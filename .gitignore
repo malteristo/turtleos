@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+venv/
+bot.log
+logs/
+*.bak
+*.backup
+*.bak.*
