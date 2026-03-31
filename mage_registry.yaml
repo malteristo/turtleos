@@ -1,0 +1,25 @@
+mages:
+  kermit:
+    discord_id: '701492724674723901'
+    address: Kermit
+    practice_dir: ~/workshop/desk
+    workshop_root: ~/workshop
+    couchdb_database: workshop_sync
+    spirit_bot_id: '1487405701440733294'
+    type: mage
+  nesrine:
+    discord_id: '1485296679900156025'
+    address: Nesrine
+    practice_dir: ~/workshops/nesrine
+    couchdb_database: nesrine_sync
+    type: practitioner
+spaces:
+  family:
+    practice_dir: ~/workshops/family
+    members:
+    - kermit
+    - nesrine
+channels:
+  '1479428854513664030': kermit
+  '1484973995823599757': nesrine
+  '1484973622471692543': family

@@ -1,0 +1,184 @@
+"""turtleOS practice file I/O — read, write, search, list practice files.
+
+Pure file operations with no dependencies on other bot modules
+(except mage.get_pd() for directory resolution).
+"""
+
+import os
+import re
+from urllib.parse import quote
+
+from mage import get_pd, get_mage_key
+from state import (
+    OBSIDIAN_VAULT, PRACTICE_WEB_BASE,
+    MAX_BRIGHT_CHARS, MAX_INTENTION_LINES,
+)
+
+
+# ─── Core File Operations ────────────────────────────────────────
+
+def read_safe(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except (FileNotFoundError, PermissionError):
+        return ""
+
+
+def read_header(path, max_lines=20):
+    try:
+        with open(path) as f:
+            lines = []
+            for i, line in enumerate(f):
+                if i >= max_lines:
+                    break
+                lines.append(line)
+            return "".join(lines)
+    except (FileNotFoundError, PermissionError):
+        return ""
+
+
+# ─── Text Utilities ──────────────────────────────────────────────
+
+def count_items(text):
+    if not text.strip():
+        return 0
+    bullets = sum(1 for line in text.strip().split("\n")
+                  if line.strip().startswith("- "))
+    if bullets > 0:
+        return bullets
+    blocks = [b.strip() for b in text.strip().split("---") if b.strip() and not b.strip().startswith("*")]
+    return len(blocks) if blocks else 0
+
+
+def truncate(text, limit=2000):
+    if len(text) <= limit:
+        return text
+    return text[:limit - 20] + "\n\n*...truncated*"
+
+
+def obsidian_link(filename):
+    """Generate a tappable link for a practice file.
+    Prefers web link (works on any phone) with obsidian:// fallback."""
+    name = filename.replace(".md", "")
+    mage_key = get_mage_key()
+    if PRACTICE_WEB_BASE:
+        web_url = f"{PRACTICE_WEB_BASE}/{mage_key}/{quote(filename)}"
+        return web_url
+    return f"[{filename}](obsidian://open?vault={quote(OBSIDIAN_VAULT)}&file={quote(name)})"
+
+
+def summarize_bright(text, limit=1500):
+    if not text or not text.strip():
+        return "(bright empty)"
+    lines = text.strip().split("\n")
+    summary_lines = []
+    items_in_section = 0
+    max_items = 5
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## ") or stripped.startswith("# "):
+            summary_lines.append(stripped)
+            items_in_section = 0
+        elif stripped.startswith("### "):
+            summary_lines.append(stripped)
+            items_in_section = 0
+        elif (stripped.startswith("- ") or (stripped.startswith("**") and not stripped.startswith("***"))) and items_in_section < max_items:
+            summary_lines.append(stripped[:140])
+            items_in_section += 1
+        elif items_in_section == max_items:
+            summary_lines.append("  *(more items...)*")
+            items_in_section += 1
+    result = "\n".join(summary_lines)
+    return result[:limit] if len(result) > limit else result
+
+
+def extract_section(content, section_name):
+    """Extract a markdown section by heading name (case-insensitive)."""
+    lines = content.split("\n")
+    target = section_name.lower().strip()
+    start = None
+    start_level = 0
+    for i, line in enumerate(lines):
+        heading_match = re.match(r'^(#{1,6})\s+(.+)', line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            title = heading_match.group(2).strip().lower()
+            if start is None and target in title:
+                start = i
+                start_level = level
+            elif start is not None and level <= start_level:
+                return "\n".join(lines[start:i]).strip()
+    if start is not None:
+        return "\n".join(lines[start:]).strip()
+    return None
+
+
+def list_headings(content):
+    """List all markdown headings in a file."""
+    headings = []
+    for line in content.split("\n"):
+        m = re.match(r'^(#{1,6})\s+(.+)', line)
+        if m:
+            headings.append(m.group(2).strip())
+    return ", ".join(headings[:15]) if headings else "(no headings)"
+
+
+def load_intentions_list():
+    idir = os.path.join(get_pd(), "intentions")
+    if not os.path.isdir(idir):
+        return []
+    return [f.replace(".md", "").replace("-", " ").replace("_", " ")
+            for f in sorted(os.listdir(idir)) if f.endswith(".md")]
+
+
+# ─── File Access Checks ─────────────────────────────────────────
+
+def is_readable(filename):
+    """Any .md file within the practice directory is readable."""
+    if ".." in filename or filename.startswith("/"):
+        return False
+    return filename.endswith(".md")
+
+
+def is_writable(filename):
+    """Any .md file within the practice directory is writable."""
+    if ".." in filename or filename.startswith("/"):
+        return False
+    return filename.endswith(".md")
+
+
+# ─── Age Utilities ───────────────────────────────────────────────
+
+def file_age_hours(path):
+    """Return file age in hours, or float('inf') if missing."""
+    from datetime import datetime
+    try:
+        return (datetime.now().timestamp() - os.path.getmtime(path)) / 3600
+    except (FileNotFoundError, OSError):
+        return float("inf")
+
+
+def format_age(hours):
+    """Human-readable age from hours."""
+    if hours == float("inf"):
+        return "∞"
+    if hours < 1:
+        return f"{int(hours * 60)}m"
+    if hours < 24:
+        return f"{int(hours)}h"
+    return f"{int(hours / 24)}d"
+
+
+# ─── Thread State I/O ────────────────────────────────────────────
+
+def get_thread_state_dir():
+    return os.path.join(get_pd(), "thread-state")
+
+
+def read_thread_state(thread_name: str) -> str:
+    """Read a thread's state file if it exists. Returns empty string if not found."""
+    safe_name = re.sub(r'[^\w\-]', '_', thread_name.lower())
+    path = os.path.join(get_thread_state_dir(), f"{safe_name}.md")
+    content = read_safe(path)
+    return content.strip()[:500] if content.strip() else ""

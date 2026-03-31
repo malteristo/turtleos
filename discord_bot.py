@@ -1,0 +1,750 @@
+#!/usr/bin/env python3
+"""turtleOS Shell — Spirit's persistent interface
+
+Modular architecture (2026-03-29 refactor):
+  state.py — shared state, config, client
+  mage.py — multi-mage registry, practice directory resolution
+  practice_io.py — file I/O utilities
+  llm.py — LLM backends (Anthropic, Gemini, Ollama)
+  tos_tools.py — 9 practice file tools + execution
+  triage.py — message classification (sub-2B local model)
+  readiness.py — 8-dimension practice health assessment
+  prompts.py — system prompt builders (identity + practice state)
+  helpers.py — shared utilities (history, logging, message splitting)
+  sessions.py — session lifecycle (timeout, reflection, notes)
+  background.py — background tasks (health, interoception)
+  commands.py — 28 commands, views, control panel, dispatch
+
+This file: event handlers, handle_dialogue, main().
+"""
+
+import asyncio
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+
+import discord
+
+
+# ─── Load .env ────────────────────────────────────────────────────
+
+def load_env(env_path=None):
+    path = env_path or os.environ.get("DOTENV_PATH", ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+
+load_env()
+
+# ─── Module Imports ───────────────────────────────────────────────
+
+from state import (
+    client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS, _processed_messages,
+    get_channel_lock, get_channel,
+    IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API,
+    HAS_GEMINI, GOOGLE_API_KEY,
+    MAX_DIALOGUE_HISTORY,
+    dialogue_histories, active_sessions,
+    KNOWN_MODELS,
+    thread_configs, absorbed_contexts,
+    EDDY_TYPES, EDDY_DEFAULT, threads_flagged_for_release,
+)
+
+from mage import (
+    get_pd, get_mage_name, get_mage_key,
+    set_practice_context, set_practice_context_for_channel,
+    is_practice_channel, is_registered_parent_channel,
+    get_registry, _resolve_mage_from_author,
+)
+
+from practice_io import (
+    read_safe, count_items,
+    file_age_hours, format_age, load_intentions_list,
+    get_thread_state_dir, read_thread_state,
+)
+
+from llm import (
+    chat_anthropic_with_model, chat_gemini, chat_ollama, chat_ollama_with_tools,
+)
+
+from tos_tools import TOS_TOOLS, execute_tos_tool, build_tool_report
+
+from triage import triage_message, prewarm_triage
+
+from prompts import (
+    get_system_prompt, get_thread_prompt, build_thread_summary,
+)
+
+from readiness import startup_readiness_check
+
+from helpers import (
+    get_history, log_activity, split_message,
+    load_thread_history, summarize_thread_context,
+    preprocess_attachments,
+)
+
+from sessions import session_monitor, close_session
+from boom_thread import handle_boom_thread_message
+from proprioceptor import prepare_context_brief
+from background import practice_health_loop, interoception_loop
+
+from commands import (
+    try_direct_command, DIRECT_COMMANDS, ControlPanelView, LinkFetchView,
+)
+
+from content_fetch import (
+    extract_urls as _extract_urls,
+    fetch_url_content as _fetch_url_content,
+    process_urls as _process_urls,
+    extract_attachments as _extract_attachments,
+)
+
+
+# ─── handle_dialogue ─────────────────────────────────────────────
+
+def _build_runtime_env(message, cfg):
+    channel = message.channel
+    mage_name = get_mage_name()
+    mage_key = get_mage_key()
+
+    is_thread = isinstance(channel, discord.Thread)
+    if is_thread:
+        parent = channel.parent
+        channel_name = parent.name if parent else "(unknown)"
+        thread_name = channel.name
+    else:
+        channel_name = channel.name if hasattr(channel, "name") else "(DM)"
+        thread_name = None
+
+    if cfg:
+        model = cfg.get("model_label", cfg.get("model", "unknown"))
+        attunement = cfg.get("attunement", "semi")
+    else:
+        model = DIALOGUE_MODEL if USE_API else REFLECTION_MODEL
+        attunement = "orchestrator"
+
+    lines = [
+        "## Runtime Environment",
+        f"- **Channel:** #{channel_name}",
+    ]
+    if thread_name:
+        lines.append(f"- **Thread:** {thread_name}")
+    lines.append(f"- **Mage:** {mage_name}")
+    lines.append(f"- **Model:** {model}")
+    lines.append(f"- **Attunement:** {attunement}")
+
+    if mage_key == "family":
+        lines.append(f"- **Message from:** {message.author.display_name}")
+        space = get_registry().get("spaces", {}).get("family", {})
+        members = space.get("members", [])
+        if members:
+            lines.append(f"- **Space members:** {', '.join(m.capitalize() for m in members)}")
+
+        speaking_mage, personal_pd = _resolve_mage_from_author(message.author)
+        if speaking_mage and personal_pd:
+            lines.append(f"- **Speaking mage workspace:** {personal_pd}")
+            compass_path = os.path.join(personal_pd, "compass.md")
+            if os.path.exists(compass_path):
+                compass = read_safe(compass_path)
+                if compass.strip():
+                    lines.append("")
+                    lines.append(f"**{speaking_mage.capitalize()}'s personal compass** (from their sovereign workspace):")
+                    lines.append(compass[:3000])
+
+        lines.append("")
+        lines.append("**Context:** Shared family space. Keep responses accessible and warm. "
+                      "You have access to the speaking member's personal practice state "
+                      "via their workspace above. Reference it naturally when relevant. "
+                      "Each member's data is sovereign — only share what the speaker asks about.")
+    elif thread_name and cfg and cfg.get("attunement") == "raw":
+        lines.append("")
+        lines.append("**Context boundary:** Raw attunement. "
+                      "Be direct and focused on the topic at hand.")
+
+    return "\n".join(lines) + "\n\n"
+
+
+async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history: list[dict]):
+    os.makedirs(get_thread_state_dir(), exist_ok=True)
+    safe_name = re.sub(r'[^\w\-]', '_', thread.name.lower())
+    state_path = os.path.join(get_thread_state_dir(), f"{safe_name}.md")
+
+    model_label = cfg["model_label"] if cfg else "default"
+    attunement = cfg["attunement"] if cfg else "semi"
+    msg_count = len(history)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    recent_exchange = ""
+    if len(history) >= 2:
+        last_user = ""
+        last_assistant = ""
+        for m in reversed(history):
+            if m["role"] == "assistant" and not last_assistant:
+                last_assistant = m["content"][:300]
+            elif m["role"] == "user" and not last_user:
+                last_user = m["content"][:300]
+            if last_user and last_assistant:
+                break
+        if last_user and last_assistant:
+            recent_exchange = f"\n**Last exchange:**\n> Mage: {last_user}\n> Spirit: {last_assistant}\n"
+
+    eddy_type = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
+    eddy_info = EDDY_TYPES.get(eddy_type, EDDY_TYPES[EDDY_DEFAULT])
+    flagged = threads_flagged_for_release.get(thread.id)
+    flag_line = f"\n**⚠️ Flagged for release:** {flagged['reason']}\n" if flagged else ""
+
+    content = (
+        f"# Thread: {thread.name}\n\n"
+        f"**Config:** `{model_label}` / `{attunement}`\n"
+        f"**Eddy:** {eddy_info['emoji']} `{eddy_type}` ({eddy_info['days'] or '∞'}d)\n"
+        f"**Messages:** {msg_count}\n"
+        f"**Last active:** {now}\n"
+        f"**Thread ID:** {thread.id}\n"
+        f"{flag_line}"
+        f"{recent_exchange}"
+    )
+
+    try:
+        with open(state_path, "w") as f:
+            f.write(content)
+    except Exception as e:
+        print(f"Thread state write failed for {thread.name}: {e}")
+
+
+async def handle_dialogue(message):
+    channel_id = message.channel.id
+
+    # Run triage and proprioceptor in parallel — tissue prepares while classification runs
+    triage_task = asyncio.create_task(triage_message(message.content))
+    # Proprioceptor runs in parallel — cancelled later if triage says trivial
+
+    proprioceptor_task = asyncio.create_task(prepare_context_brief(message.content))
+
+    triage = await triage_task
+    triage_cat = triage.get("category", "practice")
+    print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {message.content[:80]}")
+
+    # Cancel proprioceptor for trivial messages — not needed
+    if proprioceptor_task and triage_cat not in ("practice", "deep", "link"):
+        proprioceptor_task.cancel()
+        proprioceptor_task = None
+
+    history = get_history(channel_id)
+
+    if not history and isinstance(message.channel, discord.Thread):
+        loaded = await load_thread_history(message.channel)
+        if loaded:
+            dialogue_histories[channel_id] = loaded
+            history = dialogue_histories[channel_id]
+            print(f"Thread memory restored: {message.channel.name} ({len(loaded)} messages)")
+            summary = summarize_thread_context(loaded, message.channel.name)
+            await log_activity(
+                f"Thread memory restored: **{message.channel.name}** ({len(loaded)} msgs)\n{summary}", "🧠",
+                channel=message.channel
+            )
+
+    attachments = []
+    attachment_note = ""
+    if message.attachments:
+        attachments = await _extract_attachments(message)
+        if attachments:
+            fnames = ", ".join(f"{fn}" for _, _, fn in attachments)
+            attachment_note = f" [attached: {fnames}]"
+
+    url_content = ""
+    urls = await _extract_urls(message.content)
+    if urls:
+        url_content = await _process_urls(urls)
+        if url_content:
+            attachment_note += f" [fetched {len(urls)} URL(s)]"
+
+    history.append({"role": "user", "content": f"[{message.author.display_name}]: {message.content}{attachment_note}"})
+    if len(history) > MAX_DIALOGUE_HISTORY:
+        history.pop(0)
+
+    now = datetime.now(timezone.utc)
+    is_new_session = channel_id not in active_sessions or active_sessions[channel_id]["closed"]
+    if channel_id not in active_sessions:
+        active_sessions[channel_id] = {"started": now, "last_message": now, "closed": False}
+    active_sessions[channel_id]["last_message"] = now
+    active_sessions[channel_id]["closed"] = False
+
+    if is_new_session and not isinstance(message.channel, discord.Thread):
+        from mage import get_mage_type
+        ctx_parts = []
+        pd = get_pd()
+        boom_count = count_items(read_safe(os.path.join(pd, "boom.md")))
+        bright_count = count_items(read_safe(os.path.join(pd, "bright.md")))
+        compass_age = format_age(file_age_hours(os.path.join(pd, "compass.md")))
+        intentions = load_intentions_list()
+        sdir = os.path.join(pd, "sessions")
+        last_session = ""
+        if os.path.isdir(sdir):
+            recent = sorted([f for f in os.listdir(sdir) if f.endswith(".md")], reverse=True)
+            if recent:
+                last_session = recent[0].replace(".md", "")
+        ctx_parts.append(f"compass ({compass_age})")
+        ctx_parts.append(f"boom ({boom_count})")
+        ctx_parts.append(f"bright ({bright_count})")
+        if intentions:
+            ctx_parts.append(f"{len(intentions)} intentions")
+        if last_session:
+            ctx_parts.append(f"last session: {last_session}")
+
+        # Practitioners get a minimal, warm session-open — no practice jargon
+        if get_mage_type() == "practitioner":
+            # Only show the embed if there's meaningful state to indicate continuity
+            if last_session or boom_count > 0:
+                embed = discord.Embed(
+                    description="📖 Picked up where we left off.",
+                    color=OPS_EMBED_COLOR,
+                )
+                await message.channel.send(embed=embed, silent=True)
+        else:
+            embed = discord.Embed(
+                description=f"📖 Loaded: {' · '.join(ctx_parts)}",
+                color=OPS_EMBED_COLOR,
+            )
+            await message.channel.send(embed=embed, silent=True)
+
+    cfg = thread_configs.get(channel_id)
+    if cfg:
+        system_prompt = get_thread_prompt(cfg["attunement"], cfg["use_api"])
+        thread_use_api = cfg["use_api"]
+        thread_model = cfg["model"]
+    else:
+        system_prompt = get_system_prompt()
+        thread_use_api = USE_API
+        thread_model = DIALOGUE_MODEL
+
+    runtime_env = _build_runtime_env(message, cfg)
+    triage_hint = f"- **Message triage:** {triage_cat}"
+    if triage_cat == "deep":
+        triage_hint += " (take your time, go deep)"
+    elif triage_cat in ("greeting", "casual"):
+        triage_hint += " (keep it light and brief)"
+    runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
+
+    # Collect proprioceptor — worth waiting since dialogue call is the real bottleneck
+    context_brief = None
+    proprioceptor_time = None
+    if proprioceptor_task:
+        _t0 = asyncio.get_event_loop().time()
+        try:
+            context_brief = await asyncio.wait_for(proprioceptor_task, timeout=5.0)
+            proprioceptor_time = asyncio.get_event_loop().time() - _t0
+            if context_brief:
+                print(f"Proprioceptor: {len(context_brief)} chars ({proprioceptor_time:.1f}s)")
+        except asyncio.TimeoutError:
+            proprioceptor_time = asyncio.get_event_loop().time() - _t0
+            print(f"Proprioceptor: timed out ({proprioceptor_time:.1f}s)")
+        except Exception as e:
+            print(f"Proprioceptor: failed ({type(e).__name__})")
+
+    # Parse proprioceptor output: SIGNALS (for Mage) + BRIEF (for dialogue model)
+    _tissue_signals = None
+    _tissue_brief = context_brief  # fallback: use raw output
+    if context_brief:
+        for _pi, _pline in enumerate(context_brief.strip().splitlines()):
+            if _pline.strip().upper().startswith("SIGNALS:"):
+                _tissue_signals = _pline.split(":", 1)[1].strip()
+            elif _pline.strip().upper().startswith("BRIEF:"):
+                _rest = context_brief.strip().splitlines()[_pi:]
+                _tissue_brief = " ".join(l.strip() for l in _rest).replace("BRIEF:", "", 1).strip()
+                break
+
+    # Inject proprioceptor brief into dialogue model system prompt
+    if _tissue_brief and context_brief:
+        proprioceptor_block = (
+            "## Proprioceptive Context (connective tissue model)\n\n"
+            f"{_tissue_brief}\n\n"
+        )
+        system_prompt = runtime_env + proprioceptor_block + system_prompt
+    else:
+        system_prompt = runtime_env + system_prompt
+
+
+    messages_for_llm = list(history)
+    contexts = absorbed_contexts.get(channel_id, [])
+    if contexts and not cfg:
+        digest_parts = []
+        for ctx in contexts:
+            model_info = ctx.get("model_info", "")
+            config_tag = f" `{model_info.strip()}`" if model_info.strip() else ""
+            state_file = read_thread_state(ctx["name"])
+            state_note = f"\n*Thread state:* {state_file}" if state_file else ""
+            digest_parts.append(
+                f"**Thread \"{ctx['name']}\"**{config_tag}:\n{ctx['digest']}{state_note}"
+            )
+        absorbed_block = (
+            "## Absorbed Thread Context\n\n"
+            "The Mage has absorbed the following thread resonances into this conversation. "
+            "Draw on these naturally when relevant — they are part of your working context.\n\n"
+            + "\n\n---\n\n".join(digest_parts)
+        )
+        messages_for_llm = [{"role": "user", "content": absorbed_block},
+                            {"role": "assistant", "content": "I have this thread context. Let's continue."}] + messages_for_llm
+
+    # Tissue signal — compact body awareness before the mind responds
+    if _tissue_signals and "fresh topic" not in _tissue_signals.lower():
+        _tf = f"\U0001f9ec {proprioceptor_time:.1f}s" if proprioceptor_time else "\U0001f9ec"
+        await message.channel.send(f"-# {_tf} {_tissue_signals}", silent=True)
+
+    async with message.channel.typing():
+        tool_report = ""
+        is_gemini = thread_model.startswith("gemini-")
+        try:
+            if is_gemini and HAS_GEMINI and GOOGLE_API_KEY:
+                if url_content:
+                    messages_for_llm[-1] = dict(messages_for_llm[-1])
+                    messages_for_llm[-1]["content"] += "\n\n[Fetched URL content]:\n" + url_content
+                reply, tools_executed = await chat_gemini(system_prompt, messages_for_llm, model=thread_model, attachments=attachments)
+                tool_report = build_tool_report(tools_executed)
+            elif (attachments or url_content) and not is_gemini:
+                extraction = await preprocess_attachments(attachments) if attachments else ""
+                if url_content:
+                    extraction = (extraction + "\n\n" + url_content).strip() if extraction else url_content
+                if extraction:
+                    messages_for_llm[-1] = dict(messages_for_llm[-1])
+                    messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + extraction
+                if thread_use_api:
+                    reply, tools_executed = await chat_anthropic_with_model(
+                        system_prompt, messages_for_llm, thread_model, use_tools=True,
+                        tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
+                    tool_report = build_tool_report(tools_executed)
+                else:
+                    reply, tools_executed = await chat_ollama_with_tools(
+                        system_prompt, messages_for_llm, model_override=thread_model,
+                        tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
+                    tool_report = build_tool_report(tools_executed)
+            elif thread_use_api:
+                reply, tools_executed = await chat_anthropic_with_model(
+                    system_prompt, messages_for_llm, thread_model, use_tools=True,
+                    tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
+                tool_report = build_tool_report(tools_executed)
+            else:
+                reply, tools_executed = await chat_ollama_with_tools(
+                    system_prompt, messages_for_llm, model_override=thread_model,
+                    tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
+                tool_report = build_tool_report(tools_executed)
+
+            if not reply:
+                reply = "(no response generated)"
+        except Exception as e:
+            print(f"Dialogue error ({thread_model}): {type(e).__name__}: {e}")
+            try:
+                reply = await chat_ollama(system_prompt, list(history), model=REFLECTION_MODEL)
+            except Exception as e2:
+                reply = f"[dialogue error: {type(e2).__name__}: {e2}]"
+
+    # Detect and remove repeated paragraphs before sending
+    paragraphs = reply.split("\n\n")
+    if len(paragraphs) > 2:
+        seen = set()
+        deduped = []
+        for p in paragraphs:
+            normalized = p.strip()[:200]
+            if normalized and normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(p)
+        if len(deduped) < len(paragraphs):
+            print(f"Dedup: removed {len(paragraphs) - len(deduped)} repeated paragraphs")
+            reply = "\n\n".join(deduped)
+
+    if tool_report:
+        reply = f"{reply}\n\n-# ⚙️ {tool_report}"
+    history.append({"role": "assistant", "content": reply})
+    for chunk in split_message(reply):
+        await message.reply(chunk, mention_author=False)
+
+    if urls:
+        external_urls = [u for u in urls if "discord" not in urlparse(u).netloc]
+        if external_urls:
+            view = LinkFetchView(external_urls)
+            await message.channel.send(
+                f"\U0001f517 `!fetch {external_urls[0]}`",
+                view=view,
+            )
+
+    if isinstance(message.channel, discord.Thread):
+        await _update_thread_state(message.channel, cfg, history)
+
+
+# ─── Event Handlers ──────────────────────────────────────────────
+
+@client.event
+async def on_ready():
+    client.add_view(ControlPanelView())
+    print(f"Turtle online: {client.user}")
+    print(f"tOS: {get_pd()} | Identity: {IDENTITY_DIR}")
+    print(f"Dialogue: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
+    print(f"Reflection: {REFLECTION_MODEL} (local)")
+    print(f"Triage: {TRIAGE_MODEL} (local)")
+    print(f"Commands: {', '.join(DIRECT_COMMANDS.keys())}")
+    prompt = get_system_prompt()
+    print(f"System prompt: {len(prompt)} chars")
+
+    dialogue = get_channel("dialogue")
+    thread_count = 0
+    if dialogue:
+        thread_count = len(dialogue.threads)
+        ts = int(datetime.now(timezone.utc).timestamp())
+        should_post = True
+        try:
+            async for prev in dialogue.history(limit=10):
+                if prev.author == client.user and prev.embeds:
+                    for e in prev.embeds:
+                        if e.title and "Spirit online" in e.title:
+                            age = (datetime.now(timezone.utc) - prev.created_at).total_seconds()
+                            if age < 300:
+                                should_post = False
+                                print(f"Startup message debounced (last was {age:.0f}s ago)")
+                            break
+                if not should_post:
+                    break
+        except Exception:
+            pass
+        if should_post:
+            readiness = startup_readiness_check()
+            embed = discord.Embed(
+                title="\U0001f422 Spirit online",
+                description=(
+                    f"**Model:** `{DIALOGUE_MODEL}` ({'API' if USE_API else 'local'})\n"
+                    f"**Triage:** `{TRIAGE_MODEL}` · **Reflection:** `{REFLECTION_MODEL}`\n"
+                    f"**Threads:** {thread_count}\n"
+                    f"{readiness}"
+                ),
+                color=0x2ECC71,
+            )
+            embed.set_footer(text=f"<t:{ts}:t>")
+            await dialogue.send(embed=embed, silent=True)
+
+    asyncio.get_event_loop().create_task(prewarm_triage())
+
+    if dialogue:
+        try:
+            active = dialogue.threads
+            for t in active:
+                try:
+                    await t.join()
+                    print(f"Rejoined thread: {t.name} (id: {t.id})")
+                    await asyncio.sleep(1)  # Throttle to avoid Discord rate limits
+                except Exception as e:
+                    print(f"Failed to join thread {t.name}: {e}")
+                    await asyncio.sleep(2)  # Back off more on failure
+            archived_threads = []
+            async for t in dialogue.archived_threads(limit=20):
+                archived_threads.append(t)
+            for t in archived_threads:
+                try:
+                    await t.edit(archived=False)
+                    await asyncio.sleep(0.5)
+                    await t.join()
+                    print(f"Unarchived & joined: {t.name} (id: {t.id})")
+                    await asyncio.sleep(1)
+                except Exception as e:
+                    print(f"Skipped archived thread {t.name}: {e}")
+        except Exception as e:
+            print(f"Thread sync on startup failed: {e}")
+
+        try:
+            state_dir = get_thread_state_dir()
+            if os.path.isdir(state_dir):
+                live_thread_ids = set()
+                for t in dialogue.threads:
+                    live_thread_ids.add(str(t.id))
+                cleaned = 0
+                for fname in os.listdir(state_dir):
+                    if not fname.endswith(".md"):
+                        continue
+                    fpath = os.path.join(state_dir, fname)
+                    try:
+                        with open(fpath) as f:
+                            content = f.read()
+                        tid_match = re.search(r"\*\*Thread ID:\*\*\s*(\d+)", content)
+                        if tid_match and tid_match.group(1) not in live_thread_ids:
+                            os.remove(fpath)
+                            cleaned += 1
+                    except Exception:
+                        pass
+                if cleaned:
+                    print(f"Cleaned {cleaned} stale thread-state files")
+        except Exception as e:
+            print(f"Thread-state cleanup failed: {e}")
+
+        has_panel = False
+        try:
+            async for m in dialogue.pins():
+                if m.author == client.user:
+                    for e in (m.embeds or []):
+                        if e.title and e.title.startswith("\U0001f3ae"):
+                            has_panel = True
+        except Exception:
+            pass
+        if not has_panel:
+            try:
+                async for m in dialogue.history(limit=20):
+                    if m.author == client.user:
+                        for e in (m.embeds or []):
+                            if e.title and e.title.startswith("\U0001f3ae"):
+                                has_panel = True
+                                break
+                    if has_panel:
+                        break
+            except Exception:
+                pass
+        if not has_panel:
+            try:
+                embed = discord.Embed(
+                    title="\U0001f3ae Spirit Control Panel",
+                    description=(
+                        "**Threads** \u2014 pick model + attunement, then tap New Thread.\n"
+                        "**Practice** \u2014 quick access to status, diagnostics, boom, sweep.\n"
+                        "**Session** \u2014 recall to orient, release to close."
+                    ),
+                    color=0x5865F2,
+                )
+                panel_msg = await dialogue.send(embed=embed, view=ControlPanelView())
+                try:
+                    await panel_msg.pin()
+                    print("Control panel deployed and pinned.")
+                except Exception:
+                    print("Control panel deployed (pin failed — pin manually).")
+            except Exception as e:
+                print(f"Control panel deploy failed: {e}")
+
+    try:
+        if not session_monitor.is_running():
+            session_monitor.start()
+            print("session_monitor started")
+        if not practice_health_loop.is_running():
+            practice_health_loop.start()
+            print("practice_health_loop started")
+        if not interoception_loop.is_running():
+            interoception_loop.start()
+            print("interoception_loop started")
+    except Exception as e:
+        import traceback
+        print(f"Background task start failed: {e}")
+        traceback.print_exc()
+
+    
+    print("on_ready complete")
+
+
+@client.event
+async def on_thread_create(thread):
+    if is_registered_parent_channel(thread.parent_id):
+        await thread.join()
+        set_practice_context_for_channel(thread.parent_id)
+        print(f"Joined thread: {thread.name} (id: {thread.id}) [practice dir: {get_pd()}]")
+
+
+@client.event
+async def on_member_join(member):
+    if member.bot:
+        return
+    await log_activity(
+        f"New member joined: **{member.display_name}** ({member.name}). "
+        f"Use `!admin onboard {member.name}` to create their practice space.",
+        "\U0001f44b"
+    )
+    print(f"New member joined: {member.name} (id: {member.id})")
+
+
+@client.event
+async def on_member_remove(member):
+    if member.bot:
+        return
+    await log_activity(
+        f"Member left: **{member.display_name}** ({member.name}).",
+        "\U0001f6aa"
+    )
+    print(f"Member left: {member.name} (id: {member.id})")
+
+
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+
+    if message.type not in (discord.MessageType.default, discord.MessageType.reply):
+        return
+
+    set_practice_context(message)
+
+    if message.author.bot:
+        if client.user in message.mentions and is_practice_channel(message):
+            await handle_dialogue(message)
+        return
+
+    if is_practice_channel(message):
+        if await try_direct_command(message):
+            return
+        # Message-level dedup: skip if already seen (prevents duplicate responses)
+        if message.id in _processed_messages:
+            print(f"Skipping duplicate message {message.id}")
+            return
+        _processed_messages.append(message.id)
+
+        # Boom thread: URLs/attachments capture-only; plain text captures AND converses
+        if (isinstance(message.channel, discord.Thread)
+                and message.channel.name.lower() == "boom"
+                and not message.content.strip().startswith("!")):
+            has_urls = "http://" in message.content or "https://" in message.content
+            has_attachments = bool(message.attachments)
+            if has_urls or has_attachments:
+                # Shareable content — capture to boom, no dialogue
+                lock = get_channel_lock(message.channel.id)
+                async with lock:
+                    await handle_boom_thread_message(message)
+                return
+            # Plain text in boom: capture AND fall through to dialogue
+            # Everything in boom gets recorded. Conversation happens too.
+            lock = get_channel_lock(message.channel.id)
+            async with lock:
+                await handle_boom_thread_message(message)
+            # Fall through to handle_dialogue below
+
+        lock = get_channel_lock(message.channel.id)
+        async with lock:
+            await handle_dialogue(message)
+
+
+# ─── Main ────────────────────────────────────────────────────────
+
+def main():
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    if not token:
+        print("Error: DISCORD_BOT_TOKEN not set", file=sys.stderr)
+        sys.exit(1)
+
+    if "--test" in sys.argv:
+        print(f"Bot token: ...{token[-8:]}")
+        print(f"Practice: {get_pd()} | Identity: {IDENTITY_DIR}")
+        print(f"Dialogue: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
+        print(f"Reflection: {REFLECTION_MODEL} (local)")
+        print(f"Channels: {', '.join(k for k,v in CHANNELS.items() if v)}")
+        print(f"Commands: {', '.join(DIRECT_COMMANDS.keys())}")
+        prompt = get_system_prompt()
+        print(f"System prompt: {len(prompt)} chars")
+        print("Configuration OK.")
+        return
+
+    import logging
+    logging.basicConfig(level=logging.WARNING, stream=sys.stdout, force=True)
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+    client.run(token)
+
+
+if __name__ == "__main__":
+    main()

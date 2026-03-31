@@ -1,0 +1,5 @@
+anthropic
+pyyaml
+discord.py
+httpx
+requests
