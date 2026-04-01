@@ -286,8 +286,9 @@ async def fetch_youtube_transcript(url):
     video_id = match.group(1)
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
-        text = " ".join(entry["text"] for entry in transcript)
+        ytt = YouTubeTranscriptApi()
+        transcript = ytt.fetch(video_id)
+        text = " ".join(s.text for s in transcript.snippets)
         return f"YouTube transcript ({video_id}):\n{text[:8000]}", "youtube"
     except ImportError:
         return None, "youtube_transcript_api not installed"
