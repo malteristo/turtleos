@@ -6,7 +6,7 @@ echo "[Tue Mar 31 18:58:57 CEST 2026] Self-restart initiated by Turtle" >> ~/tur
 
 # Validate syntax of changed Python files before restarting
 for f in ~/turtle-shell/*.py; do
-    python3 -c "import py_compile; py_compile.compile('', doraise=True)" 2>/dev/null
+    python3 -c "import py_compile; py_compile.compile('$f', doraise=True)" 2>/dev/null
     if [ $? -ne 0 ]; then
         echo "[Tue Mar 31 18:58:57 CEST 2026] ABORT: Syntax error in $f" >> ~/turtle-shell/logs/self-dev.log
         echo "Syntax error in $f — aborting restart"
