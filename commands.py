@@ -261,12 +261,19 @@ async def cmd_sync(message):
             lines.append(f"`{fname}`: missing")
     freshness = "\n".join(lines)
 
-    embed = discord.Embed(title="\U0001f504 Practice State Freshness", color=EMBED_COLORS["sync"])
-    embed.add_field(name="Files", value=freshness, inline=False)
-    embed.add_field(name="Sync Method",
-                    value="Obsidian LiveSync via CouchDB — bidirectional, real-time.\n`!diagnose` for full stack health.",
-                    inline=False)
-    await message.reply(embed=embed, mention_author=False)
+    # 016 reroute: check if anything is stale (> 24h) or missing
+    has_issues = any("missing" in l or "d ago" in l for l in lines)
+    if has_issues:
+        embed = discord.Embed(title="\U0001f504 Practice State Freshness", color=EMBED_COLORS["sync"])
+        embed.add_field(name="Files", value=freshness, inline=False)
+        embed.add_field(name="Sync Method",
+                        value="Obsidian LiveSync via CouchDB — bidirectional, real-time.\n`!diagnose` for full stack health.",
+                        inline=False)
+        await message.reply(embed=embed, mention_author=False)
+    else:
+        # Healthy — brief confirmation, no verbose embed
+        print(f"Sync healthy: {' | '.join(lines)}")
+        await message.reply("\u2705 Practice state fresh.", mention_author=False)
 
 
 async def cmd_diagnose(message):
@@ -809,7 +816,7 @@ class EddyDissolutionView(discord.ui.View):
             summary += f" ��� {entry_count} entries captured to boom"
         await interaction.followup.send(summary)
         dialogue = get_channel("dialogue")
-        await log_activity(f"Thread **{self.thread_name}** dissolved & archived ({entry_count} boom entries)", "📦", channel=dialogue or interaction.channel)
+        print(f"Thread dissolved & archived: {self.thread_name} ({entry_count} boom entries)")  # 016 reroute: internal only
 
         for child in self.children:
             child.disabled = True
@@ -1392,18 +1399,25 @@ async def cmd_recall(message):
         embed.add_field(name="Pending Proposals", value="\n".join(proposals), inline=False)
 
     freshness_lines = []
+    any_stale = False
     for fname in ["boom.md", "bright.md", "compass.md"]:
-        path = os.path.join(get_pd(), fname)
-        if os.path.isfile(path):
-            age = datetime.now().timestamp() - os.path.getmtime(path)
+        fpath = os.path.join(get_pd(), fname)
+        if os.path.isfile(fpath):
+            age = datetime.now().timestamp() - os.path.getmtime(fpath)
             if age < 3600:
                 age_str = f"{int(age / 60)}m"
             elif age < 86400:
                 age_str = f"{int(age / 3600)}h"
             else:
                 age_str = f"{int(age / 86400)}d"
+                any_stale = True
             freshness_lines.append(f"`{fname}`: {age_str}")
-    embed.add_field(name="Freshness", value=" | ".join(freshness_lines), inline=False)
+        else:
+            freshness_lines.append(f"`{fname}`: missing")
+            any_stale = True
+    # 016 reroute: only surface freshness when something is stale — silence when healthy
+    if any_stale:
+        embed.add_field(name="Freshness ⚠️", value=" | ".join(freshness_lines), inline=False)
     embed.set_footer(text="!bright for details | !boom to see buffer | !sweep to process")
     await message.reply(embed=embed, mention_author=False)
 
