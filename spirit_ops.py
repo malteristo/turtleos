@@ -65,6 +65,31 @@ async def run():
         ch = await client.fetch_channel(channel_id)
         msg = await ch.send(text)
         thread = await msg.create_thread(name=text[:100])
+
+        # Auto-add practitioners to thread
+        try:
+            import yaml
+            with open(os.path.expanduser('~/turtle-shell/mage_registry.yaml')) as rf:
+                registry = yaml.safe_load(rf) or {}
+            mage_key = registry.get('channels', {}).get(str(channel_id))
+            member_ids = []
+            if mage_key:
+                space = registry.get('spaces', {}).get(mage_key, {})
+                if space:
+                    for mk in space.get('members', []):
+                        mid = registry.get('mages', {}).get(mk, {}).get('discord_id')
+                        if mid:
+                            member_ids.append(mid)
+                else:
+                    mid = registry.get('mages', {}).get(mage_key, {}).get('discord_id')
+                    if mid:
+                        member_ids.append(mid)
+            for uid in member_ids:
+                user = await client.fetch_user(int(uid))
+                await thread.add_user(user)
+        except Exception as e:
+            print(f'Could not auto-add users to thread: {e}')
+
         print(f'Created thread: {thread.name} (id:{thread.id})')
 
     elif op == 'threads':

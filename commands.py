@@ -32,6 +32,7 @@ from mage import (
     is_practice_channel, is_registered_parent_channel,
     reload_mage_registry, get_registry,
     _resolve_mage_from_author, _MAGE_REGISTRY,
+    get_thread_member_ids,
 )
 
 from practice_io import (
@@ -560,6 +561,15 @@ async def cmd_thread(message, args):
     model_id, use_api = resolve_model(model_str)
 
     thread = await message.create_thread(name=topic)
+
+    # Auto-add practitioners to thread
+    parent_id = message.channel.id
+    for uid in get_thread_member_ids(parent_id):
+        try:
+            user = await client.fetch_user(int(uid))
+            await thread.add_user(user)
+        except Exception as e:
+            print(f"Could not auto-add user {uid} to thread: {e}")
 
     thread_configs[thread.id] = {
         "model": model_id,
@@ -2154,6 +2164,15 @@ class ThreadTopicModal(discord.ui.Modal, title="New Thread"):
 
         msg = await dialogue.send(f"\U0001f9f5 **{topic_val}** \u2014 `{self.model_str}` / `{self.attunement}`")
         thread = await msg.create_thread(name=topic_val)
+
+        # Auto-add practitioners to thread
+        parent_id = dialogue.id
+        for uid in get_thread_member_ids(parent_id):
+            try:
+                user = await client.fetch_user(int(uid))
+                await thread.add_user(user)
+            except Exception as e:
+                print(f"Could not auto-add user {uid} to thread: {e}")
 
         eddy_type = getattr(self, "eddy_type", EDDY_DEFAULT)
         thread_configs[thread.id] = {

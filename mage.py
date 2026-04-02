@@ -196,3 +196,29 @@ def is_registered_parent_channel(channel_id):
         return True
     dialogue = get_channel("dialogue")
     return dialogue and channel_id == dialogue.id
+
+
+def get_thread_member_ids(channel_id):
+    """Return list of discord_id strings for practitioners who should be auto-added to threads in this channel.
+    For mage/practitioner channels: returns that user's discord_id.
+    For space channels (e.g. family): returns discord_ids of all space members."""
+    ch_str = str(channel_id)
+    mage_key = _MAGE_REGISTRY.get("channels", {}).get(ch_str)
+    if not mage_key:
+        return []
+
+    # Check if it maps to a space (e.g. family)
+    space = _MAGE_REGISTRY.get("spaces", {}).get(mage_key, {})
+    if space:
+        member_ids = []
+        for member_key in space.get("members", []):
+            mage = _MAGE_REGISTRY.get("mages", {}).get(member_key, {})
+            if mage.get("discord_id"):
+                member_ids.append(mage["discord_id"])
+        return member_ids
+
+    # Direct mage channel
+    mage = _MAGE_REGISTRY.get("mages", {}).get(mage_key, {})
+    if mage.get("discord_id"):
+        return [mage["discord_id"]]
+    return []
