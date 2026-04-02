@@ -133,6 +133,10 @@ async def cmd_boom(message, args):
         await message.add_reaction("\U0001f4a5")
         count = count_items(read_safe(boom_path))
         await message.reply(f"Dropped into boom. ({count} items now)", mention_author=False)
+        # Context injection: Turtle knows what was added (016 nervous system)
+        history = get_history(message.channel.id)
+        history.append({"role": "user", "content": f"!boom add {text}"})
+        history.append({"role": "assistant", "content": f"[System: Added to boom: \"{text}\" ({count} items total)]"})
         return
 
     boom = read_safe(boom_path)
@@ -143,6 +147,15 @@ async def cmd_boom(message, args):
                               description=truncate(boom), color=EMBED_COLORS["boom"])
     embed.set_footer(text="!boom add <thought> to capture | !boom convert to distill conversation")
     await message.reply(embed=embed, mention_author=False)
+
+    # Context injection: give Turtle the actual boom content (016 nervous system)
+    if boom.strip():
+        boom_summary = f"Boom buffer ({count_items(boom)} items):\n{boom[:3000]}"
+    else:
+        boom_summary = "Boom buffer is empty."
+    history = get_history(message.channel.id)
+    history.append({"role": "user", "content": "!boom"})
+    history.append({"role": "assistant", "content": f"[System: {boom_summary}]"})
 
 
 async def cmd_boom_convert(message):
@@ -190,6 +203,15 @@ async def cmd_bright(message):
         embed = discord.Embed(title=f"\u2728 Bright Surface ({count_items(bright)} items)",
                               description=truncate(bright), color=EMBED_COLORS["bright"])
     await message.reply(embed=embed, mention_author=False)
+
+    # Context injection: give Turtle the actual bright content (016 nervous system)
+    if bright.strip():
+        bright_summary = f"Bright surface ({count_items(bright)} items):\n{bright[:3000]}"
+    else:
+        bright_summary = "Bright surface is empty."
+    history = get_history(message.channel.id)
+    history.append({"role": "user", "content": "!bright"})
+    history.append({"role": "assistant", "content": f"[System: {bright_summary}]"})
 
 
 async def cmd_compass(message):
@@ -2036,8 +2058,8 @@ DIRECT_COMMANDS = {
 COMMAND_CONTEXT = {
     "status": "I displayed the practice status embed (boom count, bright count, compass, intentions, session age).",
     "diagnose": "I ran a full practice stack diagnostic — checked services, connections, sync, practice flow, and reachability. The results were shown as a color-coded embed.",
-    "boom": "I showed the current boom buffer contents.",
-    "bright": "I showed the bright surface contents.",
+    # "boom" — handled directly in cmd_boom with actual content (016)
+    # "bright" — handled directly in cmd_bright with actual content (016)
     "compass": "I showed the compass.",
     "intentions": "I showed the active intentions.",
     "sync": "I displayed the sync status.",
