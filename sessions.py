@@ -139,7 +139,8 @@ async def close_session(channel_id: int):
             session_channel = client.get_channel(channel_id)
             if session_channel:
                 names = ", ".join(d["name"] for d in impaired)
-                await log_activity(f"Post-session readiness: {names} impaired", "🔴", channel=session_channel)
+                # Route to internal log, not channel — practitioner cannot act on this (016 principle)
+                print(f"Post-session readiness: {names} impaired — internal signal, not surfaced to channel")
     except Exception as e:
         print(f"Post-session readiness check failed: {e}")
 

@@ -27,7 +27,7 @@ async def run():
         for m in reversed(msgs):
             author = m.author.display_name or m.author.name
             ts = m.created_at.strftime("%H:%M")
-            content = m.content[:500] if m.content else '[embed/system]'
+            content = m.content if m.content else '[embed/system]'
             print("[" + ts + "] " + author + ": " + content)
             print()
     

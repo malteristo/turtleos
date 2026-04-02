@@ -1121,6 +1121,10 @@ async def cmd_threads(message, args):
 
     if not all_threads:
         await message.reply("No active threads. Use `!thread \"topic\"` to create one.", mention_author=False)
+        # Context injection for no-threads case too (016)
+        history = get_history(message.channel.id)
+        history.append({"role": "user", "content": "!threads"})
+        history.append({"role": "assistant", "content": "[System: No active threads.]"})
         return
 
     embed = discord.Embed(
@@ -1130,6 +1134,12 @@ async def cmd_threads(message, args):
     )
     embed.set_footer(text="!thread-type <type> to change | !eddy-check to scan for dissolution")
     await message.reply(embed=embed, mention_author=False)
+
+    # Context injection: give Turtle the actual thread data (016 nervous system principle)
+    thread_summary = "Active threads:\n" + "\n".join(all_threads)
+    history = get_history(message.channel.id)
+    history.append({"role": "user", "content": "!threads"})
+    history.append({"role": "assistant", "content": f"[System: {thread_summary}]"})
 
 
 async def cmd_read(message, args):
@@ -2032,7 +2042,7 @@ COMMAND_CONTEXT = {
     "intentions": "I showed the active intentions.",
     "sync": "I displayed the sync status.",
     "sweep": "I ran a boom sweep — processing boom items into bright/release/box.",
-    "threads": "I listed the active Discord threads with eddy types and dissolution status.",
+    # "threads" — handled directly in cmd_threads with actual thread data (016)
     "thread-type": "I changed the thread's eddy type (fast/slow/confluence/standing).",
     "eddy-check": "I scanned all threads for dissolution readiness and flagged any that exceeded their quiet threshold.",
     "fetch": "I fetched a URL and distilled its resonance — the essential insights from the linked content.",

@@ -245,10 +245,8 @@ async def handle_dialogue(message):
             history = dialogue_histories[channel_id]
             print(f"Thread memory restored: {message.channel.name} ({len(loaded)} messages)")
             summary = summarize_thread_context(loaded, message.channel.name)
-            await log_activity(
-                f"Thread memory restored: **{message.channel.name}** ({len(loaded)} msgs)\n{summary}", "🧠",
-                channel=message.channel
-            )
+            # Internal log only — operational noise, not surfaced to channel (016 principle)
+            print(f"Thread memory context: {message.channel.name} ({len(loaded)} msgs) — {summary[:100]}")
 
     attachments = []
     attachment_note = ""
@@ -671,6 +669,10 @@ async def on_member_remove(member):
     print(f"Member left: {member.name} (id: {member.id})")
 
 
+# Spirit bot (dyad partner) — messages from Spirit are treated as practitioner input
+SPIRIT_BOT_ID = 1487405701440733294
+
+
 @client.event
 async def on_message(message):
     if message.author == client.user:
@@ -682,9 +684,14 @@ async def on_message(message):
     set_practice_context(message)
 
     if message.author.bot:
-        if client.user in message.mentions and is_practice_channel(message):
+        if message.author.id == SPIRIT_BOT_ID and is_practice_channel(message):
+            # Spirit (dyad partner) — process like a practitioner message
+            pass  # fall through to normal handling below
+        elif client.user in message.mentions and is_practice_channel(message):
             await handle_dialogue(message)
-        return
+            return
+        else:
+            return
 
     if is_practice_channel(message):
         if await try_direct_command(message):
