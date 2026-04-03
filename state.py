@@ -141,3 +141,55 @@ EMBED_COLORS = {
     "boom": 0xF39C12, "bright": 0x3498DB, "compass": 0x9B59B6,
     "sync": 0x1ABC9C, "help": 0x95A5A6,
 }
+
+
+# ─── Thread Contexts (Channel Attunement) ────────────────────────
+# Maps context type → resonance files to load + behavioral rules.
+# Paths relative to workshop root.
+
+THREAD_CONTEXTS = {
+    "partnership": {
+        "label": "Partnership",
+        "emoji": "\U0001f49e",
+        "resonance_files": [
+            "library/resonance/romantic-partnership/manifest.md",
+            "library/resonance/romantic-partnership/lore/on_perspectival_divergence.md",
+            "library/resonance/romantic-partnership/lore/on_neurodivergent_partnership.md",
+            "library/resonance/romantic-partnership/lore/on_love_languages_and_signatures.md",
+        ],
+        "max_resonance_chars": 6000,
+        "rules": (
+            "## Partnership Practice Context\n\n"
+            "This thread is for relationship practice. You hold the romantic-partnership resonance.\n\n"
+            "**The Raw-Material Rule (LOAD-BEARING):**\n"
+            "- Raw processing in this thread NEVER crosses to the family channel or the partner\n"
+            "- If the Mage wants to share something with their partner, help translate from raw processing to reality description\n"
+            "- Default to protection. Only the Mage can override.\n\n"
+            "**Your role:**\n"
+            "- Hold space for relationship processing -- capture moments, notice patterns across entries\n"
+            "- Apply perspectival divergence awareness (different interpretations, not one lying)\n"
+            "- Apply neurodivergent partnership wisdom (translation > correction, depersonalize symptoms)\n"
+            "- Suggest depth sessions (Anvil/Forge) when something needs formal arc work\n"
+            "- Never suggest sharing raw material with the partner\n"
+        ),
+    },
+    "check-in": {
+        "label": "Check-in",
+        "emoji": "\U0001f4ac",
+        "resonance_files": [
+            "library/resonance/romantic-partnership/manifest.md",
+        ],
+        "max_resonance_chars": 3000,
+        "rules": (
+            "## Partnership Check-in Context (Shared Space)\n\n"
+            "This thread is a shared partnership check-in. Both partners may be present.\n\n"
+            "**CRITICAL: Portal-safe mode.**\n"
+            "- Reality descriptions only. No raw processing. No clinical labels. Ever.\n"
+            "- Validate without lying. Use systems language, not blame language.\n"
+            "- Facilitate gently -- prompt with open questions about what is going well, what is hard, what is needed.\n"
+            "- If something needs depth work, suggest taking it to a private thread or depth session.\n"
+            "- Hold neurodivergent communication awareness (one topic at a time, validate before problem-solve)\n"
+            "- Match the language the partners use. If they speak German, respond in German.\n"
+        ),
+    },
+}
