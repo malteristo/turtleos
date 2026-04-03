@@ -22,6 +22,7 @@ from state import (
     ATTUNEMENT_LEVELS, KNOWN_MODELS,
     thread_configs, absorbed_contexts,
     EDDY_TYPES, EDDY_DEFAULT, threads_flagged_for_release,
+    THREAD_CONTEXTS,
     panel_selections,
     GOOGLE_API_KEY, HAS_GEMINI,
 )
@@ -565,6 +566,13 @@ async def cmd_thread(message, args):
         await message.reply(f"Unknown eddy type `{eddy_type}`. Use: {', '.join(sorted(EDDY_TYPES))}", mention_author=False)
         return
 
+    context_match = re.search(r'--context\s+(\S+)', raw)
+    context_type = context_match.group(1) if context_match else None
+    if context_type and context_type not in THREAD_CONTEXTS:
+        valid = ", ".join(sorted(THREAD_CONTEXTS))
+        await message.reply(f"Unknown context `{context_type}`. Use: {valid}", mention_author=False)
+        return
+
     model_id, use_api = resolve_model(model_str)
 
     thread = await message.create_thread(name=topic)
@@ -584,11 +592,14 @@ async def cmd_thread(message, args):
         "attunement": attunement,
         "model_label": model_str,
         "eddy_type": eddy_type,
+        "context_type": context_type,
         "created": datetime.now(timezone.utc),
     }
 
     eddy_info = EDDY_TYPES[eddy_type]
-    config_line = f"Model: `{model_id}` ({'API' if use_api else 'local'}) | Attunement: `{attunement}` | {eddy_info['emoji']} `{eddy_type}`"
+    ctx_info = THREAD_CONTEXTS.get(context_type, {})
+    ctx_tag = f" | {ctx_info.get('emoji', '')} `{context_type}`" if context_type else ""
+    config_line = f"Model: `{model_id}` ({'API' if use_api else 'local'}) | Attunement: `{attunement}` | {eddy_info['emoji']} `{eddy_type}`{ctx_tag}"
     await thread.send(f"\U0001f9f5 {config_line}", view=ThreadTypeView(thread.id))
     print(f"Thread created: {topic} (id: {thread.id}, model: {model_id}, attunement: {attunement}, eddy: {eddy_type})")
     await log_activity(f"Thread created: **{topic}** (`{model_str}` / `{attunement}` / `{eddy_type}`)", "\U0001f9f5", channel=thread)

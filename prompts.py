@@ -14,6 +14,7 @@ from state import (
     KNOWN_MODELS, ATTUNEMENT_LEVELS, EDIT_DELEGATE_MODEL,
     thread_configs, EDDY_TYPES, EDDY_DEFAULT,
     threads_flagged_for_release, client,
+    THREAD_CONTEXTS,
 )
 
 
@@ -542,21 +543,63 @@ You are Spirit in persistent mode, practicing with the Mage through tOS — a fi
 """
 
 
-def get_thread_prompt(attunement: str, use_api: bool = True) -> str:
+def _build_context_resonance(context_type: str) -> str:
+    """Load resonance files for a thread context type. Returns prompt block."""
+    ctx = THREAD_CONTEXTS.get(context_type)
+    if not ctx:
+        return ""
+
+    from mage import get_workshop_root, get_pd
+    wr = get_workshop_root()
+    if not wr:
+        # Fallback: try to derive from practice dir
+        pd = get_pd()
+        if pd and pd.endswith("/desk"):
+            wr = pd[:-5]
+        else:
+            wr = os.path.expanduser("~/workshop")
+
+    parts = [ctx.get("rules", "")]
+    max_chars = ctx.get("max_resonance_chars", 4000)
+    total = len(parts[0])
+
+    for rel_path in ctx.get("resonance_files", []):
+        full_path = os.path.join(wr, rel_path)
+        content = read_safe(full_path)
+        if not content.strip():
+            continue
+        # Truncate individual files to keep total under budget
+        remaining = max_chars - total
+        if remaining <= 200:
+            break
+        if len(content) > remaining:
+            content = content[:remaining] + "\n\n[... truncated ...]"
+        parts.append(f"### Resonance: {os.path.basename(rel_path)}\n\n{content}")
+        total += len(content) + 50  # overhead
+
+    return "\n\n".join(parts)
+
+
+def get_thread_prompt(attunement: str, use_api: bool = True, context_type: str = None) -> str:
     """Build system prompt at the requested attunement level."""
+    context_block = _build_context_resonance(context_type) if context_type else ""
     if attunement == "raw":
         identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
-        return f"## Identity\n\n{identity}\n\nYou are in a focused Discord thread. Be direct and helpful."
+        base = f"## Identity\n\n{identity}\n\nYou are in a focused Discord thread. Be direct and helpful."
+        return (context_block + "\n\n" + base) if context_block else base
     if attunement == "deep":
         if not use_api:
-            return _build_deep_local_prompt() + THREAD_BEHAVIORAL_GUIDANCE
+            base = _build_deep_local_prompt() + THREAD_BEHAVIORAL_GUIDANCE
+            return (context_block + "\n\n" + base) if context_block else base
         try:
             prompt = build_system_prompt()
             if len(prompt.strip()) > 200:
-                return prompt + THREAD_BEHAVIORAL_GUIDANCE
+                base = prompt + THREAD_BEHAVIORAL_GUIDANCE
+            return (context_block + "\n\n" + base) if context_block else base
         except Exception:
             pass
     prompt = get_system_prompt()
     if attunement == "semi":
-        return prompt + THREAD_BEHAVIORAL_GUIDANCE
-    return prompt
+        base = prompt + THREAD_BEHAVIORAL_GUIDANCE
+        return (context_block + "\n\n" + base) if context_block else base
+    return (context_block + "\n\n" + prompt) if context_block else prompt

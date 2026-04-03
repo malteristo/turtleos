@@ -314,7 +314,7 @@ async def handle_dialogue(message):
 
     cfg = thread_configs.get(channel_id)
     if cfg:
-        system_prompt = get_thread_prompt(cfg["attunement"], cfg["use_api"])
+        system_prompt = get_thread_prompt(cfg["attunement"], cfg["use_api"], context_type=cfg.get("context_type"))
         thread_use_api = cfg["use_api"]
         thread_model = cfg["model"]
     else:
