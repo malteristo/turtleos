@@ -1,4 +1,4 @@
-"""turtleOS commands — 28 direct commands, views, control panel, dispatch."""
+"""turtleOS commands — 29 direct commands, views, control panel, dispatch."""
 
 import asyncio
 import json
@@ -65,6 +65,7 @@ from content_fetch import (
 
 from helpers import get_history, log_activity, split_message
 from attunement import perform_attunement, get_digest_age_hours
+from load_command import cmd_load
 
 
 # ─── Direct Commands ─────────────────────────────────────────────
@@ -87,8 +88,8 @@ async def cmd_status(message):
         ollama_status = "unreachable"
 
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "bright.md"))
-    compass = read_safe(os.path.join(get_pd(), "compass.md"))
+    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
 
     sdir = os.path.join(get_pd(), "sessions")
     session_files = [f for f in os.listdir(sdir) if f.endswith(".md")] if os.path.isdir(sdir) else []
@@ -198,7 +199,7 @@ If nothing worth capturing: output exactly (nothing to capture)"""
 
 
 async def cmd_bright(message):
-    bright = read_safe(os.path.join(get_pd(), "bright.md"))
+    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
     if not bright.strip():
         embed = discord.Embed(title="\u2728 Bright Surface", description="*Empty.*", color=EMBED_COLORS["bright"])
     else:
@@ -217,7 +218,7 @@ async def cmd_bright(message):
 
 
 async def cmd_compass(message):
-    compass = read_safe(os.path.join(get_pd(), "compass.md"))
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
     if not compass.strip():
         embed = discord.Embed(title="\U0001f9ed Compass", description="*Not yet built.*", color=EMBED_COLORS["compass"])
     else:
@@ -244,10 +245,10 @@ async def cmd_intentions(message):
 
 async def cmd_sync(message):
     now = datetime.now()
-    files = ["boom.md", "bright.md", "compass.md"]
+    files = [("boom.md", "boom.md"), ("boom/bright.md", "bright.md"), ("intentions/compass.md", "compass.md")]
     lines = []
-    for fname in files:
-        path = os.path.join(get_pd(), fname)
+    for fpath, display_name in files:
+        path = os.path.join(get_pd(), fpath)
         if os.path.isfile(path):
             mtime = datetime.fromtimestamp(os.path.getmtime(path))
             age = now - mtime
@@ -257,9 +258,9 @@ async def cmd_sync(message):
                 age_str = f"{int(age.total_seconds() / 3600)}h ago"
             else:
                 age_str = f"{int(age.total_seconds() / 86400)}d ago"
-            lines.append(f"`{fname}`: {age_str}")
+            lines.append(f"`{display_name}`: {age_str}")
         else:
-            lines.append(f"`{fname}`: missing")
+            lines.append(f"`{display_name}`: missing")
     freshness = "\n".join(lines)
 
     # 016 reroute: check if anything is stale (> 24h) or missing
@@ -396,12 +397,12 @@ async def cmd_diagnose(message):
         sync_lines.append("❌ No practice files on disk")
         issues.append("Practice directory appears empty")
 
-    practice_files = ["boom.md", "bright.md", "compass.md"]
+    practice_files = [("boom.md", "boom.md"), ("boom/bright.md", "bright.md"), ("intentions/compass.md", "compass.md")]
     stale_files = []
-    for fname in practice_files:
-        age = file_age_hours(os.path.join(get_pd(), fname))
+    for fpath, display_name in practice_files:
+        age = file_age_hours(os.path.join(get_pd(), fpath))
         if age > 48:
-            stale_files.append(f"`{fname}` ({format_age(age)})")
+            stale_files.append(f"`{display_name}` ({format_age(age)})")
     if stale_files:
         sync_lines.append(f"⚠️ Stale: {', '.join(stale_files)}")
     else:
@@ -516,6 +517,7 @@ async def cmd_help(message):
         ("`!absorb <name>`", "Bring thread resonance into main channel"),
         ("`!absorbed`", "Show absorbed thread contexts"),
         ("`!forget [name]`", "Release absorbed context (all or one)"),
+        ("`!load <context>`", "Load workshop resonance (circles, bundles)"),
     ]
     fetch_cmds = [
         ("`!fetch <url>`", "Fetch & distill a URL's resonance"),
@@ -1273,10 +1275,10 @@ async def cmd_ls(message, args):
 
 async def cmd_sweep(message):
     boom_path = os.path.join(get_pd(), "boom.md")
-    bright_path = os.path.join(get_pd(), "bright.md")
+    bright_path = os.path.join(get_pd(), "boom", "bright.md")
     boom = read_safe(boom_path)
     bright = read_safe(bright_path)
-    compass = read_safe(os.path.join(get_pd(), "compass.md"))
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
 
     if not boom.strip():
         await message.reply("Boom is empty — nothing to sweep.", mention_author=False)
@@ -1371,8 +1373,8 @@ BOOM TO SWEEP:
 
 async def cmd_recall(message):
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "bright.md"))
-    compass = read_safe(os.path.join(get_pd(), "compass.md"))
+    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
 
     boom_count = count_items(boom)
     bright_count = count_items(bright)
@@ -1411,7 +1413,7 @@ async def cmd_recall(message):
 
     freshness_lines = []
     any_stale = False
-    for fname in ["boom.md", "bright.md", "compass.md"]:
+    for fname in ["boom.md", "boom/bright.md", "intentions/compass.md"]:
         fpath = os.path.join(get_pd(), fname)
         if os.path.isfile(fpath):
             age = datetime.now().timestamp() - os.path.getmtime(fpath)
@@ -1486,7 +1488,7 @@ async def cmd_edit(message, args):
             await message.reply("Use `!edit boom clear` or `!boom add <thought>`", mention_author=False)
 
     elif target == "bright":
-        bright_path = os.path.join(get_pd(), "bright.md")
+        bright_path = os.path.join(get_pd(), "boom", "bright.md")
         if action == "append" and content:
             with open(bright_path, "a") as f:
                 f.write(f"\n- {content}\n")
@@ -1505,7 +1507,7 @@ async def cmd_edit(message, args):
 
     elif target == "compass":
         if action == "set" and content:
-            compass_path = os.path.join(get_pd(), "compass.md")
+            compass_path = os.path.join(get_pd(), "intentions", "compass.md")
             with open(compass_path, "w") as f:
                 f.write(content + "\n")
             await message.add_reaction("\U0001f9ed")
@@ -2088,6 +2090,7 @@ DIRECT_COMMANDS = {
     "admin": lambda msg, args: cmd_admin(msg, args),
     "signals": lambda msg, args: cmd_signals(msg, args),
     "attune": lambda msg, args: cmd_attune(msg),
+    "load": lambda msg, args: cmd_load(msg, args),
 }
 
 COMMAND_CONTEXT = {
@@ -2108,6 +2111,7 @@ COMMAND_CONTEXT = {
     "readiness": "I ran a full practice-readiness assessment across all 8 dimensions.",
     "signals": "I showed the outfacing signal drafts -- Turtle-generated content awaiting Mage curation.",
     "attune": "I performed a self-attunement ritual -- read core practice lore, integrated understanding, and wrote a fresh attunement digest.",
+    "load": "I loaded resonance context from the workshop into this conversation.",
 }
 
 

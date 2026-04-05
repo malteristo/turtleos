@@ -279,8 +279,8 @@ async def handle_dialogue(message):
         ctx_parts = []
         pd = get_pd()
         boom_count = count_items(read_safe(os.path.join(pd, "boom.md")))
-        bright_count = count_items(read_safe(os.path.join(pd, "bright.md")))
-        compass_age = format_age(file_age_hours(os.path.join(pd, "compass.md")))
+        bright_count = count_items(read_safe(os.path.join(pd, "boom", "bright.md")))
+        compass_age = format_age(file_age_hours(os.path.join(pd, "intentions", "compass.md")))
         intentions = load_intentions_list()
         sdir = os.path.join(pd, "sessions")
         last_session = ""
@@ -522,7 +522,8 @@ async def on_ready():
                 ),
                 color=0x2ECC71,
             )
-            embed.set_footer(text=f"<t:{ts}:t>")
+            from datetime import datetime as _dt, timezone as _tz
+            embed.set_footer(text=_dt.now(_tz.utc).strftime("%Y-%m-%d %H:%M UTC"))
             await dialogue.send(embed=embed, silent=True)
 
     asyncio.get_event_loop().create_task(prewarm_triage())

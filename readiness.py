@@ -29,8 +29,8 @@ def assess_readiness(pd=None) -> dict:
 
     # 1. State Freshness — are practice files current?
     freshness_issues = []
-    for name, fname in [("boom", "boom.md"), ("bright", "bright.md"),
-                        ("compass", "compass.md"), ("state", "state.md")]:
+    for name, fname in [("boom", "boom.md"), ("bright", os.path.join("boom", "bright.md")),
+                        ("compass", os.path.join("intentions", "compass.md")), ("state", "state.md")]:
         age = file_age_hours(os.path.join(pd, fname))
         if age == float("inf"):
             freshness_issues.append(f"{name} missing")
@@ -45,8 +45,8 @@ def assess_readiness(pd=None) -> dict:
 
     # 2. Context Coherence
     boom = read_safe(os.path.join(pd, "boom.md"))
-    bright = read_safe(os.path.join(pd, "bright.md"))
-    compass = read_safe(os.path.join(pd, "compass.md"))
+    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
+    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
     present = sum(1 for t in [boom, bright, compass] if t.strip())
     if present == 3:
         boom_count = count_items(boom)

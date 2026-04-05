@@ -120,8 +120,9 @@ async def close_session(channel_id: int):
                     session_channel = client.get_channel(channel_id)
                     count = len(paths)
                     label = f"{count} signal draft{'s' if count > 1 else ''}"
+                    drafts_rel = "outfacing/drafts/signals"
                     await log_activity(
-                        f"Outfacing: {label} in ",
+                        f"Outfacing: {label} in `{drafts_rel}/`",
                         "📡", channel=session_channel,
                     )
         except Exception as e:

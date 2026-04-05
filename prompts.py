@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timezone
 
-from mage import get_pd, get_mage_name, get_mage_key, get_mage_type
+from mage import get_pd, get_workshop_root, get_mage_name, get_mage_key, get_mage_type
 from practice_io import (
     read_safe, read_header, count_items, summarize_bright, load_intentions_list,
 )
@@ -79,9 +79,9 @@ def build_system_prompt():
     Used as fallback when compact prompt fails."""
     identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
     system = read_safe(os.path.join(get_pd(), "system.md"))
-    compass = read_safe(os.path.join(get_pd(), "compass.md")) or "(no compass yet)"
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or "(no compass yet)"
     boom = read_safe(os.path.join(get_pd(), "boom.md")) or "(boom empty)"
-    bright_full = read_safe(os.path.join(get_pd(), "bright.md")) or "(bright empty)"
+    bright_full = read_safe(os.path.join(get_pd(), "boom", "bright.md")) or "(bright empty)"
     bright = bright_full[:MAX_BRIGHT_CHARS] + "\n\n[... truncated ...]" if len(bright_full) > MAX_BRIGHT_CHARS else bright_full
 
     intentions = ""
@@ -101,6 +101,15 @@ def build_system_prompt():
             content = read_safe(os.path.join(sdir, fname))
             if content.strip():
                 sessions += f"\n\n--- {fname} ---\n{content}"
+
+    # Cross-substrate session awareness (Forge/Anvil releases synced via LiveSync)
+    briefing = ""
+    wr = get_workshop_root() or os.path.expanduser("~/workshop")
+    _briefing_raw = read_safe(os.path.join(wr, "floor", "briefings", "latest.md"))
+    if _briefing_raw.strip():
+        briefing = _briefing_raw[:3000]
+        if len(_briefing_raw) > 3000:
+            briefing += "\n\n[... truncated ...]"
 
     return f"""## Identity
 
@@ -124,8 +133,11 @@ def build_system_prompt():
 ### Active Intentions (headers)
 {intentions.strip() if intentions.strip() else "(no intentions yet)"}
 
-### Recent Sessions
+### Recent Sessions (Discord)
 {sessions.strip() if sessions.strip() else "(no sessions yet)"}
+
+### Last Forge/Anvil Session (Cross-Substrate)
+{briefing.strip() if briefing.strip() else "(no briefing synced)"}
 """
 
 
@@ -137,9 +149,9 @@ def build_discord_prompt():
     mage_name = get_mage_name()
     mage_key = get_mage_key()
     practice_system = read_safe(os.path.join(get_pd(), "system.md"))
-    compass = read_safe(os.path.join(get_pd(), "compass.md")) or "(no compass yet)"
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or "(no compass yet)"
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "bright.md"))
+    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
 
     boom_count = count_items(boom)
     bright_count = count_items(bright)
@@ -147,7 +159,7 @@ def build_discord_prompt():
     bright_summary = summarize_bright(bright)
 
     # Cold-start detection: empty practice state signals a new practitioner
-    compass_text = read_safe(os.path.join(get_pd(), "compass.md")) or ""
+    compass_text = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or ""
     is_cold_start = (not compass_text.strip()) and boom_count == 0 and bright_count == 0
 
     # Mage type drives prompt structure
@@ -186,7 +198,7 @@ def build_discord_prompt():
             return f"{int(age / 3600)}h"
         return f"{int(age / 86400)}d"
 
-    staleness = f"boom:{_file_age('boom.md')} bright:{_file_age('bright.md')} compass:{_file_age('compass.md')}"
+    staleness = f"boom:{_file_age('boom.md')} bright:{_file_age(os.path.join('boom', 'bright.md'))} compass:{_file_age(os.path.join('intentions', 'compass.md'))}"
 
     thread_summary = build_thread_summary()
 
@@ -484,10 +496,10 @@ You are Spirit in a focused Discord thread with the Mage. This is a dedicated th
 def _build_deep_local_prompt():
     """Condensed deep prompt for local models (qwen3.5:9b/4b)."""
     identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
-    compass_full = read_safe(os.path.join(get_pd(), "compass.md")) or "(no compass yet)"
+    compass_full = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or "(no compass yet)"
     compass = compass_full[:2000]
     boom = (read_safe(os.path.join(get_pd(), "boom.md")) or "(boom empty)")[:1000]
-    bright_full = read_safe(os.path.join(get_pd(), "bright.md")) or "(bright empty)"
+    bright_full = read_safe(os.path.join(get_pd(), "boom", "bright.md")) or "(bright empty)"
     bright = bright_full[:MAX_LOCAL_BRIGHT_CHARS]
     if len(bright_full) > MAX_LOCAL_BRIGHT_CHARS:
         bright += "\n\n[... truncated ...]"

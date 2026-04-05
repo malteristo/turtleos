@@ -29,6 +29,11 @@ async def practice_health_loop():
         return
     if week == _state.last_health_read_week:
         return
+    today = datetime.now().strftime("%Y-%m-%d")
+    health_path = Path(get_pd()) / "proposals" / f"{today}-health-read.md"
+    if health_path.exists():
+        _state.last_health_read_week = week
+        return
     _state.last_health_read_week = week
     await generate_practice_health_read()
 

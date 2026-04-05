@@ -34,9 +34,9 @@ async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
     target = channel or get_channel("dialogue")
     if not target:
         return
-    ts = int(datetime.now(timezone.utc).timestamp())
+    ts_str = datetime.now(timezone.utc).strftime("%H:%M")
     embed = discord.Embed(
-        description=f"{emoji} <t:{ts}:t> {text}",
+        description=f"{emoji} {ts_str} {text}",
         color=OPS_EMBED_COLOR,
     )
     try:

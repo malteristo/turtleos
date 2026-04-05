@@ -99,9 +99,9 @@ async def prepare_context_brief(message_text: str) -> str | None:
     pd = get_pd()
 
     # Read practice state
-    compass = read_safe(os.path.join(pd, "compass.md")) or "(no compass)"
+    compass = read_safe(os.path.join(pd, "intentions", "compass.md")) or "(no compass)"
     boom = read_safe(os.path.join(pd, "boom.md")) or "(boom empty)"
-    bright = read_safe(os.path.join(pd, "bright.md")) or "(bright empty)"
+    bright = read_safe(os.path.join(pd, "boom", "bright.md")) or "(bright empty)"
     boom_count = count_items(boom)
     bright_count = count_items(bright)
     boom_age = format_age(file_age_hours(os.path.join(pd, "boom.md")))
