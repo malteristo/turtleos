@@ -205,6 +205,25 @@ def _extract_tweet_id_and_username(url):
         return tweet_id, username
     return None, None
 
+
+async def _fetch_full_tweet(tweet_id):
+    """Fetch full tweet text via Twitter API v2 (handles truncation from oembed)."""
+    try:
+        import sys
+        sys.path.insert(0, os.path.dirname(__file__))
+        from twitter_ops import get_client
+        client = get_client()
+        response = client.get_tweet(
+            tweet_id,
+            tweet_fields=["text", "author_id", "note_tweet"],
+        )
+        if response.data:
+            return response.data.text
+    except Exception as e:
+        print(f"Full tweet fetch failed: {type(e).__name__}: {e}")
+    return None
+
+
 async def fetch_twitter(url):
     """Extract tweet content via Twitter's oembed API (no auth needed).
     Follows links found in tweet text and extracts their content too.
@@ -269,9 +288,20 @@ async def fetch_twitter(url):
                     for i, reply_text in enumerate(replies, 1):
                         result += f"\n{i}. {reply_text}"
 
-            # Detect truncation (oembed cuts off long tweets with …)
+            # If oembed truncated, try Twitter API for full text
             if "\u2026" in text or text.rstrip().endswith("..."):
-                result += "\n\n[Note: Tweet appears truncated. Full text may contain more context. Author may have reply-thread with additional points.]"
+                if tweet_id:
+                    full_text = await _fetch_full_tweet(tweet_id)
+                    if full_text and len(full_text) > len(text):
+                        result = f"Tweet by {author}:\n{full_text}"
+                        if linked_content:
+                            result += "\n\n" + "\n".join(linked_content)
+                        if replies:
+                            result += f"\n\n[Author thread ({len(replies)} replies):]"
+                            for i, reply_text in enumerate(replies, 1):
+                                result += f"\n{i}. {reply_text}"
+                    else:
+                        result += "\n\n[Note: Tweet may be truncated. Full text may contain more context.]"
 
             return result, "twitter"
     except Exception as e:

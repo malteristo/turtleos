@@ -11,7 +11,7 @@ from state import (
     IDENTITY_DIR, REFLECTION_MODEL, HEALTH_READ_DAY, HEALTH_READ_HOUR,
     OPS_EMBED_COLOR, get_channel,
 )
-from mage import get_pd
+from mage import get_pd, set_practice_context_for_channel
 from practice_io import (
     read_safe, read_header, count_items, summarize_bright,
     file_age_hours, format_age,
@@ -34,9 +34,13 @@ async def practice_health_loop():
 
 
 async def generate_practice_health_read():
+    dialogue = get_channel("dialogue")
+    if dialogue:
+        set_practice_context_for_channel(dialogue.id)
+
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "bright.md"))
-    compass = read_safe(os.path.join(get_pd(), "compass.md"))
+    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
 
     sessions_text = ""
     sdir = os.path.join(get_pd(), "sessions")
@@ -134,11 +138,15 @@ async def interoception_loop():
         _state.interoception_startup = False
         return
 
+    dialogue = get_channel("dialogue")
+    if dialogue:
+        set_practice_context_for_channel(dialogue.id)
+
     signals = []
 
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "bright.md"))
-    compass = read_safe(os.path.join(get_pd(), "compass.md"))
+    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
+    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
 
     boom_count = count_items(boom)
     boom_age = file_age_hours(os.path.join(get_pd(), "boom.md"))
@@ -148,13 +156,13 @@ async def interoception_loop():
     elif boom_count >= 20:
         signals.append(("\U0001f35d", f"Boom is overflowing — {boom_count} items. Consider `!sweep`"))
 
-    compass_age = file_age_hours(os.path.join(get_pd(), "compass.md"))
+    compass_age = file_age_hours(os.path.join(get_pd(), "intentions", "compass.md"))
     if compass_age > 168:
         signals.append(("\U0001f9ed", f"Compass hasn't been touched in {format_age(compass_age)}"))
 
-    bright_age = file_age_hours(os.path.join(get_pd(), "bright.md"))
+    bright_age = file_age_hours(os.path.join(get_pd(), "boom", "bright.md"))
     if bright_age > 168:
-        signals.append(("\u2728", f"Bright surface untouched for {format_age(bright_age)}"))
+        signals.append(("\u2728", f"Bright untouched for {format_age(bright_age)}"))
 
     sdir = os.path.join(get_pd(), "sessions")
     if os.path.isdir(sdir):

@@ -27,8 +27,22 @@ async def run():
         for m in reversed(msgs):
             author = m.author.display_name or m.author.name
             ts = m.created_at.strftime("%H:%M")
-            content = m.content if m.content else '[embed/system]'
-            print("[" + ts + "] " + author + ": " + content)
+            if m.content:
+                msg_text = m.content
+            elif m.embeds:
+                parts = []
+                for e in m.embeds:
+                    if e.title:
+                        parts.append(e.title)
+                    if e.description:
+                        parts.append(e.description)
+                if parts:
+                    msg_text = ' | '.join(parts)
+                else:
+                    continue
+            else:
+                continue
+            print("[" + ts + "] " + author + ": " + msg_text)
             print()
     
     elif op == 'send':
