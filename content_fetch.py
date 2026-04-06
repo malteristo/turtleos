@@ -103,6 +103,14 @@ async def _direct_fetch(url, timeout=15):
     if not extracted or len(extracted.strip()) < 50:
         return None, "no readable content extracted"
 
+    _GARBAGE_SIGNALS = ["javascript is disabled", "enable javascript",
+                        "this page doesn't exist", "try searching for something else",
+                        "you've been blocked", "log in to your", "use your developer token",
+                        "file a ticket", "blocked by network security"]
+    lower = extracted.lower()
+    if any(g in lower for g in _GARBAGE_SIGNALS) and len(extracted) < 500:
+        return None, "blocked or JS-gated page (no useful content)"
+
     return extracted, "article"
 
 
@@ -154,6 +162,11 @@ async def _jina_fetch(url, timeout=20):
             text = resp.text.strip()
             if len(text) < 50:
                 return None, "jina: no readable content"
+            _BLOCKED = ["you've been blocked", "blocked by network security",
+                        "log in to your", "use your developer token"]
+            lower = text.lower()
+            if any(b in lower for b in _BLOCKED) and len(text) < 500:
+                return None, "jina: target blocked access"
             return text, "jina"
     except Exception as e:
         return None, f"jina error: {type(e).__name__}"
