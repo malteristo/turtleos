@@ -269,7 +269,11 @@ async def handle_dialogue(message):
             if url_content:
                 attachment_note += f" [fetched {len(urls)} URL(s)]"
 
-    history.append({"role": "user", "content": f"[{message.author.display_name}]: {message.content}{attachment_note}"})
+    # Include fetched content in history so it persists across turns
+    user_entry = f"[{message.author.display_name}]: {message.content}{attachment_note}"
+    if url_content:
+        user_entry += f"\n\n[Fetched content]:\n{url_content[:6000]}"
+    history.append({"role": "user", "content": user_entry})
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
 
@@ -406,15 +410,10 @@ async def handle_dialogue(message):
         is_gemini = thread_model.startswith("gemini-")
         try:
             if is_gemini and HAS_GEMINI and GOOGLE_API_KEY:
-                if url_content:
-                    messages_for_llm[-1] = dict(messages_for_llm[-1])
-                    messages_for_llm[-1]["content"] += "\n\n[Fetched URL content]:\n" + url_content
                 reply, tools_executed = await chat_gemini(system_prompt, messages_for_llm, model=thread_model, attachments=attachments)
                 tool_report = build_tool_report(tools_executed)
-            elif (attachments or url_content) and not is_gemini:
+            elif attachments and not is_gemini:
                 extraction = await preprocess_attachments(attachments) if attachments else ""
-                if url_content:
-                    extraction = (extraction + "\n\n" + url_content).strip() if extraction else url_content
                 if extraction:
                     messages_for_llm[-1] = dict(messages_for_llm[-1])
                     messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + extraction
