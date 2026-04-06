@@ -427,4 +427,10 @@ async def handle_boom_thread_message(message):
         else:
             await message.reply(reply_text, mention_author=False)
 
-    return True
+    # Return full fetched content for dialogue to reference
+    if all_fetched_content:
+        parts = []
+        for url, raw in all_fetched_content:
+            parts.append(f"[Content from {url}]:\n{raw[:8000]}")
+        return "\n\n---\n\n".join(parts)
+    return None

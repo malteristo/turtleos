@@ -106,6 +106,9 @@ from content_fetch import (
     extract_attachments as _extract_attachments,
 )
 
+# Boom thread fetched content cache (message.id -> content string)
+_boom_fetched_content = {}
+
 
 # ─── handle_dialogue ─────────────────────────────────────────────
 
@@ -256,12 +259,15 @@ async def handle_dialogue(message):
             fnames = ", ".join(f"{fn}" for _, _, fn in attachments)
             attachment_note = f" [attached: {fnames}]"
 
-    url_content = ""
-    urls = await _extract_urls(message.content)
-    if urls:
-        url_content = await _process_urls(urls)
-        if url_content:
-            attachment_note += f" [fetched {len(urls)} URL(s)]"
+    url_content = _boom_fetched_content.pop(message.id, "")
+    if url_content:
+        attachment_note += " [content from boom capture]"
+    else:
+        urls = await _extract_urls(message.content)
+        if urls:
+            url_content = await _process_urls(urls)
+            if url_content:
+                attachment_note += f" [fetched {len(urls)} URL(s)]"
 
     history.append({"role": "user", "content": f"[{message.author.display_name}]: {message.content}{attachment_note}"})
     if len(history) > MAX_DIALOGUE_HISTORY:
@@ -709,17 +715,12 @@ async def on_message(message):
                 and not message.content.strip().startswith("!")):
             has_urls = "http://" in message.content or "https://" in message.content
             has_attachments = bool(message.attachments)
-            if has_urls or has_attachments:
-                # Shareable content — capture to boom, no dialogue
-                lock = get_channel_lock(message.channel.id)
-                async with lock:
-                    await handle_boom_thread_message(message)
-                return
-            # Plain text in boom: capture AND fall through to dialogue
-            # Everything in boom gets recorded. Conversation happens too.
+            # All boom messages: capture to boom, then fall through to dialogue
             lock = get_channel_lock(message.channel.id)
             async with lock:
-                await handle_boom_thread_message(message)
+                fetched_content = await handle_boom_thread_message(message)
+            if fetched_content:
+                _boom_fetched_content[message.id] = fetched_content
             # Fall through to handle_dialogue below
 
         lock = get_channel_lock(message.channel.id)
