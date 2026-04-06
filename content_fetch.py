@@ -1,16 +1,55 @@
 #!/usr/bin/env python3
 """Content fetching and processing for turtleOS Discord bot.
 
-Handles URL extraction, platform-specific fetching (Twitter/X, YouTube),
+Handles URL extraction, platform-specific fetching (Twitter/X, YouTube, Reddit),
 generic web scraping via trafilatura, LITL safety checks, and
 Discord attachment preprocessing via Gemini.
+
+CLI tool integration (2026-04-06): Delegates to community-maintained CLI tools
+(twitter-cli, rdt-cli, yt-dlp) when available, falling back to existing methods.
+Inspired by Agent Reach pattern: use the best tool for each platform.
 
 Extracted from discord_bot.py 2026-03-24 for structural health.
 """
 
+import asyncio
+import json
+import os
 import re
+import shutil
 
 import httpx
+
+
+_VENV_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin")
+
+
+def _cli_path(name):
+    """Get the path to a CLI tool, preferring the local venv."""
+    venv_path = os.path.join(_VENV_BIN, name)
+    if os.path.exists(venv_path):
+        return venv_path
+    return shutil.which(name)
+
+
+async def _run_cli(args, timeout=30):
+    """Run a CLI command asynchronously, return (stdout, returncode)."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return stdout.decode(errors="replace"), proc.returncode
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return "", -1
+    except Exception:
+        return "", -1
 
 
 _URL_PATTERN = re.compile(r"https?://[^\s<>\"\')\]]+")
@@ -288,7 +327,7 @@ async def fetch_twitter(url):
                     for i, reply_text in enumerate(replies, 1):
                         result += f"\n{i}. {reply_text}"
 
-            # If oembed truncated, try Twitter API for full text
+            # If oembed truncated, try Twitter API then Jina Reader for full text
             if "\u2026" in text or text.rstrip().endswith("..."):
                 if tweet_id:
                     full_text = await _fetch_full_tweet(tweet_id)
@@ -301,7 +340,11 @@ async def fetch_twitter(url):
                             for i, reply_text in enumerate(replies, 1):
                                 result += f"\n{i}. {reply_text}"
                     else:
-                        result += "\n\n[Note: Tweet may be truncated. Full text may contain more context.]"
+                        jina_content, jina_reason = await _jina_fetch(url, timeout=20)
+                        if jina_content and len(jina_content) > len(text):
+                            result = f"Tweet by {author} (via Jina Reader):\n{jina_content[:6000]}"
+                        else:
+                            result += "\n\n[Note: Tweet may be truncated. Full text may contain more context.]"
 
             return result, "twitter"
     except Exception as e:
@@ -326,23 +369,135 @@ async def fetch_youtube_transcript(url):
         return None, f"transcript error: {type(e).__name__}"
 
 
+async def fetch_reddit(url):
+    """Fetch Reddit post content via rdt-cli (no auth needed for public posts)."""
+    cli = _cli_path("rdt")
+    if not cli:
+        return None, "rdt-cli not installed"
+
+    match = re.search(r"/comments/([a-z0-9]+)", url)
+    if not match:
+        return None, "could not extract Reddit post ID from URL"
+    post_id = match.group(1)
+
+    stdout, rc = await _run_cli([cli, "read", f"t3_{post_id}"], timeout=20)
+    if rc != 0 or "ok: false" in stdout:
+        return None, f"rdt-cli failed (rc={rc})"
+
+    if "ok: true" not in stdout:
+        return None, "rdt-cli: unexpected output format"
+
+    try:
+        import yaml
+        data = yaml.safe_load(stdout)
+        children = (data.get("data", {}).get("data", {}).get("children")
+                    or data.get("data", {}).get("children", []))
+        if children and isinstance(children[0], dict):
+            post = children[0].get("data", {})
+            title = post.get("title", "")
+            selftext = post.get("selftext", "")
+            author = post.get("author", "unknown")
+            subreddit = post.get("subreddit_name_prefixed", "")
+            score = post.get("score", 0)
+            num_comments = post.get("num_comments", 0)
+
+            result = f"Reddit: {title}\n"
+            result += f"by u/{author} in {subreddit} | {score} points, {num_comments} comments\n"
+            if selftext:
+                result += f"\n{selftext[:6000]}"
+            return result, "reddit"
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    if len(stdout) > 100:
+        return f"Reddit post (raw YAML):\n{stdout[:6000]}", "reddit"
+    return None, "rdt-cli: could not parse output"
+
+
+async def _yt_dlp_fetch(url, timeout=30):
+    """Fetch YouTube metadata + subtitles via yt-dlp (supports 1800+ sites)."""
+    cli = _cli_path("yt-dlp")
+    if not cli:
+        return None, "yt-dlp not installed"
+
+    stdout, rc = await _run_cli(
+        [cli, "--dump-json", "--no-download", url],
+        timeout=timeout,
+    )
+    if rc != 0 or not stdout.strip():
+        return None, f"yt-dlp failed (rc={rc})"
+
+    try:
+        data = json.loads(stdout)
+        title = data.get("title", "Unknown")
+        uploader = data.get("uploader", "unknown")
+        duration = data.get("duration", 0)
+        description = data.get("description", "")
+
+        subs = data.get("subtitles", {})
+        auto_subs = data.get("automatic_captions", {})
+
+        transcript_text = None
+        for lang in ["en", "de", "de-DE"]:
+            sub_list = subs.get(lang) or auto_subs.get(lang)
+            if sub_list:
+                for fmt in sub_list:
+                    if fmt.get("ext") == "json3" and fmt.get("url"):
+                        try:
+                            async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as http:
+                                resp = await http.get(fmt["url"])
+                                if resp.status_code == 200:
+                                    sub_data = resp.json()
+                                    segments = []
+                                    for ev in sub_data.get("events", []):
+                                        for s in ev.get("segs", []):
+                                            t = s.get("utf8", "").strip()
+                                            if t and t != "\n":
+                                                segments.append(t)
+                                    if segments:
+                                        transcript_text = " ".join(segments)
+                        except Exception:
+                            pass
+                    if transcript_text:
+                        break
+                if transcript_text:
+                    break
+
+        mins, secs = divmod(int(duration), 60)
+        result = f"YouTube: {title}\nBy: {uploader} | Duration: {mins}m{secs}s\n"
+        if transcript_text:
+            result += f"\nTranscript:\n{transcript_text[:8000]}"
+        elif description:
+            result += f"\nDescription:\n{description[:4000]}"
+        else:
+            result += "\n[No transcript or description available.]"
+        return result, "yt-dlp"
+    except Exception as e:
+        return None, f"yt-dlp parse error: {type(e).__name__}"
+
+
 def detect_platform(url):
     """Detect known platforms that need special handling."""
     if "twitter.com/" in url or "x.com/" in url:
         return "twitter"
     if "youtube.com/" in url or "youtu.be/" in url:
         return "youtube"
+    if "reddit.com/" in url or "redd.it/" in url:
+        return "reddit"
     return None
 
 
 async def process_urls(urls, max_urls=3):
     """Fetch and process URLs using graceful degradation.
-    Includes LITL safety check on fetched content."""
+    Includes LITL safety check and link depth transparency reporting."""
     results = []
     for url in urls[:max_urls]:
         platform = detect_platform(url)
         content, source_type = None, None
         attempts = []
+        nested_urls_found = []
 
         if platform == "twitter":
             content, source_type = await fetch_twitter(url)
@@ -352,6 +507,13 @@ async def process_urls(urls, max_urls=3):
             content, source_type = await fetch_youtube_transcript(url)
             if not content:
                 attempts.append(f"youtube transcript: {source_type}")
+                content, source_type = await _yt_dlp_fetch(url)
+                if not content:
+                    attempts.append(f"yt-dlp: {source_type}")
+        elif platform == "reddit":
+            content, source_type = await fetch_reddit(url)
+            if not content:
+                attempts.append(f"reddit rdt-cli: {source_type}")
 
         if not content:
             content, source_type = await fetch_url_content(url)
@@ -359,6 +521,13 @@ async def process_urls(urls, max_urls=3):
                 attempts.append(source_type)
 
         if content:
+            nested_urls_found = _URL_PATTERN.findall(content)
+            nested_urls_found = [u for u in nested_urls_found
+                                 if u != url
+                                 and not u.startswith("https://t.co/")
+                                 and "twitter.com" not in u
+                                 and "x.com" not in u]
+
             litl_hits = litl_check(content)
             if litl_hits:
                 results.append(
@@ -369,7 +538,14 @@ async def process_urls(urls, max_urls=3):
                 )
                 print(f"LITL detected in {url}: {litl_hits[:3]}")
             else:
-                results.append(f"[URL: {url} (via {source_type})]\n{content[:8000]}")
+                entry = f"[URL: {url} (via {source_type})]\n{content[:8000]}"
+                if nested_urls_found[:3]:
+                    entry += "\n\n[Link depth report: Found nested URLs in this content:"
+                    for nu in nested_urls_found[:3]:
+                        np = detect_platform(nu)
+                        entry += f"\n  - {nu} ({np or 'web'} — not yet explored)"
+                    entry += "\n  Tell me if you want me to explore any of these.]"
+                results.append(entry)
         else:
             attempts_str = " → ".join(attempts) if attempts else "unknown"
             results.append(
