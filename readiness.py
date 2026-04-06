@@ -14,6 +14,25 @@ from state import (
 )
 
 
+def _resolve_default_pd():
+    """Resolve practice dir from registry for background contexts where
+    message-based context isn't set."""
+    pd = get_pd()
+    if pd and os.path.exists(os.path.join(pd, "boom", "bright.md")):
+        return pd
+    try:
+        from mage import _load_mage_registry
+        registry = _load_mage_registry()
+        kermit = registry.get("mages", {}).get("kermit", {})
+        if kermit and kermit.get("practice_dir"):
+            resolved = os.path.expanduser(kermit["practice_dir"])
+            if os.path.isdir(resolved):
+                return resolved
+    except Exception:
+        pass
+    return pd
+
+
 def assess_readiness(pd=None) -> dict:
     """Full 8-dimension practice-readiness assessment.
 
@@ -25,13 +44,13 @@ def assess_readiness(pd=None) -> dict:
     from sessions import session_monitor
     from background import interoception_loop, practice_health_loop
 
-    pd = pd or get_pd()
+    pd = pd or _resolve_default_pd()
     dims = []
 
     # 1. State Freshness — are practice files current?
     freshness_issues = []
     for name, fname in [("boom", "boom.md"), ("bright", os.path.join("boom", "bright.md")),
-                        ("compass", os.path.join("intentions", "compass.md")), ("state", "state.md")]:
+                        ("compass", os.path.join("intentions", "compass.md"))]:
         age = file_age_hours(os.path.join(pd, fname))
         if age == float("inf"):
             freshness_issues.append(f"{name} missing")
@@ -96,18 +115,27 @@ def assess_readiness(pd=None) -> dict:
     else:
         dims.append({"name": "Session Continuity", "status": "impaired", "detail": "no sessions directory"})
 
-    # 5. Workshop Visibility
-    workshop_sync_marker = os.path.join(pd, "state.md")
-    sync_age = file_age_hours(workshop_sync_marker)
-    if sync_age < 24:
-        dims.append({"name": "Workshop Visibility", "status": "ready",
-                     "detail": f"state synced {format_age(sync_age)} ago"})
-    elif sync_age < 72:
-        dims.append({"name": "Workshop Visibility", "status": "degraded",
-                     "detail": f"state {format_age(sync_age)} old"})
+    # 5. Workshop Visibility — check if LiveSync mirror is reachable via practice files
+    sync_markers = [("boom", "boom.md"), ("compass", os.path.join("intentions", "compass.md"))]
+    sync_ages = []
+    for name, fname in sync_markers:
+        age = file_age_hours(os.path.join(pd, fname))
+        if age != float("inf"):
+            sync_ages.append((name, age))
+    if sync_ages:
+        freshest_name, freshest_age = min(sync_ages, key=lambda x: x[1])
+        if freshest_age < 24:
+            dims.append({"name": "Workshop Visibility", "status": "ready",
+                         "detail": f"workshop synced ({freshest_name} {format_age(freshest_age)} ago)"})
+        elif freshest_age < 72:
+            dims.append({"name": "Workshop Visibility", "status": "degraded",
+                         "detail": f"workshop {format_age(freshest_age)} old"})
+        else:
+            dims.append({"name": "Workshop Visibility", "status": "impaired",
+                         "detail": f"workshop stale ({format_age(freshest_age)})"})
     else:
         dims.append({"name": "Workshop Visibility", "status": "impaired",
-                     "detail": f"no sync in {format_age(sync_age)}" if sync_age != float("inf") else "no state file"})
+                     "detail": "no practice files reachable"})
 
     # 6. Substrate Health
     substrate_issues = []
