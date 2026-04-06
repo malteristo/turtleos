@@ -1,5 +1,6 @@
-"""turtleOS readiness assessment — 8-dimension practice health check."""
+"""turtleOS readiness assessment — 9-dimension practice health check."""
 
+import base64
 import json
 import os
 from datetime import datetime, timezone
@@ -159,6 +160,10 @@ def assess_readiness(pd=None) -> dict:
     else:
         dims.append({"name": "Attunement Depth", "status": "impaired", "detail": "soul.md missing"})
 
+    # 9. Content Reach — can we fetch content from external platforms?
+    reach_result = _check_content_reach()
+    dims.append(reach_result)
+
     # Determine highest-leverage improvement
     impaired = [d for d in dims if d["status"] == "impaired"]
     degraded = [d for d in dims if d["status"] == "degraded"]
@@ -215,3 +220,175 @@ def save_readiness_trail(result, pd=None):
     trail_path = trail_dir / f"{now.strftime('%Y-%m-%d')}.jsonl"
     with open(trail_path, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+def _check_content_reach() -> dict:
+    """Check CLI tool availability and credential health for content fetching.
+    Synchronous check (no network calls) — just tool presence and credential validity."""
+    from content_fetch import _cli_path
+
+    tools = {}
+    issues = []
+    warnings = []
+
+    # Twitter: check tool + env vars
+    twitter_cli = _cli_path("twitter")
+    twitter_token = os.environ.get("TWITTER_AUTH_TOKEN", "")
+    twitter_ct0 = os.environ.get("TWITTER_CT0", "")
+    if twitter_cli and twitter_token and twitter_ct0:
+        tools["twitter"] = "ready"
+    elif twitter_cli and (not twitter_token or not twitter_ct0):
+        tools["twitter"] = "no cookies"
+        issues.append("Twitter: cookies missing")
+    else:
+        tools["twitter"] = "not installed"
+        issues.append("Twitter: twitter-cli missing")
+
+    # Reddit: check tool + credential file + JWT expiry
+    rdt_cli = _cli_path("rdt")
+    rdt_cred = Path.home() / ".config" / "rdt-cli" / "credential.json"
+    if rdt_cli and rdt_cred.exists():
+        try:
+            cred_data = json.loads(rdt_cred.read_text())
+            session_cookie = cred_data.get("cookies", {}).get("reddit_session", "")
+            if session_cookie:
+                days_left = _jwt_days_remaining(session_cookie)
+                if days_left is not None:
+                    if days_left < 0:
+                        tools["reddit"] = "expired"
+                        issues.append(f"Reddit: cookie expired {abs(days_left)}d ago")
+                    elif days_left < 14:
+                        tools["reddit"] = "expiring soon"
+                        warnings.append(f"Reddit: cookie expires in {days_left}d")
+                    else:
+                        tools["reddit"] = f"ready ({days_left}d left)"
+                else:
+                    tools["reddit"] = "ready"
+            else:
+                tools["reddit"] = "no cookie"
+                issues.append("Reddit: session cookie empty")
+        except Exception:
+            tools["reddit"] = "cred file corrupt"
+            issues.append("Reddit: credential file unreadable")
+    elif rdt_cli:
+        tools["reddit"] = "no credentials"
+        issues.append("Reddit: run rdt login or provide cookie")
+    else:
+        tools["reddit"] = "not installed"
+        issues.append("Reddit: rdt-cli missing")
+
+    # YouTube: check tool (no auth needed)
+    ytdlp = _cli_path("yt-dlp")
+    if ytdlp:
+        tools["youtube"] = "ready"
+    else:
+        tools["youtube"] = "degraded"
+        warnings.append("YouTube: yt-dlp missing (transcript API only)")
+
+    # Build dimension result
+    detail_parts = [f"{platform}: {status}" for platform, status in tools.items()]
+    detail = ", ".join(detail_parts)
+
+    if issues:
+        if any("expired" in i or "missing" in i for i in issues):
+            return {"name": "Content Reach", "status": "impaired", "detail": detail}
+        return {"name": "Content Reach", "status": "degraded", "detail": detail}
+    elif warnings:
+        return {"name": "Content Reach", "status": "degraded", "detail": detail}
+    return {"name": "Content Reach", "status": "ready", "detail": detail}
+
+
+def _jwt_days_remaining(token: str) -> int | None:
+    """Extract days until expiration from a JWT. Returns None if not a JWT."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1]
+        padding = 4 - len(payload) % 4
+        if padding != 4:
+            payload += "=" * padding
+        decoded = base64.urlsafe_b64decode(payload)
+        data = json.loads(decoded)
+        exp = data.get("exp")
+        if exp is None:
+            return None
+        now = datetime.now(timezone.utc).timestamp()
+        return int((exp - now) / 86400)
+    except Exception:
+        return None
+
+
+def check_content_reach_detail() -> str:
+    """Detailed content reach report for care rituals and diagnostics.
+    Returns a formatted string with tool versions, credential status, and recommendations."""
+    from content_fetch import _cli_path
+
+    lines = ["**Content Reach Diagnostic**", ""]
+
+    # Twitter
+    twitter_cli = _cli_path("twitter")
+    if twitter_cli:
+        lines.append(f"🐦 **Twitter:** twitter-cli installed at `{twitter_cli}`")
+        token = os.environ.get("TWITTER_AUTH_TOKEN", "")
+        ct0 = os.environ.get("TWITTER_CT0", "")
+        if token and ct0:
+            lines.append(f"   Auth: cookie configured (token: ...{token[-8:]})")
+        else:
+            lines.append("   ⚠️ Auth: TWITTER_AUTH_TOKEN and/or TWITTER_CT0 missing from environment")
+            lines.append("   → Ask the Mage to extract cookies from browser DevTools")
+    else:
+        lines.append("🐦 **Twitter:** ❌ twitter-cli not installed")
+        lines.append("   → `pip install twitter-cli`")
+
+    lines.append("")
+
+    # Reddit
+    rdt = _cli_path("rdt")
+    rdt_cred = Path.home() / ".config" / "rdt-cli" / "credential.json"
+    if rdt:
+        lines.append(f"📖 **Reddit:** rdt-cli installed at `{rdt}`")
+        if rdt_cred.exists():
+            try:
+                cred = json.loads(rdt_cred.read_text())
+                session = cred.get("cookies", {}).get("reddit_session", "")
+                if session:
+                    days = _jwt_days_remaining(session)
+                    if days is not None:
+                        if days < 0:
+                            lines.append(f"   🔴 Cookie EXPIRED {abs(days)} days ago")
+                            lines.append("   → Ask the Mage: extract reddit_session cookie from browser")
+                        elif days < 14:
+                            lines.append(f"   🟡 Cookie expires in {days} days — renewal needed soon")
+                            lines.append("   → Ask the Mage before it expires")
+                        else:
+                            lines.append(f"   Auth: session valid ({days} days remaining)")
+                    else:
+                        lines.append("   Auth: session cookie present (no expiry detected)")
+                else:
+                    lines.append("   ⚠️ Credential file exists but session cookie empty")
+            except Exception as e:
+                lines.append(f"   ⚠️ Could not read credential file: {e}")
+        else:
+            lines.append("   ⚠️ No credentials configured")
+            lines.append("   → Ask the Mage: extract reddit_session cookie from browser")
+    else:
+        lines.append("📖 **Reddit:** ❌ rdt-cli not installed")
+        lines.append("   → `pip install rdt-cli`")
+
+    lines.append("")
+
+    # YouTube
+    yt = _cli_path("yt-dlp")
+    if yt:
+        lines.append(f"📺 **YouTube:** yt-dlp installed at `{yt}`")
+        lines.append("   Auth: none needed (public content)")
+    else:
+        lines.append("📺 **YouTube:** ⚠️ yt-dlp not installed (using transcript API only)")
+        lines.append("   → `pip install yt-dlp`")
+
+    lines.append("")
+    lines.append("*Content reach is checked automatically in readiness assessment.*")
+    lines.append("*Cookie renewal requires the Mage — Turtle will alert when expiration approaches.*")
+
+    return "\n".join(lines)
