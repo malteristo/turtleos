@@ -276,10 +276,78 @@ async def _fetch_full_tweet(tweet_id):
     return None
 
 
+async def _twitter_cli_fetch(url):
+    """Fetch tweet via twitter-cli (cookie-based auth, full text, no truncation).
+    Requires TWITTER_AUTH_TOKEN + TWITTER_CT0 in environment."""
+    cli = _cli_path("twitter")
+    if not cli:
+        return None, "twitter-cli not installed"
+
+    stdout, rc = await _run_cli([cli, "tweet", url], timeout=15)
+    if rc != 0 or "not_authenticated" in stdout or "ok: false" in stdout:
+        reason = "auth failed" if "not_authenticated" in stdout else f"rc={rc}"
+        return None, f"twitter-cli: {reason}"
+
+    if "ok: true" not in stdout:
+        return None, "twitter-cli: unexpected output"
+
+    try:
+        import yaml
+        data = yaml.safe_load(stdout)
+        tweets = data.get("data", [])
+        if not tweets:
+            return None, "twitter-cli: no tweet data"
+        tweet = tweets[0] if isinstance(tweets, list) else tweets
+        text = tweet.get("text", "")
+        author_data = tweet.get("author", {})
+        author = author_data.get("screenName") or author_data.get("name", "unknown")
+        metrics = tweet.get("metrics", {})
+
+        result = f"Tweet by @{author}:\n{text}"
+        if metrics:
+            result += f"\n[{metrics.get('likes', 0)} likes, {metrics.get('retweets', 0)} RTs, {metrics.get('views', 0)} views]"
+
+        urls_in_tweet = re.findall(r"https?://t\.co/\S+", text)
+        if urls_in_tweet:
+            linked_content = []
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10), follow_redirects=True) as http:
+                for tco in urls_in_tweet[:3]:
+                    try:
+                        link_resp = await http.get(tco, follow_redirects=True)
+                        final_url = str(link_resp.url)
+                        if "x.com" in final_url or "twitter.com" in final_url:
+                            continue
+                        if link_resp.status_code == 200 and "text/html" in link_resp.headers.get("content-type", ""):
+                            import trafilatura
+                            extracted = trafilatura.extract(link_resp.text, include_links=False, favor_recall=True)
+                            if extracted and len(extracted.strip()) > 50:
+                                linked_content.append(f"[Linked article from {final_url}]:\n{extracted[:6000]}")
+                            else:
+                                linked_content.append(f"[Linked: {final_url} — content not extractable]")
+                        else:
+                            linked_content.append(f"[Linked: {final_url}]")
+                    except Exception:
+                        linked_content.append(f"[Linked: {tco} (could not follow)]")
+            if linked_content:
+                result += "\n\n" + "\n".join(linked_content)
+
+        return result, "twitter-cli"
+    except ImportError:
+        return None, "twitter-cli: pyyaml not installed for parsing"
+    except Exception as e:
+        return None, f"twitter-cli parse error: {type(e).__name__}"
+
+
 async def fetch_twitter(url):
-    """Extract tweet content via Twitter's oembed API (no auth needed).
-    Follows links found in tweet text and extracts their content too.
-    For X articles that can't be scraped, provides actionable guidance."""
+    """Fetch tweet content. Tries twitter-cli first (full text), falls back to oembed.
+    Follows links found in tweet text and extracts their content too."""
+    # Layer 1: twitter-cli (cookie-based, full text, metrics)
+    content, reason = await _twitter_cli_fetch(url)
+    if content:
+        return content, "twitter-cli"
+    print(f"twitter-cli fallback: {reason}")
+
+    # Layer 2: oembed (no auth needed, but truncates long tweets)
     import html as _html
 
     oembed_url = f"https://publish.twitter.com/oembed?url={url}&omit_script=true"
