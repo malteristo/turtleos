@@ -461,7 +461,7 @@ async def fetch_reddit(url):
         return None, "could not extract Reddit post ID from URL"
     post_id = match.group(1)
 
-    stdout, rc = await _run_cli([cli, "read", f"t3_{post_id}"], timeout=20)
+    stdout, rc = await _run_cli([cli, "read", post_id], timeout=20)
     if rc != 0 or "ok: false" in stdout:
         return None, f"rdt-cli failed (rc={rc})"
 
@@ -471,22 +471,44 @@ async def fetch_reddit(url):
     try:
         import yaml
         data = yaml.safe_load(stdout)
-        children = (data.get("data", {}).get("data", {}).get("children")
-                    or data.get("data", {}).get("children", []))
-        if children and isinstance(children[0], dict):
-            post = children[0].get("data", {})
-            title = post.get("title", "")
-            selftext = post.get("selftext", "")
-            author = post.get("author", "unknown")
-            subreddit = post.get("subreddit_name_prefixed", "")
-            score = post.get("score", 0)
-            num_comments = post.get("num_comments", 0)
+        listings = data.get("data", [])
+        if isinstance(listings, list) and listings:
+            first_listing = listings[0]
+            children = first_listing.get("data", {}).get("children", [])
+            if children and isinstance(children[0], dict):
+                post = children[0].get("data", {})
+                title = post.get("title", "")
+                selftext = post.get("selftext", "")
+                author = post.get("author", "unknown")
+                subreddit = post.get("subreddit_name_prefixed", "")
+                score = post.get("score", 0)
+                num_comments = post.get("num_comments", 0)
+                post_url = post.get("url", "")
 
-            result = f"Reddit: {title}\n"
-            result += f"by u/{author} in {subreddit} | {score} points, {num_comments} comments\n"
-            if selftext:
-                result += f"\n{selftext[:6000]}"
-            return result, "reddit"
+                result = f"Reddit: {title}\n"
+                result += f"by u/{author} in {subreddit} | {score} points, {num_comments} comments\n"
+                if selftext:
+                    result += f"\n{selftext[:6000]}"
+                elif post_url:
+                    result += f"\n[Link post: {post_url}]"
+
+                # Include top comments from second listing
+                if len(listings) > 1:
+                    comment_children = listings[1].get("data", {}).get("children", [])
+                    top_comments = []
+                    for c in comment_children[:5]:
+                        if c.get("kind") == "t1":
+                            cd = c.get("data", {})
+                            c_author = cd.get("author", "?")
+                            c_body = cd.get("body", "")
+                            c_score = cd.get("score", 0)
+                            if c_body:
+                                top_comments.append(f"u/{c_author} ({c_score} pts): {c_body[:500]}")
+                    if top_comments:
+                        result += f"\n\n[Top {len(top_comments)} comments:]\n"
+                        result += "\n---\n".join(top_comments)
+
+                return result, "reddit"
     except ImportError:
         pass
     except Exception:
