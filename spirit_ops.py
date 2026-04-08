@@ -71,7 +71,8 @@ async def run():
             import yaml
             with open(os.path.expanduser('~/turtle-shell/mage_registry.yaml')) as rf:
                 registry = yaml.safe_load(rf) or {}
-            mage_key = registry.get('channels', {}).get(str(channel_id))
+            ch_entry = registry.get('channels', {}).get(str(channel_id))
+            mage_key = ch_entry.get('mage') if isinstance(ch_entry, dict) else ch_entry
             member_ids = []
             if mage_key:
                 space = registry.get('spaces', {}).get(mage_key, {})
