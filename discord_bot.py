@@ -63,6 +63,7 @@ from mage import (
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
     get_registry, _resolve_mage_from_author,
+    get_thread_member_ids,
 )
 
 from practice_io import (
@@ -716,6 +717,11 @@ async def on_thread_create(thread):
     if is_registered_parent_channel(thread.parent_id):
         await thread.join()
         set_practice_context_for_channel(thread.parent_id)
+        for uid in get_thread_member_ids(thread.parent_id):
+            try:
+                await thread.add_user(discord.Object(id=int(uid)))
+            except Exception:
+                pass
         # Phase 1 Eyes: register new thread
         try:
             parent_name = thread.parent.name if thread.parent else "unknown"
@@ -818,7 +824,19 @@ async def on_message(message):
 
 # ─── Main ────────────────────────────────────────────────────────
 
+
+def _ensure_single_instance():
+    """Prevent duplicate bot processes — the source of double responses."""
+    import subprocess
+    result = subprocess.run(["pgrep", "-f", "discord_bot.py"], capture_output=True, text=True)
+    pids = [int(p) for p in result.stdout.strip().split("\n") if p.strip()]
+    pids = [p for p in pids if p != os.getpid()]
+    if pids:
+        print(f"WARNING: Another discord_bot.py already running (PID {pids}). Exiting.", file=sys.stderr)
+        sys.exit(1)
+
 def main():
+    _ensure_single_instance()
     token = os.environ.get("DISCORD_BOT_TOKEN")
     if not token:
         print("Error: DISCORD_BOT_TOKEN not set", file=sys.stderr)
