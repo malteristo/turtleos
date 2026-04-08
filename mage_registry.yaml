@@ -20,6 +20,15 @@ spaces:
     - kermit
     - nesrine
 channels:
-  '1479428854513664030': kermit
-  '1484973995823599757': nesrine
-  '1491163697278881836': family
+  '1479428854513664030':
+    mage: kermit
+    type: river
+    description: "Kermit's private practice surface"
+  '1484973995823599757':
+    mage: nesrine
+    type: hosted-river
+    description: "Nesrine's private practice surface, hosted on Kermit's server"
+  '1491163697278881836':
+    mage: family
+    type: shared
+    description: "Family shared practice — Kermit, Nesrine, and eventually the boys"

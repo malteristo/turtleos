@@ -51,12 +51,30 @@ def get_registry():
     return _MAGE_REGISTRY
 
 
+def _get_channel_mage(channel_id):
+    """Extract mage key from channel entry (supports both string and dict formats)."""
+    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
+    if entry is None:
+        return None
+    if isinstance(entry, dict):
+        return entry.get("mage")
+    return entry
+
+
+def _get_channel_type(channel_id):
+    """Get channel type (river, hosted-river, shared). Returns None for legacy format."""
+    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
+    if isinstance(entry, dict):
+        return entry.get("type")
+    return None
+
+
 # ─── Resolution Functions ────────────────────────────────────────
 
 def _resolve_practice_dir_for_channel(channel_id):
     """Resolve practice directory from channel ID via registry."""
     ch_str = str(channel_id)
-    mage_name = _MAGE_REGISTRY.get("channels", {}).get(ch_str)
+    mage_name = _get_channel_mage(channel_id)
     if not mage_name:
         return _TOS_DIR_DEFAULT
     mage = _MAGE_REGISTRY.get("mages", {}).get(mage_name, {})
@@ -71,7 +89,7 @@ def _resolve_practice_dir_for_channel(channel_id):
 def _resolve_mage_info_for_channel(channel_id):
     """Resolve mage name and key from channel ID via registry."""
     ch_str = str(channel_id)
-    mage_key = _MAGE_REGISTRY.get("channels", {}).get(ch_str)
+    mage_key = _get_channel_mage(channel_id)
     if mage_key:
         mage = _MAGE_REGISTRY.get("mages", {}).get(mage_key, {})
         if mage:
@@ -85,7 +103,7 @@ def _resolve_mage_info_for_channel(channel_id):
 def _resolve_workshop_root_for_channel(channel_id):
     """Resolve workshop root from channel ID via registry."""
     ch_str = str(channel_id)
-    mage_name = _MAGE_REGISTRY.get("channels", {}).get(ch_str)
+    mage_name = _get_channel_mage(channel_id)
     if not mage_name:
         return None
     mage = _MAGE_REGISTRY.get("mages", {}).get(mage_name, {})
@@ -203,7 +221,7 @@ def get_thread_member_ids(channel_id):
     For mage/practitioner channels: returns that user's discord_id.
     For space channels (e.g. family): returns discord_ids of all space members."""
     ch_str = str(channel_id)
-    mage_key = _MAGE_REGISTRY.get("channels", {}).get(ch_str)
+    mage_key = _get_channel_mage(channel_id)
     if not mage_key:
         return []
 
