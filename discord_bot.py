@@ -20,6 +20,7 @@ This file: event handlers, handle_dialogue, main().
 
 import asyncio
 import os
+import json
 import re
 import sys
 from datetime import datetime, timezone
@@ -68,6 +69,11 @@ from practice_io import (
     read_safe, count_items,
     file_age_hours, format_age, load_intentions_list,
     get_thread_state_dir, read_thread_state,
+)
+
+from thread_registry import (
+    register_thread, update_thread_activity,
+    backfill_from_discord, get_registry_summary,
 )
 
 from llm import (
@@ -479,6 +485,22 @@ async def handle_dialogue(message):
 
     if isinstance(message.channel, discord.Thread):
         await _update_thread_state(message.channel, cfg, history)
+        # Phase 1 Eyes: update thread registry on every exchange
+        if isinstance(message.channel, discord.Thread):
+            try:
+                parent_name = message.channel.parent.name if message.channel.parent else "unknown"
+                model_label = cfg.get("model_label", "default") if cfg else "default"
+                att = cfg.get("attunement", "semi") if cfg else "semi"
+                ctx_type = cfg.get("context_type") if cfg else None
+                eddy = cfg.get("eddy_type", "fast") if cfg else "fast"
+                register_thread(
+                    message.channel.id, message.channel.name,
+                    parent_channel=parent_name, model=model_label,
+                    attunement=att, context_type=ctx_type, eddy_type=eddy,
+                )
+                update_thread_activity(message.channel.id)
+            except Exception as e:
+                print(f"Registry update failed: {e}")
 
 
 # ─── Event Handlers ──────────────────────────────────────────────
@@ -533,6 +555,33 @@ async def on_ready():
 
     asyncio.get_event_loop().create_task(prewarm_triage())
 
+    # Pre-warm delegate edit model to avoid cold-start latency
+    async def _prewarm_edit_model():
+        import urllib.request
+        from state import OLLAMA_URL, EDIT_DELEGATE_MODEL
+        try:
+            payload = json.dumps({
+                "model": EDIT_DELEGATE_MODEL,
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": False,
+                "options": {"num_ctx": 512, "num_predict": 1},
+                "keep_alive": "30m",
+            }).encode()
+            def _do():
+                req = urllib.request.Request(
+                    f"{OLLAMA_URL}/api/chat",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    resp.read()
+            import asyncio
+            await asyncio.to_thread(_do)
+            print(f"Edit model pre-warmed: {EDIT_DELEGATE_MODEL}")
+        except Exception as e:
+            print(f"Edit model pre-warm failed: {e}")
+    asyncio.get_event_loop().create_task(_prewarm_edit_model())
+
     if dialogue:
         try:
             active = dialogue.threads
@@ -583,6 +632,24 @@ async def on_ready():
                     print(f"Cleaned {cleaned} stale thread-state files")
         except Exception as e:
             print(f"Thread-state cleanup failed: {e}")
+
+        # Phase 1 Eyes: backfill thread registry from Discord
+        try:
+            guild = dialogue.guild
+            gfull = await client.fetch_guild(guild.id)
+            from mage import get_registry as _get_mage_registry
+            _reg = _get_mage_registry()
+            _practice_channels = []
+            for ch_id_str in _reg.get("channels", {}).keys():
+                try:
+                    _practice_channels.append(int(ch_id_str))
+                except (ValueError, TypeError):
+                    pass
+            added, updated = await backfill_from_discord(gfull, _practice_channels or None)
+            summary = get_registry_summary()
+            print(f"Thread registry backfill: {added} added, {updated} updated — {summary}")
+        except Exception as e:
+            print(f"Thread registry backfill failed: {e}")
 
         has_panel = False
         try:
@@ -649,7 +716,29 @@ async def on_thread_create(thread):
     if is_registered_parent_channel(thread.parent_id):
         await thread.join()
         set_practice_context_for_channel(thread.parent_id)
-        print(f"Joined thread: {thread.name} (id: {thread.id}) [practice dir: {get_pd()}]")
+        # Phase 1 Eyes: register new thread
+        try:
+            parent_name = thread.parent.name if thread.parent else "unknown"
+            created = thread.created_at.isoformat() if thread.created_at else None
+            register_thread(
+                thread.id, thread.name,
+                parent_channel=parent_name, created=created,
+            )
+            print(f"Joined + registered thread: {thread.name} (id: {thread.id})")
+        except Exception as e:
+            print(f"Joined thread: {thread.name} (id: {thread.id}) [registry failed: {e}]")
+
+
+@client.event
+async def on_thread_update(before, after):
+    if is_registered_parent_channel(after.parent_id if after.parent_id else 0):
+        from thread_registry import update_thread_name
+        if before.name != after.name:
+            try:
+                update_thread_name(after.id, after.name)
+                print(f"Thread renamed: {before.name} -> {after.name}")
+            except Exception as e:
+                print(f"Thread rename registry update failed: {e}")
 
 
 @client.event

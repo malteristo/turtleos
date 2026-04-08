@@ -323,7 +323,10 @@ def execute_tos_tool(name, arguments):
 
 
 def _delegate_edit_sync(path, filename, content, instruction):
-    """Delegate a file edit to a fast local model (synchronous for tool execution)."""
+    """Delegate a file edit to a fast local model (synchronous).
+
+    Uses keep_alive to prevent cold-start latency on subsequent calls.
+    """
     import urllib.request
 
     prompt = (
@@ -342,6 +345,7 @@ def _delegate_edit_sync(path, filename, content, instruction):
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "options": {"num_ctx": 8192, "temperature": 0.1},
+        "keep_alive": "30m",
     }).encode()
 
     try:
@@ -355,7 +359,7 @@ def _delegate_edit_sync(path, filename, content, instruction):
             result = data.get("message", {}).get("content", "").strip()
 
         if not result or len(result) < 10:
-            return f"Delegate edit failed — local model returned empty/short result"
+            return f"Delegate edit failed \u2014 local model returned empty/short result"
 
         result = result.strip()
         if result.startswith("```"):
@@ -369,7 +373,7 @@ def _delegate_edit_sync(path, filename, content, instruction):
         with open(path, "w") as f:
             f.write(result)
 
-        return f"Done. Edited {filename} ({len(content)}→{len(result)} chars)."
+        return f"Done. Edited {filename} ({len(content)}\u2192{len(result)} chars)."
 
     except Exception as e:
         return f"Delegate edit failed: {type(e).__name__}: {e}"

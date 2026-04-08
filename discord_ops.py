@@ -57,17 +57,16 @@ async def run():
         threads = await gfull.active_threads()
         for t in threads:
             pname = t.parent.name if t.parent else 'unknown'
-            count = 0
-            async for _ in t.history(limit=100):
-                count += 1
-            print(t.name + " in #" + pname + " (id:" + str(t.id) + ") messages:" + str(count))
+            count = getattr(t, 'message_count', None) or '?'
+            created = t.created_at.strftime('%Y-%m-%d') if t.created_at else '?'
+            print(t.name + " in #" + pname + " (id:" + str(t.id) + ") messages:" + str(count) + " created:" + str(created))
     
     elif op == 'help':
         print("Usage: discord_ops.py <read|send|threads> <channel_id> [text/limit]")
         print("Channels:")
         print("  kermit:       1479428854513664030")
         print("  nesrine:      1484973995823599757")
-        print("  family:       1484973622471692543  (forum — use 'threads' first)")
+        print("  family:       1491163697278881836  (text channel — river model)")
         print("  heartbeat:    1479428858133479466")
         print("  efferent:     1479428862776442942")
         print("  afferent:     1479428866975207424")

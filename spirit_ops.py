@@ -99,10 +99,9 @@ async def run():
         threads = await gfull.active_threads()
         for t in threads:
             pname = t.parent.name if t.parent else 'unknown'
-            count = 0
-            async for _ in t.history(limit=100):
-                count += 1
-            print(f'{t.name} in #{pname} (id:{t.id}) messages:{count}')
+            count = getattr(t, 'message_count', None) or '?'
+            created = t.created_at.strftime('%Y-%m-%d') if t.created_at else '?'
+            print(f'{t.name} in #{pname} (id:{t.id}) messages:{count} created:{created}')
 
     elif op == 'help':
         print('Usage: dyad_ops.py <send|read|thread|threads|help> <channel_id> [text/limit]')

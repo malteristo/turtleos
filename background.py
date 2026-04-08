@@ -19,6 +19,7 @@ from practice_io import (
 from llm import chat_ollama
 from helpers import log_activity
 import state as _state
+from thread_registry import get_stale_threads, get_registry_summary
 
 
 @tasks.loop(hours=1)
@@ -185,6 +186,19 @@ async def interoception_loop():
         unread = [f for f in os.listdir(pdir) if f.endswith(".md")]
         if len(unread) >= 3:
             signals.append(("\U0001f4ec", f"{len(unread)} proposals waiting in `proposals/`"))
+
+    # Phase 1 Eyes: stale eddy detection
+    try:
+        stale = get_stale_threads(days=7)
+        unharvested_stale = [t for t in stale if t["harvest_status"] == "pending"]
+        if unharvested_stale:
+            names = ", ".join(t["name"] for t in unharvested_stale[:5])
+            extra = f" (+{len(unharvested_stale) - 5} more)" if len(unharvested_stale) > 5 else ""
+            signals.append(("\U0001f50d", f"{len(unharvested_stale)} eddies quiet >7d, unharvested: {names}{extra}"))
+        elif stale:
+            signals.append(("\U0001f30a", f"{len(stale)} quiet eddies (all harvested)"))
+    except Exception as e:
+        print(f"Stale thread detection failed: {e}")
 
     practice_files = ["boom.md", "bright.md", "compass.md"]
     ages = {f: file_age_hours(os.path.join(get_pd(), f)) for f in practice_files}
