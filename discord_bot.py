@@ -826,13 +826,21 @@ async def on_message(message):
 
 
 def _ensure_single_instance():
-    """Prevent duplicate bot processes — the source of double responses."""
-    import subprocess
-    result = subprocess.run(["pgrep", "-f", "discord_bot.py"], capture_output=True, text=True)
-    pids = [int(p) for p in result.stdout.strip().split("\n") if p.strip()]
-    pids = [p for p in pids if p != os.getpid()]
-    if pids:
-        print(f"WARNING: Another discord_bot.py already running (PID {pids}). Exiting.", file=sys.stderr)
+    """Prevent duplicate bot processes using an exclusive file lock.
+
+    Uses fcntl.flock() — atomic, kernel-level, automatically released on
+    process exit (including crashes). No race conditions unlike pgrep.
+    """
+    import fcntl
+    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".discord_bot.lock")
+    global _lock_file
+    _lock_file = open(lock_path, "w")
+    try:
+        fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_file.write(str(os.getpid()))
+        _lock_file.flush()
+    except (IOError, OSError):
+        print("Another discord_bot.py is already running. Exiting.", file=sys.stderr)
         sys.exit(1)
 
 def main():
