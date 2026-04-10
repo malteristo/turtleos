@@ -1146,49 +1146,81 @@ async def cmd_fetch(message, args):
 
 
 async def cmd_threads(message, args):
+    show_all = "--all" in args
     source = message.channel
     if isinstance(source, discord.Thread):
         source = source.parent
-    all_threads = []
+
+    active_threads = []
+    dormant_threads = []
+    archived_threads = []
+    now = datetime.now(timezone.utc)
 
     if source and hasattr(source, "threads"):
         for t in source.threads:
             cfg = thread_configs.get(t.id)
-            age = datetime.now(timezone.utc) - (cfg["created"] if cfg else t.created_at)
+            configured = cfg is not None
+            age = now - (cfg["created"] if cfg else t.created_at)
+            age_days = age.total_seconds() / 86400
+
             if age.total_seconds() >= 86400:
-                age_str = f"{int(age.total_seconds() / 86400)}d"
+                age_str = f"{int(age_days)}d"
             elif age.total_seconds() >= 3600:
                 age_str = f"{int(age.total_seconds() / 3600)}h"
             else:
                 age_str = f"{int(age.total_seconds() / 60)}m"
+
             eddy_type = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
             eddy_info = EDDY_TYPES[eddy_type]
-            flagged = " ⚠️" if t.id in threads_flagged_for_release else ""
-            if cfg:
-                all_threads.append(
-                    f"{eddy_info['emoji']} **{t.name}** — `{cfg['model_label']}` / `{cfg['attunement']}` ({age_str}){flagged}"
-                )
-            else:
-                all_threads.append(f"{eddy_info['emoji']} **{t.name}** — unconfigured ({age_str}){flagged}")
+            flagged = " \u26a0\ufe0f" if t.id in threads_flagged_for_release else ""
 
-    if not all_threads:
+            if cfg:
+                line = f"{eddy_info['emoji']} **{t.name}** \u2014 `{cfg['model_label']}` / `{cfg['attunement']}` ({age_str}){flagged}"
+            else:
+                line = f"{eddy_info['emoji']} **{t.name}** \u2014 unconfigured ({age_str}){flagged}"
+
+            if configured or age_days < 7:
+                active_threads.append(line)
+            elif age_days < 20:
+                dormant_threads.append(line)
+            else:
+                archived_threads.append(line)
+
+    if not active_threads and not dormant_threads:
         await message.reply("No active threads. Use `!thread \"topic\"` to create one.", mention_author=False)
-        # Context injection for no-threads case too (016)
         history = get_history(message.channel.id)
         history.append({"role": "user", "content": "!threads"})
         history.append({"role": "assistant", "content": "[System: No active threads.]"})
         return
 
+    parts = []
+    if active_threads:
+        parts.extend(active_threads)
+    if dormant_threads:
+        parts.append("\n\u2500\u2500\u2500 dormant \u2500\u2500\u2500")
+        parts.extend(dormant_threads)
+    if show_all and archived_threads:
+        parts.append("\n\u2500\u2500\u2500 archived \u2500\u2500\u2500")
+        parts.extend(archived_threads)
+
+    title = f"\U0001f9f5 Threads \u2014 {len(active_threads)} active"
+    if dormant_threads:
+        title += f" \u00b7 {len(dormant_threads)} dormant"
+    if archived_threads:
+        title += f" \u00b7 {len(archived_threads)} archived"
+
     embed = discord.Embed(
-        title=f"\U0001f9f5 Active Threads ({len(all_threads)})",
-        description="\n".join(all_threads),
+        title=title,
+        description="\n".join(parts),
         color=EMBED_COLORS["help"],
     )
-    embed.set_footer(text="!thread-type <type> to change | !eddy-check to scan for dissolution")
+    footer = "!thread-type <type> to change | !eddy-check to scan for dissolution"
+    if not show_all and archived_threads:
+        footer += f" | !threads --all to show {len(archived_threads)} archived"
+    embed.set_footer(text=footer)
     await message.reply(embed=embed, mention_author=False)
 
-    # Context injection: give Turtle the actual thread data (016 nervous system principle)
-    thread_summary = "Active threads:\n" + "\n".join(all_threads)
+    thread_summary = "Threads:\n" + "\n".join(parts)
     history = get_history(message.channel.id)
     history.append({"role": "user", "content": "!threads"})
     history.append({"role": "assistant", "content": f"[System: {thread_summary}]"})
