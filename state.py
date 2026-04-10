@@ -80,6 +80,7 @@ MAX_LOCAL_BRIGHT_CHARS = 3000
 MAX_LOCAL_INTENTION_LINES = 10
 OBSIDIAN_VAULT = os.environ.get("OBSIDIAN_VAULT", "magic-practice")
 PRACTICE_WEB_BASE = os.environ.get("PRACTICE_WEB_BASE", "")
+PRACTICE_TIMEZONE = os.environ.get("PRACTICE_TIMEZONE", "Europe/Berlin")
 
 
 # ─── Boom Thread ─────────────────────────────────────────────

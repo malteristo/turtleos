@@ -10,6 +10,7 @@ From phone: Share -> Discord -> boom thread. Done.
 import os
 import re
 from datetime import datetime, timezone
+from helpers import local_now
 
 import discord
 
@@ -292,7 +293,7 @@ async def handle_boom_thread_message(message):
     """
     pd = get_pd()
     boom_path = os.path.join(pd, "boom.md")
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    timestamp = local_now().strftime("%Y-%m-%d %H:%M")
     text = message.content.strip()
     entries = []
     feedback_parts = []

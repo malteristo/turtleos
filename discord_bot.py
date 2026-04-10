@@ -92,7 +92,7 @@ from prompts import (
 from readiness import startup_readiness_check
 
 from helpers import (
-    get_history, log_activity, split_message,
+    local_now, get_history, log_activity, split_message,
     load_thread_history, summarize_thread_context,
     preprocess_attachments,
 )
@@ -189,7 +189,7 @@ async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history
     model_label = cfg["model_label"] if cfg else "default"
     attunement = cfg["attunement"] if cfg else "semi"
     msg_count = len(history)
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = local_now().strftime("%Y-%m-%d %H:%M")
 
     recent_exchange = ""
     if len(history) >= 2:
@@ -540,8 +540,7 @@ async def on_ready():
                 ),
                 color=0x2ECC71,
             )
-            from datetime import datetime as _dt, timezone as _tz
-            embed.set_footer(text=_dt.now(_tz.utc).strftime("%Y-%m-%d %H:%M UTC"))
+            embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
             await dialogue.send(embed=embed, silent=True)
 
     asyncio.get_event_loop().create_task(prewarm_triage())

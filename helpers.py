@@ -2,11 +2,13 @@
 
 import discord
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from state import (
     client, OPS_EMBED_COLOR,
     dialogue_histories, MAX_DIALOGUE_HISTORY,
     get_channel, HAS_GEMINI, GOOGLE_API_KEY,
+    PRACTICE_TIMEZONE,
 )
 
 
@@ -28,13 +30,23 @@ def split_message(text, limit=1900):
     return chunks
 
 
+# ─── Timezone ────────────────────────────────────────────────────
+
+_tz = ZoneInfo(PRACTICE_TIMEZONE)
+
+
+def local_now():
+    """Current time in the practice timezone."""
+    return datetime.now(_tz)
+
+
 # ─── Activity Logging ───────────────────────────────────────────
 
 async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
     target = channel or get_channel("dialogue")
     if not target:
         return
-    ts_str = datetime.now(timezone.utc).strftime("%H:%M")
+    ts_str = local_now().strftime("%H:%M")
     embed = discord.Embed(
         description=f"{emoji} {ts_str} {text}",
         color=OPS_EMBED_COLOR,

@@ -16,7 +16,7 @@ from practice_io import read_safe
 from llm import chat_ollama
 from prompts import get_system_prompt
 from readiness import assess_readiness, save_readiness_trail
-from helpers import get_history, log_activity, split_message
+from helpers import get_history, log_activity, split_message, local_now
 from outfacing import evaluate_outfacing_signal, save_signal_drafts, MIN_EXCHANGES_FOR_SIGNAL
 from state import client
 
@@ -69,7 +69,7 @@ async def close_session(channel_id: int):
         if not reflection:
             return
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = local_now().strftime("%Y-%m-%d")
 
         if "---SESSION_NOTE---" in reflection and "---END_SESSION_NOTE---" in reflection:
             note = reflection.split("---SESSION_NOTE---")[1].split("---END_SESSION_NOTE---")[0].strip()
@@ -192,7 +192,7 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         if not result:
             return
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        today = local_now().strftime("%Y-%m-%d %H:%M")
         updated = []
 
         if "---BOOM_ITEMS---" in result and "---END_BOOM_ITEMS---" in result:

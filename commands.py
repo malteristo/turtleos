@@ -63,7 +63,7 @@ from content_fetch import (
     process_urls as _process_urls,
 )
 
-from helpers import get_history, log_activity, split_message
+from helpers import local_now, get_history, log_activity, split_message
 from attunement import perform_attunement, get_digest_age_hours
 from load_command import cmd_load
 
@@ -984,7 +984,7 @@ def _cache_resonance(url: str, resonance: str, title: str = ""):
     os.makedirs(cache_dir, exist_ok=True)
     url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
     path = os.path.join(cache_dir, f"{url_hash}.md")
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = local_now().strftime("%Y-%m-%d %H:%M")
     content = f"# {title or url}\n\n**URL:** {url}\n**Cached:** {now}\n\n---\n\n{resonance}\n"
     try:
         with open(path, "w") as f:

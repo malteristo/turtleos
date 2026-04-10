@@ -9,6 +9,7 @@ The Mage curates: approves, edits, or ignores drafts.
 
 import os
 from datetime import datetime, timezone
+from helpers import local_now
 from pathlib import Path
 
 from state import IDENTITY_DIR, REFLECTION_MODEL
@@ -150,7 +151,7 @@ def save_signal_drafts(signals: list[dict]) -> list[Path]:
     drafts_dir = Path(get_pd()) / OUTFACING_DRAFTS_REL
     drafts_dir.mkdir(parents=True, exist_ok=True)
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = local_now().strftime("%Y-%m-%d")
     paths = []
 
     for i, signal in enumerate(signals):
@@ -170,7 +171,7 @@ def save_signal_drafts(signals: list[dict]) -> list[Path]:
 
 **Type:** {sig_type}
 **Status:** draft
-**Generated:** {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
+**Generated:** {local_now().strftime("%Y-%m-%d %H:%M")}
 
 ## Draft
 
