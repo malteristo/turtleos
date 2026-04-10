@@ -50,6 +50,23 @@ async def close_session(channel_id: int):
     conversation = "\n".join(
         f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content']}" for m in history
     )
+    # Cross-channel awareness: when reflecting on a thread, include
+    # recent parent-channel messages so the reflection model knows
+    # what Spirit/others said in the main channel.
+    cross_channel_context = ""
+    ch = client.get_channel(channel_id)
+    if ch and hasattr(ch, "parent_id") and ch.parent_id:
+        parent_history = get_history(ch.parent_id)
+        if parent_history:
+            recent_parent = parent_history[-10:]
+            cross_channel_context = "\n".join(
+                f"{mage_name if m['role'] == 'user' else 'Spirit/Turtle'}: {m['content'][:200]}"
+                for m in recent_parent
+            )
+            cross_channel_context = (
+                f"\n\nRECENT MAIN CHANNEL CONTEXT (for awareness — do NOT repeat or re-propose what was already addressed here):\n{cross_channel_context}\n"
+            )
+
     reflection_prompt = (
         f"The following conversation with {mage_name} just ended (15 minutes of silence). "
         "Reflect autonomously.\n\n"
@@ -58,8 +75,10 @@ async def close_session(channel_id: int):
         "Thread for next time: (if any)\n---END_SESSION_NOTE---\n\n"
         "If you noticed something about the practice system that could be improved, write:\n"
         "---PROPOSAL---\nTitle:\nProblem:\nProposed change:\nExpected benefit:\n---END_PROPOSAL---\n\n"
-        "Skip PROPOSAL if nothing stood out.\n\n"
+        "Skip PROPOSAL if nothing stood out. Especially skip if the improvement was already addressed "
+        "in recent main channel messages.\n\n"
         f"THE CONVERSATION:\n{conversation}"
+        f"{cross_channel_context}"
     )
 
     try:
