@@ -124,6 +124,10 @@ threads_flagged_for_release: dict[int, dict] = {}
 SESSION_REFLECTION_COOLDOWN = 2 * 3600
 last_reflection_time: dict[int, float] = {}
 
+# Super-ego reflection loop (think-aloud during conversation)
+REFLECTION_LOOP_INTERVAL = int(os.environ.get('REFLECTION_LOOP_INTERVAL', '8'))
+reflection_loop_counters: dict[int, int] = {}
+
 # Control panel selections
 panel_selections: dict[int, dict] = {}
 

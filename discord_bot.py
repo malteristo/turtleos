@@ -97,7 +97,7 @@ from helpers import (
     preprocess_attachments,
 )
 
-from sessions import session_monitor, close_session
+from sessions import session_monitor, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop
@@ -464,6 +464,9 @@ async def handle_dialogue(message):
     history.append({"role": "assistant", "content": reply})
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
+
+    # Super-ego: think aloud after sustained conversation
+    asyncio.ensure_future(maybe_reflect(message.channel, history))
 
     if urls and not _urls_already_processed:
         external_urls = [u for u in urls if "discord" not in urlparse(u).netloc]

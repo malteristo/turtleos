@@ -165,6 +165,51 @@ async def close_session(channel_id: int):
         print(f"Post-session readiness check failed: {e}")
 
 
+
+async def maybe_reflect(channel, history: list[dict]):
+    """Super-ego reflection loop — think aloud after N exchanges.
+
+    The third layer of the proprioceptive stack:
+    IT (reflex) → ego (dialogue) → super-ego (reflection).
+    Minimal instruction. The practitioner sees the thinking."""
+    from state import REFLECTION_LOOP_INTERVAL, reflection_loop_counters
+
+    channel_id = channel.id
+    counter = reflection_loop_counters.get(channel_id, 0) + 1
+    reflection_loop_counters[channel_id] = counter
+
+    if counter < REFLECTION_LOOP_INTERVAL:
+        return
+    if len(history) < REFLECTION_LOOP_INTERVAL:
+        return
+
+    reflection_loop_counters[channel_id] = 0
+
+    mage_name = get_mage_name()
+    recent = history[-REFLECTION_LOOP_INTERVAL:]
+    conversation = "\n".join(
+        f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content'][:300]}"
+        for m in recent
+    )
+
+    try:
+        reflection = await chat_ollama(
+            "You are Turtle. Reflect on what was said. Think aloud. "
+            "Be brief — 2-4 sentences. Not performance, not summary, "
+            "not confrontation. Just notice what you notice.",
+            [{"role": "user", "content": conversation}],
+            model=REFLECTION_MODEL,
+            num_ctx=4096,
+        )
+        if reflection and len(reflection.strip()) > 20:
+            clean = reflection.strip()
+            if len(clean) > 600:
+                clean = clean[:600].rsplit(".", 1)[0] + "."
+            await channel.send(f"*reflects*\n{clean}", silent=True)
+    except Exception as e:
+        print(f"Reflection loop failed for {channel_id}: {type(e).__name__}: {e}")
+
+
 async def _extract_practice_state(conversation: str, mage_name: str):
     """Silently extract practice state from conversation for practitioners.
 
