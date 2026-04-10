@@ -577,7 +577,18 @@ async def cmd_thread(message, args):
 
     model_id, use_api = resolve_model(model_str)
 
-    thread = await message.create_thread(name=topic)
+    try:
+        thread = await message.create_thread(name=topic)
+    except discord.HTTPException as e:
+        if e.code == 160004:
+            await message.reply(
+                "A thread already exists on this message. "
+                "Try `!thread` on a different message, or post a new message first.",
+                mention_author=False,
+            )
+        else:
+            await message.reply(f"Couldn't create thread: {e.text}", mention_author=False)
+        return
 
     # Auto-add practitioners to thread
     parent_id = message.channel.id

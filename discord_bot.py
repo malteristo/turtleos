@@ -267,11 +267,14 @@ async def handle_dialogue(message):
             attachment_note = f" [attached: {fnames}]"
 
     url_content = _boom_fetched_content.pop(message.id, "")
+    _urls_already_processed = False
     if url_content:
         attachment_note += " [content from boom capture]"
+        _urls_already_processed = True
     else:
         urls = await _extract_urls(message.content)
         if urls:
+            _urls_already_processed = True
             url_content = await _process_urls(urls)
             if url_content:
                 attachment_note += f" [fetched {len(urls)} URL(s)]"
@@ -476,7 +479,7 @@ async def handle_dialogue(message):
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
 
-    if urls:
+    if urls and not _urls_already_processed:
         external_urls = [u for u in urls if "discord" not in urlparse(u).netloc]
         if external_urls:
             view = LinkFetchView(external_urls)

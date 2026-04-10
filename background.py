@@ -183,7 +183,8 @@ async def interoception_loop():
 
     pdir = os.path.join(get_pd(), "proposals")
     if os.path.isdir(pdir):
-        unread = [f for f in os.listdir(pdir) if f.endswith(".md")]
+        unread = [f for f in os.listdir(pdir)
+                  if f.endswith(".md") and os.path.isfile(os.path.join(pdir, f))]
         if len(unread) >= 3:
             signals.append(("\U0001f4ec", f"{len(unread)} proposals waiting in `proposals/`"))
 
