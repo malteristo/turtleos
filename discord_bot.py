@@ -316,21 +316,7 @@ async def handle_dialogue(message):
         if last_session:
             ctx_parts.append(f"last session: {last_session}")
 
-        # Practitioners get a minimal, warm session-open — no practice jargon
-        if get_mage_type() == "practitioner":
-            # Only show the embed if there's meaningful state to indicate continuity
-            if last_session or boom_count > 0:
-                embed = discord.Embed(
-                    description="📖 Picked up where we left off.",
-                    color=OPS_EMBED_COLOR,
-                )
-                await message.channel.send(embed=embed, silent=True)
-        else:
-            embed = discord.Embed(
-                description=f"📖 Loaded: {' · '.join(ctx_parts)}",
-                color=OPS_EMBED_COLOR,
-            )
-            await message.channel.send(embed=embed, silent=True)
+        # INT-023: Context loads silently. Healthy state needs no announcement.
 
     cfg = thread_configs.get(channel_id)
     if cfg:
