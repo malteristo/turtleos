@@ -578,7 +578,8 @@ async def cmd_thread(message, args):
     model_id, use_api = resolve_model(model_str)
 
     try:
-        thread = await message.create_thread(name=topic)
+        eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 4320)
+        thread = await message.create_thread(name=topic, auto_archive_duration=eddy_archive)
     except discord.HTTPException as e:
         if e.code == 160004:
             await message.reply(
@@ -2235,7 +2236,8 @@ class ThreadTopicModal(discord.ui.Modal, title="New Thread"):
         model_id, use_api = resolve_model(self.model_str)
 
         msg = await dialogue.send(f"\U0001f9f5 **{topic_val}** \u2014 `{self.model_str}` / `{self.attunement}`")
-        thread = await msg.create_thread(name=topic_val)
+        eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 4320)
+        thread = await msg.create_thread(name=topic_val, auto_archive_duration=eddy_archive)
 
         # Auto-add practitioners to thread
         parent_id = dialogue.id

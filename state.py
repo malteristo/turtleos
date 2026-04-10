@@ -112,10 +112,10 @@ absorbed_contexts: dict[int, list[dict]] = {}  # channel_id -> [{name, digest, a
 
 # Thread eddy types
 EDDY_TYPES = {
-    "fast": {"label": "Fast Eddy", "days": 3, "emoji": "⚡"},
-    "slow": {"label": "Slow Whirlpool", "days": 14, "emoji": "🌀"},
-    "confluence": {"label": "Confluence", "days": 7, "emoji": "🔀"},
-    "standing": {"label": "Standing Wave", "days": None, "emoji": "🌊"},
+    "fast": {"label": "Fast Eddy", "days": 3, "emoji": "⚡", "archive_minutes": 4320},
+    "slow": {"label": "Slow Whirlpool", "days": 14, "emoji": "🌀", "archive_minutes": 10080},
+    "confluence": {"label": "Confluence", "days": 7, "emoji": "🔀", "archive_minutes": 10080},
+    "standing": {"label": "Standing Wave", "days": None, "emoji": "🌊", "archive_minutes": 10080},
 }
 EDDY_DEFAULT = "fast"
 threads_flagged_for_release: dict[int, dict] = {}
