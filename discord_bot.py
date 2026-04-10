@@ -363,13 +363,15 @@ async def handle_dialogue(message):
         except Exception as e:
             print(f"Proprioceptor: failed ({type(e).__name__})")
 
-    # Parse proprioceptor output: SIGNALS (for Mage) + BRIEF (for dialogue model)
-    _tissue_signals = None
+    # Parse proprioceptor output: REFLEX (visible micro-expression) + BRIEF (for dialogue model)
+    _reflex = None
     _tissue_brief = context_brief  # fallback: use raw output
     if context_brief:
         for _pi, _pline in enumerate(context_brief.strip().splitlines()):
-            if _pline.strip().upper().startswith("SIGNALS:"):
-                _tissue_signals = _pline.split(":", 1)[1].strip()
+            if _pline.strip().upper().startswith("REFLEX:"):
+                _raw_reflex = _pline.split(":", 1)[1].strip()
+                if _raw_reflex and _raw_reflex != "—" and _raw_reflex != "-":
+                    _reflex = _raw_reflex
             elif _pline.strip().upper().startswith("BRIEF:"):
                 _rest = context_brief.strip().splitlines()[_pi:]
                 _tissue_brief = " ".join(l.strip() for l in _rest).replace("BRIEF:", "", 1).strip()
@@ -407,10 +409,9 @@ async def handle_dialogue(message):
         messages_for_llm = [{"role": "user", "content": absorbed_block},
                             {"role": "assistant", "content": "I have this thread context. Let's continue."}] + messages_for_llm
 
-    # Tissue signal — compact body awareness before the mind responds
-    if _tissue_signals and "fresh topic" not in _tissue_signals.lower():
-        _tf = f"\U0001f9ec {proprioceptor_time:.1f}s" if proprioceptor_time else "\U0001f9ec"
-        await message.channel.send(f"-# {_tf} {_tissue_signals}", silent=True)
+    # Micro-expression — body's visible reflex before the mind responds
+    if _reflex:
+        await message.channel.send(f"-# {_reflex}", silent=True)
 
     async with message.channel.typing():
         tool_report = ""
