@@ -67,11 +67,12 @@ async def triage_message(text: str) -> dict:
     default = {"category": "practice", "needs_state": True}
     try:
         prompt = TRIAGE_PROMPT + text[:500]
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)) as http:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=5.0, write=5.0, pool=5.0)) as http:
             payload = {
                 "model": TRIAGE_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": False,
+                "think": False,
                 "options": {"num_ctx": 2048},
                 "format": "json",
                 "keep_alive": "10m",
