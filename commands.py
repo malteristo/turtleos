@@ -1604,10 +1604,32 @@ async def cmd_absorb(message, args):
 
     name = " ".join(args).strip().strip('"').lower()
     target_thread = None
-    for t in dialogue.threads:
+
+    # Search: exact match first, then partial, across cached + fetched threads
+    all_threads = list(dialogue.threads)
+    try:
+        guild_threads = await dialogue.guild.active_threads()
+        for t in guild_threads.threads:
+            if t.parent_id == dialogue.id and t not in all_threads:
+                all_threads.append(t)
+    except Exception:
+        pass
+
+    # Exact match (name or ID)
+    for t in all_threads:
         if t.name.lower() == name or str(t.id) == name:
             target_thread = t
             break
+
+    # Partial match (search term contained in thread name)
+    if not target_thread:
+        partial_matches = [t for t in all_threads if name in t.name.lower()]
+        if len(partial_matches) == 1:
+            target_thread = partial_matches[0]
+        elif len(partial_matches) > 1:
+            names = ", ".join(f"**{t.name}**" for t in partial_matches[:5])
+            await message.reply(f"Multiple threads match `{name}`: {names}. Be more specific.", mention_author=False)
+            return
 
     if not target_thread:
         await message.reply(f"Thread `{name}` not found. Try `!threads` to see active threads.", mention_author=False)
@@ -2199,6 +2221,7 @@ class _InteractionAsMessage:
         self.content = ""
         self.id = interaction.id
         self.guild = interaction.guild
+        self._followup_sent = False
 
     async def reply(self, content=None, *, embed=None, mention_author=False, **kwargs):
         send_kwargs = {}
@@ -2206,7 +2229,15 @@ class _InteractionAsMessage:
             send_kwargs["content"] = content
         if embed:
             send_kwargs["embed"] = embed
-        if send_kwargs:
+        if not send_kwargs:
+            return
+        try:
+            if not self._followup_sent:
+                await self._interaction.followup.send(**send_kwargs, ephemeral=True)
+                self._followup_sent = True
+            else:
+                await self._interaction.followup.send(**send_kwargs, ephemeral=True)
+        except (discord.NotFound, discord.HTTPException):
             await self.channel.send(**send_kwargs)
 
     async def add_reaction(self, emoji):
