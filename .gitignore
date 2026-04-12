@@ -1,8 +1,28 @@
+# Environment & secrets
+.env
+consul/.env
+scout/.env
+
+# Python
 __pycache__/
 *.pyc
 venv/
+
+# Runtime artifacts
 bot.log
+bot.err
 logs/
+consul/bot.err
+consul/bot.log
+scout/bot.err
+scout/bot.log
+*.lock
+
+# Backups
 *.bak
 *.backup
 *.bak.*
+*.pre-*
+
+# Practitioner data (per-practitioner, stays local)
+workshops/
