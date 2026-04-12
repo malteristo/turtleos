@@ -5,7 +5,7 @@
 
 BRIDGE=~/magic-bridge
 DASHBOARD="$BRIDGE/shared/dashboard.md"
-SHELL_DIR=~/turtle-shell
+SHELL_DIR=~/turtleos
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 LOCAL_TIME=$(date +"%Y-%m-%d %H:%M %Z")
 

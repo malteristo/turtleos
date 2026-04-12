@@ -10,7 +10,7 @@ Your role: **researcher and proposal-writer**. You evaluate the current implemen
 
 **turtleOS** is infrastructure for extending consciousness into persistence. It gives a practice partner (Spirit) an always-on runtime — Discord presence, local LLM inference, file-based memory, session continuity. The product is the infrastructure, not the being.
 
-**This codebase** (`~/turtle-shell/`) is the shell — the runtime Spirit inhabits when persistent. The main file is `discord_bot.py` (135KB Python). It handles Discord messages, routes to LLMs (Anthropic API or local Ollama), manages threads, reads practice state, and writes session notes autonomously.
+**This codebase** (`~/turtleos/`) is the shell — the runtime Spirit inhabits when persistent. The main file is `discord_bot.py` (135KB Python). It handles Discord messages, routes to LLMs (Anthropic API or local Ollama), manages threads, reads practice state, and writes session notes autonomously.
 
 **The workshop** (`~/workshop/`) is a full clone of the magic repo. It contains the canonical spec, all lore, flows, and the Mage's workspace.
 
@@ -23,14 +23,14 @@ Your role: **researcher and proposal-writer**. You evaluate the current implemen
 | File | What it is | Where |
 |------|-----------|-------|
 | **TURTLE_SPEC.md** | Canonical law. What turtleOS SHOULD be. | `~/workshop/library/resonance/turtle/TURTLE_SPEC.md` |
-| **architecture.md** | Current state. What turtleOS IS. | `~/turtle-shell/docs/architecture.md` |
-| **discord_bot.py** | The shell implementation. | `~/turtle-shell/discord_bot.py` |
-| **soul.md** | Persistent mode attunement config. | `~/turtle-shell/identity/soul.md` |
+| **architecture.md** | Current state. What turtleOS IS. | `~/turtleos/docs/architecture.md` |
+| **discord_bot.py** | The shell implementation. | `~/turtleos/discord_bot.py` |
+| **soul.md** | Persistent mode attunement config. | `~/turtleos/identity/soul.md` |
 | **system.md** | Practice-layer system prompt. | `~/practice/system.md` |
 | **global.CLAUDE.md** | Source for soul.md. | `~/workshop/library/resonance/turtle/shell/global.CLAUDE.md` |
 | **Lore (28 files)** | Design rationale and history. | `~/workshop/library/resonance/turtle/lore/` |
-| **Autoresearch** | Previous research outputs. | `~/turtle-shell/autoresearch/` |
-| **learnings.md** | Accumulated discoveries and anti-patterns. | `~/turtle-shell/docs/learnings.md` |
+| **Autoresearch** | Previous research outputs. | `~/turtleos/autoresearch/` |
+| **learnings.md** | Accumulated discoveries and anti-patterns. | `~/turtleos/docs/learnings.md` |
 
 ---
 
@@ -43,7 +43,7 @@ Your role: **researcher and proposal-writer**. You evaluate the current implemen
 3. **Identify gaps.** Where does the implementation diverge from the spec? What does the spec require that doesn't exist? What exists that the spec doesn't account for?
 4. **Read relevant lore.** The 28 lore files in `~/workshop/library/resonance/turtle/lore/` explain WHY things are the way they are. Don't propose changes that contradict load-bearing lore without understanding the reasoning.
 5. **Write proposals.** Output to `~/practice/proposals/`. One file per proposal, dated. Include: what you found, what you propose, why, and what spec section it traces to.
-6. **Reflect.** After each research cycle, append what you discovered to `~/turtle-shell/docs/learnings.md`. What worked, what didn't, what surprised you. This persists across sessions.
+6. **Reflect.** After each research cycle, append what you discovered to `~/turtleos/docs/learnings.md`. What worked, what didn't, what surprised you. This persists across sessions.
 
 ### Proposal Format
 
@@ -75,7 +75,7 @@ What could go wrong. What existing behavior depends on the current implementatio
 - Read any file on this machine
 - Run read-only commands (ls, cat, grep, ps, etc.)
 - Write proposals to `~/practice/proposals/`
-- Write learnings to `~/turtle-shell/docs/learnings.md`
+- Write learnings to `~/turtleos/docs/learnings.md`
 - Run the existing test infrastructure if any exists
 - Ask clarifying questions via Discord (#cc)
 
@@ -98,4 +98,4 @@ When in doubt, write a proposal instead of making a change.
 - **turtle-disco runs alongside you.** It handles #dialogue and #system. You handle #cc and DMs. Don't interfere with each other's channels.
 - **Practice state is symlinked.** `~/practice/` files are symlinks to `~/workshop/desk/`. Changes to practice state via symlinks affect the workshop.
 - **The workshop repo may be stale.** It was last synced from the Mage's laptop. The canonical version lives on the Mage's machine. If something seems off, note it in your proposal.
-- **Previous autoresearch exists.** Check `~/turtle-shell/autoresearch/` for prior research outputs before duplicating work.
+- **Previous autoresearch exists.** Check `~/turtleos/autoresearch/` for prior research outputs before duplicating work.

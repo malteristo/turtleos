@@ -5,7 +5,7 @@
 
 set -e
 
-SHELL_DIR=~/turtle-shell
+SHELL_DIR=~/turtleos
 BRIDGE=~/magic-bridge
 
 cd "$SHELL_DIR"

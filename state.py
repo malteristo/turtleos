@@ -46,7 +46,7 @@ def get_channel(name):
 
 # ─── Config Constants ────────────────────────────────────────────
 
-IDENTITY_DIR = os.path.expanduser("~/turtle-shell/identity")
+IDENTITY_DIR = os.path.expanduser("~/turtleos/identity")
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DIALOGUE_MODEL = os.environ.get("DIALOGUE_MODEL", "llama3.3:70b")

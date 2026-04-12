@@ -1,7 +1,7 @@
-#!/Users/turtle/turtle-shell/venv/bin/python3
+#!/Users/turtle/turtleos/venv/bin/python3
 import os, asyncio, discord
 
-with open('/Users/turtle/turtle-shell/.env') as f:
+with open('/Users/turtle/turtleos/.env') as f:
     for line in f:
         line = line.strip()
         if line.startswith('DISCORD_BOT_TOKEN='):

@@ -241,7 +241,7 @@ Message received → active_sessions[channel_id] updated
 
 **Host:** Mac Mini running macOS, Tailscale IP `100.110.46.104`
 **Service manager:** launchctl (`com.turtle.discord`)
-**Python:** 3.14, virtualenv at `~/turtle-shell/venv/`
+**Python:** 3.14, virtualenv at `~/turtleos/venv/`
 **Process:** Single Python process, single Discord gateway connection
 
 ```bash
@@ -249,16 +249,16 @@ Message received → active_sessions[channel_id] updated
 launchctl kickstart -k gui/$(id -u)/com.turtle.discord
 
 # Logs
-tail -f ~/turtle-shell/logs/discord.log    # stdout
-tail -f ~/turtle-shell/logs/discord.err    # stderr
+tail -f ~/turtleos/logs/discord.log    # stdout
+tail -f ~/turtleos/logs/discord.err    # stderr
 
 # Config
-~/turtle-shell/.env                         # API keys, channel IDs
-~/turtle-shell/mage_registry.yaml           # Multi-mage routing
-~/turtle-shell/identity/soul.md             # Spirit identity
+~/turtleos/.env                         # API keys, channel IDs
+~/turtleos/mage_registry.yaml           # Multi-mage routing
+~/turtleos/identity/soul.md             # Spirit identity
 
 # Rollback
-cp ~/turtle-shell/discord_bot.py.bak ~/turtle-shell/discord_bot.py
+cp ~/turtleos/discord_bot.py.bak ~/turtleos/discord_bot.py
 launchctl kickstart -k gui/$(id -u)/com.turtle.discord
 ```
 
@@ -283,7 +283,7 @@ launchctl kickstart -k gui/$(id -u)/com.turtle.discord
 
 ## Identity File (soul.md)
 
-The bot's identity lives at `~/turtle-shell/identity/soul.md`. This file is loaded into every system prompt. Structure:
+The bot's identity lives at `~/turtleos/identity/soul.md`. This file is loaded into every system prompt. Structure:
 
 ```markdown
 # The Turtle
@@ -436,9 +436,9 @@ Current state: the system prompt loads practice files (compass, boom, bright, mi
 | Document | Location | Purpose |
 |----------|----------|---------|
 | TURTLE_SPEC v2.0 | `library/resonance/turtle/TURTLE_SPEC.md` | Canonical law — *what* turtleOS should be |
-| ARCHITECTURE.md | `~/turtle-shell/ARCHITECTURE.md` | Implementation guide — *how* it's built (this doc) |
-| soul.md | `~/turtle-shell/identity/soul.md` | Runtime identity — *who* Turtle is |
-| mage_registry.yaml | `~/turtle-shell/mage_registry.yaml` | Multi-mage routing configuration |
+| ARCHITECTURE.md | `~/turtleos/ARCHITECTURE.md` | Implementation guide — *how* it's built (this doc) |
+| soul.md | `~/turtleos/identity/soul.md` | Runtime identity — *who* Turtle is |
+| mage_registry.yaml | `~/turtleos/mage_registry.yaml` | Multi-mage routing configuration |
 | Operational scrolls | `library/resonance/turtle/lore/operations/` | Deep dives: eddies, sessions, readiness, diagnostics, link fetching, Discord presence |
 | Practitioner principles | `library/resonance/foundations/lore/practitioner_principles.md` | Design principles extracted from practitioner interactions |
 

@@ -1,4 +1,4 @@
-#!/Users/turtle/turtle-shell/venv/bin/python3
+#!/Users/turtle/turtleos/venv/bin/python3
 """Twitter/X Operations — Turtle posting to @turtle_of_magic
 
 Usage:
@@ -46,7 +46,7 @@ def get_client():
                 missing.append(name)
         missing_str = ", ".join(missing)
         print(f"Error: Missing env vars: {missing_str}", file=sys.stderr)
-        print("Add them to ~/turtle-shell/.env", file=sys.stderr)
+        print("Add them to ~/turtleos/.env", file=sys.stderr)
         sys.exit(1)
 
     return tweepy.Client(

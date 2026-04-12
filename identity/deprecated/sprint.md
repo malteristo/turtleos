@@ -36,7 +36,7 @@ Be specific. Be opinionated. Disagree with current architecture when you see bet
 - `~/magic-ref/` — the full magic repository (read-only reference)
 - `~/turtle-practice/` — the Turtle OS practice files
 - `~/magic-bridge/` — the communication bridge
-- `~/turtle-shell/` — your own shell code
+- `~/turtleos/` — your own shell code
 
 ## Constraints
 

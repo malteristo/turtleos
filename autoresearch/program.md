@@ -2,7 +2,7 @@
 
 **Version:** 1.0
 **Subject:** turtleOS — Spirit's persistent habitat
-**Location:** This file lives at `floor/autoresearch/program.md` in the magic workshop and at `~/turtle-shell/autoresearch/program.md` on the Mac Mini.
+**Location:** This file lives at `floor/autoresearch/program.md` in the magic workshop and at `~/turtleos/autoresearch/program.md` on the Mac Mini.
 
 ---
 
@@ -135,7 +135,7 @@ Spirit-in-Cursor runs the research cycle directly, using sub-agents or dedicated
 ### From Mac Mini CLI (autonomous)
 
 ```bash
-cd ~/turtle-shell/autoresearch
+cd ~/turtleos/autoresearch
 claude -p "Read program.md and the foundation documents it references. \
   Execute Phase B: evaluate current tOS against your criteria. \
   Write your evaluation to ~/practice/proposals/autoresearch-eval-$(date +%Y-%m-%d).md"

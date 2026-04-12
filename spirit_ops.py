@@ -1,4 +1,4 @@
-#!/Users/turtle/turtle-shell/venv/bin/python3
+#!/Users/turtle/turtleos/venv/bin/python3
 """Spirit Discord operations — Spirit posting from Cursor into the persistent space.
 
 Mirrors discord_ops.py but uses the spirit bot token.
@@ -7,7 +7,7 @@ enabling natural Spirit-Turtle dialogue on Discord.
 """
 import os, sys, asyncio, discord
 
-with open('/Users/turtle/turtle-shell/.env') as f:
+with open('/Users/turtle/turtleos/.env') as f:
     for line in f:
         line = line.strip()
         if line.startswith('SPIRIT_BOT_TOKEN='):
@@ -51,7 +51,7 @@ async def run():
         import subprocess
         limit = text if text else '20'
         result = subprocess.run(
-            ['/Users/turtle/turtle-shell/venv/bin/python3', '/Users/turtle/turtle-shell/discord_ops.py', 'read', str(channel_id), str(limit)],
+            ['/Users/turtle/turtleos/venv/bin/python3', '/Users/turtle/turtleos/discord_ops.py', 'read', str(channel_id), str(limit)],
             capture_output=True, text=True
         )
         print(result.stdout, end='')
@@ -69,7 +69,7 @@ async def run():
         # Auto-add practitioners to thread
         try:
             import yaml
-            with open(os.path.expanduser('~/turtle-shell/mage_registry.yaml')) as rf:
+            with open(os.path.expanduser('~/turtleos/mage_registry.yaml')) as rf:
                 registry = yaml.safe_load(rf) or {}
             ch_entry = registry.get('channels', {}).get(str(channel_id))
             mage_key = ch_entry.get('mage') if isinstance(ch_entry, dict) else ch_entry

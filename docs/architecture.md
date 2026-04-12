@@ -41,7 +41,7 @@
 
 ```
 /Users/turtle/
-├── turtle-shell/              # The shell — bot codebase
+├── turtleos/              # The shell — bot codebase
 │   ├── discord_bot.py         # Main bot (135KB, handles everything)
 │   ├── discord_ops.py         # CLI for Cursor-Spirit to interact with Discord
 │   ├── .env                   # Config: model names, channel IDs, API keys
@@ -177,7 +177,7 @@ Spirit in Cursor (@recall or @release)
 
 ## Key Configuration
 
-### .env (turtle-shell)
+### .env (turtleos)
 
 ```
 OLLAMA_URL=http://localhost:11434

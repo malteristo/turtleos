@@ -25,7 +25,7 @@ _workshop_root_ctx = contextvars.ContextVar("workshop_root", default=None)
 
 def _load_mage_registry():
     """Load the mage registry from YAML config."""
-    registry_path = os.path.expanduser("~/turtle-shell/mage_registry.yaml")
+    registry_path = os.path.expanduser("~/turtleos/mage_registry.yaml")
     if not os.path.exists(registry_path):
         return {"channels": {}, "mages": {}, "spaces": {}}
     try:

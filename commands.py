@@ -1925,7 +1925,7 @@ async def cmd_admin(message, args):
         )
 
         import yaml
-        registry_path = os.path.expanduser("~/turtle-shell/mage_registry.yaml")
+        registry_path = os.path.expanduser("~/turtleos/mage_registry.yaml")
         with open(registry_path) as f:
             reg = yaml.safe_load(f) or {}
         if "mages" not in reg:
@@ -2030,8 +2030,8 @@ async def cmd_signals(message, args):
         try:
             import subprocess
             result = subprocess.run(
-                ["/Users/turtle/turtle-shell/venv/bin/python3",
-                 "/Users/turtle/turtle-shell/twitter_ops.py",
+                ["/Users/turtle/turtleos/venv/bin/python3",
+                 "/Users/turtle/turtleos/twitter_ops.py",
                  "post", draft_text],
                 capture_output=True, text=True, timeout=30,
             )
