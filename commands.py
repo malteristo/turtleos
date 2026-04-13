@@ -615,7 +615,7 @@ async def cmd_thread(message, args):
     }
 
     config_line = _build_config_line(thread.id)
-    view = ThreadConfigView(current_type=eddy_type, current_context=context_type)
+    view = ThreadConfigView(current_type=eddy_type)
     await thread.send(config_line, view=view)
     print(f"Thread created: {topic} (id: {thread.id}, model: {model_id}, attunement: {attunement}, eddy: {eddy_type})")
 
@@ -750,12 +750,11 @@ def _build_config_line(thread_id: int) -> str:
 
 
 class ThreadConfigView(discord.ui.View):
-    """Persistent thread configuration — type buttons + context selector. Never disables."""
+    """Persistent thread configuration — type buttons. Never disables."""
 
-    def __init__(self, current_type: str = "standard", current_context: str | None = None):
+    def __init__(self, current_type: str = "standard"):
         super().__init__(timeout=None)
         self._current_type = current_type
-        self._current_context = current_context
         for child in self.children:
             cid = child.custom_id or ""
             if cid.startswith("tconfig:"):
@@ -765,19 +764,13 @@ class ThreadConfigView(discord.ui.View):
                         discord.ButtonStyle.primary if type_key == current_type
                         else discord.ButtonStyle.secondary
                     )
-            if cid == "tconfig:ctx":
-                for opt in child.options:
-                    opt.default = (opt.value == (current_context or "__none__"))
 
     async def _set_type(self, interaction: discord.Interaction, new_type: str):
         thread_id = interaction.channel.id
         cfg = thread_configs.get(thread_id)
         if cfg:
             cfg["eddy_type"] = new_type
-        new_view = ThreadConfigView(
-            current_type=new_type,
-            current_context=cfg.get("context_type") if cfg else None,
-        )
+        new_view = ThreadConfigView(current_type=new_type)
         config_line = _build_config_line(thread_id)
         await interaction.response.edit_message(content=config_line, view=new_view)
 
@@ -792,46 +785,6 @@ class ThreadConfigView(discord.ui.View):
     @discord.ui.button(label="🍃 Manual Release", custom_id="tconfig:manual", style=discord.ButtonStyle.secondary, row=0)
     async def manual_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._set_type(interaction, "manual")
-
-    @discord.ui.select(
-        custom_id="tconfig:ctx",
-        placeholder="📎 Load context...",
-        min_values=1, max_values=1,
-        options=[
-            discord.SelectOption(label="No context", value="__none__", description="Default — no practice context loaded", default=True),
-        ] + [
-            discord.SelectOption(
-                label=info["label"], value=ctx_key,
-                description=f"{info.get('emoji', '')} {ctx_key} resonance",
-            )
-            for ctx_key, info in THREAD_CONTEXTS.items()
-        ],
-        row=1,
-    )
-    async def context_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        thread_id = interaction.channel.id
-        cfg = thread_configs.get(thread_id)
-        chosen = select.values[0]
-        new_context = None if chosen == "__none__" else chosen
-
-        if cfg:
-            cfg["context_type"] = new_context
-
-        new_view = ThreadConfigView(
-            current_type=cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT,
-            current_context=new_context,
-        )
-        config_line = _build_config_line(thread_id)
-
-        if new_context and new_context in THREAD_CONTEXTS:
-            ctx_info = THREAD_CONTEXTS[new_context]
-            await interaction.response.edit_message(content=config_line, view=new_view)
-            await interaction.followup.send(
-                f"{ctx_info.get('emoji', '📎')} Context loaded: **{ctx_info['label']}**",
-                ephemeral=False,
-            )
-        else:
-            await interaction.response.edit_message(content=config_line, view=new_view)
 
 
 # Keep ThreadTypeView as alias for backward compat with any existing views
