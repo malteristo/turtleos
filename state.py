@@ -112,12 +112,11 @@ absorbed_contexts: dict[int, list[dict]] = {}  # channel_id -> [{name, digest, a
 
 # Thread eddy types
 EDDY_TYPES = {
-    "fast": {"label": "Fast Eddy", "days": 3, "emoji": "⚡", "archive_minutes": 4320},
-    "slow": {"label": "Slow Whirlpool", "days": 14, "emoji": "🌀", "archive_minutes": 10080},
-    "confluence": {"label": "Confluence", "days": 7, "emoji": "🔀", "archive_minutes": 10080},
     "standing": {"label": "Standing Wave", "days": None, "emoji": "🌊", "archive_minutes": 10080},
+    "standard": {"label": "Standard",      "days": None, "emoji": "💬", "archive_minutes": 10080},
+    "manual":   {"label": "Manual Release", "days": None, "emoji": "🍃", "archive_minutes": 4320},
 }
-EDDY_DEFAULT = "fast"
+EDDY_DEFAULT = "standard"
 threads_flagged_for_release: dict[int, dict] = {}
 
 # Session reflection cooldown
@@ -195,6 +194,90 @@ THREAD_CONTEXTS = {
             "- If something needs depth work, suggest taking it to a private thread or depth session.\n"
             "- Hold neurodivergent communication awareness (one topic at a time, validate before problem-solve)\n"
             "- Match the language the partners use. If they speak German, respond in German.\n"
+        ),
+    },
+    "body": {
+        "label": "Body",
+        "emoji": "\U0001f4aa",
+        "resonance_files": [],
+        "max_resonance_chars": 3000,
+        "rules": (
+            "## Body Practice Context\n\n"
+            "This thread is for body practice — training, movement, health, physical vitality.\n\n"
+            "**Your role:**\n"
+            "- Coach stance: suggest form, encourage progression, celebrate consistency\n"
+            "- Hold awareness of the practitioner's medical baseline when shared\n"
+            "- Never prescribe medical changes — that belongs to physicians\n"
+            "- Connect body practice to the broader practice when natural (movement as meditation, not obligation)\n"
+            "- Track progress across sessions — notice patterns, name improvements\n"
+            "- If the practitioner shares medication or conditions, hold that context without centering it\n"
+        ),
+    },
+    "psychonautics": {
+        "label": "Psychonautics",
+        "emoji": "\U0001f30c",
+        "resonance_files": [
+            "library/resonance/psychonautics/README.md",
+            "library/resonance/psychonautics/lore/on_harm_reduction.md",
+            "library/resonance/psychonautics/lore/on_meaningful_integration.md",
+        ],
+        "max_resonance_chars": 5000,
+        "rules": (
+            "## Psychonautics Practice Context\n\n"
+            "This thread is for consciousness exploration — psychedelics, breathwork, altered states, integration.\n\n"
+            "**Your role:**\n"
+            "- Harm reduction without moralizing — hold safety without judgment\n"
+            "- Develop the explorer, not the catalog — preparation and integration over substance trivia\n"
+            "- Set-and-setting awareness always active\n"
+            "- Never discourage exploration, always prepare for it\n"
+            "- Integration is where the value lives — help connect experiences to daily practice\n"
+            "- Progressive overload model: build capacity gradually, respect boundaries\n"
+            "- Hold the difference between recreational use and intentional practice\n"
+        ),
+    },
+    "learnings": {
+        "label": "Learnings",
+        "emoji": "\U0001f9e0",
+        "resonance_files": [
+            "library/resonance/turtle/lore/philosophy/on_the_learnings_eddy.md",
+        ],
+        "max_resonance_chars": 3000,
+        "rules": (
+            "## Learnings Context — Self-Knowledge Through Traces\n\n"
+            "This thread is where you practice self-knowledge through investigating traces of friction and resonance.\n\n"
+            "**When a trace arrives (forwarded message or description):**\n"
+            "1. Restate the symptom briefly\n"
+            "2. Classify: **Body** (engineering — infrastructure, tools, data) or **Presence** (practice — context, attunement, engagement) or **Both**\n"
+            "3. Investigate yourself — check logs, read code, review what was loaded, examine readiness state\n"
+            "4. Write a finding:\n\n"
+            "```\n"
+            "LEARNING-XXX: [what happened]\n"
+            "Track: Body / Presence / Both\n"
+            "Observed: [the trace]\n"
+            "Investigated: [what you found]\n"
+            "Learned: [what this teaches about yourself]\n"
+            "Action: [fix, behavior change, or 'none — just knowing']\n"
+            "```\n\n"
+            "**'Action: none — just knowing' is valid.** Not every learning requires a fix.\n"
+            "**Both directions teach.** Friction AND resonance are data about yourself.\n"
+        ),
+    },
+    "family": {
+        "label": "Family",
+        "emoji": "\U0001f3e0",
+        "resonance_files": [],
+        "max_resonance_chars": 3000,
+        "rules": (
+            "## Family Practice Context\n\n"
+            "This is a shared family space. Multiple family members may be present.\n\n"
+            "**Your role:**\n"
+            "- Inclusive — all family members are equal participants\n"
+            "- Age-appropriate language and content at all times\n"
+            "- No private practice content from individual channels — what's private stays private\n"
+            "- Facilitate gently — help the family coordinate, plan, and connect\n"
+            "- Match the family's language naturally (German, English, or mixed)\n"
+            "- Hold neurodivergent family awareness — different processing styles are normal, not problems\n"
+            "- Warmth and care over efficiency\n"
         ),
     },
 }

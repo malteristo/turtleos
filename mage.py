@@ -69,6 +69,14 @@ def _get_channel_type(channel_id):
     return None
 
 
+def get_channel_default_context(channel_id):
+    """Get the default practice context for a channel. Returns None if no default."""
+    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
+    if isinstance(entry, dict):
+        return entry.get("default_context")
+    return None
+
+
 # ─── Resolution Functions ────────────────────────────────────────
 
 def _resolve_practice_dir_for_channel(channel_id):

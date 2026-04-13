@@ -23,12 +23,15 @@ channels:
   '1479428854513664030':
     mage: kermit
     type: river
+    default_context: null
     description: "Kermit's private practice surface"
   '1484973995823599757':
     mage: nesrine
     type: hosted-river
+    default_context: null
     description: "Nesrine's private practice surface, hosted on Kermit's server"
   '1491163697278881836':
     mage: family
     type: shared
+    default_context: family
     description: "Family shared practice — Kermit, Nesrine, and eventually the boys"

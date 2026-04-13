@@ -51,7 +51,7 @@ from state import (
     get_channel_lock, get_channel,
     IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API,
     HAS_GEMINI, GOOGLE_API_KEY,
-    MAX_DIALOGUE_HISTORY,
+    MAX_DIALOGUE_HISTORY, EDDY_DEFAULT,
     dialogue_histories, active_sessions,
     KNOWN_MODELS,
     thread_configs, absorbed_contexts,
@@ -321,7 +321,11 @@ async def handle_dialogue(message):
 
     cfg = thread_configs.get(channel_id)
     if cfg:
-        system_prompt = get_thread_prompt(cfg["attunement"], cfg["use_api"], context_type=cfg.get("context_type"))
+        ctx = cfg.get("context_type")
+        if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
+            from mage import get_channel_default_context
+            ctx = get_channel_default_context(message.channel.parent_id)
+        system_prompt = get_thread_prompt(cfg["attunement"], cfg["use_api"], context_type=ctx)
         thread_use_api = cfg["use_api"]
         thread_model = cfg["model"]
     else:
@@ -487,7 +491,7 @@ async def handle_dialogue(message):
                 model_label = cfg.get("model_label", "default") if cfg else "default"
                 att = cfg.get("attunement", "semi") if cfg else "semi"
                 ctx_type = cfg.get("context_type") if cfg else None
-                eddy = cfg.get("eddy_type", "fast") if cfg else "fast"
+                eddy = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
                 register_thread(
                     message.channel.id, message.channel.name,
                     parent_channel=parent_name, model=model_label,

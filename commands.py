@@ -575,6 +575,10 @@ async def cmd_thread(message, args):
         await message.reply(f"Unknown context `{context_type}`. Use: {valid}", mention_author=False)
         return
 
+    if not context_type:
+        from mage import get_channel_default_context
+        context_type = get_channel_default_context(message.channel.id)
+
     model_id, use_api = resolve_model(model_str)
 
     try:
@@ -694,11 +698,11 @@ async def cmd_thread_type(message, args):
         cfg = thread_configs.get(message.channel.id, {})
         current = cfg.get("eddy_type", EDDY_DEFAULT)
         info = EDDY_TYPES[current]
-        types_list = " / ".join(f"`{k}` ({v['emoji']} {v['days'] or '∞'}d)" for k, v in EDDY_TYPES.items())
+        types_list = " / ".join(f"`{k}` ({v['emoji']} {v['label']})" for k, v in EDDY_TYPES.items())
         await message.reply(
             f"Current type: {info['emoji']} **{info['label']}** (`{current}`)\n"
             f"Available: {types_list}\n"
-            f"Usage: `!thread-type slow`",
+            f"Usage: `!thread-type standing`",
             mention_author=False,
         )
         return
@@ -719,9 +723,8 @@ async def cmd_thread_type(message, args):
         }
     info = EDDY_TYPES[new_type]
     old_info = EDDY_TYPES[old_type]
-    days_str = f"{info['days']}d" if info['days'] else "∞"
     await message.reply(
-        f"{old_info['emoji']} → {info['emoji']} Thread type changed to **{info['label']}** (dissolves after {days_str} quiet)",
+        f"{old_info['emoji']} → {info['emoji']} Thread type changed to **{info['label']}**",
         mention_author=False,
     )
     await log_activity(f"Thread **{message.channel.name}** type: `{old_type}` → `{new_type}`", info['emoji'], channel=message.channel)
@@ -739,18 +742,17 @@ def _build_config_line(thread_id: int) -> str:
     eddy_type = cfg.get("eddy_type", EDDY_DEFAULT)
     context_type = cfg.get("context_type")
     eddy_info = EDDY_TYPES[eddy_type]
-    days_str = f"{eddy_info['days']}d" if eddy_info['days'] else "∞"
     ctx_tag = ""
     if context_type:
         ctx_info = THREAD_CONTEXTS.get(context_type, {})
-        ctx_tag = f" · {ctx_info.get('emoji', '📎')} `{context_type}`"
-    return f"🧵 `{model_id}` ({'API' if use_api else 'local'}) · `{attunement}` · {eddy_info['emoji']} {eddy_info['label']} ({days_str}){ctx_tag}"
+        ctx_tag = f" · {ctx_info.get('emoji', '📎')} {ctx_info.get('label', context_type)}"
+    return f"🧵 `{model_id}` ({'API' if use_api else 'local'}) · `{attunement}` · {eddy_info['emoji']} {eddy_info['label']}{ctx_tag}"
 
 
 class ThreadConfigView(discord.ui.View):
     """Persistent thread configuration — type buttons + context selector. Never disables."""
 
-    def __init__(self, current_type: str = "fast", current_context: str | None = None):
+    def __init__(self, current_type: str = "standard", current_context: str | None = None):
         super().__init__(timeout=None)
         self._current_type = current_type
         self._current_context = current_context
@@ -779,21 +781,17 @@ class ThreadConfigView(discord.ui.View):
         config_line = _build_config_line(thread_id)
         await interaction.response.edit_message(content=config_line, view=new_view)
 
-    @discord.ui.button(label="⚡ Fast (3d)", custom_id="tconfig:fast", style=discord.ButtonStyle.secondary, row=0)
-    async def fast_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._set_type(interaction, "fast")
+    @discord.ui.button(label="💬 Standard", custom_id="tconfig:standard", style=discord.ButtonStyle.primary, row=0)
+    async def standard_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._set_type(interaction, "standard")
 
-    @discord.ui.button(label="🌀 Slow (14d)", custom_id="tconfig:slow", style=discord.ButtonStyle.secondary, row=0)
-    async def slow_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._set_type(interaction, "slow")
-
-    @discord.ui.button(label="🔀 Confluence (7d)", custom_id="tconfig:confluence", style=discord.ButtonStyle.secondary, row=0)
-    async def confluence_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._set_type(interaction, "confluence")
-
-    @discord.ui.button(label="🌊 Standing (∞)", custom_id="tconfig:standing", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="🌊 Standing", custom_id="tconfig:standing", style=discord.ButtonStyle.secondary, row=0)
     async def standing_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._set_type(interaction, "standing")
+
+    @discord.ui.button(label="🍃 Manual Release", custom_id="tconfig:manual", style=discord.ButtonStyle.secondary, row=0)
+    async def manual_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._set_type(interaction, "manual")
 
     @discord.ui.select(
         custom_id="tconfig:ctx",
@@ -961,13 +959,18 @@ class EddyDissolutionView(discord.ui.View):
 
 
 async def eddy_dissolution_check():
+    """Sunday sweep — flag standard threads that have been quiet 7+ days.
+
+    Standing threads never dissolve. Manual threads dissolve at session end.
+    Standard threads are checked here on Sundays (or on-demand via !eddy-check).
+    """
+    STANDARD_QUIET_DAYS = 7
     now = datetime.now(timezone.utc)
     newly_flagged = []
 
     for tid, cfg in list(thread_configs.items()):
         eddy_type = cfg.get("eddy_type", EDDY_DEFAULT)
-        threshold_days = EDDY_TYPES.get(eddy_type, {}).get("days")
-        if threshold_days is None:
+        if eddy_type != "standard":
             continue
         if tid in threads_flagged_for_release:
             continue
@@ -989,22 +992,21 @@ async def eddy_dissolution_check():
             pass
 
         quiet_days = (now - last_activity).total_seconds() / 86400
-        if quiet_days >= threshold_days:
+        if quiet_days >= STANDARD_QUIET_DAYS:
             threads_flagged_for_release[tid] = {
                 "flagged_at": now,
-                "reason": f"Quiet for {int(quiet_days)}d (threshold: {threshold_days}d for {eddy_type})",
+                "reason": f"Quiet for {int(quiet_days)}d (standard thread)",
                 "thread_name": thread.name,
             }
             newly_flagged.append(thread.name)
 
             parent = thread.parent or get_channel("dialogue")
             if parent:
-                eddy_info = EDDY_TYPES[eddy_type]
+                eddy_info = EDDY_TYPES["standard"]
                 embed = discord.Embed(
                     title=f"{eddy_info['emoji']} Thread ready to dissolve",
                     description=(
-                        f"**{thread.name}** has been quiet for **{int(quiet_days)}d** "
-                        f"(type: {eddy_info['label']}, threshold: {threshold_days}d)\n\n"
+                        f"**{thread.name}** has been quiet for **{int(quiet_days)}d**.\n\n"
                         "What should happen with this thread?"
                     ),
                     color=0xFFA500,

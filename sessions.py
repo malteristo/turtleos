@@ -6,10 +6,13 @@ from pathlib import Path
 
 from discord.ext import tasks
 
+import re
+
 from state import (
     active_sessions, SESSION_TIMEOUT_SECONDS, MIN_EXCHANGES_FOR_REFLECTION,
     SESSION_REFLECTION_COOLDOWN, last_reflection_time,
     IDENTITY_DIR, REFLECTION_MODEL,
+    thread_configs, EDDY_DEFAULT,
 )
 from mage import get_pd, get_mage_name, get_mage_type, set_practice_context_for_channel
 from practice_io import read_safe
@@ -159,10 +162,14 @@ async def close_session(channel_id: int):
             session_channel = client.get_channel(channel_id)
             if session_channel:
                 names = ", ".join(d["name"] for d in impaired)
-                # Route to internal log, not channel — practitioner cannot act on this (016 principle)
                 print(f"Post-session readiness: {names} impaired — internal signal, not surfaced to channel")
     except Exception as e:
         print(f"Post-session readiness check failed: {e}")
+
+    # Manual-release dissolution — metabolize and close when the conversation is done
+    cfg = thread_configs.get(channel_id)
+    if cfg and cfg.get("eddy_type") == "manual":
+        await _manual_release_dissolve(channel_id, history)
 
 
 
@@ -286,3 +293,76 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
 
     except Exception as e:
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
+
+
+async def _manual_release_dissolve(channel_id: int, history: list[dict]):
+    """Dissolve a manual-release thread — capture essence, archive, notify parent."""
+    import discord
+    from thread_registry import mark_dissolved
+
+    thread = client.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        return
+
+    thread_name = thread.name
+    mage_name = get_mage_name()
+
+    # Capture essence via reflection model
+    msgs = [
+        f"{'Mage' if m['role'] == 'user' else 'Turtle'}: {m['content'][:300]}"
+        for m in history
+    ]
+    essence = ""
+    entry_count = 0
+    if len(msgs) >= 2:
+        conversation = "\n".join(msgs)
+        try:
+            result = await chat_ollama(
+                f"This thread \"{thread_name}\" is dissolving. "
+                "Extract the essential insights worth keeping. Write as boom entries (- prefix). "
+                "If nothing worth keeping: output (nothing to capture)",
+                [{"role": "user", "content": conversation}],
+                model=REFLECTION_MODEL, num_ctx=8192,
+            )
+            if result and "(nothing to capture)" not in result.lower():
+                essence = result
+                boom_path = os.path.join(get_pd(), "boom.md")
+                timestamp = local_now().strftime("%Y-%m-%d %H:%M")
+                with open(boom_path, "a") as f:
+                    f.write(f"\n\n## Thread dissolved: {thread_name} ({timestamp})\n{essence}\n")
+                entry_count = sum(1 for line in essence.split("\n") if line.strip().startswith("-"))
+        except Exception as e:
+            print(f"Manual release essence capture failed for {thread_name}: {e}")
+
+    # Archive the conversation
+    archive_dir = Path(get_pd()) / "thread-archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    today = local_now().strftime("%Y-%m-%d")
+    safe_name = re.sub(r'[^\w-]', '_', thread_name.lower())
+    archive_path = archive_dir / f"{today}_{safe_name}.md"
+    archive_content = f"# Thread Archive: {thread_name}\n\n"
+    archive_content += f"**Archived:** {today}\n**Messages:** {len(msgs)}\n\n"
+    if essence:
+        archive_content += f"## Essence\n{essence}\n\n"
+    archive_content += "## Conversation\n" + "\n".join(msgs[-20:]) + "\n"
+    archive_path.write_text(archive_content)
+
+    # Clean up in-memory state
+    thread_configs.pop(channel_id, None)
+    mark_dissolved(channel_id)
+
+    # Notify parent channel
+    parent = thread.parent
+    if parent:
+        summary = f"🍃 **{thread_name}** dissolved"
+        if entry_count:
+            summary += f" — {entry_count} entries captured to boom"
+        await parent.send(summary, silent=True)
+
+    # Archive the Discord thread
+    try:
+        await thread.edit(archived=True)
+    except Exception:
+        pass
+
+    print(f"Manual release: {thread_name} dissolved ({entry_count} boom entries)")
