@@ -104,6 +104,7 @@ from background import practice_health_loop, interoception_loop
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView, LinkFetchView,
+    ThreadConfigView,
 )
 
 from content_fetch import (
@@ -502,6 +503,7 @@ async def handle_dialogue(message):
 @client.event
 async def on_ready():
     client.add_view(ControlPanelView())
+    client.add_view(ThreadConfigView())
     print(f"Turtle online: {client.user}")
     print(f"tOS: {get_pd()} | Identity: {IDENTITY_DIR}")
     print(f"Dialogue: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")

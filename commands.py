@@ -610,13 +610,10 @@ async def cmd_thread(message, args):
         "created": datetime.now(timezone.utc),
     }
 
-    eddy_info = EDDY_TYPES[eddy_type]
-    ctx_info = THREAD_CONTEXTS.get(context_type, {})
-    ctx_tag = f" | {ctx_info.get('emoji', '')} `{context_type}`" if context_type else ""
-    config_line = f"Model: `{model_id}` ({'API' if use_api else 'local'}) | Attunement: `{attunement}` | {eddy_info['emoji']} `{eddy_type}`{ctx_tag}"
-    await thread.send(f"\U0001f9f5 {config_line}", view=ThreadTypeView(thread.id))
+    config_line = _build_config_line(thread.id)
+    view = ThreadConfigView(current_type=eddy_type, current_context=context_type)
+    await thread.send(config_line, view=view)
     print(f"Thread created: {topic} (id: {thread.id}, model: {model_id}, attunement: {attunement}, eddy: {eddy_type})")
-    await log_activity(f"Thread created: **{topic}** (`{model_str}` / `{attunement}` / `{eddy_type}`)", "\U0001f9f5", channel=thread)
 
 
 async def cmd_boom_thread(message, args):
@@ -732,44 +729,115 @@ async def cmd_thread_type(message, args):
 
 # ─── Views ───────────────────────────────────────────────────────
 
-class ThreadTypeView(discord.ui.View):
-    def __init__(self, thread_id: int):
-        super().__init__(timeout=3600)
-        self.thread_id = thread_id
+def _build_config_line(thread_id: int) -> str:
+    """Build the config display line for a thread's opening message."""
+    cfg = thread_configs.get(thread_id, {})
+    model_label = cfg.get("model_label", "local")
+    model_id = cfg.get("model") or model_label
+    use_api = cfg.get("use_api", False)
+    attunement = cfg.get("attunement", "semi")
+    eddy_type = cfg.get("eddy_type", EDDY_DEFAULT)
+    context_type = cfg.get("context_type")
+    eddy_info = EDDY_TYPES[eddy_type]
+    days_str = f"{eddy_info['days']}d" if eddy_info['days'] else "∞"
+    ctx_tag = ""
+    if context_type:
+        ctx_info = THREAD_CONTEXTS.get(context_type, {})
+        ctx_tag = f" · {ctx_info.get('emoji', '📎')} `{context_type}`"
+    return f"🧵 `{model_id}` ({'API' if use_api else 'local'}) · `{attunement}` · {eddy_info['emoji']} {eddy_info['label']} ({days_str}){ctx_tag}"
+
+
+class ThreadConfigView(discord.ui.View):
+    """Persistent thread configuration — type buttons + context selector. Never disables."""
+
+    def __init__(self, current_type: str = "fast", current_context: str | None = None):
+        super().__init__(timeout=None)
+        self._current_type = current_type
+        self._current_context = current_context
         for child in self.children:
-            child.custom_id = f"{child.custom_id}:{thread_id}"
+            cid = child.custom_id or ""
+            if cid.startswith("tconfig:"):
+                type_key = cid.split(":")[1]
+                if type_key in EDDY_TYPES:
+                    child.style = (
+                        discord.ButtonStyle.primary if type_key == current_type
+                        else discord.ButtonStyle.secondary
+                    )
+            if cid == "tconfig:ctx":
+                for opt in child.options:
+                    opt.default = (opt.value == (current_context or "__none__"))
 
     async def _set_type(self, interaction: discord.Interaction, new_type: str):
-        cfg = thread_configs.get(self.thread_id)
+        thread_id = interaction.channel.id
+        cfg = thread_configs.get(thread_id)
         if cfg:
             cfg["eddy_type"] = new_type
-        info = EDDY_TYPES[new_type]
-        await interaction.response.send_message(
-            f"{info['emoji']} Thread type → **{info['label']}** ({info['days'] or '∞'}d)",
-            ephemeral=False,
+        new_view = ThreadConfigView(
+            current_type=new_type,
+            current_context=cfg.get("context_type") if cfg else None,
         )
-        for child in self.children:
-            child.disabled = True
-        try:
-            await interaction.message.edit(view=self)
-        except Exception:
-            pass
+        config_line = _build_config_line(thread_id)
+        await interaction.response.edit_message(content=config_line, view=new_view)
 
-    @discord.ui.button(label="⚡ Fast (3d)", custom_id="ttype:fast", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="⚡ Fast (3d)", custom_id="tconfig:fast", style=discord.ButtonStyle.secondary, row=0)
     async def fast_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._set_type(interaction, "fast")
 
-    @discord.ui.button(label="🌀 Slow (14d)", custom_id="ttype:slow", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🌀 Slow (14d)", custom_id="tconfig:slow", style=discord.ButtonStyle.secondary, row=0)
     async def slow_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._set_type(interaction, "slow")
 
-    @discord.ui.button(label="🔀 Confluence (7d)", custom_id="ttype:confluence", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔀 Confluence (7d)", custom_id="tconfig:confluence", style=discord.ButtonStyle.secondary, row=0)
     async def confluence_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._set_type(interaction, "confluence")
 
-    @discord.ui.button(label="🌊 Standing (∞)", custom_id="ttype:standing", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🌊 Standing (∞)", custom_id="tconfig:standing", style=discord.ButtonStyle.primary, row=0)
     async def standing_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._set_type(interaction, "standing")
+
+    @discord.ui.select(
+        custom_id="tconfig:ctx",
+        placeholder="📎 Load context...",
+        min_values=1, max_values=1,
+        options=[
+            discord.SelectOption(label="No context", value="__none__", description="Default — no practice context loaded", default=True),
+        ] + [
+            discord.SelectOption(
+                label=info["label"], value=ctx_key,
+                description=f"{info.get('emoji', '')} {ctx_key} resonance",
+            )
+            for ctx_key, info in THREAD_CONTEXTS.items()
+        ],
+        row=1,
+    )
+    async def context_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        thread_id = interaction.channel.id
+        cfg = thread_configs.get(thread_id)
+        chosen = select.values[0]
+        new_context = None if chosen == "__none__" else chosen
+
+        if cfg:
+            cfg["context_type"] = new_context
+
+        new_view = ThreadConfigView(
+            current_type=cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT,
+            current_context=new_context,
+        )
+        config_line = _build_config_line(thread_id)
+
+        if new_context and new_context in THREAD_CONTEXTS:
+            ctx_info = THREAD_CONTEXTS[new_context]
+            await interaction.response.edit_message(content=config_line, view=new_view)
+            await interaction.followup.send(
+                f"{ctx_info.get('emoji', '📎')} Context loaded: **{ctx_info['label']}**",
+                ephemeral=False,
+            )
+        else:
+            await interaction.response.edit_message(content=config_line, view=new_view)
+
+
+# Keep ThreadTypeView as alias for backward compat with any existing views
+ThreadTypeView = ThreadConfigView
 
 
 class EddyDissolutionView(discord.ui.View):
@@ -2289,15 +2357,14 @@ class ThreadTopicModal(discord.ui.Modal, title="New Thread"):
             "created": datetime.now(timezone.utc),
         }
 
-        eddy_info = EDDY_TYPES[eddy_type]
-        config_line = f"Model: `{model_id}` ({'API' if use_api else 'local'}) | Attunement: `{self.attunement}` | {eddy_info['emoji']} `{eddy_type}`"
-        await thread.send(f"\U0001f9f5 {config_line}", view=ThreadTypeView(thread.id))
+        config_line = _build_config_line(thread.id)
+        view = ThreadConfigView(current_type=eddy_type)
+        await thread.send(config_line, view=view)
         await interaction.response.send_message(
             f"Thread **{topic_val}** created (`{self.model_str}` / `{self.attunement}` / `{eddy_type}`).",
             ephemeral=True,
         )
         print(f"Thread created via panel: {topic_val} (model: {model_id}, attunement: {self.attunement}, eddy: {eddy_type})")
-        await log_activity(f"Thread created: **{topic_val}** (`{self.model_str}` / `{self.attunement}` / `{eddy_type}`)", "\U0001f9f5", channel=thread)
 
 
 class ControlPanelView(discord.ui.View):
