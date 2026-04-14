@@ -100,7 +100,7 @@ from helpers import (
 from sessions import session_monitor, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
 from proprioceptor import prepare_context_brief
-from background import practice_health_loop, interoception_loop
+from background import practice_health_loop, interoception_loop, daily_reminders_loop
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView, LinkFetchView,
@@ -701,6 +701,9 @@ async def on_ready():
         if not interoception_loop.is_running():
             interoception_loop.start()
             print("interoception_loop started")
+        if not daily_reminders_loop.is_running():
+            daily_reminders_loop.start()
+            print("daily_reminders_loop started")
     except Exception as e:
         import traceback
         print(f"Background task start failed: {e}")

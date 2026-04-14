@@ -2178,6 +2178,7 @@ DIRECT_COMMANDS = {
     "help": lambda msg, args: cmd_help(msg),
     "admin": lambda msg, args: cmd_admin(msg, args),
     "signals": lambda msg, args: cmd_signals(msg, args),
+    "drip": lambda msg, args: cmd_drip(msg, args),
     "attune": lambda msg, args: cmd_attune(msg),
     "load": lambda msg, args: cmd_load(msg, args),
 }
@@ -2427,3 +2428,64 @@ async def cmd_panel(message):
     view = ControlPanelView()
     await message.channel.send(embed=embed, view=view)
 
+
+
+async def cmd_drip(message, args):
+    """Signal drip management — !drip done marks current tweet as posted."""
+    if not args or args[0].lower() != "done":
+        drip_path = os.path.join(get_pd(), "outfacing", "drip-state.md")
+        content = read_safe(drip_path)
+        if not content:
+            await message.reply("No drip state found.", mention_author=False)
+            return
+        pending = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", content)
+        posted = re.findall(r"\|\s*(\d+)\s*\|\s*posted\s*\|", content)
+        await message.reply(
+            f"Signal drip: {len(posted)} posted, {len(pending)} pending.\n"
+            f"Next: Tweet {pending[0]}/18" if pending else "All tweets posted!",
+            mention_author=False,
+        )
+        return
+
+    drip_path = os.path.join(get_pd(), "outfacing", "drip-state.md")
+    content = read_safe(drip_path)
+    if not content:
+        await message.reply("No drip state found at `outfacing/drip-state.md`", mention_author=False)
+        return
+
+    lines = content.split("\n")
+    updated_lines = []
+    found = False
+    tweet_num = None
+    today = local_now().strftime("%Y-%m-%d")
+
+    for line in lines:
+        if not found and "| pending |" in line:
+            match = re.match(r"\|\s*(\d+)\s*\|\s*pending\s*\|", line)
+            if match:
+                tweet_num = match.group(1)
+                line = re.sub(
+                    r"\|\s*pending\s*\|\s*\|",
+                    f"| posted | {today} |",
+                    line,
+                )
+                found = True
+        updated_lines.append(line)
+
+    if not found:
+        await message.reply("No pending tweets in the drip!", mention_author=False)
+        return
+
+    Path(drip_path).write_text("\n".join(updated_lines))
+
+    remaining = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", "\n".join(updated_lines))
+    if remaining:
+        await message.reply(
+            f"\u2705 Tweet {tweet_num}/18 posted. Next: Tweet {remaining[0]}/18.",
+            mention_author=False,
+        )
+    else:
+        await message.reply(
+            f"\u2705 Tweet {tweet_num}/18 posted. Story thread complete! \U0001f389",
+            mention_author=False,
+        )

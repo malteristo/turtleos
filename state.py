@@ -139,6 +139,12 @@ HEALTH_READ_DAY = 6  # Sunday
 HEALTH_READ_HOUR = 6  # 6 AM local
 last_health_read_week: int = 0
 
+# Daily reminders state
+last_reminder_date: str | None = None
+REMINDER_HOUR_START = 8
+REMINDER_HOUR_END = 10
+SIGNAL_DRIP_THREAD_ID = 1492574217621995640
+
 # Embed colors
 EMBED_COLORS = {
     "status_ok": 0x2ECC71, "status_warn": 0xF1C40F, "status_error": 0xE74C3C,

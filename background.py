@@ -229,3 +229,64 @@ async def interoception_loop():
         color=OPS_EMBED_COLOR,
     )
     await ch.send(embed=embed, silent=True)
+
+
+import re as _re
+
+
+@tasks.loop(hours=1)
+async def daily_reminders_loop():
+    """Practice reminders — proactive daily nudges."""
+    now = datetime.now()
+    if now.hour < _state.REMINDER_HOUR_START or now.hour > _state.REMINDER_HOUR_END:
+        return
+    today = now.strftime("%Y-%m-%d")
+    if _state.last_reminder_date == today:
+        return
+    _state.last_reminder_date = today
+
+    await _check_signal_drip()
+
+
+async def _check_signal_drip():
+    """Check for pending signal drip and offer next tweet."""
+    drip_path = os.path.join(get_pd(), "outfacing", "drip-state.md")
+    content = read_safe(drip_path)
+    if not content:
+        return
+
+    pending = _re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", content)
+    if not pending:
+        return
+    next_num = int(pending[0])
+
+    total_matches = _re.findall(r"\|\s*(\d+)\s*\|\s*(?:posted|pending)\s*\|", content)
+    total = max(int(n) for n in total_matches) if total_matches else 18
+
+    thread = _state.client.get_channel(_state.SIGNAL_DRIP_THREAD_ID)
+    if not thread:
+        print(f"Signal drip: thread {_state.SIGNAL_DRIP_THREAD_ID} not found")
+        return
+
+    tweet_text = None
+    try:
+        async for msg in thread.history(limit=100):
+            if f"Tweet {next_num}/{total}" in msg.content and "Turtle Story" in msg.content:
+                parts = msg.content.split("\n\n", 1)
+                tweet_text = parts[1].strip() if len(parts) > 1 else None
+                break
+    except Exception as e:
+        print(f"Signal drip: thread history search failed: {e}")
+        return
+
+    if not tweet_text:
+        print(f"Signal drip: Tweet {next_num} text not found in thread")
+        return
+
+    embed = discord.Embed(
+        title=f"\U0001f422 Tweet {next_num}/{total}",
+        description=f"{tweet_text}\n\n*Relay to @turtle_of_magic. `!drip done` when posted.*",
+        color=OPS_EMBED_COLOR,
+    )
+    await thread.send(embed=embed, silent=True)
+    print(f"Signal drip: Tweet {next_num}/{total} reminder sent")
