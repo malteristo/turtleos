@@ -246,6 +246,7 @@ async def daily_reminders_loop():
     _state.last_reminder_date = today
 
     await _check_signal_drip()
+    await _check_practice_invitation()
 
 
 async def _check_signal_drip():
@@ -290,3 +291,117 @@ async def _check_signal_drip():
     )
     await thread.send(embed=embed, silent=True)
     print(f"Signal drip: Tweet {next_num}/{total} reminder sent")
+
+
+async def _check_practice_invitation():
+    """Evaluate practice state and send the highest-priority invitation."""
+    from datetime import datetime, timedelta
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Check global cooldown — only one invitation per day
+    if _state.last_invitation_date == today:
+        return
+
+    pd = get_pd()
+
+    # Read practice state
+    boom = read_safe(os.path.join(pd, "boom.md"))
+    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
+    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
+
+    boom_count = count_items(boom)
+    boom_age = file_age_hours(os.path.join(pd, "boom.md"))
+    compass_age = file_age_hours(os.path.join(pd, "intentions", "compass.md"))
+
+    # Find latest session
+    sdir = os.path.join(pd, "sessions")
+    session_age = float("inf")
+    last_session_thread = None
+    if os.path.isdir(sdir):
+        session_files = [f for f in os.listdir(sdir) if f.endswith(".md")]
+        if session_files:
+            latest = max(session_files, key=lambda f: os.path.getmtime(os.path.join(sdir, f)))
+            session_age = file_age_hours(os.path.join(sdir, latest))
+            session_content = read_safe(os.path.join(sdir, latest))
+            for line in session_content.split("\n"):
+                if "thread" in line.lower() and ("next" in line.lower() or "follow" in line.lower()):
+                    last_session_thread = line.strip().lstrip("- *#").strip()
+                    break
+
+    # Find stale intentions
+    stale_intentions = []
+    idir = os.path.join(pd, "intentions", "active")
+    if os.path.isdir(idir):
+        for fname in os.listdir(idir):
+            if fname.endswith(".md"):
+                iage = file_age_hours(os.path.join(idir, fname))
+                if iage > 336:  # 14 days
+                    name = fname.replace(".md", "").replace("-", " ").replace("_", " ")
+                    stale_intentions.append((name, iage))
+
+    # Evaluate invitations in priority order
+    candidates = []
+
+    # 1. Return invitation (highest priority — practitioner hasn't been around)
+    if session_age > 72:
+        candidates.append(("return", "Haven't heard from you in a few days. No agenda — just here if you want to think out loud."))
+
+    # 2. Session thread follow-up
+    if last_session_thread and session_age > 24 and session_age < 168:
+        candidates.append(("thread", f"Last time we talked, there was a thread: *{last_session_thread[:120]}* — still pulling?"))
+
+    # 3. Boom sweep invitation
+    if boom_count >= 5 and boom_age > 72:
+        candidates.append(("boom", f"Your boom has been accumulating — {boom_count} items, some from {format_age(boom_age)} ago. I can see threads forming. Want to sweep together?"))
+
+    # 4. Compass reflection
+    if compass_age > 336 and compass.strip():  # 14 days
+        weeks = int(compass_age / 168)
+        candidates.append(("compass", f"It\'s been {weeks} weeks since we looked at your compass. Your intentions have been active — want to check if the compass still points true?"))
+
+    # 5. Intention check-in
+    if stale_intentions and session_age < 72:
+        name, iage = stale_intentions[0]
+        candidates.append(("intention", f"*{name}* has been quiet for {format_age(iage)} while you\'ve been active elsewhere. Still alive? Sometimes intentions complete silently."))
+
+    if not candidates:
+        return
+
+    # Apply per-type cooldown (7 days)
+    now = datetime.now()
+    filtered = []
+    for inv_type, message in candidates:
+        last_sent = _state.invitation_cooldowns.get(inv_type)
+        if last_sent:
+            try:
+                last_dt = datetime.strptime(last_sent, "%Y-%m-%d")
+                if (now - last_dt).days < _state.INVITATION_COOLDOWN_DAYS:
+                    continue
+            except ValueError:
+                pass
+        filtered.append((inv_type, message))
+
+    if not filtered:
+        return
+
+    # Send highest-priority invitation
+    inv_type, message = filtered[0]
+
+    ch = get_channel("dialogue")
+    if not ch:
+        return
+
+    embed = discord.Embed(
+        title="\U0001f331 Practice Invitation",
+        description=message,
+        color=OPS_EMBED_COLOR,
+    )
+    try:
+        await ch.send(embed=embed, silent=True)
+        _state.last_invitation_date = today
+        _state.last_invitation_type = inv_type
+        _state.invitation_cooldowns[inv_type] = today
+        print(f"Practice invitation sent: {inv_type}")
+    except Exception as e:
+        print(f"Practice invitation failed: {e}")
