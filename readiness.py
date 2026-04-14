@@ -42,7 +42,7 @@ def assess_readiness(pd=None) -> dict:
     """
     # Import here to avoid circular imports — these are background task references
     from sessions import session_monitor
-    from background import interoception_loop, practice_health_loop
+    from background import interoception_loop, practice_health_loop, daily_reminders_loop, health_canary_loop
 
     pd = pd or _resolve_default_pd()
     dims = []
@@ -171,6 +171,16 @@ def assess_readiness(pd=None) -> dict:
     else:
         metabolic_ok = False
         metabolic_detail.append("health loop ✗")
+    if daily_reminders_loop.is_running():
+        metabolic_detail.append("reminders ✓")
+    else:
+        metabolic_ok = False
+        metabolic_detail.append("reminders ✗")
+    if health_canary_loop.is_running():
+        metabolic_detail.append("canary ✓")
+    else:
+        metabolic_ok = False
+        metabolic_detail.append("canary ✗")
     dims.append({"name": "Metabolic Health",
                  "status": "ready" if metabolic_ok else "degraded",
                  "detail": ", ".join(metabolic_detail)})

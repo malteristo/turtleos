@@ -151,6 +151,13 @@ last_invitation_date: str | None = None
 invitation_cooldowns: dict[str, str] = {}  # type -> last_sent_date
 INVITATION_COOLDOWN_DAYS = 7
 
+# INT-027 Health canary state
+canary_consecutive_failures: dict[str, int] = {}  # check_name -> consecutive fail count
+canary_last_alert: dict[str, str] = {}  # check_name -> last alert date
+CANARY_ALERT_THRESHOLD = 2  # consecutive failures before alerting
+CANARY_ALERT_COOLDOWN_HOURS = 6
+
+
 
 # Embed colors
 EMBED_COLORS = {
