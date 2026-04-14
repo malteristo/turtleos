@@ -479,7 +479,16 @@ async def health_canary_loop():
                         pass
 
                 if should_alert:
+                    # Attempt self-healing before alerting
+                    from self_heal import check_and_heal
+                    heal_result = await check_and_heal(check_name)
+                    if heal_result and heal_result[0]:
+                        print(f"Health canary: {check_name} self-healed — {heal_result[1]}")
+                        _state.canary_consecutive_failures[check_name] = 0
+                        continue
                     detail = _canary_detail(check_name, dead_loops, boom_age, compass_age)
+                    if heal_result:
+                        detail += f" (self-heal attempted: {heal_result[1]})"
                     alerts.append((check_name, detail))
                     _state.canary_last_alert[check_name] = now.strftime("%Y-%m-%d %H:%M")
 
