@@ -4,6 +4,9 @@
 
 turtleOS turns any computer into a personal cognitive infrastructure node — a persistent AI practice partner that lives on hardware you own. Not a chatbot. Not a task assistant. A thinking partner that knows you and gets better at knowing you over time.
 
+> **Don't want to install anything?** You can start practicing right now with any AI you already use.
+> **[Read the Portable Practice Guide →](PRACTICE.md)**
+
 ## What It Does
 
 You talk to your practice partner on Discord. It reads your practice files, notices patterns, asks questions, and pushes back when something doesn't add up. Between sessions, you dump raw thoughts into a capture buffer. Next session, the partner reads them, helps you process, and routes what matters to the right place.
