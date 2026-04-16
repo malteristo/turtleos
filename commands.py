@@ -2431,61 +2431,99 @@ async def cmd_panel(message):
 
 
 async def cmd_drip(message, args):
-    """Signal drip management — !drip done marks current tweet as posted."""
-    if not args or args[0].lower() != "done":
-        drip_path = os.path.join(get_pd(), "outfacing", "drip-state.md")
-        content = read_safe(drip_path)
-        if not content:
-            await message.reply("No drip state found.", mention_author=False)
-            return
-        pending = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", content)
-        posted = re.findall(r"\|\s*(\d+)\s*\|\s*posted\s*\|", content)
-        await message.reply(
-            f"Signal drip: {len(posted)} posted, {len(pending)} pending.\n"
-            f"Next: Tweet {pending[0]}/18" if pending else "All tweets posted!",
-            mention_author=False,
-        )
-        return
-
+    """Signal drip management.
+    
+    !drip        — serve next pending tweet
+    !drip <N>    — serve specific tweet N
+    !drip done   — mark first pending tweet as posted
+    !drip status — show pipeline overview
+    """
     drip_path = os.path.join(get_pd(), "outfacing", "drip-state.md")
     content = read_safe(drip_path)
     if not content:
-        await message.reply("No drip state found at `outfacing/drip-state.md`", mention_author=False)
+        await message.reply("No drip state found.", mention_author=False)
         return
 
-    lines = content.split("\n")
-    updated_lines = []
-    found = False
-    tweet_num = None
-    today = local_now().strftime("%Y-%m-%d")
+    pending = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", content)
+    posted = re.findall(r"\|\s*(\d+)\s*\|\s*posted\s*\|", content)
+    total_matches = re.findall(r"\|\s*(\d+)\s*\|\s*(?:posted|pending)\s*\|", content)
+    total = max(int(n) for n in total_matches) if total_matches else 18
 
-    for line in lines:
-        if not found and "| pending |" in line:
-            match = re.match(r"\|\s*(\d+)\s*\|\s*pending\s*\|", line)
-            if match:
-                tweet_num = match.group(1)
-                line = re.sub(
-                    r"\|\s*pending\s*\|\s*\|",
-                    f"| posted | {today} |",
-                    line,
-                )
-                found = True
-        updated_lines.append(line)
-
-    if not found:
-        await message.reply("No pending tweets in the drip!", mention_author=False)
+    if not args:
+        if not pending:
+            await message.reply("All tweets posted!", mention_author=False)
+            return
+        next_num = int(pending[0])
+        await _serve_tweet(message, next_num, total)
         return
 
-    Path(drip_path).write_text("\n".join(updated_lines))
+    cmd = args[0].lower()
 
-    remaining = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", "\n".join(updated_lines))
-    if remaining:
+    if cmd == "status":
         await message.reply(
-            f"\u2705 Tweet {tweet_num}/18 posted. Next: Tweet {remaining[0]}/18.",
+            f"Signal drip: {len(posted)} posted, {len(pending)} pending.\n"
+            f"Next: Tweet {pending[0]}/{total}" if pending else "All done!",
             mention_author=False,
         )
+        return
+
+    if cmd == "done":
+        if not pending:
+            await message.reply("No pending tweets in the drip!", mention_author=False)
+            return
+        lines = content.split("\n")
+        updated_lines = []
+        found = False
+        tweet_num = None
+        today = local_now().strftime("%Y-%m-%d")
+        for line in lines:
+            if not found and "| pending |" in line:
+                match = re.match(r"\|\s*(\d+)\s*\|\s*pending\s*\|", line)
+                if match:
+                    tweet_num = match.group(1)
+                    line = re.sub(
+                        r"\|\s*pending\s*\|\s*\|",
+                        f"| posted | {today} |",
+                        line,
+                    )
+                    found = True
+            updated_lines.append(line)
+        if not found:
+            await message.reply("No pending tweets in the drip!", mention_author=False)
+            return
+        Path(drip_path).write_text("\n".join(updated_lines))
+        pending_after = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", "\n".join(updated_lines))
+        next_info = f" Next: Tweet {pending_after[0]}/{total}." if pending_after else ""
+        await message.reply(f"\u2705 Tweet {tweet_num}/{total} marked posted.{next_info}", mention_author=False)
+        return
+
+    if cmd.isdigit():
+        num = int(cmd)
+        if num < 1 or num > total:
+            await message.reply(f"Tweet number must be 1-{total}.", mention_author=False)
+            return
+        await _serve_tweet(message, num, total)
+        return
+
+    await message.reply("Usage: `!drip` (next) · `!drip <N>` (specific) · `!drip done` · `!drip status`", mention_author=False)
+
+
+async def _serve_tweet(message, num, total):
+    """Serve a specific tweet by number."""
+    from outfacing import get_story_tweet
+    tweet_text = get_story_tweet(num)
+    if tweet_text:
+        embed = discord.Embed(
+            title=f"\U0001f422 Tweet {num}/{total}",
+            description=f"{tweet_text}\n\n*Relay to @turtle_of_magic. `!drip done` when posted.*",
+            color=0x2ecc71,
+        )
+        await message.reply(embed=embed, mention_author=False)
     else:
         await message.reply(
-            f"\u2705 Tweet {tweet_num}/18 posted. Story thread complete! \U0001f389",
+            f"Tweet {num}/{total} — could not load text from story file.",
             mention_author=False,
         )
+
+
+
