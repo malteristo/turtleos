@@ -150,74 +150,20 @@ async def interoception_loop():
     if dialogue:
         set_practice_context_for_channel(dialogue.id)
 
-    signals = []
-
-    boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
-    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
-
-    boom_count = count_items(boom)
-    boom_age = file_age_hours(os.path.join(get_pd(), "boom.md"))
-
-    if boom_count >= 10 and boom_age > 24:
-        signals.append(("\U0001f35d", f"Boom feels heavy — {boom_count} items, last touched {format_age(boom_age)} ago"))
-    elif boom_count >= 20:
-        signals.append(("\U0001f35d", f"Boom is overflowing — {boom_count} items. Consider `!sweep`"))
-
-    compass_age = file_age_hours(os.path.join(get_pd(), "intentions", "compass.md"))
-    if compass_age > 168:
-        signals.append(("\U0001f9ed", f"Compass hasn't been touched in {format_age(compass_age)}"))
-
-    bright_age = file_age_hours(os.path.join(get_pd(), "boom", "bright.md"))
-    if bright_age > 168:
-        signals.append(("\u2728", f"Bright untouched for {format_age(bright_age)}"))
-
-    sdir = os.path.join(get_pd(), "sessions")
-    if os.path.isdir(sdir):
-        session_files = [f for f in os.listdir(sdir) if f.endswith(".md")]
-        if session_files:
-            latest = max(session_files, key=lambda f: os.path.getmtime(os.path.join(sdir, f)))
-            session_age = file_age_hours(os.path.join(sdir, latest))
-            if session_age > 72:
-                signals.append(("\U0001f4ad", f"No conversations in {format_age(session_age)}"))
-        else:
-            signals.append(("\U0001f4ad", "No session notes yet"))
-
-    pdir = os.path.join(get_pd(), "proposals")
-    if os.path.isdir(pdir):
-        unread = [f for f in os.listdir(pdir)
-                  if f.endswith(".md") and os.path.isfile(os.path.join(pdir, f))]
-        if len(unread) >= 3:
-            signals.append(("\U0001f4ec", f"{len(unread)} proposals waiting in `proposals/`"))
-
-    # Phase 1 Eyes: stale eddy detection
+    from pulse import scan_pulse, compose_interoception, save_river_state
     try:
-        stale = get_stale_threads(days=7)
-        unharvested_stale = [t for t in stale if t["harvest_status"] == "pending"]
-        if unharvested_stale:
-            names = ", ".join(t["name"] for t in unharvested_stale[:5])
-            extra = f" (+{len(unharvested_stale) - 5} more)" if len(unharvested_stale) > 5 else ""
-            signals.append(("\U0001f50d", f"{len(unharvested_stale)} eddies quiet >7d, unharvested: {names}{extra}"))
-        elif stale:
-            signals.append(("\U0001f30a", f"{len(stale)} quiet eddies (all harvested)"))
+        pulse_data = scan_pulse()
+        signals = compose_interoception(pulse_data, prev_pulse=_state.last_pulse)
+        _state.last_pulse = pulse_data
     except Exception as e:
-        print(f"Stale thread detection failed: {e}")
-
-    practice_files = ["boom.md", "bright.md", "compass.md"]
-    ages = {f: file_age_hours(os.path.join(get_pd(), f)) for f in practice_files}
-    if all(a > 48 for a in ages.values()):
-        signals.append(("\U0001f4a4", f"Practice state quiet — nothing updated in 2+ days"))
-
-    new_signals = []
-    for emoji, text in signals:
-        sig_key = text[:40]
-        last_time = _state.last_interoception.get(sig_key)
-        if last_time is None or (datetime.now() - last_time).total_seconds() > 12 * 3600:
-            new_signals.append((emoji, text))
-            _state.last_interoception[sig_key] = datetime.now()
-
-    if not new_signals:
+        print(f"Pulse scan failed in interoception: {e}")
         return
+
+    if not signals:
+        print("Interoception: no delta, suppressed")
+        return
+
+    new_signals = signals
 
     ch = get_channel("dialogue")
     if not ch:
@@ -226,13 +172,12 @@ async def interoception_loop():
     lines_out = [f"{emoji} {text}" for emoji, text in new_signals]
     description = "\n".join(lines_out)
     embed = discord.Embed(
-        title="🧠 Interoception",
+        title="\U0001f9e0 Interoception",
         description=description,
         color=OPS_EMBED_COLOR,
     )
     await ch.send(embed=embed, silent=True)
-
-
+    save_river_state("\U0001f9e0 Interoception", description)
 import re as _re
 
 
@@ -271,19 +216,10 @@ async def _check_signal_drip():
         print(f"Signal drip: thread {_state.SIGNAL_DRIP_THREAD_ID} not found")
         return
 
-    tweet_text = None
-    try:
-        async for msg in thread.history(limit=100):
-            if f"Tweet {next_num}/{total}" in msg.content and "Turtle Story" in msg.content:
-                parts = msg.content.split("\n\n", 1)
-                tweet_text = parts[1].strip() if len(parts) > 1 else None
-                break
-    except Exception as e:
-        print(f"Signal drip: thread history search failed: {e}")
-        return
-
+    from outfacing import get_story_tweet
+    tweet_text = get_story_tweet(next_num)
     if not tweet_text:
-        print(f"Signal drip: Tweet {next_num} text not found in thread")
+        print(f"Signal drip: Tweet {next_num} text not found in story file")
         return
 
     embed = discord.Embed(

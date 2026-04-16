@@ -132,6 +132,7 @@ panel_selections: dict[int, dict] = {}
 
 # Interoception state
 last_interoception: dict = {}
+last_pulse: dict | None = None
 interoception_startup = True
 
 # Practice health loop state
