@@ -66,6 +66,7 @@ from content_fetch import (
 from helpers import local_now, get_history, log_activity, split_message
 from attunement import perform_attunement, get_digest_age_hours
 from load_command import cmd_load
+from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, EddySpawnView
 
 
 # ─── Direct Commands ─────────────────────────────────────────────
@@ -513,6 +514,7 @@ async def cmd_help(message):
         ("`!thread \"topic\" [--model M] [--type T]`", "Create focused thread (types: fast/slow/confluence/standing)"),
         ("`!threads`", "List active threads with eddy types"),
         ("`!thread-type <type>`", "Change thread's eddy type (in thread)"),
+        ("`!new [topic]`", "Auto-spawn thread from message (AI-named)"),
         ("`!eddy-check`", "Scan threads for dissolution readiness"),
         ("`!absorb <name>`", "Bring thread resonance into main channel"),
         ("`!absorbed`", "Show absorbed thread contexts"),
@@ -2178,6 +2180,7 @@ DIRECT_COMMANDS = {
     "help": lambda msg, args: cmd_help(msg),
     "admin": lambda msg, args: cmd_admin(msg, args),
     "signals": lambda msg, args: cmd_signals(msg, args),
+    "new": lambda msg, args: cmd_new(msg, args),
     "drip": lambda msg, args: cmd_drip(msg, args),
     "attune": lambda msg, args: cmd_attune(msg),
     "load": lambda msg, args: cmd_load(msg, args),
@@ -2428,6 +2431,21 @@ async def cmd_panel(message):
     view = ControlPanelView()
     await message.channel.send(embed=embed, view=view)
 
+
+
+
+async def cmd_new(message, args):
+    """Spawn a focused thread from this message: !new [optional topic]"""
+    if isinstance(message.channel, discord.Thread):
+        await message.reply("Use `!new` in the main channel to spawn a thread.", mention_author=False)
+        return
+
+    topic = " ".join(args).strip() if args else None
+    thread = await spawn_eddy(message, topic=topic)
+    if thread:
+        await message.add_reaction("🧵")
+    else:
+        await message.reply("Could not create thread \u2014 this message may already have one.", mention_author=False)
 
 
 async def cmd_drip(message, args):

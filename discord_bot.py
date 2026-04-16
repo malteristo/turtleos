@@ -99,6 +99,7 @@ from helpers import (
 
 from sessions import session_monitor, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
+from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
 
@@ -505,6 +506,16 @@ async def handle_dialogue(message):
 # ─── Event Handlers ──────────────────────────────────────────────
 
 @client.event
+async def on_interaction(interaction: discord.Interaction):
+    """Route eddy:spawn button clicks to the handler."""
+    if interaction.type == discord.InteractionType.component:
+        custom_id = interaction.data.get("custom_id", "")
+        if custom_id.startswith("eddy:spawn:"):
+            await handle_eddy_spawn_interaction(interaction)
+            return
+
+
+@client.event
 async def on_ready():
     client.add_view(ControlPanelView())
     client.add_view(ThreadConfigView())
@@ -527,7 +538,7 @@ async def on_ready():
             async for prev in dialogue.history(limit=10):
                 if prev.author == client.user and prev.embeds:
                     for e in prev.embeds:
-                        if e.title and "Spirit online" in e.title:
+                        if e.title and ("Spirit online" in e.title or "enters the river" in e.title):
                             age = (datetime.now(timezone.utc) - prev.created_at).total_seconds()
                             if age < 300:
                                 should_post = False
@@ -538,19 +549,30 @@ async def on_ready():
         except Exception:
             pass
         if should_post:
-            readiness = startup_readiness_check()
-            embed = discord.Embed(
-                title="\U0001f422 Spirit online",
-                description=(
-                    f"**Model:** `{DIALOGUE_MODEL}` ({'API' if USE_API else 'local'})\n"
-                    f"**Triage:** `{TRIAGE_MODEL}` · **Reflection:** `{REFLECTION_MODEL}`\n"
-                    f"**Threads:** {thread_count}\n"
-                    f"{readiness}"
-                ),
-                color=0x2ECC71,
-            )
-            embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
-            await dialogue.send(embed=embed, silent=True)
+            from pulse import scan_pulse, compose_river_entry, save_river_state
+            try:
+                set_practice_context_for_channel(dialogue.id)
+                pulse_data = scan_pulse()
+                entry_title, entry_desc = compose_river_entry(pulse_data, thread_count)
+                embed = discord.Embed(
+                    title=entry_title,
+                    description=entry_desc,
+                    color=0x2ECC71,
+                )
+                embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
+                await dialogue.send(embed=embed, silent=True)
+                save_river_state(entry_title, entry_desc)
+            except Exception as e:
+                print(f"River-entry failed, falling back: {e}")
+                import traceback; traceback.print_exc()
+                readiness = startup_readiness_check()
+                embed = discord.Embed(
+                    title="\U0001f422 Turtle online",
+                    description=f"**Threads:** {thread_count}\n{readiness}",
+                    color=0x2ECC71,
+                )
+                embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
+                await dialogue.send(embed=embed, silent=True)
 
     asyncio.get_event_loop().create_task(prewarm_triage())
 
@@ -821,9 +843,26 @@ async def on_message(message):
                 _boom_fetched_content[message.id] = fetched_content
             # Fall through to handle_dialogue below
 
+        # Auto-detect thread-worthy content in main channel
+        offer_eddy = (
+            not isinstance(message.channel, discord.Thread)
+            and should_offer_eddy(message)
+        )
+
         lock = get_channel_lock(message.channel.id)
         async with lock:
             await handle_dialogue(message)
+
+        if offer_eddy:
+            try:
+                view = make_eddy_spawn_view(message)
+                await message.channel.send(
+                    "-# 🧵 This looks like it could be its own thread.",
+                    view=view,
+                    silent=True,
+                )
+            except Exception as e:
+                print(f"Eddy offer failed: {e}")
 
 
 # ─── Main ────────────────────────────────────────────────────────
