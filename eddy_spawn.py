@@ -168,14 +168,22 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
 
 def make_eddy_spawn_view(source_message) -> discord.ui.View:
     """Create a view with a thread-spawn button. Encodes source IDs in custom_id."""
+    channel_id = source_message.channel.id
+    message_id = source_message.id
+
     view = discord.ui.View(timeout=None)
-    custom_id = f"eddy:spawn:{source_message.channel.id}:{source_message.id}"
+    custom_id = f"eddy:spawn:{channel_id}:{message_id}"
     button = discord.ui.Button(
         label="Start thread",
         custom_id=custom_id,
         style=discord.ButtonStyle.secondary,
         emoji="\U0001f9f5",
     )
+
+    async def button_callback(interaction: discord.Interaction):
+        await handle_eddy_spawn_interaction(interaction)
+
+    button.callback = button_callback
     view.add_item(button)
     return view
 
