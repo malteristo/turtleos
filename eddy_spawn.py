@@ -1,14 +1,13 @@
 """turtleOS eddy spawn — auto-create focused threads from rich content.
 
-Two modes:
-  !new        — explicit command, always spawns a thread from the message
-  Auto-detect — when main-channel content looks thread-worthy, offer a button
+Core pattern: a standing intake thread acts as a thread launcher.
+Anything posted into the intake thread auto-spawns a new thread
+in the parent channel, seeded with the content. The intake thread
+is the front door — drop content, get a focused conversation.
 
-Both use the same spawn_eddy() pipeline:
-  1. Analyze content (URLs, text, attachments)
-  2. Generate a thread topic via LLM
-  3. Create a Discord thread from the source message
-  4. Post a substantive opening response in the thread
+Also supports:
+  !new [topic]  — explicit command from main channel
+  Auto-detect   — URL/long-text messages in main channel get a button
 """
 
 import asyncio
@@ -28,6 +27,8 @@ TOPIC_MODEL = "qwen3.5:9b"
 TOPIC_CTX = 2048
 TOPIC_TIMEOUT = 15
 
+INTAKE_THREAD_NAMES = {"new", "new thread", "intake"}
+
 URL_PATTERN = re.compile(r'https?://\S+')
 LONG_TEXT_THRESHOLD = 250
 MULTI_PARAGRAPH_THRESHOLD = 3
@@ -39,12 +40,15 @@ TOPIC_PROMPT = (
 )
 
 
-def should_offer_eddy(message) -> bool:
-    """Detect whether a main-channel message is a thread seed.
+def is_intake_thread(channel) -> bool:
+    """Check if a channel is the standing intake thread."""
+    if not isinstance(channel, discord.Thread):
+        return False
+    return channel.name.lower().strip() in INTAKE_THREAD_NAMES
 
-    Signals: external URLs, long text, multi-paragraph, pasted content.
-    Excludes: commands, short reactions, greetings, messages in threads.
-    """
+
+def should_offer_eddy(message) -> bool:
+    """Detect whether a main-channel message is a thread seed."""
     if isinstance(message.channel, discord.Thread):
         return False
 
@@ -103,8 +107,68 @@ async def generate_topic(content: str) -> str:
     return first_line if first_line else "new thread"
 
 
+async def spawn_eddy_in_channel(channel, content: str, topic: str | None = None,
+                                 eddy_type: str = "standard"):
+    """Create a thread in a channel (not from a message). Used by the intake pattern.
+
+    Returns the created thread, or None on failure.
+    """
+    from commands import thread_configs, _build_config_line, ThreadConfigView
+    from llm import resolve_model
+    from mage import get_thread_member_ids
+    from thread_registry import register_thread
+    from state import client
+
+    if not topic:
+        topic = await generate_topic(content)
+
+    model_id, use_api = resolve_model("local")
+    attunement = "semi"
+    eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 10080)
+
+    try:
+        thread = await channel.create_thread(
+            name=topic,
+            auto_archive_duration=eddy_archive,
+            type=discord.ChannelType.public_thread,
+        )
+    except discord.HTTPException as e:
+        print(f"Eddy spawn in channel failed: {e}")
+        return None
+
+    thread_configs[thread.id] = {
+        "model": model_id,
+        "use_api": use_api,
+        "attunement": attunement,
+        "model_label": "local",
+        "eddy_type": eddy_type,
+        "context_type": None,
+        "created": datetime.now(timezone.utc),
+    }
+
+    config_line = _build_config_line(thread.id)
+    view = ThreadConfigView(current_type=eddy_type)
+    await thread.send(config_line, view=view)
+
+    for uid in get_thread_member_ids(channel.id):
+        try:
+            user = await client.fetch_user(int(uid))
+            await thread.add_user(user)
+        except Exception:
+            pass
+
+    register_thread(
+        thread.id, topic,
+        parent_channel=channel.name if hasattr(channel, "name") else "unknown",
+        model="local", attunement=attunement, eddy_type=eddy_type,
+    )
+
+    print(f"Eddy spawned in channel: {topic} (id: {thread.id})")
+    return thread
+
+
 async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standard"):
-    """Create a focused thread from a message with a substantive opening.
+    """Create a thread from a message (used by !new and button spawn).
 
     Returns the created thread, or None on failure.
     """
@@ -166,6 +230,81 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
     return thread
 
 
+async def handle_intake_message(message):
+    """Handle a message posted in the intake thread.
+
+    Spawns a new thread in the parent channel, seeds it with the content,
+    and gets Turtle to respond there. The intake thread gets a brief
+    confirmation; the new thread gets Turtle's substantive opening.
+    """
+    from state import dialogue_histories
+    from helpers import split_message
+    from prompts import get_thread_prompt
+
+    parent = message.channel.parent
+    if not parent:
+        print("Intake: no parent channel found")
+        return None
+
+    content = message.content.strip()
+    if not content and not message.attachments:
+        return None
+    if content.startswith("!"):
+        return None
+
+    thread = await spawn_eddy_in_channel(parent, content)
+    if not thread:
+        await message.reply("Couldn't create thread.", mention_author=False)
+        return None
+
+    # Confirmation in intake thread
+    await message.reply(
+        f"\U0001f9f5 \u2192 **{thread.name}**",
+        mention_author=False,
+    )
+
+    # Generate Turtle's opening response in the new thread
+    user_entry = f"[{message.author.display_name}]: {content}"
+
+    # Fetch URLs if present
+    url_content = ""
+    urls = URL_PATTERN.findall(content)
+    if urls:
+        try:
+            from content_fetch import process_urls
+            url_content = await process_urls(urls)
+            if url_content:
+                user_entry += f"\n\n[Fetched content]:\n{url_content[:6000]}"
+        except Exception as e:
+            print(f"Intake URL fetch failed: {e}")
+
+    history = [{"role": "user", "content": user_entry}]
+    dialogue_histories[thread.id] = list(history)
+
+    system_prompt = get_thread_prompt("semi", False)
+
+    try:
+        async with thread.typing():
+            from llm import chat_ollama_with_tools
+            from tos_tools import TOS_TOOLS, execute_tos_tool
+            reply, _ = await chat_ollama_with_tools(
+                system_prompt, history,
+                tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool,
+            )
+            if not reply:
+                reply = "*listening*"
+    except Exception as e:
+        print(f"Intake opening response failed: {e}")
+        reply = "*listening*"
+
+    dialogue_histories[thread.id].append({"role": "assistant", "content": reply})
+    for chunk in split_message(reply):
+        await thread.send(chunk)
+
+    print(f"Intake: spawned {thread.name} (id: {thread.id}) with opening response")
+    return thread
+
+
 def make_eddy_spawn_view(source_message) -> discord.ui.View:
     """Create a view with a thread-spawn button. Encodes source IDs in custom_id."""
     channel_id = source_message.channel.id
@@ -189,7 +328,7 @@ def make_eddy_spawn_view(source_message) -> discord.ui.View:
 
 
 async def handle_eddy_spawn_interaction(interaction: discord.Interaction):
-    """Handle eddy:spawn button clicks. Called from on_interaction in the bot."""
+    """Handle eddy:spawn button clicks."""
     custom_id = interaction.data.get("custom_id", "")
     parts = custom_id.split(":")
     if len(parts) < 4:

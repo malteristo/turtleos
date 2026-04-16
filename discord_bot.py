@@ -99,7 +99,7 @@ from helpers import (
 
 from sessions import session_monitor, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
-from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction
+from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction, is_intake_thread, handle_intake_message
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
 
@@ -828,6 +828,13 @@ async def on_message(message):
             print(f"Skipping duplicate message {message.id}")
             return
         _processed_messages.append(message.id)
+
+        # Intake thread: auto-spawn new threads from dropped content
+        if is_intake_thread(message.channel) and not message.content.strip().startswith("!"):
+            lock = get_channel_lock(message.channel.id)
+            async with lock:
+                await handle_intake_message(message)
+            return
 
         # Boom thread: URLs/attachments capture-only; plain text captures AND converses
         if (isinstance(message.channel, discord.Thread)
