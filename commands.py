@@ -66,7 +66,7 @@ from content_fetch import (
 from helpers import local_now, get_history, log_activity, split_message
 from attunement import perform_attunement, get_digest_age_hours
 from load_command import cmd_load
-from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, EddySpawnView
+from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, make_eddy_spawn_view
 
 
 # ─── Direct Commands ─────────────────────────────────────────────
