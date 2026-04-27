@@ -16,6 +16,8 @@ This procedure is the first safe slice of Turtle self-development. It gives Turt
 5. Verify syntax of any file under discussion with `python3 -m py_compile <file.py>` when relevant.
 6. Summarize the diagnosis, smallest proposed change, and verification plan.
 
+When doing this from Discord, keep tool use narrow: one shell action per turn. If more evidence is needed, continue in a follow-up turn rather than batching several shell calls at once.
+
 ## Boundaries
 
 - Do not commit, stage, restart services, install packages, or edit files through the shell harness.
