@@ -7,31 +7,36 @@ mages:
     couchdb_database: workshop_sync
     spirit_bot_id: '1487405701440733294'
     type: mage
+    primary: true
+    runtime_dir: ~/workshops/kermit
   nesrine:
     discord_id: '1485296679900156025'
     address: Nesrine
     practice_dir: ~/workshops/nesrine
     couchdb_database: nesrine_sync
     type: practitioner
+    runtime_dir: ~/workshops/nesrine
 spaces:
   family:
     practice_dir: ~/workshops/family
     members:
     - kermit
     - nesrine
+    runtime_dir: ~/workshops/family
 channels:
   '1479428854513664030':
     mage: kermit
     type: river
     default_context: null
-    description: "Kermit's private practice surface"
+    description: Kermit's private practice surface
   '1484973995823599757':
     mage: nesrine
     type: hosted-river
     default_context: null
-    description: "Nesrine's private practice surface, hosted on Kermit's server"
+    description: Nesrine's private practice surface, hosted on Kermit's server
   '1491163697278881836':
     mage: family
     type: shared
     default_context: family
-    description: "Family shared practice — Kermit, Nesrine, and eventually the boys"
+    description: Family shared practice — Kermit, Nesrine, and eventually the boys
+default_mage: kermit

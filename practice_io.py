@@ -8,7 +8,7 @@ import os
 import re
 from urllib.parse import quote
 
-from mage import get_pd, get_mage_key
+from mage import get_pd, get_mage_key, get_runtime_dir
 from state import (
     OBSIDIAN_VAULT, PRACTICE_WEB_BASE,
     MAX_BRIGHT_CHARS, MAX_INTENTION_LINES,
@@ -173,7 +173,7 @@ def format_age(hours):
 # ─── Thread State I/O ────────────────────────────────────────────
 
 def get_thread_state_dir():
-    return os.path.join(get_pd(), "thread-state")
+    return os.path.join(get_runtime_dir(), "thread-state")
 
 
 def read_thread_state(thread_name: str) -> str:

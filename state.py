@@ -115,6 +115,7 @@ EDDY_TYPES = {
     "standing": {"label": "Standing Wave", "days": None, "emoji": "🌊", "archive_minutes": 10080},
     "standard": {"label": "Standard",      "days": None, "emoji": "💬", "archive_minutes": 10080},
     "manual":   {"label": "Manual Release", "days": None, "emoji": "🍃", "archive_minutes": 4320},
+    "system":   {"label": "System",         "days": None, "emoji": "🌀", "archive_minutes": 10080},
 }
 EDDY_DEFAULT = "standard"
 threads_flagged_for_release: dict[int, dict] = {}

@@ -12,6 +12,9 @@ venv/
 bot.log
 bot.err
 logs/
+canary_state.json
+canary_triage_fallback_state.json
+river_state.md
 consul/bot.err
 consul/bot.log
 scout/bot.err
@@ -20,6 +23,7 @@ scout/bot.log
 
 # Backups
 *.bak
+*.bak-*
 *.backup
 *.bak.*
 *.pre-*

@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import time
 
 from mage import get_pd, get_workshop_root
 from practice_io import (
@@ -10,6 +11,14 @@ from practice_io import (
 )
 from state import OLLAMA_URL, EDIT_DELEGATE_MODEL, EMBED_COLORS
 from llm import chat_ollama
+from shell_harness import format_shell_result, run_shell_command
+from tool_result import (
+    TRANSIENT,
+    classify_tool_text,
+    format_tool_result as format_typed_tool_result,
+    log_tool_result,
+    make_tool_result,
+)
 
 
 # ─── Workshop Path Resolution ────────────────────────────────────
@@ -185,12 +194,42 @@ TOS_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_turtleos_shell",
+            "description": (
+                "Run a constrained, audited shell command inside ~/turtleos for self-development. "
+                "Allowed commands are read-only inspection and verification: pwd, ls, rg, git status/diff/log/show/branch/rev-parse, "
+                "and python -m py_compile for .py files. Use this to inspect the turtleOS source tree, check git state, "
+                "search code, or verify syntax. It cannot commit, edit files, restart services, change permissions, or run arbitrary Python."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Command to run, e.g. 'git status --short' or 'python3 -m py_compile commands.py'",
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": "Optional working directory inside ~/turtleos, relative or absolute.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Short reason for the action; logged for transparency.",
+                    },
+                },
+                "required": ["command", "reason"],
+            },
+        },
+    },
 ]
 
 
 # ─── Tool Execution ──────────────────────────────────────────────
 
-def execute_tos_tool(name, arguments):
+def _execute_tos_tool_raw(name, arguments):
     if name == "read_practice_file":
         filename = arguments.get("filename", "")
         if not is_readable(filename):
@@ -258,6 +297,13 @@ def execute_tos_tool(name, arguments):
                 entries.append(f"  {filepath} ({size} bytes)")
         return "\n".join(entries) if entries else "(empty)"
 
+    if name == "run_turtleos_shell":
+        command = arguments.get("command", "")
+        cwd = arguments.get("cwd", "")
+        reason = arguments.get("reason", "")
+        result = run_shell_command(command, cwd=cwd or None, reason=reason, requester="turtle-llm")
+        return format_shell_result(result)
+
     if name == "patch_practice_file":
         filename = arguments.get("filename", "")
         old_text = arguments.get("old_text", "")
@@ -320,6 +366,43 @@ def execute_tos_tool(name, arguments):
         return f"Done. Wrote {filename} ({len(old_content)}→{len(content)} chars)."
 
     return f"Unknown tool: {name}"
+
+
+def _max_tool_attempts(name: str) -> int:
+    if name in ("read_practice_file", "search_practice_files", "list_practice_files", "run_turtleos_shell"):
+        return 2
+    return 1
+
+
+def execute_tos_tool_reliable(name, arguments):
+    """Execute a tOS tool with typed failure classification and minimal retries."""
+    attempts = _max_tool_attempts(name)
+    last_result = None
+    for attempt in range(1, attempts + 1):
+        try:
+            raw = _execute_tos_tool_raw(name, arguments)
+            result = classify_tool_text(name, raw)
+        except Exception as e:
+            result = make_tool_result(
+                tool=name,
+                ok=False,
+                kind=TRANSIENT if isinstance(e, (TimeoutError, ConnectionError)) else "system_error",
+                summary=f"{type(e).__name__}: {e}",
+                retryable=isinstance(e, (TimeoutError, ConnectionError)),
+            )
+
+        last_result = result
+        if result.get("ok") or not result.get("retryable") or attempt == attempts:
+            log_tool_result(result, arguments, attempts=attempt)
+            return format_typed_tool_result(result)
+        time.sleep(0.25 * attempt)
+
+    log_tool_result(last_result, arguments, attempts=attempts)
+    return format_typed_tool_result(last_result)
+
+
+def execute_tos_tool(name, arguments):
+    return execute_tos_tool_reliable(name, arguments)
 
 
 def _delegate_edit_sync(path, filename, content, instruction):
@@ -391,6 +474,10 @@ def build_tool_report(tools_executed):
         name = t["name"]
         args = t["args"]
         if name in ("read_practice_file", "search_practice_files", "list_practice_files"):
+            continue
+        if name == "run_turtleos_shell":
+            command = args.get("command", "")
+            write_ops.append(f"ran shell `{command[:80]}`")
             continue
         fname = args.get("filename", "")
         if not fname:

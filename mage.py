@@ -14,8 +14,9 @@ from state import client, get_channel, CHANNELS
 
 # ─── Context Variables ───────────────────────────────────────────
 
-_TOS_DIR_DEFAULT = os.path.expanduser("~/workshops/kermit")
-_practice_dir_ctx = contextvars.ContextVar("practice_dir", default=_TOS_DIR_DEFAULT)
+RUNTIME_DIR_DEFAULT = os.path.expanduser("~/workshops/kermit")
+_practice_dir_ctx = contextvars.ContextVar("practice_dir", default=None)
+_runtime_dir_ctx = contextvars.ContextVar("runtime_dir", default=None)
 _mage_name_ctx = contextvars.ContextVar("mage_name", default="Kermit")
 _mage_key_ctx = contextvars.ContextVar("mage_key", default="kermit")
 _workshop_root_ctx = contextvars.ContextVar("workshop_root", default=None)
@@ -79,19 +80,69 @@ def get_channel_default_context(channel_id):
 
 # ─── Resolution Functions ────────────────────────────────────────
 
+def _primary_mage_key():
+    """Return the mage key used for context-free/background tasks."""
+    configured = _MAGE_REGISTRY.get("default_mage")
+    if configured:
+        return configured
+    for key, mage in _MAGE_REGISTRY.get("mages", {}).items():
+        if mage.get("primary"):
+            return key
+    if "kermit" in _MAGE_REGISTRY.get("mages", {}):
+        return "kermit"
+    mages = _MAGE_REGISTRY.get("mages", {})
+    return next(iter(mages), None)
+
+
+def _default_runtime_dir_for_key(key):
+    return os.path.expanduser(f"~/workshops/{key}") if key else RUNTIME_DIR_DEFAULT
+
+
+def _resolve_primary_practice_dir():
+    key = _primary_mage_key()
+    mage = _MAGE_REGISTRY.get("mages", {}).get(key, {}) if key else {}
+    return os.path.expanduser(mage.get("practice_dir") or _default_runtime_dir_for_key(key))
+
+
+def _resolve_primary_runtime_dir():
+    key = _primary_mage_key()
+    mage = _MAGE_REGISTRY.get("mages", {}).get(key, {}) if key else {}
+    return os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(key))
+
+
+def _resolve_primary_workshop_root():
+    key = _primary_mage_key()
+    mage = _MAGE_REGISTRY.get("mages", {}).get(key, {}) if key else {}
+    root = mage.get("workshop_root")
+    return os.path.expanduser(root) if root else None
+
+
 def _resolve_practice_dir_for_channel(channel_id):
-    """Resolve practice directory from channel ID via registry."""
-    ch_str = str(channel_id)
+    """Resolve canonical writable practice directory from channel ID via registry."""
     mage_name = _get_channel_mage(channel_id)
     if not mage_name:
-        return _TOS_DIR_DEFAULT
+        return _resolve_primary_practice_dir()
     mage = _MAGE_REGISTRY.get("mages", {}).get(mage_name, {})
     if mage:
-        return os.path.expanduser(mage.get("practice_dir", _TOS_DIR_DEFAULT))
+        return os.path.expanduser(mage.get("practice_dir") or _default_runtime_dir_for_key(mage_name))
     space = _MAGE_REGISTRY.get("spaces", {}).get(mage_name, {})
     if space:
-        return os.path.expanduser(space.get("practice_dir", _TOS_DIR_DEFAULT))
-    return _TOS_DIR_DEFAULT
+        return os.path.expanduser(space.get("practice_dir") or _default_runtime_dir_for_key(mage_name))
+    return _resolve_primary_practice_dir()
+
+
+def _resolve_runtime_dir_for_channel(channel_id):
+    """Resolve Turtle-local operational state directory from channel ID via registry."""
+    mage_name = _get_channel_mage(channel_id)
+    if not mage_name:
+        return _resolve_primary_runtime_dir()
+    mage = _MAGE_REGISTRY.get("mages", {}).get(mage_name, {})
+    if mage:
+        return os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(mage_name))
+    space = _MAGE_REGISTRY.get("spaces", {}).get(mage_name, {})
+    if space:
+        return os.path.expanduser(space.get("runtime_dir") or _default_runtime_dir_for_key(mage_name))
+    return _resolve_primary_runtime_dir()
 
 
 def _resolve_mage_info_for_channel(channel_id):
@@ -156,14 +207,29 @@ def get_mage_address():
 
 
 def get_pd():
-    """Get the practice directory for the current context."""
-    return _practice_dir_ctx.get()
+    """Get the canonical practice directory for the current context."""
+    return _practice_dir_ctx.get() or _resolve_primary_practice_dir()
+
+
+def get_runtime_dir():
+    """Get Turtle-local operational state directory for the current context."""
+    return _runtime_dir_ctx.get() or _resolve_primary_runtime_dir()
+
+
+def get_topology():
+    """Return current topology paths for diagnostics and drift checks."""
+    return {
+        "mage_key": get_mage_key(),
+        "practice_dir": get_pd(),
+        "workshop_root": get_workshop_root(),
+        "runtime_dir": get_runtime_dir(),
+    }
 
 
 def get_workshop_root():
     """Get the workshop root for the current context (read-only wider access).
-    Returns None if no workshop_root is configured (falls back to practice_dir)."""
-    return _workshop_root_ctx.get()
+    Returns None if no workshop_root is configured."""
+    return _workshop_root_ctx.get() or _resolve_primary_workshop_root()
 
 
 def set_practice_context(message):
@@ -172,6 +238,7 @@ def set_practice_context(message):
     ch_id = channel.parent_id if hasattr(channel, "parent_id") and channel.parent_id else channel.id
     pd = _resolve_practice_dir_for_channel(ch_id)
     _practice_dir_ctx.set(pd)
+    _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(ch_id))
     mage_name, mage_key = _resolve_mage_info_for_channel(ch_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
@@ -184,6 +251,7 @@ def set_practice_context_for_channel(channel_id):
     """Set full practice context from a raw channel ID (for thread creation, session close, etc.)."""
     pd = _resolve_practice_dir_for_channel(channel_id)
     _practice_dir_ctx.set(pd)
+    _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(channel_id))
     mage_name, mage_key = _resolve_mage_info_for_channel(channel_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)

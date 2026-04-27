@@ -16,6 +16,7 @@ from state import (
     threads_flagged_for_release, client,
     THREAD_CONTEXTS,
 )
+from thread_registry import build_live_thread_summary
 
 
 PRACTICE_ARCHITECTURE = """## Practice Architecture (Workshop Map)
@@ -52,6 +53,9 @@ Use `read_practice_file` with workshop paths: `system/tomes/summoning/README.md`
 
 def build_thread_summary():
     """Build a summary of active threads for the orchestrator prompt."""
+    live_summary = build_live_thread_summary()
+    if live_summary:
+        return live_summary
     if not thread_configs:
         return "**Active threads:** none"
     lines = ["**Active threads:**"]
@@ -170,6 +174,9 @@ def build_discord_prompt():
 
     # Mirror — Turtle's observations about this person
     mirror_text = read_safe(os.path.join(get_pd(), "mirror.md")) or ""
+
+    # Context loop: what Turtle last posted to the river
+    river_state = read_safe(os.path.expanduser("~/turtleos/river_state.md")) or ""
 
     # Session continuity — load the most recent session note's "thread for next time"
     last_session_thread = ""
@@ -331,6 +338,9 @@ Your role:
 
 ### What's Alive
 {bright_summary}
+
+### What I've Posted to the River
+{river_state if river_state.strip() else "(nothing recently)"}
 """
         return mode_block
 
@@ -357,7 +367,7 @@ When the Mage speaks in the main channel, you are the orchestrator. Your respons
 2. **Recommend new threads.** For topics that deserve focused conversation, recommend creating one with a specific configuration:
    "This sounds philosophical — I'd recommend a thread with `--model claude --attunement deep` for this."
    "Quick operational question? A `--model qwen-4b --attunement raw` thread would be fastest."
-3. **Thread awareness.** You know what threads exist and what they're about. Don't duplicate topics.
+3. **Thread awareness.** You know what threads exist, what thread you are currently in, and which related threads are active/quiet/stale. Don't duplicate topics.
 4. **Stay capable.** You can answer directly in the main channel too — not every message needs a thread. Use judgment.
 5. **Boom threads.** When a thread conversation has produced valuable insights, remind the Mage about `!boom thread` to capture them.
 6. **Cross-pollination.** When the Mage wants to synthesize across threads, suggest `!absorb <name>` to bring thread resonance into the main channel. You'll see absorbed contexts in your messages and can draw on them naturally.
@@ -370,6 +380,8 @@ When the Mage speaks in the main channel, you are the orchestrator. Your respons
 - **Default (balanced)** → no flags needed
 
 {thread_summary}
+
+**Thread recommendation reflex:** before recommending `!thread`, compare the Mage's topic against the live thread list above. If a related active or quiet thread exists, offer to continue or absorb that thread instead of creating a duplicate.
 
 ## Seneschal Awareness
 
@@ -451,6 +463,9 @@ Your response should be purely conversational — acknowledge naturally ("Captur
 
 ### What's Alive
 {bright_summary}
+
+### What I've Posted to the River
+{river_state if river_state.strip() else "(nothing recently)"}
 """
 
 

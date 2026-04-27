@@ -8,6 +8,7 @@ The Mage curates: approves, edits, or ignores drafts.
 """
 
 import os
+import re
 from datetime import datetime, timezone
 from helpers import local_now
 from pathlib import Path
@@ -25,6 +26,14 @@ MIN_EXCHANGES_FOR_SIGNAL = 6
 
 # Where drafts land (within practice directory, syncs via LiveSync)
 OUTFACING_DRAFTS_REL = "outfacing/drafts/signals"
+
+# Autonomous signal generation should surface crystallizations, not create a queue.
+MAX_AUTONOMOUS_SIGNAL_DRAFTS_PER_DAY = 3
+CRYSTALLIZATION_PATTERNS = [
+    r"\b(shipped|deployed|implemented|patched|fixed|verified|cleared|resolved)\b",
+    r"\b(proposal|decision|renamed|changed|learned|realized|discovered)\b",
+    r"\b(state[- ]change|story arc|public-worthy|signal-worthy)\b",
+]
 
 # Signal types Turtle can generate
 SIGNAL_TYPES = {
@@ -140,6 +149,30 @@ async def evaluate_outfacing_signal(conversation: str, reflection: str) -> list[
         return []
 
 
+def signal_draft_count_today() -> int:
+    """Count today's active signal drafts, excluding archived compost."""
+    drafts_dir = Path(get_pd()) / OUTFACING_DRAFTS_REL
+    today = local_now().strftime("%Y-%m-%d")
+    if not drafts_dir.exists():
+        return 0
+    return len([
+        p for p in drafts_dir.glob(f"{today}-*.md")
+        if p.is_file() and "archive" not in p.parts
+    ])
+
+
+def should_evaluate_outfacing_signal(conversation: str, reflection: str) -> tuple[bool, str]:
+    """Gate autonomous signal drafts to crystallized practice events."""
+    if signal_draft_count_today() >= MAX_AUTONOMOUS_SIGNAL_DRAFTS_PER_DAY:
+        return False, f"daily cap reached ({MAX_AUTONOMOUS_SIGNAL_DRAFTS_PER_DAY})"
+
+    haystack = f"{reflection}\n\n{conversation}".lower()
+    for pattern in CRYSTALLIZATION_PATTERNS:
+        if re.search(pattern, haystack, re.IGNORECASE):
+            return True, "crystallization marker present"
+    return False, "no crystallization marker"
+
+
 def save_signal_drafts(signals: list[dict]) -> list[Path]:
     """Save signal drafts to desk/outfacing/drafts/signals/.
 
@@ -186,3 +219,24 @@ def save_signal_drafts(signals: list[dict]) -> list[Path]:
         print(f"Outfacing signal draft: {path}")
 
     return paths
+
+
+def get_story_tweet(tweet_num: int) -> str | None:
+    """Extract tweet N from the turtle story source file.
+
+    Searches both the current practice directory and the synced desk,
+    since the story file may live in either depending on context.
+    """
+    import glob
+    search_roots = [get_pd(), os.path.expanduser("~/workshop/desk")]
+    for root in search_roots:
+        drafts_dir = os.path.join(root, "outfacing", "drafts", "signals")
+        story_files = glob.glob(os.path.join(drafts_dir, "*-turtle-story.md"))
+        if story_files:
+            text = read_safe(sorted(story_files)[-1])
+            if text:
+                pattern = rf"### {tweet_num}\.\n\n(.*?)(?=\n\n### \d+\.|\n\n---|\Z)"
+                match = re.search(pattern, text, re.DOTALL)
+                if match:
+                    return match.group(1).strip()
+    return None

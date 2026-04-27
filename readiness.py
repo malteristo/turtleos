@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from mage import get_pd
+from mage import get_pd, get_runtime_dir
 from practice_io import read_safe, count_items, file_age_hours, format_age
 from state import (
     IDENTITY_DIR, DIALOGUE_MODEL, USE_API,
@@ -246,7 +246,7 @@ def startup_readiness_check() -> str:
 
 def save_readiness_trail(result, pd=None):
     """Append readiness assessment to the trail for trend analysis."""
-    pd = pd or get_pd()
+    pd = pd or get_runtime_dir()
     trail_dir = Path(pd) / "readiness"
     trail_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)

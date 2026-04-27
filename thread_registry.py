@@ -11,11 +11,11 @@ from pathlib import Path
 
 import yaml
 
-from mage import get_pd
+from mage import get_runtime_dir
 
 
 def _registry_path() -> Path:
-    return Path(get_pd()) / "thread-state" / "registry.yaml"
+    return Path(get_runtime_dir()) / "thread-state" / "registry.yaml"
 
 
 def load_registry() -> dict:
@@ -93,6 +93,141 @@ def update_thread_name(thread_id: int, new_name: str):
     if tid in registry["threads"]:
         registry["threads"][tid]["name"] = new_name
         save_registry(registry)
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _age_label(dt: datetime | None, now: datetime | None = None) -> str:
+    if not dt:
+        return "unknown"
+    now = now or datetime.now(timezone.utc)
+    seconds = max(0, int((now - dt).total_seconds()))
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
+
+
+def thread_activity_status(info: dict, now: datetime | None = None) -> str:
+    if info.get("harvest_status") == "dissolved":
+        return "dissolved"
+    now = now or datetime.now(timezone.utc)
+    last_dt = _parse_dt(info.get("last_activity"))
+    if not last_dt:
+        return "unknown"
+    age_days = (now - last_dt).total_seconds() / 86400
+    if age_days < 2:
+        return "active"
+    if age_days < 7:
+        return "quiet"
+    return "stale"
+
+
+def format_thread_awareness_line(thread_id: str, info: dict, now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    created = _age_label(_parse_dt(info.get("created")), now)
+    last = _age_label(_parse_dt(info.get("last_activity")), now)
+    status = thread_activity_status(info, now)
+    model = info.get("model") or "default"
+    attunement = info.get("attunement") or "semi"
+    eddy = info.get("eddy_type") or "fast"
+    messages = info.get("message_count", 0)
+    return (
+        f"- **{info.get('name', 'unknown')}** — `{model}` / `{attunement}` · "
+        f"`{eddy}` · status:{status} · created:{created} ago · last:{last} ago · "
+        f"messages:{messages} · id:{thread_id}"
+    )
+
+
+def get_thread_awareness(thread_id: int | str) -> str:
+    registry = load_registry()
+    info = registry.get("threads", {}).get(str(thread_id))
+    if not info:
+        return "not in registry yet"
+    return format_thread_awareness_line(str(thread_id), info).lstrip("- ")
+
+
+def _topic_tokens(text: str) -> set[str]:
+    import re
+    stop = {"the", "and", "for", "with", "from", "this", "that", "agent", "thread"}
+    return {
+        tok
+        for tok in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if len(tok) >= 3 and tok not in stop
+    }
+
+
+def get_related_thread_awareness(thread_name: str, current_thread_id: int | str | None = None, limit: int = 5) -> str:
+    """Return related registry entries for the current topic, including stale predecessors."""
+    tokens = _topic_tokens(thread_name)
+    if not tokens:
+        return ""
+
+    registry = load_registry()
+    now = datetime.now(timezone.utc)
+    related = []
+    current = str(current_thread_id) if current_thread_id is not None else None
+    for tid, info in registry.get("threads", {}).items():
+        if tid == current or info.get("harvest_status") == "dissolved":
+            continue
+        other_tokens = _topic_tokens(info.get("name", ""))
+        score = len(tokens & other_tokens)
+        if score == 0:
+            continue
+        status_priority = {"active": 0, "quiet": 1, "stale": 2, "unknown": 3}.get(thread_activity_status(info, now), 4)
+        last = _parse_dt(info.get("last_activity")) or datetime.fromtimestamp(0, tz=timezone.utc)
+        related.append((score, -status_priority, last.timestamp(), tid, info))
+
+    if not related:
+        return ""
+
+    related.sort(reverse=True)
+    lines = ["**Related registered threads:**"]
+    for _, _, _, tid, info in related[:limit]:
+        lines.append(format_thread_awareness_line(tid, info, now))
+    return "\n".join(lines)
+
+
+def build_live_thread_summary(limit: int = 12) -> str:
+    """Registry-backed thread summary for prompt injection."""
+    registry = load_registry()
+    threads = registry.get("threads", {})
+    if not threads:
+        return "**Active threads:** none in registry"
+
+    now = datetime.now(timezone.utc)
+    visible = []
+    for tid, info in threads.items():
+        if info.get("harvest_status") == "dissolved":
+            continue
+        status = thread_activity_status(info, now)
+        priority = {"active": 0, "quiet": 1, "stale": 2, "unknown": 3}.get(status, 4)
+        last = _parse_dt(info.get("last_activity")) or datetime.fromtimestamp(0, tz=timezone.utc)
+        visible.append((priority, -last.timestamp(), tid, info))
+
+    if not visible:
+        return "**Active threads:** none (all dissolved)"
+
+    visible.sort()
+    lines = ["**Discord thread state (live registry):**"]
+    for _, _, tid, info in visible[:limit]:
+        lines.append(format_thread_awareness_line(tid, info, now))
+    if len(visible) > limit:
+        lines.append(f"- ... {len(visible) - limit} more registered threads")
+    lines.append("")
+    lines.append("Before recommending a new thread, check this list for related active/quiet threads and offer continuation when appropriate.")
+    return "\n".join(lines)
 
 
 def mark_harvested(thread_id: int):

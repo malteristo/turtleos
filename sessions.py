@@ -20,7 +20,12 @@ from llm import chat_ollama
 from prompts import get_system_prompt
 from readiness import assess_readiness, save_readiness_trail
 from helpers import get_history, log_activity, split_message, local_now
-from outfacing import evaluate_outfacing_signal, save_signal_drafts, MIN_EXCHANGES_FOR_SIGNAL
+from outfacing import (
+    evaluate_outfacing_signal,
+    save_signal_drafts,
+    should_evaluate_outfacing_signal,
+    MIN_EXCHANGES_FOR_SIGNAL,
+)
 from state import client
 
 
@@ -135,7 +140,12 @@ async def close_session(channel_id: int):
     # ── Outfacing signal evaluation (Mage channel only) ──
     if get_mage_type() != "practitioner" and len(history) >= MIN_EXCHANGES_FOR_SIGNAL:
         try:
-            signals = await evaluate_outfacing_signal(conversation, reflection)
+            should_evaluate, reason = should_evaluate_outfacing_signal(conversation, reflection)
+            if not should_evaluate:
+                print(f"Outfacing signal skipped: {reason}")
+                signals = []
+            else:
+                signals = await evaluate_outfacing_signal(conversation, reflection)
             if signals:
                 paths = save_signal_drafts(signals)
                 if paths:

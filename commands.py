@@ -4,10 +4,11 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import discord
 
@@ -28,7 +29,7 @@ from state import (
 )
 
 from mage import (
-    get_pd, get_mage_name, get_mage_key, get_mage_type,
+    get_pd, get_runtime_dir, get_workshop_root, get_topology, get_mage_name, get_mage_key, get_mage_type,
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
     reload_mage_registry, get_registry,
@@ -66,7 +67,9 @@ from content_fetch import (
 from helpers import local_now, get_history, log_activity, split_message
 from attunement import perform_attunement, get_digest_age_hours
 from load_command import cmd_load
-from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, make_eddy_spawn_view
+from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, make_eddy_spawn_view, post_thread_opening
+
+INTAKE_PUBLIC_URL = os.environ.get("INTAKE_PUBLIC_URL", "http://100.110.46.104:8742/paste")
 
 
 # ─── Direct Commands ─────────────────────────────────────────────
@@ -280,207 +283,99 @@ async def cmd_sync(message):
 
 
 async def cmd_diagnose(message):
-    """Full practice stack diagnostic — checks all five layers."""
+    """Grounded mechanical diagnostic — displays the same checks canary.py runs."""
+    import importlib.util
+
     now = datetime.now(timezone.utc)
-    issues = []
-    actions = []
+    canary_path = Path(__file__).with_name("canary.py")
 
-    # ── Layer 1: Services
-    services_lines = []
-
-    def _check_process(name, pattern):
-        try:
-            r = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True, timeout=5)
-            return r.returncode == 0
-        except Exception:
-            return False
-
-    def _check_launchd(label):
-        try:
-            r = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=5)
-            return label in r.stdout
-        except Exception:
-            return False
-
-    couchdb_running = _check_process("CouchDB", "beam.smp")
-    obsidian_running = _check_process("Obsidian", "Obsidian")
-    discord_running = _check_launchd("com.turtle.discord")
-    ollama_reachable = False
-
-    services_lines.append(f"{'✅' if discord_running else '❌'} Discord bot")
-    services_lines.append(f"{'✅' if couchdb_running else '❌'} CouchDB")
-    services_lines.append(f"{'✅' if obsidian_running else '❌'} Obsidian (LiveSync host)")
+    if not canary_path.exists():
+        embed = discord.Embed(
+            title="🔴 Mechanical Diagnostic Unavailable",
+            description=f"`{canary_path}` not found.",
+            color=EMBED_COLORS["status_error"],
+            timestamp=now,
+        )
+        await message.reply(embed=embed, mention_author=False)
+        return
 
     try:
-        r = subprocess.run(["curl", "-s", "-m", "3", "http://localhost:11434/api/tags"],
-                           capture_output=True, text=True, timeout=5)
-        model_data = json.loads(r.stdout)
-        models = [m["name"] for m in model_data.get("models", [])]
-        ollama_reachable = True
-        services_lines.append(f"✅ Ollama ({len(models)} models)")
-    except Exception:
-        services_lines.append("❌ Ollama")
+        spec = importlib.util.spec_from_file_location("turtle_canary", canary_path)
+        canary = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(canary)
+    except Exception as e:
+        embed = discord.Embed(
+            title="🔴 Mechanical Diagnostic Import Failed",
+            description=f"`canary.py` could not be loaded: `{type(e).__name__}: {e}`",
+            color=EMBED_COLORS["status_error"],
+            timestamp=now,
+        )
+        await message.reply(embed=embed, mention_author=False)
+        return
 
-    if not couchdb_running:
-        issues.append("CouchDB is down — all sync is dead")
-        actions.append("`open ~/Applications/Apache\\ CouchDB.app`")
-    if not obsidian_running:
-        issues.append("Obsidian not running — LiveSync relay is offline")
-        actions.append("`launchctl kickstart -k gui/$(id -u)/com.obsidian`")
-    if not discord_running:
-        issues.append("Discord bot is down")
-        actions.append("`launchctl kickstart -k gui/$(id -u)/com.turtle.discord`")
-    if not ollama_reachable:
-        issues.append("Ollama unreachable — local inference unavailable")
-        actions.append("Check if Ollama is installed and running")
-
-    # ── Layer 2: Connections
-    connections_lines = []
-
-    couchdb_healthy = False
-    couchdb_doc_count = 0
-    try:
-        r = subprocess.run(
-            ["curl", "-s", "-m", "3", "http://admin:LPWDpWLuf4i9Bp1A2OCKpQ@localhost:5984/workshop_sync"],
-            capture_output=True, text=True, timeout=5)
-        db_info = json.loads(r.stdout)
-        couchdb_doc_count = db_info.get("doc_count", 0)
-        couchdb_healthy = couchdb_doc_count > 0
-        connections_lines.append(f"✅ CouchDB: {couchdb_doc_count} docs")
-    except Exception:
-        connections_lines.append("❌ CouchDB: cannot connect")
-        if couchdb_running:
-            issues.append("CouchDB process running but not responding on port 5984")
-            actions.append("Check CouchDB logs: `tail -20 ~/Library/Application\\\\ Support/CouchDB2/couch.log`")
-
-    tailscale_ok = False
-    tailscale_url = ""
-    try:
-        r = subprocess.run(["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "serve", "status"],
-                           capture_output=True, text=True, timeout=5)
-        if "proxy" in r.stdout and "5984" in r.stdout:
-            tailscale_ok = True
-            for line in r.stdout.split("\n"):
-                if "https://" in line:
-                    tailscale_url = line.strip().split()[0]
-                    break
-            connections_lines.append(f"✅ Tailscale serve → `{tailscale_url}`")
+    results = []
+    has_red = False
+    has_yellow = False
+    for check in canary.CHECKS:
+        if len(check) == 4:
+            layer, name, fn, weight = check
         else:
-            connections_lines.append("⚠️ Tailscale serve: not proxying CouchDB")
-            issues.append("Tailscale serve is not proxying CouchDB — mobile sync broken")
-            actions.append("`sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg http://localhost:5984`")
-    except Exception:
-        connections_lines.append("❌ Tailscale: cannot check status")
-        issues.append("Tailscale binary not found or not responding")
-        actions.append("Verify Tailscale is installed: `brew install tailscale`")
+            layer, name, fn, weight = "legacy", check[0], check[1], check[2]
+        try:
+            status, detail = fn()
+        except Exception as e:
+            status, detail = "red", f"check raised: {type(e).__name__}: {e}"
+        results.append({"layer": layer, "name": name, "status": status, "detail": detail, "weight": weight})
+        if status == "red" and weight == "high":
+            has_red = True
+        elif status in ("red", "yellow"):
+            has_yellow = True
 
-    gateway_latency = round(client.latency * 1000)
-    connections_lines.append(f"✅ Discord gateway: {gateway_latency}ms" if gateway_latency < 5000
-                             else f"⚠️ Discord gateway: {gateway_latency}ms (slow)")
+    overall = "red" if has_red else ("yellow" if has_yellow else "green")
+    green_count = sum(1 for r in results if r["status"] == "green")
 
-    # ── Layer 3: Sync
-    sync_lines = []
-
-    disk_file_count = 0
-    try:
-        for root, dirs, files in os.walk(get_pd()):
-            dirs[:] = [d for d in dirs if not d.startswith(".")]
-            disk_file_count += sum(1 for f in files if f.endswith(".md"))
-    except Exception:
-        pass
-
-    if couchdb_healthy and disk_file_count > 0:
-        sync_lines.append(f"✅ Disk: {disk_file_count} files | CouchDB: {couchdb_doc_count} docs")
-    elif disk_file_count > 0 and not couchdb_healthy:
-        sync_lines.append(f"⚠️ Disk: {disk_file_count} files | CouchDB: unreachable")
-        issues.append("Files exist on disk but CouchDB is unreachable — sync paused")
-    elif disk_file_count == 0:
-        sync_lines.append("❌ No practice files on disk")
-        issues.append("Practice directory appears empty")
-
-    practice_files = [("boom.md", "boom.md"), ("boom/bright.md", "bright.md"), ("intentions/compass.md", "compass.md")]
-    stale_files = []
-    for fpath, display_name in practice_files:
-        age = file_age_hours(os.path.join(get_pd(), fpath))
-        if age > 48:
-            stale_files.append(f"`{display_name}` ({format_age(age)})")
-    if stale_files:
-        sync_lines.append(f"⚠️ Stale: {', '.join(stale_files)}")
-    else:
-        sync_lines.append("✅ Core files fresh (< 48h)")
-
-    # ── Layer 4: Practice Flow
-    practice_lines = []
-
-    boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    boom_count = count_items(boom)
-    boom_age = file_age_hours(os.path.join(get_pd(), "boom.md"))
-    if boom_count >= 15 and boom_age > 24:
-        practice_lines.append(f"⚠️ Boom: {boom_count} items, untouched {format_age(boom_age)} — needs sweep")
-        actions.append("`!sweep` to process boom into bright")
-    elif boom_count > 0:
-        practice_lines.append(f"✅ Boom: {boom_count} items")
-    else:
-        practice_lines.append("✅ Boom: empty")
-
-    sdir = os.path.join(get_pd(), "sessions")
-    if os.path.isdir(sdir):
-        session_files = [f for f in os.listdir(sdir) if f.endswith(".md")]
-        if session_files:
-            latest = max(session_files, key=lambda f: os.path.getmtime(os.path.join(sdir, f)))
-            latest_session_age = file_age_hours(os.path.join(sdir, latest))
-            if latest_session_age > 72:
-                practice_lines.append(f"⚠️ Last session: {format_age(latest_session_age)} ago")
-            else:
-                practice_lines.append(f"✅ Last session: {format_age(latest_session_age)} ago")
-        else:
-            practice_lines.append("⚠️ No session notes yet")
-
-    pdir = os.path.join(get_pd(), "proposals")
-    if os.path.isdir(pdir):
-        proposals = [f for f in os.listdir(pdir) if f.endswith(".md")]
-        if len(proposals) >= 3:
-            practice_lines.append(f"⚠️ {len(proposals)} proposals waiting")
-        elif proposals:
-            practice_lines.append(f"✅ {len(proposals)} proposal(s)")
-
-    # ── Layer 5: Reachability
-    reach_lines = []
-    if tailscale_ok and tailscale_url:
-        reach_lines.append(f"✅ Mobile sync URL: `{tailscale_url}`")
-        reach_lines.append("Phone not syncing? Check:\n"
-                           "1. Tailscale app connected on phone\n"
-                           "2. LiveSync URI matches the URL above\n"
-                           "3. Try toggling LiveSync off/on in Obsidian")
-    elif not tailscale_ok:
-        reach_lines.append("❌ Mobile sync unavailable (Tailscale serve down)")
-    reach_lines.append(f"✅ SSH: `turtle@192.168.8.106` (LAN) or Tailscale IP")
-
-    # ── Build embed
-    has_errors = any("❌" in l for l in services_lines + connections_lines + sync_lines)
-    has_warnings = any("⚠️" in l for l in services_lines + connections_lines + sync_lines + practice_lines)
-
-    if has_errors:
+    if overall == "red":
         color = EMBED_COLORS["status_error"]
-        title = "🔴 Practice Stack — Issues Detected"
-    elif has_warnings:
+        title = "🔴 Mechanical Diagnostic — Red"
+    elif overall == "yellow":
         color = EMBED_COLORS["status_warn"]
-        title = "🟡 Practice Stack — Attention Needed"
+        title = "🟡 Mechanical Diagnostic — Yellow"
     else:
         color = EMBED_COLORS["status_ok"]
-        title = "🟢 Practice Stack — All Healthy"
+        title = "🟢 Mechanical Diagnostic — Green"
 
-    embed = discord.Embed(title=title, color=color, timestamp=now)
-    embed.add_field(name="Services", value="\n".join(services_lines), inline=False)
-    embed.add_field(name="Connections", value="\n".join(connections_lines), inline=False)
-    embed.add_field(name="Sync", value="\n".join(sync_lines), inline=False)
-    embed.add_field(name="Practice Flow", value="\n".join(practice_lines), inline=False)
-    embed.add_field(name="Reachability", value="\n".join(reach_lines), inline=False)
+    status_icon = {"green": "✅", "yellow": "⚠️", "red": "❌"}
+    check_lines = [
+        f"{status_icon.get(r['status'], '•')} `{r['name']}` — {r['detail']}"
+        for r in results
+    ]
 
-    if actions:
-        embed.add_field(name="Suggested Actions", value="\n".join(f"→ {a}" for a in actions), inline=False)
+    embed = discord.Embed(
+        title=title,
+        description=f"{green_count}/{len(results)} checks green. Grounded in `canary.py`.",
+        color=color,
+        timestamp=now,
+    )
+    embed.add_field(name="Checks", value=truncate("\n".join(check_lines), 3900), inline=False)
 
-    embed.set_footer(text="!diagnose checks all 5 layers of the practice stack")
+    topology = get_topology()
+    topology_lines = [
+        f"practice: `{topology['practice_dir']}`",
+        f"runtime: `{topology['runtime_dir']}`",
+    ]
+    if topology.get("workshop_root"):
+        topology_lines.append(f"workshop: `{topology['workshop_root']}`")
+    embed.add_field(name="Topology", value="\n".join(topology_lines), inline=False)
+
+    if overall != "green":
+        degraded = [r for r in results if r["status"] != "green"]
+        embed.add_field(
+            name="Degraded Signature",
+            value="\n".join(f"`{r['name']}`: {r['status']}" for r in degraded),
+            inline=False,
+        )
+
+    embed.set_footer(text="!diagnose is a read-only view of canary.py; scheduled canary handles alerts")
     await message.reply(embed=embed, mention_author=False)
 
 
@@ -615,6 +510,13 @@ async def cmd_thread(message, args):
         "context_type": context_type,
         "created": datetime.now(timezone.utc),
     }
+
+    await post_thread_opening(
+        thread,
+        topic,
+        origin=f"`!thread` in #{getattr(message.channel, 'name', 'practice channel')}",
+        source_text=message.content,
+    )
 
     config_line = _build_config_line(thread.id)
     view = ThreadConfigView(current_type=eddy_type)
@@ -987,7 +889,7 @@ async def cmd_eddy_check(message, args):
 # ─── Link Fetching ───────────────────────────────────────────────
 
 def _resonance_cache_dir():
-    return os.path.join(get_pd(), "link-resonance")
+    return os.path.join(get_runtime_dir(), "link-resonance")
 
 
 def _get_cached_resonance(url: str) -> str | None:
@@ -1039,6 +941,11 @@ async def _distill_resonance(raw_content: str, url: str) -> str:
         return raw_content[:2000]
 
 
+def _paste_endpoint_for(url: str) -> str:
+    """Build a prefilled paste endpoint link for unfetchable content."""
+    return f"{INTAKE_PUBLIC_URL}?{urlencode({'url': url})}"
+
+
 class LinkFetchView(discord.ui.View):
     def __init__(self, urls: list[str]):
         super().__init__(timeout=3600)
@@ -1081,9 +988,10 @@ class LinkFetchView(discord.ui.View):
                 raw_content, source_type = await _fetch_url_content(url)
 
             if not raw_content:
+                paste_url = _paste_endpoint_for(url)
                 await interaction.followup.send(
                     f"\U0001f517 Could not fetch `{url}` ({source_type}). "
-                    "Share a screenshot or paste the text directly."
+                    f"Paste the text here so Turtle can process it with source context: {paste_url}"
                 )
                 return
 
@@ -1155,9 +1063,10 @@ async def cmd_fetch(message, args):
             raw_content, source_type = await _fetch_url_content(url)
 
         if not raw_content:
+            paste_url = _paste_endpoint_for(url)
             await message.reply(
                 f"\U0001f517 Could not fetch `{url}` ({source_type}).\n"
-                "Try: screenshot it, paste the text, or share via a different link.",
+                f"Paste the text here so Turtle can process it with source context: {paste_url}",
                 mention_author=False,
             )
             return
@@ -1961,7 +1870,8 @@ async def cmd_admin(message, args):
         reg["mages"][mage_key_val] = {
             "discord_id": str(target_member.id),
             "address": target_member.display_name,
-            "practice_dir": f"~/workshops/{mage_key_val}"
+            "practice_dir": f"~/workshops/{mage_key_val}",
+            "runtime_dir": f"~/workshops/{mage_key_val}"
         }
         reg["channels"][str(new_ch.id)] = mage_key_val
         with open(registry_path, "w") as f:
@@ -2210,6 +2120,92 @@ COMMAND_CONTEXT = {
 
 _PRACTITIONER_COMMANDS = {"status", "help", "recall", "release"}
 
+CONTEXTUAL_ACTION_TIMEOUT = 3600
+CONTEXTUAL_ACTION_COMMANDS = {
+    "status", "diagnose", "sync", "sweep", "recall", "release",
+    "boom", "thread", "new", "threads", "eddy-check", "fetch",
+    "absorb", "absorbed", "forget", "readiness", "signals", "load",
+}
+_CONTEXTUAL_ACTIONS = {}
+
+
+class ContextualActionView(discord.ui.View):
+    """Scoped button row for one local recommendation."""
+
+    def __init__(self, actions: list[tuple[str, str]], timeout: int = CONTEXTUAL_ACTION_TIMEOUT):
+        super().__init__(timeout=timeout)
+        self._action_ids = []
+        for idx, (label, command) in enumerate(actions[:3]):
+            action_id = secrets.token_urlsafe(8)
+            self._action_ids.append(action_id)
+            _CONTEXTUAL_ACTIONS[action_id] = command
+            button = discord.ui.Button(
+                label=label[:80],
+                custom_id=f"ctx:{action_id}",
+                style=discord.ButtonStyle.secondary,
+                row=0,
+            )
+            button.callback = self._make_callback(action_id)
+            self.add_item(button)
+
+    def _make_callback(self, action_id: str):
+        async def callback(interaction: discord.Interaction):
+            await handle_contextual_action(interaction, action_id)
+            for child in self.children:
+                child.disabled = True
+            try:
+                await interaction.message.edit(view=self)
+            except Exception:
+                pass
+        return callback
+
+    async def on_timeout(self):
+        for action_id in self._action_ids:
+            _CONTEXTUAL_ACTIONS.pop(action_id, None)
+
+
+def _parse_contextual_command(command: str) -> tuple[str, list[str]]:
+    text = command.strip()
+    if text.startswith("!"):
+        text = text[1:]
+    parts = text.split(None, 1)
+    cmd = parts[0].lower() if parts else ""
+    args = parts[1].split() if len(parts) > 1 else []
+    return cmd, args
+
+
+async def handle_contextual_action(interaction: discord.Interaction, action_id: str):
+    command = _CONTEXTUAL_ACTIONS.pop(action_id, None)
+    if not command:
+        await interaction.response.send_message("This action expired.", ephemeral=True)
+        return
+
+    cmd, args = _parse_contextual_command(command)
+    if cmd not in CONTEXTUAL_ACTION_COMMANDS:
+        await interaction.response.send_message(f"Action `{cmd}` is not available as a contextual button.", ephemeral=True)
+        return
+
+    handler = DIRECT_COMMANDS.get(cmd)
+    if not handler:
+        await interaction.response.send_message(f"Unknown action `{cmd}`.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    msg = _InteractionAsMessage(interaction)
+    msg.content = f"!{command.lstrip('!')}"
+    try:
+        await handler(msg, args)
+        await log_activity(f"Contextual action `!{cmd}` executed", "🔘", channel=interaction.channel)
+    except Exception as e:
+        await interaction.followup.send(f"Action error: {e}", ephemeral=True)
+        await log_activity(f"Contextual action `!{cmd}` failed: {e}", "❌", channel=interaction.channel)
+
+
+async def send_with_actions(channel, message: str, actions: list[tuple[str, str]]):
+    """Send a local recommendation with a small row of command-backed buttons."""
+    view = ContextualActionView(actions)
+    return await channel.send(message, view=view)
+
 
 async def try_direct_command(message):
     text = message.content.strip()
@@ -2294,6 +2290,7 @@ class ThreadTopicModal(discord.ui.Modal, title="New Thread"):
         model_id, use_api = resolve_model(self.model_str)
 
         msg = await dialogue.send(f"\U0001f9f5 **{topic_val}** \u2014 `{self.model_str}` / `{self.attunement}`")
+        eddy_type = getattr(self, "eddy_type", EDDY_DEFAULT)
         eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 4320)
         thread = await msg.create_thread(name=topic_val, auto_archive_duration=eddy_archive)
 
@@ -2306,7 +2303,6 @@ class ThreadTopicModal(discord.ui.Modal, title="New Thread"):
             except Exception as e:
                 print(f"Could not auto-add user {uid} to thread: {e}")
 
-        eddy_type = getattr(self, "eddy_type", EDDY_DEFAULT)
         thread_configs[thread.id] = {
             "model": model_id,
             "use_api": use_api,
@@ -2315,6 +2311,13 @@ class ThreadTopicModal(discord.ui.Modal, title="New Thread"):
             "eddy_type": eddy_type,
             "created": datetime.now(timezone.utc),
         }
+
+        await post_thread_opening(
+            thread,
+            topic_val,
+            origin="control panel thread launcher",
+            source_text=f"{topic_val} — {self.model_str} / {self.attunement}",
+        )
 
         config_line = _build_config_line(thread.id)
         view = ThreadConfigView(current_type=eddy_type)

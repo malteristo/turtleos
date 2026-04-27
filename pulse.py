@@ -10,6 +10,119 @@ from practice_io import read_safe, count_items, file_age_hours, format_age
 
 RIVER_STATE_PATH = os.path.expanduser("~/turtleos/river_state.md")
 
+PROPOSAL_ACTIVE_STATES = {"proposed", "accepted", "implementing", "review"}
+PROPOSAL_INACTIVE_STATES = {"hold", "deployed", "released", "archived", "integrated"}
+PROPOSAL_STATE_ALIASES = {
+    "draft": "proposed",
+    "awaiting resonance check": "proposed",
+    "new": "proposed",
+    "open": "proposed",
+    "endorsed": "accepted",
+    "approved": "accepted",
+    "adopted": "deployed",
+    "implemented": "deployed",
+    "deployed": "deployed",
+    "stabilized": "deployed",
+    "closed": "released",
+    "subsumed": "released",
+    "rejected": "released",
+    "superseded": "released",
+    "incubating": "hold",
+    "blocked": "hold",
+}
+PROPOSAL_STATE_DIRS = PROPOSAL_ACTIVE_STATES | PROPOSAL_INACTIVE_STATES
+
+
+def _normalize_proposal_state(raw: str | None) -> str:
+    if not raw:
+        return "proposed"
+    status = re.sub(r"[*_`]+", "", raw).strip().lower()
+    status = status.split("—", 1)[0].strip()
+    status = status.split("-", 1)[0].strip()
+    status = status.split("(", 1)[0].strip()
+    status = re.sub(r"[^a-z\s]", " ", status)
+    status = re.sub(r"\s+", " ", status).strip()
+
+    if status in PROPOSAL_ACTIVE_STATES or status in PROPOSAL_INACTIVE_STATES:
+        return status
+    for key, state in PROPOSAL_STATE_ALIASES.items():
+        if key in status:
+            return state
+    if "phase" in status and "implemented" in status:
+        return "deployed"
+    return "proposed"
+
+
+def _proposal_state_from_path(path: Path, proposals_dir: Path) -> str | None:
+    try:
+        rel = path.relative_to(proposals_dir)
+    except ValueError:
+        return None
+    if len(rel.parts) <= 1:
+        return None
+    dirname = rel.parts[0].lower()
+    if dirname in PROPOSAL_STATE_DIRS:
+        return dirname
+    return None
+
+
+def _proposal_status_line(text: str) -> str | None:
+    lines = text.splitlines()
+    for line in lines[:12]:
+        match = re.search(r"status\**\s*:?\s*(.+)$", line, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    first_line = lines[0] if lines else ""
+    bracket = re.search(r"\[([^\]]+)\]", first_line)
+    if bracket:
+        return bracket.group(1).strip()
+    return None
+
+
+def _proposal_state(path: Path, proposals_dir: Path) -> str:
+    state = _proposal_state_from_path(path, proposals_dir)
+    if state:
+        return state
+    try:
+        content = path.read_text(errors="ignore")
+    except Exception:
+        return "proposed"
+    return _normalize_proposal_state(_proposal_status_line(content))
+
+
+def _scan_proposals(proposals_dir: str) -> dict:
+    base = Path(proposals_dir)
+    counts = {state: 0 for state in sorted(PROPOSAL_ACTIVE_STATES | PROPOSAL_INACTIVE_STATES)}
+    examples = {state: [] for state in counts}
+    files_total = 0
+
+    if not base.is_dir():
+        return {
+            "total": 0,
+            "active": 0,
+            "files_total": 0,
+            "by_state": counts,
+            "examples": examples,
+        }
+
+    for path in sorted(base.rglob("*.md")):
+        if not path.is_file() or path.name.lower() == "readme.md":
+            continue
+        files_total += 1
+        state = _proposal_state(path, base)
+        counts[state] = counts.get(state, 0) + 1
+        if len(examples.setdefault(state, [])) < 3:
+            examples[state].append(str(path.relative_to(base)))
+
+    active = sum(counts.get(state, 0) for state in PROPOSAL_ACTIVE_STATES)
+    return {
+        "total": active,
+        "active": active,
+        "files_total": files_total,
+        "by_state": counts,
+        "examples": examples,
+    }
+
 
 def scan_pulse(pd=None):
     """Scan practice surfaces and return structured vitality picture."""
@@ -35,15 +148,9 @@ def scan_pulse(pd=None):
         "latest_age": recent_sessions[0]["age_hours"] if recent_sessions else float("inf"),
     }
 
-    # Proposals
+    # Proposals — count active lifecycle pressure, not historical sediment.
     pdir = os.path.join(pd, "proposals")
-    proposal_count = 0
-    if os.path.isdir(pdir):
-        proposal_count = len([
-            f for f in os.listdir(pdir)
-            if f.endswith(".md") and os.path.isfile(os.path.join(pdir, f))
-        ])
-    pulse["proposals"] = {"total": proposal_count}
+    pulse["proposals"] = _scan_proposals(pdir)
 
     # Notes
     ndir = os.path.join(pd, "notes")
@@ -99,13 +206,15 @@ def scan_pulse(pd=None):
         from thread_registry import get_stale_threads
         stale = get_stale_threads(days=7)
         unharvested = [t for t in stale if t["harvest_status"] == "pending"]
+        attention = sorted(unharvested, key=_eddy_attention_score, reverse=True)
         pulse["threads_stale"] = {
             "count": len(stale),
             "unharvested": len(unharvested),
-            "names": [t["name"] for t in unharvested[:5]],
+            "names": [t["name"] for t in attention[:5]],
+            "attention": attention[:5],
         }
     except Exception:
-        pulse["threads_stale"] = {"count": 0, "unharvested": 0, "names": []}
+        pulse["threads_stale"] = {"count": 0, "unharvested": 0, "names": [], "attention": []}
 
     # Signal drip
     drip_path = os.path.join(pd, "outfacing", "drip-state.md")
@@ -125,6 +234,33 @@ def scan_pulse(pd=None):
     pulse["texture"] = _classify_texture(pulse)
     return pulse
 
+
+def _eddy_attention_score(thread: dict) -> float:
+    name = thread.get("name", "").lower()
+    score = min(thread.get("message_count", 0), 80)
+    priority_terms = {
+        "learnings": 90,
+        "resonance": 70,
+        "practice": 60,
+        "discord": 55,
+        "turtle": 35,
+        "boom": 35,
+    }
+    for key, boost in priority_terms.items():
+        if key in name:
+            score += boost
+            break
+    score -= min(thread.get("age_days", 0), 60) * 0.4
+    return score
+
+
+def _top_attention_eddy(pulse) -> dict | None:
+    attention = pulse.get("threads_stale", {}).get("attention") or []
+    return attention[0] if attention else None
+
+
+def _format_eddy_name(name: str) -> str:
+    return name.replace("_", " ").strip()
 
 def _classify_texture(pulse):
     """Classify practice texture from signals."""
@@ -146,25 +282,21 @@ def _classify_texture(pulse):
 
 
 def compose_river_entry(pulse, thread_count=0):
-    """Compose the river-entry narrative from pulse data.
-
-    Three beats: live thread, quality of current, opening gesture.
-    Returns (title, description) for a Discord embed.
-    """
     lines = []
 
     live = _find_live_threads(pulse)
     if live:
-        lines.append(live)
+        lines.append(f"Current: {live}")
 
-    texture = _describe_texture(pulse)
-    if texture:
-        lines.append(texture)
+    doorway = _practice_doorway(pulse)
+    if doorway:
+        lines.append(f"Useful doorway: {doorway}")
 
-    lines.append(_opening_gesture(pulse))
+    gesture = _opening_gesture(pulse)
+    if gesture:
+        lines.append(gesture)
 
-    return "\U0001f422 *enters the river*", "\n".join(lines)
-
+    return "🐢 *enters the river*", "\n".join(lines)
 
 def _find_live_threads(pulse):
     """Name the 1-2 things with energy right now."""
@@ -200,47 +332,47 @@ def _find_live_threads(pulse):
     return None
 
 
-def _describe_texture(pulse):
-    """Describe quality of the current — texture, not gauges."""
-    t = pulse["texture"]
-    extras = []
+def _practice_doorway(pulse) -> str:
+    top_eddy = _top_attention_eddy(pulse)
+    if top_eddy:
+        name = _format_eddy_name(top_eddy["name"])
+        return f"`{name}` may hold uncaptured resonance; review it before opening new threads."
 
-    if pulse["boom"]["count"] >= 5:
-        extras.append(f"boom has {pulse['boom']['count']} items")
-    if pulse["drip"] and pulse["drip"]["pending"] and not any(
-        i["age_hours"] < 48 for i in pulse["intentions"]
-    ):
-        extras.append("signal pipeline mid-drip")
+    if pulse["boom"]["count"] >= 10:
+        return f"boom has {pulse['boom']['count']} items; a sweep would turn raw material into usable surface."
+
+    if pulse["drip"] and pulse["drip"].get("pending"):
+        d = pulse["drip"]
+        return f"signal drip is at tweet {d['next']}/{d['total']}; continue or deliberately pause the sequence."
+
     if pulse["proposals"]["total"] >= 10:
-        extras.append(f"{pulse['proposals']['total']} proposals waiting")
-    if pulse["threads_stale"]["unharvested"] > 0:
-        extras.append(f"{pulse["threads_stale"]["unharvested"]} {"eddy" if pulse["threads_stale"]["unharvested"] == 1 else "eddies"} unharvested")
+        return f"{pulse['proposals']['total']} proposals are waiting; choose one proposal to accept, revise, or close."
 
+    if pulse["sessions"]["count_recent"] > 0:
+        return "recent conversation is still warm; harvest one lesson before it becomes sediment."
+
+    return "choose a thread, a sweep, or a quiet check-in."
+
+def _describe_texture(pulse):
     phrases = {
-        "executing": "Sessions and artifacts moving together.",
-        "accumulating": "Boom accumulating \u2014 something percolating.",
-        "digesting": "Digestion mode \u2014 crystallizing without new input.",
-        "stirring": "Things stirring across surfaces.",
-        "quiet": "Practice has been quiet.",
+        "executing": "Sessions and artifacts are moving together.",
+        "accumulating": "Raw material is accumulating and wants a sweep.",
+        "digesting": "The practice is digesting; look for what is ready to crystallize.",
+        "stirring": "Several surfaces are active; choose one doorway.",
+        "quiet": "The practice is quiet; begin with orientation rather than maintenance.",
     }
-
-    base = phrases.get(t, "")
-    if extras:
-        return base + " " + " \u00b7 ".join(extras[:2])
-    return base
-
+    return phrases.get(pulse["texture"], "")
 
 def _opening_gesture(pulse):
-    """Calibrated opening based on what's perceived."""
+    top_eddy = _top_attention_eddy(pulse)
+    if top_eddy:
+        name = _format_eddy_name(top_eddy["name"])
+        return f"Suggested: ask `what resonance in {name} has not landed yet?`"
+    if pulse["boom"]["count"] >= 10:
+        return "Suggested: run a focused sweep before adding more raw material."
     if pulse["texture"] == "quiet" and pulse["sessions"]["latest_age"] > 72:
-        return "*what brought you to the river?*"
-    stale = pulse["threads_stale"]
-    if stale["unharvested"] > 0 and stale["names"]:
-        return f"*{stale['names'][0]} has been quiet \u2014 sitting or stalled?*"
-    if pulse["texture"] == "accumulating":
-        return "*what wants to surface?*"
-    return "*what's moving?*"
-
+        return "Suggested: start with recall or name what brought you here."
+    return "Suggested: pick the live thread, then harvest one concrete next step."
 
 def _pulse_signature(pulse):
     """Extract comparable dimensions from pulse for delta detection."""
@@ -286,11 +418,6 @@ def _delta_significant(prev_sig, curr_sig):
 
 
 def compose_interoception(pulse, prev_pulse=None):
-    """Compose interoception signals from pulse data.
-
-    Delta-aware: if prev_pulse is provided, only signals meaningful changes.
-    Returns list of (emoji, text) tuples.
-    """
     curr_sig = _pulse_signature(pulse)
     prev_sig = _pulse_signature(prev_pulse) if prev_pulse else None
 
@@ -300,41 +427,42 @@ def compose_interoception(pulse, prev_pulse=None):
     signals = []
 
     bc, ba = pulse["boom"]["count"], pulse["boom"]["age_hours"]
-    if bc >= 10 and ba > 24:
-        signals.append(("\U0001f35d", f"Boom feels heavy \u2014 {bc} items, last touched {format_age(ba)} ago"))
-    elif bc >= 20:
-        signals.append(("\U0001f35d", f"Boom is overflowing \u2014 {bc} items. Consider `!sweep`"))
+    if bc >= 20:
+        signals.append(("🍝", f"Raw material is overflowing: {bc} boom items. Remedy: sweep before collecting more."))
+    elif bc >= 10 and ba > 24:
+        signals.append(("🍝", f"Boom is heavy: {bc} items, last touched {format_age(ba)} ago. Remedy: distill the top few."))
 
-    if pulse["compass"]["age_hours"] > 168:
-        signals.append(("\U0001f9ed", f"Compass hasn't been touched in {format_age(pulse['compass']['age_hours'])}"))
+    top_eddy = _top_attention_eddy(pulse)
+    ts = pulse["threads_stale"]
+    if top_eddy:
+        name = _format_eddy_name(top_eddy["name"])
+        signals.append(("🔍", f"Uncaptured resonance risk: {ts['unharvested']} quiet eddies. Start with `{name}` ({top_eddy.get('message_count', 0)} msgs)."))
+    elif ts["count"] > 0:
+        signals.append(("🌊", f"{ts['count']} quiet eddies, all marked harvested. No action unless one feels alive again."))
 
-    if pulse["bright"]["age_hours"] > 168:
-        signals.append(("\u2728", f"Bright untouched for {format_age(pulse['bright']['age_hours'])}"))
+    if pulse["proposals"]["total"] >= 20:
+        signals.append(("📬", f"Proposal sediment: {pulse['proposals']['total']} files waiting. Remedy: accept, revise, or close one before adding more."))
+    elif pulse["proposals"]["total"] >= 3:
+        signals.append(("📬", f"{pulse['proposals']['total']} proposals waiting. Remedy: review one when the current thread pauses."))
+
+    compass_age = pulse["compass"]["age_hours"]
+    if compass_age != float("inf") and compass_age > 168:
+        signals.append(("🧭", f"Compass is stale ({format_age(compass_age)}). Remedy: brief orientation refresh, not a full rewrite."))
+
+    bright_age = pulse["bright"]["age_hours"]
+    if bright_age != float("inf") and bright_age > 168:
+        signals.append(("✨", f"Bright has not been touched in {format_age(bright_age)}. Remedy: promote one harvested pattern."))
 
     sa = pulse["sessions"]["latest_age"]
     if sa > 72 and sa != float("inf"):
-        signals.append(("\U0001f4ad", f"No conversations in {format_age(sa)}"))
+        signals.append(("💭", f"Session continuity gap: no conversations in {format_age(sa)}. Remedy: recall before deep work."))
     elif sa == float("inf"):
-        signals.append(("\U0001f4ad", "No session notes yet"))
-
-    if pulse["proposals"]["total"] >= 3:
-        signals.append(("\U0001f4ec", f"{pulse['proposals']['total']} proposals in `proposals/`"))
-
-    ts = pulse["threads_stale"]
-    if ts["unharvested"] > 0:
-        names = ", ".join(ts["names"][:5])
-        extra = f" (+{ts['unharvested'] - 5} more)" if ts["unharvested"] > 5 else ""
-        signals.append(("\U0001f50d", f"{ts['unharvested']} eddies quiet >7d, unharvested: {names}{extra}"))
-    elif ts["count"] > 0:
-        signals.append(("\U0001f30a", f"{ts['count']} quiet eddies (all harvested)"))
+        signals.append(("💭", "No session notes yet. Remedy: close the next meaningful exchange with release."))
 
     if pulse["texture"] == "quiet":
-        signals.append(("\U0001f4a4", "Practice state quiet \u2014 nothing updated in 2+ days"))
+        signals.append(("💤", "Practice is quiet. Remedy: offer a doorway, not a nag."))
 
-    return signals
-
-
-
+    return signals[:3]
 
 def save_river_state(title, content):
     """Save what Turtle posted to the river, for context loop injection."""

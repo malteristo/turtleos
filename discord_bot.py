@@ -75,6 +75,7 @@ from practice_io import (
 from thread_registry import (
     register_thread, update_thread_activity,
     backfill_from_discord, get_registry_summary,
+    get_related_thread_awareness, get_thread_awareness,
 )
 
 from llm import (
@@ -99,13 +100,14 @@ from helpers import (
 
 from sessions import session_monitor, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
-from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction, is_intake_thread, handle_intake_message
+from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction, is_intake_thread, handle_intake_message, generate_topic
+from intake_server import start_intake_server
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView, LinkFetchView,
-    ThreadConfigView,
+    ThreadConfigView, send_with_actions,
 )
 
 from content_fetch import (
@@ -117,6 +119,66 @@ from content_fetch import (
 
 # Boom thread fetched content cache (message.id -> content string)
 _boom_fetched_content = {}
+
+
+_CONTEXTUAL_ACTION_COMMANDS = {
+    "status", "diagnose", "sync", "sweep", "recall", "release",
+    "boom", "thread", "new", "threads", "eddy-check", "fetch",
+    "absorb", "absorbed", "forget", "readiness", "signals", "load",
+}
+_CONTEXTUAL_COMMAND_RE = re.compile(r"`(![A-Za-z][\w-]*(?:\s+[^`]+)?)`")
+
+
+def _contextual_action_label(command: str) -> str:
+    body = command.strip().lstrip("!")
+    cmd = body.split(None, 1)[0].lower() if body else ""
+    rest = body.split(None, 1)[1] if " " in body else ""
+
+    if cmd == "thread":
+        match = re.search(r'"([^"]+)"', rest)
+        topic = match.group(1) if match else rest.split("--", 1)[0].strip()
+        return f"Create thread: {topic[:42]}" if topic else "Create thread"
+    if cmd == "new":
+        return "Open eddy"
+    if cmd == "boom" and rest.startswith("thread"):
+        return "Boom thread"
+    labels = {
+        "status": "Show status",
+        "diagnose": "Run diagnose",
+        "sync": "Check sync",
+        "sweep": "Sweep boom",
+        "recall": "Recall",
+        "release": "Release session",
+        "boom": "Show boom",
+        "threads": "Show threads",
+        "eddy-check": "Check eddies",
+        "fetch": "Fetch link",
+        "absorb": "Absorb thread",
+        "absorbed": "Show absorbed",
+        "forget": "Forget context",
+        "readiness": "Assess readiness",
+        "signals": "Review signals",
+        "load": "Load context",
+    }
+    return labels.get(cmd, f"Run !{cmd}")
+
+
+def _extract_contextual_actions(reply: str) -> list[tuple[str, str]]:
+    # Find direct commands Turtle recommended so the shell can attach buttons.
+    actions = []
+    seen = set()
+    for match in _CONTEXTUAL_COMMAND_RE.finditer(reply):
+        command = match.group(1).strip()
+        cmd = command.lstrip("!").split(None, 1)[0].lower()
+        if cmd not in _CONTEXTUAL_ACTION_COMMANDS or command in seen:
+            continue
+        seen.add(command)
+        actions.append((_contextual_action_label(command), command))
+
+    # More than three command mentions is usually help text, not a local recommendation.
+    if len(actions) > 3:
+        return []
+    return actions
 
 
 # ─── handle_dialogue ─────────────────────────────────────────────
@@ -147,7 +209,13 @@ def _build_runtime_env(message, cfg):
         f"- **Channel:** #{channel_name}",
     ]
     if thread_name:
-        lines.append(f"- **Thread:** {thread_name}")
+        awareness = get_thread_awareness(channel.id)
+        lines.append(f"- **Current thread:** {thread_name} ({awareness})")
+        related = get_related_thread_awareness(thread_name, current_thread_id=channel.id)
+        if related:
+            lines.append("")
+            lines.append(related)
+        lines.append("- **Thread-state rule:** This is the conversation you are currently inside. Do not recommend creating a new thread for this same topic; continue here or reference related threads from the live registry.")
     lines.append(f"- **Mage:** {mage_name}")
     lines.append(f"- **Model:** {model}")
     lines.append(f"- **Attunement:** {attunement}")
@@ -181,6 +249,17 @@ def _build_runtime_env(message, cfg):
                       "Be direct and focused on the topic at hand.")
 
     return "\n".join(lines) + "\n\n"
+
+
+def _build_source_trace(source_flags: list[str]) -> str:
+    """Compact visible epistemic trace for context injected before the reply."""
+    seen = []
+    for flag in source_flags:
+        if flag and flag not in seen:
+            seen.append(flag)
+    if not seen:
+        return ""
+    return "Sources: " + "; ".join(seen)
 
 
 async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history: list[dict]):
@@ -230,18 +309,81 @@ async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history
         print(f"Thread state write failed for {thread.name}: {e}")
 
 
+def _summarize_message_snapshot(snapshot, index: int) -> str:
+    parts = [f"[Forwarded message {index}]"]
+    created = getattr(snapshot, "created_at", None)
+    if created:
+        parts.append(f"created: {created.isoformat()}")
+    msg_type = getattr(snapshot, "type", None)
+    if msg_type:
+        parts.append(f"type: {msg_type}")
+
+    content = (getattr(snapshot, "content", "") or "").strip()
+    if content:
+        parts.append(f"content:\n{content}")
+
+    embeds = getattr(snapshot, "embeds", []) or []
+    if embeds:
+        embed_lines = []
+        for embed in embeds[:3]:
+            bits = []
+            if getattr(embed, "title", None):
+                bits.append(f"title={embed.title}")
+            if getattr(embed, "url", None):
+                bits.append(f"url={embed.url}")
+            if getattr(embed, "description", None):
+                bits.append(f"description={embed.description[:500]}")
+            if bits:
+                embed_lines.append("; ".join(bits))
+        if embed_lines:
+            parts.append("embeds:\n" + "\n".join(f"- {line}" for line in embed_lines))
+
+    attachments = getattr(snapshot, "attachments", []) or []
+    if attachments:
+        attachment_lines = []
+        for att in attachments[:5]:
+            name = getattr(att, "filename", "attachment")
+            content_type = getattr(att, "content_type", None) or "unknown type"
+            url = getattr(att, "url", None)
+            attachment_lines.append(f"{name} ({content_type})" + (f" {url}" if url else ""))
+        parts.append("attachments:\n" + "\n".join(f"- {line}" for line in attachment_lines))
+
+    if len(parts) == 1:
+        parts.append("no readable content in snapshot")
+    return "\n".join(parts)
+
+
+def _extract_forwarded_context(message) -> str:
+    snapshots = getattr(message, "message_snapshots", None) or []
+    if not snapshots:
+        return ""
+    blocks = [_summarize_message_snapshot(snapshot, idx) for idx, snapshot in enumerate(snapshots, 1)]
+    return "\n\n".join(blocks)
+
+
+def _visible_message_content(message) -> tuple[str, str]:
+    content = message.content or ""
+    forwarded_context = _extract_forwarded_context(message)
+    if forwarded_context:
+        if content.strip():
+            return f"{content}\n\n{forwarded_context}", forwarded_context
+        return forwarded_context, forwarded_context
+    return content, ""
+
+
 async def handle_dialogue(message):
     channel_id = message.channel.id
+    visible_content, forwarded_context = _visible_message_content(message)
 
     # Run triage and proprioceptor in parallel — tissue prepares while classification runs
-    triage_task = asyncio.create_task(triage_message(message.content))
+    triage_task = asyncio.create_task(triage_message(visible_content))
     # Proprioceptor runs in parallel — cancelled later if triage says trivial
 
-    proprioceptor_task = asyncio.create_task(prepare_context_brief(message.content))
+    proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
 
     triage = await triage_task
     triage_cat = triage.get("category", "practice")
-    print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {message.content[:80]}")
+    print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {visible_content[:80]}")
 
     # Cancel proprioceptor for trivial messages — not needed
     if proprioceptor_task and triage_cat not in ("practice", "deep", "link"):
@@ -261,28 +403,36 @@ async def handle_dialogue(message):
             print(f"Thread memory context: {message.channel.name} ({len(loaded)} msgs) — {summary[:100]}")
 
     attachments = []
+    attachment_names = []
+    attachment_extracted = False
     attachment_note = ""
     if message.attachments:
         attachments = await _extract_attachments(message)
         if attachments:
-            fnames = ", ".join(f"{fn}" for _, _, fn in attachments)
+            attachment_names = [fn for _, _, fn in attachments]
+            fnames = ", ".join(attachment_names)
             attachment_note = f" [attached: {fnames}]"
 
+    urls = []
     url_content = _boom_fetched_content.pop(message.id, "")
+    url_source_count = 0
+    content_from_boom_capture = False
     _urls_already_processed = False
     if url_content:
         attachment_note += " [content from boom capture]"
         _urls_already_processed = True
+        content_from_boom_capture = True
     else:
-        urls = await _extract_urls(message.content)
+        urls = await _extract_urls(visible_content)
         if urls:
             _urls_already_processed = True
             url_content = await _process_urls(urls)
             if url_content:
+                url_source_count = len(urls)
                 attachment_note += f" [fetched {len(urls)} URL(s)]"
 
     # Include fetched content in history so it persists across turns
-    user_entry = f"[{message.author.display_name}]: {message.content}{attachment_note}"
+    user_entry = f"[{message.author.display_name}]: {visible_content}{attachment_note}"
     if url_content:
         user_entry += f"\n\n[Fetched content]:\n{url_content[:6000]}"
     history.append({"role": "user", "content": user_entry})
@@ -341,6 +491,16 @@ async def handle_dialogue(message):
     elif triage_cat in ("greeting", "casual"):
         triage_hint += " (keep it light and brief)"
     runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
+    source_flags = []
+    if url_content:
+        if content_from_boom_capture:
+            source_flags.append("boom-captured fetched content")
+        else:
+            source_flags.append(f"bot-fetched URL content ({url_source_count or len(urls)} URL(s))")
+    if attachments:
+        source_flags.append(f"attachment metadata ({', '.join(attachment_names)})")
+    if forwarded_context:
+        source_flags.append("forwarded message snapshot")
 
     # Collect proprioceptor — worth waiting since dialogue call is the real bottleneck
     context_brief = None
@@ -374,6 +534,7 @@ async def handle_dialogue(message):
 
     # Inject proprioceptor brief into dialogue model system prompt
     if _tissue_brief and context_brief:
+        source_flags.append("practice-state context brief")
         proprioceptor_block = (
             "## Proprioceptive Context (connective tissue model)\n\n"
             f"{_tissue_brief}\n\n"
@@ -386,6 +547,7 @@ async def handle_dialogue(message):
     messages_for_llm = list(history)
     contexts = absorbed_contexts.get(channel_id, [])
     if contexts and not cfg:
+        source_flags.append(f"absorbed thread context ({len(contexts)} thread(s))")
         digest_parts = []
         for ctx in contexts:
             model_info = ctx.get("model_info", "")
@@ -418,6 +580,7 @@ async def handle_dialogue(message):
             elif attachments and not is_gemini:
                 extraction = await preprocess_attachments(attachments) if attachments else ""
                 if extraction:
+                    attachment_extracted = True
                     messages_for_llm[-1] = dict(messages_for_llm[-1])
                     messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + extraction
                 if thread_use_api:
@@ -467,9 +630,21 @@ async def handle_dialogue(message):
 
     if tool_report:
         reply = f"{reply}\n\n-# ⚙️ {tool_report}"
+    if attachment_extracted:
+        source_flags.append("extracted attachment text")
+    source_trace = _build_source_trace(source_flags)
+    if source_trace:
+        reply = f"{reply}\n\n-# {source_trace}"
     history.append({"role": "assistant", "content": reply})
+    contextual_actions = _extract_contextual_actions(reply)
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
+    if contextual_actions:
+        label = "Recommended action" if len(contextual_actions) == 1 else "Recommended actions"
+        try:
+            await send_with_actions(message.channel, f"-# {label}", contextual_actions)
+        except Exception as e:
+            print(f"Contextual action send failed: {e}")
 
     # Super-ego: think aloud after sustained conversation
     asyncio.ensure_future(maybe_reflect(message.channel, history))
@@ -505,6 +680,8 @@ async def handle_dialogue(message):
 
 # ─── Event Handlers ──────────────────────────────────────────────
 
+_intake_runner = None
+
 @client.event
 async def on_interaction(interaction: discord.Interaction):
     """Route eddy:spawn button clicks to the handler."""
@@ -517,6 +694,7 @@ async def on_interaction(interaction: discord.Interaction):
 
 @client.event
 async def on_ready():
+    global _intake_runner
     client.add_view(ControlPanelView())
     client.add_view(ThreadConfigView())
     print(f"Turtle online: {client.user}")
@@ -527,6 +705,14 @@ async def on_ready():
     print(f"Commands: {', '.join(DIRECT_COMMANDS.keys())}")
     prompt = get_system_prompt()
     print(f"System prompt: {len(prompt)} chars")
+
+    # Start intake before slow Discord thread rejoin so paste stays available during startup.
+    if _intake_runner is None:
+        try:
+            vortex_id = 1494273454738903162
+            _intake_runner = await start_intake_server(discord_client=client, vortex_thread_id=vortex_id)
+        except Exception as e:
+            print(f"Intake server failed to start: {e}")
 
     dialogue = get_channel("dialogue")
     thread_count = 0
@@ -735,6 +921,8 @@ async def on_ready():
         traceback.print_exc()
 
     
+    # Intake server starts earlier in on_ready and is guarded by _intake_runner.
+
     print("on_ready complete")
 
 
@@ -805,7 +993,7 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if message.type not in (discord.MessageType.default, discord.MessageType.reply):
+    if message.type not in (discord.MessageType.default, discord.MessageType.reply) and not getattr(message, "message_snapshots", None):
         return
 
     set_practice_context(message)
@@ -862,9 +1050,10 @@ async def on_message(message):
 
         if offer_eddy:
             try:
-                view = make_eddy_spawn_view(message)
+                topic = await generate_topic(_visible_message_content(message)[0])
+                view = make_eddy_spawn_view(message, topic=topic)
                 await message.channel.send(
-                    "-# 🧵 This looks like it could be its own thread.",
+                    f'-# **Open eddy: "{topic}"** `local` · `semi`',
                     view=view,
                     silent=True,
                 )

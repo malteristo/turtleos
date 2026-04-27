@@ -69,7 +69,7 @@ async def run():
         print("  family:       1491163697278881836  (text channel — river model)")
         print("  heartbeat:    1479428858133479466")
         print("  efferent:     1479428862776442942")
-        print("  afferent:     1479428866975207424")
+        print("  river (alerts): 1479428854513664030")
         print("  precognition: 1479428870401691731")
         print("  care:         1479428874382213121")
         print("  distress:     1479428878199033987")
