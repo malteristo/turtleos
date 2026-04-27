@@ -42,6 +42,14 @@ def classify_tool_text(tool: str, text: str) -> dict:
     lower = raw.lower()
     summary = raw.strip() or "(empty tool result)"
 
+    if tool == "list_turtle_capabilities":
+        if summary.startswith("- `") or summary.startswith("No Turtle skills"):
+            return make_tool_result(tool=tool, ok=True, kind=SUCCESS, summary=summary, retryable=False)
+
+    if tool == "read_turtle_capability":
+        if summary.startswith("[skill:") or summary.startswith("[procedure:"):
+            return make_tool_result(tool=tool, ok=True, kind=SUCCESS, summary=summary, retryable=False)
+
     if "shell command blocked" in lower or "not allowed" in lower or "cannot read" in lower or "cannot write" in lower or "cannot patch" in lower or "cannot append" in lower or "cannot edit" in lower:
         return make_tool_result(tool=tool, ok=False, kind=BLOCKED, summary=summary, retryable=False)
 

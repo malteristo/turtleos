@@ -16,6 +16,7 @@ from state import (
     threads_flagged_for_release, client,
     THREAD_CONTEXTS,
 )
+from capabilities import build_capability_summary
 from thread_registry import build_live_thread_summary
 
 
@@ -115,6 +116,8 @@ def build_system_prompt():
         if len(_briefing_raw) > 3000:
             briefing += "\n\n[... truncated ...]"
 
+    capability_summary = build_capability_summary()
+
     return f"""## Identity
 
 {identity}
@@ -142,6 +145,8 @@ def build_system_prompt():
 
 ### Last Forge/Anvil Session (Cross-Substrate)
 {briefing.strip() if briefing.strip() else "(no briefing synced)"}
+
+{capability_summary}
 """
 
 
@@ -208,6 +213,7 @@ def build_discord_prompt():
     staleness = f"boom:{_file_age('boom.md')} bright:{_file_age(os.path.join('boom', 'bright.md'))} compass:{_file_age(os.path.join('intentions', 'compass.md'))}"
 
     thread_summary = build_thread_summary()
+    capability_summary = build_capability_summary()
 
     env_block = ""  # Runtime env injected by _build_runtime_env in handle_dialogue
 
@@ -382,6 +388,8 @@ When the Mage speaks in the main channel, you are the orchestrator. Your respons
 {thread_summary}
 
 **Thread recommendation reflex:** before recommending `!thread`, compare the Mage's topic against the live thread list above. If a related active or quiet thread exists, offer to continue or absorb that thread instead of creating a duplicate.
+
+{capability_summary}
 
 ## Seneschal Awareness
 

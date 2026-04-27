@@ -11,6 +11,7 @@ from practice_io import (
 )
 from state import OLLAMA_URL, EDIT_DELEGATE_MODEL, EMBED_COLORS
 from llm import chat_ollama
+from capabilities import format_capability_index, read_capability
 from shell_harness import format_shell_result, run_shell_command
 from tool_result import (
     TRANSIENT,
@@ -224,6 +225,49 @@ TOS_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_turtle_capabilities",
+            "description": (
+                "List Turtle's local skills and procedures. Use this when deciding how to approach "
+                "self-development, diagnostics, tool shakedowns, or recurring operating tasks."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "description": "Optional filter: 'skill' or 'procedure'. Leave blank for all.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_turtle_capability",
+            "description": (
+                "Read the full text of one Turtle skill or procedure before following it. "
+                "Names are slugs from list_turtle_capabilities, e.g. kind='procedure', name='tool-shakedown'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "description": "Capability kind: 'skill' or 'procedure'.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Capability slug, with or without .md.",
+                    },
+                },
+                "required": ["kind", "name"],
+            },
+        },
+    },
 ]
 
 
@@ -304,6 +348,15 @@ def _execute_tos_tool_raw(name, arguments):
         result = run_shell_command(command, cwd=cwd or None, reason=reason, requester="turtle-llm")
         return format_shell_result(result)
 
+    if name == "list_turtle_capabilities":
+        kind = (arguments.get("kind") or "").strip() or None
+        return format_capability_index(kind)
+
+    if name == "read_turtle_capability":
+        kind = (arguments.get("kind") or "").strip()
+        capability_name = (arguments.get("name") or "").strip()
+        return read_capability(kind, capability_name)
+
     if name == "patch_practice_file":
         filename = arguments.get("filename", "")
         old_text = arguments.get("old_text", "")
@@ -369,7 +422,14 @@ def _execute_tos_tool_raw(name, arguments):
 
 
 def _max_tool_attempts(name: str) -> int:
-    if name in ("read_practice_file", "search_practice_files", "list_practice_files", "run_turtleos_shell"):
+    if name in (
+        "read_practice_file",
+        "search_practice_files",
+        "list_practice_files",
+        "run_turtleos_shell",
+        "list_turtle_capabilities",
+        "read_turtle_capability",
+    ):
         return 2
     return 1
 
@@ -473,7 +533,13 @@ def build_tool_report(tools_executed):
     for t in tools_executed:
         name = t["name"]
         args = t["args"]
-        if name in ("read_practice_file", "search_practice_files", "list_practice_files"):
+        if name in (
+            "read_practice_file",
+            "search_practice_files",
+            "list_practice_files",
+            "list_turtle_capabilities",
+            "read_turtle_capability",
+        ):
             continue
         if name == "run_turtleos_shell":
             command = args.get("command", "")

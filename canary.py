@@ -28,6 +28,7 @@ SOURCE_MODULES = [
     "sessions.py",
     "eddy_spawn.py",
     "intake_server.py",
+    "capabilities.py",
     "shell_harness.py",
     "tos_tools.py",
     "tool_result.py",
@@ -196,6 +197,7 @@ def check_tool_smoke():
                 "command": "rg -n execute_tos_tool tos_tools.py",
                 "reason": "canary safe search smoke",
             })),
+            ("capability_index", tools.execute_tos_tool("list_turtle_capabilities", {})),
         ]
     except Exception as e:
         return "red", f"tool smoke raised: {type(e).__name__}: {e}"
