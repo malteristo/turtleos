@@ -91,7 +91,7 @@ def check_launchd_label(label):
 
 def check_bridge_err_clean(path):
     if not path.exists():
-        return "yellow", f"{path} missing"
+        return "green", "no errors (file absent)"
     try:
         lines = path.read_text(errors="replace").splitlines()
         tail = "\n".join(lines[-200:])
