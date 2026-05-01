@@ -95,6 +95,18 @@ def _is_operational_topic(topic: str) -> bool:
     return any(pattern in lower for pattern in OPERATIONAL_TOPIC_PATTERNS)
 
 
+def _is_explicit_test_thread(topic: str) -> bool:
+    """Detect model/substrate test threads where auto-openings can prime behavior."""
+    lower = topic.lower().strip()
+    tokens = re.split(r'[\s_-]+', lower)
+    return (
+        lower.startswith('model-test')
+        or lower.endswith('-test')
+        or 'model-test' in lower
+        or ('test' in tokens and any(t in tokens for t in ('model', 'qwen', 'sonnet', 'claude')))
+    )
+
+
 def _practice_state_excerpt(topic: str, limit: int = 1800) -> str:
     """Pull small practice-state slices so openings can orient without becoming briefings."""
     pd = get_pd()
@@ -189,6 +201,10 @@ async def compose_thread_opening(topic: str, origin: str, source_text: str = "")
 
 async def post_thread_opening(thread, topic: str, origin: str, source_text: str = ""):
     """Post the orientation message for a newly-created thread."""
+    if _is_explicit_test_thread(topic):
+        print(f'Thread opening suppressed for test thread: {topic}')
+        return ""
+
     opening = await compose_thread_opening(topic, origin, source_text)
     for chunk in split_message(opening):
         await thread.send(chunk)
