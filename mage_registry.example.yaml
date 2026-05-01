@@ -1,0 +1,28 @@
+# Example registry for turtleOS multi-practitioner routing.
+# Copy to mage_registry.yaml and replace placeholders with your Discord IDs,
+# channel IDs, and local practice paths. Keep the real file untracked.
+
+mages:
+  default:
+    discord_id: "YOUR_DISCORD_USER_ID"
+    address: "Your Name"
+    practice_dir: ~/workshops/default
+    runtime_dir: ~/workshops/default
+    type: mage
+    primary: true
+
+spaces:
+  shared:
+    practice_dir: ~/workshops/shared
+    runtime_dir: ~/workshops/shared
+    members:
+      - default
+
+channels:
+  "YOUR_DIALOGUE_CHANNEL_ID":
+    mage: default
+    type: river
+    default_context: null
+    description: Private practice surface
+
+default_mage: default

@@ -1,5 +1,6 @@
 # Environment & secrets
 .env
+mage_registry.yaml
 consul/.env
 scout/.env
 

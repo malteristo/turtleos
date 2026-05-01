@@ -3,3 +3,6 @@ pyyaml
 discord.py
 httpx
 requests
+aiohttp
+tweepy
+trafilatura

@@ -47,12 +47,12 @@ Discord message
 
 Cloud API (Anthropic Claude) handles deep conversation. The explicit design: cloud dependency shrinks as local models improve.
 
-**24 Python modules, ~9,200 lines.** See [ARCHITECTURE.md](ARCHITECTURE.md) for the full module map, data flow, and design decisions.
+**34 Python files, approximately 14,000 lines of Python code.** See [ARCHITECTURE.md](ARCHITECTURE.md) for the full module map, data flow, and design decisions.
 
 ## Quick Start
 
 ### Requirements
-- Python 3.9+
+- Python 3.11+ recommended; currently tested on the deployed Python 3.14 runtime
 - [Ollama](https://ollama.ai) (for local models)
 - A Discord bot token ([guide](https://discord.com/developers/applications))
 - An Anthropic API key (for conversation model)
@@ -64,7 +64,8 @@ git clone https://github.com/malteristo/turtleos.git
 cd turtleos
 
 cp .env.template .env
-# Edit .env with your API keys and Discord token
+cp mage_registry.example.yaml mage_registry.yaml
+# Edit .env and mage_registry.yaml with your API keys, Discord token, channel IDs, and practice paths
 
 python3 -m venv venv
 source venv/bin/activate
@@ -107,7 +108,7 @@ turtleOS supports multiple practitioners on one node. Each practitioner gets:
 - Their own practice directory (`~/workshops/<name>/`)
 - Their own practice context (compass, boom, sessions, etc.)
 
-Practitioners are registered in `mage_registry.yaml`. The system routes messages to the correct practice directory automatically.
+Practitioners are registered in `mage_registry.yaml`, created locally from `mage_registry.example.yaml`. The real registry contains Discord IDs, channel IDs, and local paths, so it stays untracked. The system routes messages to the correct practice directory automatically.
 
 ## Project Structure
 
@@ -115,7 +116,7 @@ Practitioners are registered in `mage_registry.yaml`. The system routes messages
 turtleos/
 ├── TURTLE_SPEC.md      # Canonical specification (22 sections)
 ├── ARCHITECTURE.md     # Implementation guide — module map, data flow, design decisions
-├── soul.md             # AI identity / system prompt
+├── identity/soul.md    # AI identity / system prompt
 ├── discord_bot.py      # Entry point
 ├── triage.py           # Message classification (local 0.8B model)
 ├── proprioceptor.py    # Practice state scanning (local 9B model)

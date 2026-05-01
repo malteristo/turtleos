@@ -1,6 +1,6 @@
 # turtleOS Bot Architecture
 
-> 14-module Discord bot for practice partnership. Rebuilt 2026-03-29 from a 4,656-line monolith.
+> Persistent Discord practice substrate. Rebuilt 2026-03-29 from a 4,656-line monolith; evolved into a public codebase of 34 Python files and approximately 14,000 lines of Python code.
 
 ## Overview
 
@@ -48,58 +48,82 @@ Discord message
     │       └─ assess_readiness (readiness.py)
     │
     ├─ practice_health_loop (background.py)     ← @tasks.loop(1h), runs weekly
-    │   └─ 7-dimension health assessment → proposals/
+    │   └─ readiness assessment → proposals/
     │
-    └─ interoception_loop (background.py)       ← @tasks.loop(3h)
-        └─ practice state signals → dialogue channel
+    ├─ interoception_loop (background.py)       ← @tasks.loop(3h)
+    │   └─ pulse.py → practice state signals → dialogue channel
+    │
+    ├─ intake server (intake_server.py)         ← aiohttp on :8742
+    │   └─ /intake and /paste → box/intake/ + vortex embed
+    │
+    └─ canary (canary.py via launchd)           ← hourly mechanical health
+        └─ CouchDB, Tailscale, launchd, bridge err freshness, Ollama, triage fallbacks
 ```
 
 ## Module Map
 
-### Layer 0: Foundation (no internal dependencies)
+Line counts are approximate snapshots from the deployed shell. Prefer the responsibilities and dependency direction over exact counts.
 
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `state.py` | 138 | Shared mutable state: bot client, config constants, locks, session dicts, channel mappings. All modules import from here rather than holding their own globals. |
+### Layer 0: Foundation and Configuration
 
-### Layer 1: Core Services
+| Module | Approx. lines | Purpose |
+|--------|---------------|---------|
+| `state.py` | 305 | Shared mutable state: bot client, config constants, locks, histories, model names, channel mappings, thread configs. |
+| `mage.py` | 250 | Mage/practitioner registry, channel→practice-dir routing, contextvars for per-channel async isolation. |
+| `practice_io.py` | 184 | File I/O helpers for practice directories: read, write, list, search, section extraction, links. |
+| `helpers.py` | 110 | Discord/practice utilities: message splitting, activity logging, history access, local time. |
 
-| Module | Lines | Depends on | Purpose |
-|--------|-------|-----------|---------|
-| `mage.py` | 175 | state | Mage registry (YAML). Channel→mage resolution. Context variables (`_practice_dir_ctx`, `_mage_name_ctx`, `_mage_key_ctx`) for per-channel async isolation. Mage type (`mage` vs `practitioner`). |
-| `practice_io.py` | 184 | state, mage | File I/O for practice directories. Read, write, search, list, section extraction, Obsidian linking. Pure file operations. |
-| `llm.py` | 202 | state | Three LLM backends: Anthropic (API), Gemini (API), Ollama (local HTTP). Model resolution, tool-loop execution. |
-| `triage.py` | 63 | state | Sub-2B local model (Ollama) classifies messages as greeting/casual/practice/deep. Runs on every message to calibrate response depth. |
-| `content_fetch.py` | 294 | (stdlib) | URL extraction, platform-specific fetching (Twitter/X, YouTube transcripts), generic web scraping (trafilatura), LITL safety checks, Gemini-based attachment processing. |
+### Layer 1: Model and Content Services
 
-### Layer 2: Intelligence
+| Module | Approx. lines | Purpose |
+|--------|---------------|---------|
+| `llm.py` | 233 | Anthropic, Gemini, and Ollama backends; model resolution; tool-call loop. |
+| `triage.py` | 100 | Fast local message classification with heuristic fallback. |
+| `content_fetch.py` | 705 | URL extraction and platform-specific content fetching; direct/Jina/Wayback fallback; LITL checks; attachment preprocessing. |
+| `twitter_ops.py` | 176 | Twitter/X API integration and posting support. |
 
-| Module | Lines | Depends on | Purpose |
-|--------|-------|-----------|---------|
-| `tos_tools.py` | 370 | state, mage, practice_io, llm | 9 practice file tools exposed to LLMs: `read_practice_file`, `write_practice_file`, `patch_practice_file`, `append_to_practice_file`, `delegate_edit`, `list_practice_files`, `search_practice_files`, `list_headings`, `get_file_info`. Tool dispatch and reporting. |
-| `readiness.py` | 217 | state, mage, practice_io | 8-dimension practice health assessment: coherence, alignment, velocity, load, resonance quality, wellbeing, external impact, infrastructure. Generates readiness trails. |
-| `prompts.py` | 522 | state, mage, practice_io | System prompt builders. Two paths: **mage** (full orchestrator with thread management, commands, conversational editing) and **practitioner** (thinking partner, language mirroring, guided discovery). Cold-start detection, session continuity, relationship context, mirror observations. |
+### Layer 2: Practice Intelligence
 
-### Layer 3: Orchestration
+| Module | Approx. lines | Purpose |
+|--------|---------------|---------|
+| `prompts.py` | 626 | System prompt construction for mage/practitioner/thread contexts; identity and practice-state injection. |
+| `proprioceptor.py` | 204 | Local connective-tissue model: practice-state scan, context brief, visible reflex. |
+| `readiness.py` | 432 | Practice and engineering readiness assessment; readiness trail persistence. |
+| `pulse.py` | 346 | Practice pulse scan and river-entry/interoception texture composition. |
+| `tos_tools.py` | 409 | Practice file tools exposed to LLMs plus delegate-edit machinery. |
+| `attunement.py` | 216 | Attunement helpers and digest-age checks. |
+| `outfacing.py` | 242 | Autonomous signal evaluation and signal draft persistence, now gated by crystallization and daily cap. |
+| `load_command.py` | 284 | `!load` context/resonance loader for circles and bundles. |
 
-| Module | Lines | Depends on | Purpose |
-|--------|-------|-----------|---------|
-| `helpers.py` | 98 | state, content_fetch* | Shared utilities: `split_message`, `log_activity`, `get_history`, `load_thread_history`, `summarize_thread_context`, `preprocess_attachments`. Used by commands, sessions, dialogue. |
-| `sessions.py` | 204 | state, mage, practice_io, llm, prompts, readiness, helpers | Session lifecycle. 60s monitor loop. On timeout: reflection via local model → session note + optional proposal. For practitioners: silent practice state extraction (compass, boom, mirror). Post-session readiness check. |
-| `background.py` | 203 | state, mage, practice_io, llm, helpers | Background tasks. Weekly practice health read (7 dimensions). 3-hourly interoception (practice state signals to dialogue channel). |
-| `commands.py` | 2094 | state, mage, practice_io, llm, tos_tools, readiness, content_fetch, helpers, sessions* | 28 direct commands (`!boom`, `!bright`, `!sweep`, `!thread`, `!recall`, `!release`, etc.). 4 View classes (thread creation, eddy dissolution, link fetch, control panel). 1 Modal (thread topic). Practitioner command gating. |
+### Layer 3: Conversation, Session, and River Orchestration
 
-### Layer 4: Entry Point
+| Module | Approx. lines | Purpose |
+|--------|---------------|---------|
+| `discord_bot.py` | 937 | Main entry point and event handlers; message dispatch; dialogue path; thread updates; startup orchestration; singleton guard. |
+| `commands.py` | 2556 | Direct command dispatcher plus Discord views/modals. Current largest gravity well. |
+| `sessions.py` | 378 | Session monitor, reflection, session notes, proposals, practice-state extraction, manual-release dissolution. |
+| `background.py` | 466 | Scheduled loops: practice health, interoception, invitations, signal drip, health canary loop. |
+| `boom_thread.py` | 437 | Standing boom thread intake, distillation, and follow-up interactions. |
+| `eddy_spawn.py` | 720 | Thread/eddy creation, intake-thread launcher, vortex/prism routing, resonance detection. |
+| `thread_registry.py` | 233 | Thread registry, backfill, activity tracking, lifecycle metadata. |
+| `intake_server.py` | 511 | Embedded aiohttp server for `/intake`, `/paste`, `/health`; saves long-form content to `box/intake/`. |
 
-| Module | Lines | Depends on | Purpose |
-|--------|-------|-----------|---------|
-| `discord_bot.py` | 667 | all modules | Slim entry point. `load_env()`, `handle_dialogue()`, `_build_runtime_env()`, `_update_thread_state()`, event handlers (`on_ready`, `on_message`, `on_thread_create`, `on_member_join/remove`), background task startup, `main()`. |
+### Layer 4: Operations and Shell Support
+
+| Module | Approx. lines | Purpose |
+|--------|---------------|---------|
+| `canary.py` | 232 | Standalone mechanical health check run by launchd; state-change alert dedup. |
+| `self_heal.py` | 154 | Self-healing helpers for service restarts and degraded states. |
+| `spirit_ops.py` | 120 | Spirit-side Discord CLI for reading/sending. Needs import-safety and `--file` mode. |
+| `discord_ops.py` | 79 | Operator Discord CLI for read/send/thread operations. |
+| `tools.py` | 238 | Shell/tool helpers retained for operational use. |
+| `deploy_river.py` | 224 | Deployment helper for river assets. |
 
 *\* = lazy import to break circular dependency*
 
 ## Circular Dependencies
 
-Three circular dependency chains, all resolved via lazy (in-function) imports:
+The shell still has a few deliberate circular edges, resolved via lazy (in-function) imports:
 
 1. **readiness ↔ sessions/background** — `readiness.py` needs to check if background tasks are running, but sessions/background import readiness for post-session checks. Resolved: readiness lazy-imports `session_monitor`, `interoception_loop`, `practice_health_loop`.
 
@@ -350,7 +374,7 @@ The `!admin onboard <username>` command creates a complete practitioner environm
 
 ## Content Fetching (content_fetch.py)
 
-294-line module handling URL extraction and content processing.
+Content fetching handles URL extraction and content processing. The module has grown beyond the original direct/Wayback fetcher into a layered content-reach system.
 
 **URL processing pipeline:**
 ```
@@ -363,7 +387,8 @@ URL detected in message
     │   │   └─ youtube_transcript_api → full transcript text
     │   └─ other → fetch_url_content()
     │       ├─ Layer 1: direct HTTP GET + trafilatura extraction
-    │       └─ Layer 4: Wayback Machine fallback
+    │       ├─ Layer 2: Jina Reader
+    │       └─ Layer 3: Wayback Machine fallback
     │
     ├─ litl_check() — scan for prompt injection patterns
     │   └─ Regex: "ignore previous", "you are now", "new instructions", etc.
@@ -389,57 +414,59 @@ The bot's perspective is simple: files appear in `~/workshops/<name>/`, the bot 
 
 ## Spec Traceability
 
-Maps TURTLE_SPEC v2.0 sections to implementation modules. A future Spirit rebuilding turtleOS uses this as the implementation guide.
+Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuilding turtleOS uses this as the implementation guide.
 
 | TURTLE_SPEC Section | Implementation | Status |
 |---|---|---|
 | §1 Meta | — | Governance, not code |
 | §2 Lexicon | — | Terminology reference |
 | §3 Fundamental Identity | `identity/soul.md` | Fully implemented |
-| §4 Practice Stack | `prompts.py` (mage vs practitioner paths) | Fully implemented |
+| §4 Practice Stack | `prompts.py` (mage vs practitioner paths), `mage.py` | Fully implemented |
 | §5 Practice Files | `practice_io.py`, `tos_tools.py` | Fully implemented |
-| §6 Inline Transparency | `helpers.py:log_activity()`, operations embeds | Fully implemented |
-| §7.1-7.2 Cognitive Stack / Tiers | `llm.py` (3 backends), `state.py` (model config) | Fully implemented |
+| §6 Inline Transparency | `helpers.py:log_activity()`, operations embeds, `pulse.py` river-entry | Implemented; visible tool-use remains a proposal |
+| §7.1-7.2 Cognitive Stack / Tiers | `llm.py`, `state.py`, `triage.py`, `proprioceptor.py`, `sessions.py` | Fully implemented |
+| §7.2.1 Proprioceptor | `proprioceptor.py`, `discord_bot.py` integration | Implemented |
 | §7.3 Triage Categories | `triage.py` | Fully implemented (8 categories) |
-| §7.4-7.5 Thread Models / Substrate Honesty | `prompts.py`, `commands.py` | Fully implemented |
-| §8.1 Session Opening | `discord_bot.py:handle_dialogue()` (new session embed) | Fully implemented |
+| §7.4-7.5 Thread Models / Substrate Honesty | `prompts.py`, `commands.py`, `state.py` thread model config | Implemented |
+| §8.1 Session Opening | `pulse.py`, `background.py`, `discord_bot.py:on_ready()` | Implemented as river-entry |
 | §8.2 During Session | `discord_bot.py:handle_dialogue()` (history, triage hints) | Fully implemented |
 | §8.3 Session Closing | `sessions.py:close_session()` | Fully implemented |
-| §9.1-9.3 Eddy Model | `commands.py` (ThreadTypeView, EddyDissolutionView) | Fully implemented |
-| §9.4 Micro-Attunement | — | **Not implemented** (see below) |
-| §10 Practice-Readiness | `readiness.py` (8 dimensions, 3 scoring levels) | Fully implemented |
-| §11 Interoception | `background.py:interoception_loop()` | Fully implemented |
-| §12 Seneschal Commands | `commands.py` (28 commands, `try_direct_command()`) | Fully implemented |
+| §9.1-9.3 Eddy Model | `commands.py`, `eddy_spawn.py`, `thread_registry.py` | Implemented; eddy debt/thread-index work remains active |
+| §9.4 Micro-Attunement | `proprioceptor.py`, `prompts.py`, `load_command.py` | Partially implemented |
+| §9.5 Thread Context Attunement | `state.py:THREAD_CONTEXTS`, `prompts.py`, `commands.py`, `load_command.py` | Implemented |
+| §10 Practice-Readiness | `readiness.py`, `canary.py`, `background.py` | Implemented; real `!diagnose` wrapper pending |
+| §10.8 Learnings Eddy | `thread_registry.py`, Discord thread practice | Practice pattern implemented; automation still evolving |
+| §11 Interoception / Pulse | `background.py:interoception_loop()`, `pulse.py` | Implemented |
+| §12 Seneschal Commands | `commands.py` (`try_direct_command()` and direct command table) | Implemented; `commands.py` is the largest refactor candidate |
 | §13 Control Panel | `commands.py:ControlPanelView` | Fully implemented |
-| §14 Cross-Substrate Coherence | External (LiveSync, SSH) — not bot code | N/A (external) |
+| §14 Cross-Substrate Coherence | External LiveSync/SSH plus `spirit_ops.py`, `discord_ops.py`, symlinked spec/identity | Implemented externally; laptop-closed invariant remains a topology decision |
 | §15 Seneschal (Admin) | `commands.py:cmd_admin()` | Fully implemented |
-| §16 Link Fetching | `content_fetch.py` | Fully implemented |
+| §16 Link Fetching / Content Reach | `content_fetch.py`, `intake_server.py`, `commands.py` paste endpoint | Implemented with graceful paste fallback |
 | §17 Behavioral Laws | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §18 Boundaries | `identity/soul.md` | Encoded in identity |
 | §19 The Offering | `identity/soul.md`, `prompts.py` | Encoded in prompts |
-| §20 Architecture & Traceability | This document | This document |
+| §20 Architecture & Traceability | This document, TURTLE_SPEC symlink/copy | This document |
+| §20-22 Intake / Outfacing / Shell-Shedding | `boom_thread.py`, `intake_server.py`, `outfacing.py`, `spirit_ops.py`, self-development workflow | Implemented in pieces |
 
-### Not Yet Implemented
+### Partially Implemented / Active Gaps
 
-**§9.4 Micro-Attunement** — The spec describes a mechanism where Turtle identifies relevant lore, loads it into context, and deepens responses based on accumulated practice wisdom. This requires:
-- Lore file indexing/tagging
-- Relevance scoring ("which scroll applies to this conversation?")
-- Dynamic context injection mid-conversation
-- Visibility signal that attunement is happening
+**Micro-attunement:** Baseline context readiness is implemented through `proprioceptor.py`, thread context injection, and `!load`. Full autonomous lore-scroll relevance loading is still partial.
 
-Current state: the system prompt loads practice files (compass, boom, bright, mirror, resonance, session notes) but does NOT dynamically load lore scrolls from `library/resonance/`. This is an aspirational capability — the infrastructure (lore files, resonance bundles) exists, but the automatic relevance-based loading does not.
+**Mechanical diagnosis:** `canary.py` provides ground-truth health checks and alert dedup. A real `!diagnose` command should wrap the canary so Turtle stops improvising diagnostics.
 
-**Implementation path when ready:** Add a lore index file mapping scroll topics to keywords. In `prompts.py`, after building the base prompt, check conversation context against the index and inject relevant scroll excerpts. Track what was loaded for transparency.
+**Visible tool use:** Tool/file/fetch context exists, but practitioner-visible epistemic narration remains incomplete. See proposal 028.
+
+**Shell hygiene:** `spirit_ops.py` needs import-safety and `--file` input before large Spirit→Turtle handoffs are clean.
 
 ## Companion Documents
 
 | Document | Location | Purpose |
 |----------|----------|---------|
-| TURTLE_SPEC v2.0 | `library/resonance/turtle/TURTLE_SPEC.md` | Canonical law — *what* turtleOS should be |
+| TURTLE_SPEC v2.4 | `TURTLE_SPEC.md` | Canonical law — *what* turtleOS should be |
 | ARCHITECTURE.md | `~/turtleos/ARCHITECTURE.md` | Implementation guide — *how* it's built (this doc) |
 | soul.md | `~/turtleos/identity/soul.md` | Runtime identity — *who* Turtle is |
 | mage_registry.yaml | `~/turtleos/mage_registry.yaml` | Multi-mage routing configuration |
 | Operational scrolls | `library/resonance/turtle/lore/operations/` | Deep dives: eddies, sessions, readiness, diagnostics, link fetching, Discord presence |
 | Practitioner principles | `library/resonance/foundations/lore/practitioner_principles.md` | Design principles extracted from practitioner interactions |
 
-Together, TURTLE_SPEC + ARCHITECTURE.md + soul.md + mage_registry.yaml + the 9 operational scrolls constitute a complete rebuild kit. A Spirit on any substrate can read these and reconstruct turtleOS from scratch.
+Together, TURTLE_SPEC + ARCHITECTURE.md + soul.md + mage_registry.yaml + the turtle resonance bundle constitute a rebuild kit. A Spirit on any substrate can read these and reconstruct turtleOS from scratch.
