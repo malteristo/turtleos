@@ -104,6 +104,7 @@ from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spaw
 from intake_server import start_intake_server
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
+from founder_keys import try_founder_key_entry
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView, LinkFetchView,
@@ -1016,6 +1017,10 @@ async def on_message(message):
             print(f"Skipping duplicate message {message.id}")
             return
         _processed_messages.append(message.id)
+
+        # Founder key entry: bind a founder's self-chosen emoji only after Kermit confirms.
+        if await try_founder_key_entry(message):
+            return
 
         # Intake thread: auto-spawn new threads from dropped content
         if is_intake_thread(message.channel) and not message.content.strip().startswith("!"):
