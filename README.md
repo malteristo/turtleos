@@ -4,8 +4,20 @@
 
 turtleOS turns any computer into a personal cognitive infrastructure node — a persistent AI practice partner that lives on hardware you own. Not a chatbot. Not a task assistant. A thinking partner that knows you and gets better at knowing you over time.
 
+turtleOS is a **markdown practice core plus a reference shell**. The practice core is portable meaning: prompts, files, folders, and habits. The reference shell is the Python runtime that makes the practice ambient, conversational, and self-maintaining on owned hardware.
+
 > **Don't want to install anything?** You can start practicing right now with any AI you already use.
 > **[Read the Portable Practice Guide →](PRACTICE.md)**
+
+## How to Read This Repo
+
+turtleOS has three layers:
+
+1. **Practice core** — markdown files and prompts that define the practice.
+2. **Reference shell** — Python services that make the practice persistent on owned hardware.
+3. **Your instance** — local configuration, model choices, Discord channels, and private practice state.
+
+The core is the product's soul. The shell is the current open-source body. Your instance is yours. Setup starts by creating a practice root, then installing the shell that serves it.
 
 ## What It Does
 
@@ -63,21 +75,26 @@ Cloud API (Anthropic Claude) handles deep conversation. The explicit design: clo
 git clone https://github.com/malteristo/turtleos.git
 cd turtleos
 
+# 1. Create your practice root: the files that belong to you
+mkdir -p ~/workshops/$(whoami)
+cp -r template/* ~/workshops/$(whoami)/
+
+# 2. Configure the reference shell that will serve that practice
 cp .env.template .env
 cp mage_registry.example.yaml mage_registry.yaml
-# Edit .env and mage_registry.yaml with your API keys, Discord token, channel IDs, and practice paths
+# Edit .env and mage_registry.yaml with your API keys, Discord token, channel IDs, and practice path
 
+# 3. Install runtime dependencies
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
+# 4. Install local model components
 ollama pull qwen3.5:0.8b
 ollama pull qwen3.5:9b
 ollama pull qwen3.5:27b
 
-mkdir -p ~/workshops/$(whoami)
-cp -r template/* ~/workshops/$(whoami)/
-
+# 5. Start the shell
 python discord_bot.py
 ```
 
@@ -86,7 +103,10 @@ python discord_bot.py
 Once the bot is running and connected to your Discord server:
 1. Send a message in the configured dialogue channel
 2. The first session builds your **compass** — a map of what matters in your life
-3. Everything else grows from there
+3. Confirm a session note can be written and your practice files can be read back
+4. Everything else grows from there
+
+The first success metric is not "bot online." It is first meaningful practice interaction plus continuity: your practice root was read, the conversation was situated, and the next session has something real to inherit.
 
 ## Practice Template
 
