@@ -521,6 +521,13 @@ async def cmd_thread(message, args):
     config_line = _build_config_line(thread.id)
     view = ThreadConfigView(current_type=eddy_type)
     await thread.send(config_line, view=view)
+    try:
+        await message.channel.send(
+            f"🌀 Thread created: **{topic}** — {thread.mention}",
+            silent=True,
+        )
+    except Exception as e:
+        print(f"Thread parent link failed: {e}")
     print(f"Thread created: {topic} (id: {thread.id}, model: {model_id}, attunement: {attunement}, eddy: {eddy_type})")
 
 
@@ -2239,12 +2246,18 @@ async def try_direct_command(message):
 class _InteractionAsMessage:
     def __init__(self, interaction: discord.Interaction):
         self._interaction = interaction
+        self._message = interaction.message
         self.channel = interaction.channel
         self.author = interaction.user
         self.content = ""
-        self.id = interaction.id
+        self.id = interaction.message.id if interaction.message else interaction.id
         self.guild = interaction.guild
         self._followup_sent = False
+
+    async def create_thread(self, *args, **kwargs):
+        if not self._message:
+            raise RuntimeError("Contextual action has no source message to create a thread from")
+        return await self._message.create_thread(*args, **kwargs)
 
     async def reply(self, content=None, *, embed=None, mention_author=False, **kwargs):
         send_kwargs = {}
