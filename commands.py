@@ -5,6 +5,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,6 +69,7 @@ from helpers import local_now, get_history, log_activity, split_message
 from attunement import perform_attunement, get_digest_age_hours
 from load_command import cmd_load
 from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, make_eddy_spawn_view, post_thread_opening
+from runtime.adapters.discord import submit_discord_practice_handoff
 
 INTAKE_PUBLIC_URL = os.environ.get("INTAKE_PUBLIC_URL", "http://100.110.46.104:8742/paste")
 
@@ -125,6 +127,50 @@ async def cmd_status(message):
     embed.add_field(name="Practice", value="\n".join(practice), inline=False)
     embed.set_footer(text="turtleOS shell")
     await message.reply(embed=embed, mention_author=False)
+
+
+async def cmd_propose(message, args):
+    """Capture a proposal through the native runtime: !propose "Title" body."""
+    raw = " ".join(args).strip()
+    if not raw:
+        await message.reply('Usage: `!propose "Title" proposal body...`', mention_author=False)
+        return
+
+    try:
+        parts = shlex.split(raw)
+    except ValueError as exc:
+        await message.reply(f"Could not parse proposal: {exc}", mention_author=False)
+        return
+
+    if len(parts) < 2:
+        await message.reply('Usage: `!propose "Title" proposal body...`', mention_author=False)
+        return
+
+    title = parts[0].strip()
+    body = " ".join(parts[1:]).strip()
+    if not title or not body:
+        await message.reply('Usage: `!propose "Title" proposal body...`', mention_author=False)
+        return
+
+    task = submit_discord_practice_handoff(
+        message=message,
+        principal=get_mage_key(),
+        artifact="proposal",
+        title=title,
+        body=body,
+    )
+    artifact_path = task.artifact_refs[0].get("artifact_path") if task.artifact_refs else None
+    rel_path = artifact_path
+    if artifact_path:
+        try:
+            rel_path = str(Path(artifact_path).relative_to(Path(get_pd()).resolve()))
+        except ValueError:
+            rel_path = artifact_path
+    await message.reply(
+        f"Proposal captured through native runtime. Task `{task.task_id}`" + (f" -> `{rel_path}`" if rel_path else "."),
+        mention_author=False,
+    )
+    await log_activity(f"Native runtime proposal captured: `{task.task_id}`", "🧾", channel=message.channel)
 
 
 async def cmd_boom(message, args):
@@ -2071,6 +2117,7 @@ async def cmd_attune(message):
 
 DIRECT_COMMANDS = {
     "status": lambda msg, args: cmd_status(msg),
+    "propose": lambda msg, args: cmd_propose(msg, args),
     "boom": lambda msg, args: cmd_boom_convert(msg) if args and args[0].lower() == "convert" else (cmd_boom_thread(msg, args[1:]) if args and args[0].lower() == "thread" else cmd_boom(msg, args)),
     "bright": lambda msg, args: cmd_bright(msg),
     "compass": lambda msg, args: cmd_compass(msg),
@@ -2106,6 +2153,7 @@ DIRECT_COMMANDS = {
 COMMAND_CONTEXT = {
     "status": "I displayed the practice status embed (boom count, bright count, compass, intentions, session age).",
     "diagnose": "I ran a full practice stack diagnostic — checked services, connections, sync, practice flow, and reachability. The results were shown as a color-coded embed.",
+    "propose": "I captured a proposal through the native runtime, creating a durable task, audit trail, and proposal artifact.",
     # "boom" — handled directly in cmd_boom with actual content (016)
     # "bright" — handled directly in cmd_bright with actual content (016)
     "compass": "I showed the compass.",
@@ -2130,7 +2178,7 @@ _PRACTITIONER_COMMANDS = {"status", "help", "recall", "release"}
 CONTEXTUAL_ACTION_TIMEOUT = 3600
 CONTEXTUAL_ACTION_COMMANDS = {
     "status", "diagnose", "sync", "sweep", "recall", "release",
-    "boom", "thread", "new", "threads", "eddy-check", "fetch",
+    "boom", "propose", "thread", "new", "threads", "eddy-check", "fetch",
     "absorb", "absorbed", "forget", "readiness", "signals", "load",
 }
 _CONTEXTUAL_ACTIONS = {}

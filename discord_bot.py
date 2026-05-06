@@ -124,7 +124,7 @@ _boom_fetched_content = {}
 
 _CONTEXTUAL_ACTION_COMMANDS = {
     "status", "diagnose", "sync", "sweep", "recall", "release",
-    "boom", "thread", "new", "threads", "eddy-check", "fetch",
+    "boom", "propose", "thread", "new", "threads", "eddy-check", "fetch",
     "absorb", "absorbed", "forget", "readiness", "signals", "load",
 }
 _CONTEXTUAL_COMMAND_RE = re.compile(r"`(![A-Za-z][\w-]*(?:\s+[^`]+)?)`")
@@ -151,6 +151,7 @@ def _contextual_action_label(command: str) -> str:
         "recall": "Recall",
         "release": "Release session",
         "boom": "Show boom",
+        "propose": "Capture proposal",
         "threads": "Show threads",
         "eddy-check": "Check eddies",
         "fetch": "Fetch link",
