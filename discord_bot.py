@@ -398,11 +398,13 @@ async def handle_dialogue(message):
     channel_id = message.channel.id
     visible_content, forwarded_context = _visible_message_content(message)
 
-    # Run triage and proprioceptor in parallel — tissue prepares while classification runs
+    # Run triage and proprioceptor in parallel — tissue prepares while classification runs.
+    # Threads already receive an injected thread card, so skip proprioception there;
+    # the card is the continuity tissue and avoids extra local-model contention.
     triage_task = asyncio.create_task(triage_message(visible_content))
-    # Proprioceptor runs in parallel — cancelled later if triage says trivial
-
-    proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
+    proprioceptor_task = None
+    if not isinstance(message.channel, discord.Thread):
+        proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
 
     triage = await triage_task
     triage_cat = triage.get("category", "practice")
@@ -536,7 +538,7 @@ async def handle_dialogue(message):
     if proprioceptor_task:
         _t0 = asyncio.get_event_loop().time()
         try:
-            context_brief = await asyncio.wait_for(proprioceptor_task, timeout=5.0)
+            context_brief = await asyncio.wait_for(proprioceptor_task, timeout=8.0)
             proprioceptor_time = asyncio.get_event_loop().time() - _t0
             if context_brief:
                 print(f"Proprioceptor: {len(context_brief)} chars ({proprioceptor_time:.1f}s)")

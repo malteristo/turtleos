@@ -199,3 +199,10 @@ Turtle's local-only dialogue path now treats thread state as a thread card, not 
 This is the first implementation of the Turtle memory principle: persistence is inscription plus return. The card is used quietly; Turtle should not foreground context limits unless they materially affect the conversation.
 
 Local thread dialogue uses the injected thread card directly and skips the conversational tool loop by default. Direct commands and capability-backed actions remain available, but ordinary thread replies should not spend model turns searching for state that the runtime has already placed in the prompt.
+
+
+## Local Proprioception Tuning
+
+After moving daily dialogue to `qwen3.6:35b-a3b`, the proprioceptor became a local-model contention point: thread replies already had thread-card continuity, but the 9B proprioceptor often timed out at the 5s dialogue wait boundary. The local-only path now treats thread cards as the proprioceptive surface for Discord threads and skips the separate proprioceptor there.
+
+For non-thread practice messages, proprioception runs on `qwen3.5:4b` with a smaller context budget and bounded state excerpts. The goal is quick connective tissue, not a second dialogue mind.

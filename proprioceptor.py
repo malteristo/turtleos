@@ -1,6 +1,6 @@
 """turtleOS proprioceptor — connective tissue for context preparation.
 
-A small fast model (qwen3.5:9b) that runs in parallel with triage,
+A small fast model (qwen3.5:4b) that runs in parallel with triage,
 reads the inbound message + practice state, and composes a focused
 context brief for the dialogue model. The dialogue model receives
 exactly the context it needs for THIS message, not everything.
@@ -30,10 +30,10 @@ from practice_io import (
 
 # ─── Configuration ────────────────────────────────────────────────
 
-PROPRIOCEPTOR_MODEL = "qwen3.5:9b"
-PROPRIOCEPTOR_CTX = 2048
+PROPRIOCEPTOR_MODEL = "qwen3.5:4b"
+PROPRIOCEPTOR_CTX = 1536
 PROPRIOCEPTOR_THINK = False  # Speed over depth — this is tissue, not brain
-PROPRIOCEPTOR_TIMEOUT = 30.0  # seconds — httpx read timeout (model needs time for context)
+PROPRIOCEPTOR_TIMEOUT = 8.0  # seconds — this is tissue, not the main dialogue path
 
 
 # ─── The Proprioceptor's Attunement ──────────────────────────────
@@ -126,9 +126,9 @@ async def prepare_context_brief(message_text: str) -> str | None:
     boom_age = format_age(file_age_hours(os.path.join(pd, "boom.md")))
 
     # Truncate aggressively — proprioceptor needs signal, not completeness
-    compass_brief = compass[:800]
-    boom_brief = boom[-1000:]  # Most recent boom items (bottom of file)
-    bright_brief = summarize_bright(bright, limit=600)
+    compass_brief = compass[:500]
+    boom_brief = boom[-600:]  # Most recent boom items (bottom of file)
+    bright_brief = summarize_bright(bright, limit=400)
 
     # Load intention headers (just titles and current focus)
     intentions_text = ""
@@ -136,7 +136,7 @@ async def prepare_context_brief(message_text: str) -> str | None:
     if os.path.isdir(idir):
         for fname in sorted(os.listdir(idir)):
             if fname.endswith(".md"):
-                header = read_header(os.path.join(idir, fname), max_lines=10)
+                header = read_header(os.path.join(idir, fname), max_lines=5)
                 if header.strip():
                     intentions_text += f"\n--- {fname} ---\n{header}"
     if not intentions_text.strip():
@@ -146,11 +146,11 @@ async def prepare_context_brief(message_text: str) -> str | None:
     sessions_text = ""
     sdir = os.path.join(pd, "sessions")
     if os.path.isdir(sdir):
-        recent = sorted([f for f in os.listdir(sdir) if f.endswith(".md")], reverse=True)[:2]
+        recent = sorted([f for f in os.listdir(sdir) if f.endswith(".md")], reverse=True)[:1]
         for fname in reversed(recent):
             content = read_safe(os.path.join(sdir, fname))
             if content.strip():
-                sessions_text += f"\n--- {fname} ---\n{content[:500]}"
+                sessions_text += f"\n--- {fname} ---\n{content[:300]}"
     if not sessions_text.strip():
         sessions_text = "(no recent sessions)"
 
