@@ -9,6 +9,7 @@ from typing import Any
 
 from runtime.audit import AuditLog, AuditRecord
 from runtime.handoff import submit_practice_handoff
+from runtime.model_probe import submit_model_probe
 from runtime.paths import RuntimePaths
 from runtime.readiness import RuntimeReadiness
 from runtime.tasks import TaskStore
@@ -64,6 +65,23 @@ def build_parser() -> argparse.ArgumentParser:
     readiness = subparsers.add_parser("readiness", help="show native runtime readiness sensorium")
     readiness.add_argument("--limit", type=int, default=10, help="number of recent tasks/failures to include")
     readiness.set_defaults(func=cmd_readiness)
+
+    probe = subparsers.add_parser("probe", help="run provider-neutral model probes")
+    probe_subparsers = probe.add_subparsers(dest="probe_command", required=True)
+    probe_run = probe_subparsers.add_parser("run", help="run the same prompt/context through explicit providers")
+    probe_run.add_argument("--title", required=True)
+    probe_run.add_argument("--provider", action="append", required=True, help="provider:model, e.g. ollama:qwen3.5:9b")
+    prompt_group = probe_run.add_mutually_exclusive_group(required=True)
+    prompt_group.add_argument("--prompt")
+    prompt_group.add_argument("--prompt-file", type=Path)
+    context_group = probe_run.add_mutually_exclusive_group()
+    context_group.add_argument("--context", default="")
+    context_group.add_argument("--context-file", type=Path)
+    probe_run.add_argument("--source", default="spirit")
+    probe_run.add_argument("--interface", default="cli")
+    probe_run.add_argument("--scope", default="model-probe")
+    probe_run.add_argument("--trust-level", default="operator")
+    probe_run.set_defaults(func=cmd_probe_run)
     return parser
 
 
@@ -156,6 +174,25 @@ def cmd_readiness(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_probe_run(args: argparse.Namespace) -> int:
+    prompt = read_text_arg(args.prompt, args.prompt_file)
+    context = read_text_arg(args.context, args.context_file)
+    task = submit_model_probe(
+        principal=args.principal,
+        title=args.title,
+        prompt=prompt,
+        context=context,
+        providers=args.provider,
+        source=args.source,
+        interface=args.interface,
+        registry_path=Path(args.registry),
+        scope=args.scope,
+        trust_level=args.trust_level,
+    )
+    print_json({"task_id": task.task_id, "state": task.state, "artifact_refs": task.artifact_refs})
+    return 0 if task.state == "completed" else 1
+
+
 def runtime_paths(args: argparse.Namespace) -> RuntimePaths:
     return RuntimePaths.for_principal(args.principal, registry_path=Path(args.registry))
 
@@ -164,6 +201,12 @@ def read_body(args: argparse.Namespace) -> str:
     if args.body_file:
         return args.body_file.read_text(encoding="utf-8")
     return args.body
+
+
+def read_text_arg(value: str | None, path: Path | None) -> str:
+    if path:
+        return path.read_text(encoding="utf-8")
+    return value or ""
 
 
 def summarize_task_for_cli(task) -> dict[str, Any]:

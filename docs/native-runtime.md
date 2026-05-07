@@ -174,3 +174,19 @@ Failed tasks remain active readiness signals until they are resolved. Deliberate
 ```
 
 Clearing changes matching deliberate test failures from `failed` to `cleared` and appends `task.cleared` to the audit log. Real operational failures should not be cleared this way; fix the cause or add a specific resolution path.
+
+
+## Local Model Probe Harness
+
+The native runtime now exposes provider-neutral model probes through:
+
+```bash
+./turtle probe run \
+  --title "Founder room probe" \
+  --provider ollama:qwen3.5:9b \
+  --provider anthropic:claude-sonnet-4-6 \
+  --context-file /path/to/context.md \
+  --prompt-file /path/to/prompt.md
+```
+
+A probe is a durable `model.probe` task. It uses the same prompt and context for every explicit provider, writes a JSON artifact under `<runtime_dir>/native-runtime/model-probes/`, and records one audit event per provider result. The artifact deliberately stops at `ready_for_review`: model migration is a practice-quality decision, so the runtime preserves comparable evidence rather than pretending an automatic score is the verdict.

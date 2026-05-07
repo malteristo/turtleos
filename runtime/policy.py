@@ -64,6 +64,9 @@ class CapabilityRegistry:
             "practice.write_proposal": CapabilityPolicy(
                 "practice.write_proposal", risk="low", allowed_principals=principals, allowed_root="practice_dir"
             ),
+            "model.run_probe": CapabilityPolicy(
+                "model.run_probe", risk="medium", allowed_principals=principals, allowed_root="runtime_dir"
+            ),
         }
         return cls(paths, policies)
 

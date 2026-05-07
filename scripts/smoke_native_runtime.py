@@ -16,6 +16,7 @@ import yaml
 
 from runtime.audit import AuditLog
 from runtime.handoff import submit_practice_handoff
+from runtime.model_probe import submit_model_probe
 from runtime.paths import RuntimePaths
 from runtime.policy import CapabilityRegistry, PolicyDenied
 from runtime.readiness import RuntimeReadiness
@@ -48,10 +49,11 @@ def main() -> int:
         paths = RuntimePaths.for_principal("smoke", registry_path=registry)
         success_task = assert_success_handoff(paths, registry)
         failed_task = assert_failed_handoff(paths, registry)
+        probe_task = assert_model_probe(paths, registry)
         assert_policy_root(paths)
         readiness = OfflineReadiness(paths).assess(limit=10)
         assert readiness["overall"] == "degraded", readiness
-        assert readiness["tasks"]["total"] == 2, readiness
+        assert readiness["tasks"]["total"] == 3, readiness
         assert len(readiness["tasks"]["recent_failures"]) == 1, readiness
         assert readiness["artifacts"]["status"] == "ready", readiness
         print(json.dumps({
@@ -59,6 +61,7 @@ def main() -> int:
             "root": str(root),
             "success_task": success_task.task_id,
             "failed_task": failed_task.task_id,
+            "probe_task": probe_task.task_id,
             "readiness": readiness["overall"],
         }, indent=2, sort_keys=True))
         return 0
@@ -135,6 +138,29 @@ def assert_failed_handoff(paths: RuntimePaths, registry: Path):
     actions = [record["action"] for record in AuditLog(paths.audit_dir).records_for_task(failed.task_id)]
     assert "task.failed" in actions, actions
     return failed
+
+
+def assert_model_probe(paths: RuntimePaths, registry: Path):
+    task = submit_model_probe(
+        principal="smoke",
+        title="Smoke Model Probe",
+        prompt="What is one invariant a persistent practice partner should preserve?",
+        context="Offline smoke context.",
+        providers=["stub:alpha", "stub:beta"],
+        source="smoke-suite",
+        interface="script",
+        registry_path=registry,
+    )
+    assert task.state == "completed", task.to_dict()
+    assert task.artifact_refs, task.to_dict()
+    artifact_path = Path(task.artifact_refs[0]["artifact_path"])
+    assert artifact_path.exists(), artifact_path
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["comparison"]["successful_count"] == 2, artifact
+    actions = [record["action"] for record in AuditLog(paths.audit_dir).records_for_task(task.task_id)]
+    assert actions.count("model.provider.completed") == 2, actions
+    assert "artifact.validated" in actions, actions
+    return task
 
 
 def assert_policy_root(paths: RuntimePaths) -> None:
