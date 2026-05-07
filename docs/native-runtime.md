@@ -190,3 +190,10 @@ The native runtime now exposes provider-neutral model probes through:
 ```
 
 A probe is a durable `model.probe` task. It uses the same prompt and context for every explicit provider, writes a JSON artifact under `<runtime_dir>/native-runtime/model-probes/`, and records one audit event per provider result. The artifact deliberately stops at `ready_for_review`: model migration is a practice-quality decision, so the runtime preserves comparable evidence rather than pretending an automatic score is the verdict.
+
+
+## Externalized Persistence Thread Cards
+
+Turtle's local-only dialogue path now treats thread state as a thread card, not a thin log. In Discord threads, each meaningful exchange rewrites a markdown card under the runtime thread-state directory with the last user move, last Turtle move, continuity cue, and return rule. On the next reply inside that thread, the card is injected into the runtime environment so Turtle can return to written state before simulating memory.
+
+This is the first implementation of the Turtle memory principle: persistence is inscription plus return. The card is used quietly; Turtle should not foreground context limits unless they materially affect the conversation.

@@ -177,8 +177,8 @@ def get_thread_state_dir():
 
 
 def read_thread_state(thread_name: str) -> str:
-    """Read a thread's state file if it exists. Returns empty string if not found."""
+    """Read a thread card if it exists. Returns empty string if not found."""
     safe_name = re.sub(r'[^\w\-]', '_', thread_name.lower())
     path = os.path.join(get_thread_state_dir(), f"{safe_name}.md")
     content = read_safe(path)
-    return content.strip()[:500] if content.strip() else ""
+    return content.strip()[:1400] if content.strip() else ""

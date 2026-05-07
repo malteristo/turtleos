@@ -213,11 +213,17 @@ def _build_runtime_env(message, cfg):
     if thread_name:
         awareness = get_thread_awareness(channel.id)
         lines.append(f"- **Current thread:** {thread_name} ({awareness})")
+        thread_card = read_thread_state(thread_name)
+        if thread_card:
+            lines.append("")
+            lines.append("## Current Thread Card")
+            lines.append(thread_card)
         related = get_related_thread_awareness(thread_name, current_thread_id=channel.id)
         if related:
             lines.append("")
             lines.append(related)
         lines.append("- **Thread-state rule:** This is the conversation you are currently inside. Do not recommend creating a new thread for this same topic; continue here or reference related threads from the live registry.")
+        lines.append("- **Externalized persistence rule:** Treat the thread card as your durable memory for this eddy. Use it quietly; do not announce context limits unless they materially affect the conversation.")
     lines.append(f"- **Mage:** {mage_name}")
     lines.append(f"- **Model:** {model}")
     lines.append(f"- **Attunement:** {attunement}")
@@ -265,6 +271,7 @@ def _build_source_trace(source_flags: list[str]) -> str:
 
 
 async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history: list[dict]):
+    """Write the thread card Turtle will return to on future context windows."""
     os.makedirs(get_thread_state_dir(), exist_ok=True)
     safe_name = re.sub(r'[^\w\-]', '_', thread.name.lower())
     state_path = os.path.join(get_thread_state_dir(), f"{safe_name}.md")
@@ -274,41 +281,55 @@ async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history
     msg_count = len(history)
     now = local_now().strftime("%Y-%m-%d %H:%M")
 
-    recent_exchange = ""
-    if len(history) >= 2:
-        last_user = ""
-        last_assistant = ""
-        for m in reversed(history):
-            if m["role"] == "assistant" and not last_assistant:
-                last_assistant = m["content"][:300]
-            elif m["role"] == "user" and not last_user:
-                last_user = m["content"][:300]
-            if last_user and last_assistant:
-                break
+    last_user = ""
+    last_assistant = ""
+    for m in reversed(history):
+        if m["role"] == "assistant" and not last_assistant:
+            last_assistant = _thread_card_excerpt(m["content"])
+        elif m["role"] == "user" and not last_user:
+            last_user = _thread_card_excerpt(m["content"])
         if last_user and last_assistant:
-            recent_exchange = f"\n**Last exchange:**\n> Mage: {last_user}\n> Spirit: {last_assistant}\n"
+            break
 
     eddy_type = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
     eddy_info = EDDY_TYPES.get(eddy_type, EDDY_TYPES[EDDY_DEFAULT])
     flagged = threads_flagged_for_release.get(thread.id)
-    flag_line = f"\n**⚠️ Flagged for release:** {flagged['reason']}\n" if flagged else ""
+    flag_line = f"\n**Flagged for release:** {flagged['reason']}\n" if flagged else ""
+
+    continuity = "Return by reading this card before simulating memory."
+    if last_user:
+        continuity = "Resume from the last user move and update this card after the next meaningful reply."
 
     content = (
-        f"# Thread: {thread.name}\n\n"
+        f"# Thread Card: {thread.name}\n\n"
+        f"**Thread ID:** {thread.id}\n"
         f"**Config:** `{model_label}` / `{attunement}`\n"
         f"**Eddy:** {eddy_info['emoji']} `{eddy_type}` ({eddy_info['days'] or '∞'}d)\n"
-        f"**Messages:** {msg_count}\n"
+        f"**Messages in working history:** {msg_count}\n"
         f"**Last active:** {now}\n"
-        f"**Thread ID:** {thread.id}\n"
-        f"{flag_line}"
-        f"{recent_exchange}"
+        f"**Continuity cue:** {continuity}\n"
+        f"{flag_line}\n"
+        "## Last User Move\n"
+        f"{last_user or '(none captured yet)'}\n\n"
+        "## Last Turtle Move\n"
+        f"{last_assistant or '(none captured yet)'}\n\n"
+        "## Return Rule\n"
+        "Use this card as externalized persistence: check it before continuing the thread, "
+        "then overwrite it with the newest durable state after the exchange.\n"
     )
 
     try:
         with open(state_path, "w") as f:
             f.write(content)
     except Exception as e:
-        print(f"Thread state write failed for {thread.name}: {e}")
+        print(f"Thread card write failed for {thread.name}: {e}")
+
+
+def _thread_card_excerpt(value: str, limit: int = 700) -> str:
+    text = re.sub(r"\s+", " ", (value or "")).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0] + " ..."
 
 
 def _summarize_message_snapshot(snapshot, index: int) -> str:
