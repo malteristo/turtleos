@@ -626,6 +626,14 @@ async def handle_dialogue(message):
                     system_prompt, messages_for_llm, thread_model, use_tools=True,
                     tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
                 tool_report = build_tool_report(tools_executed)
+            elif isinstance(message.channel, discord.Thread):
+                # Thread cards are already injected into the prompt. For local
+                # thread dialogue, avoid the tool loop by default so Qwen does
+                # not spend turns searching for state it already has.
+                reply = await chat_ollama(
+                    system_prompt, messages_for_llm, model=thread_model,
+                    num_ctx=32768, think=False)
+                tools_executed = []
             else:
                 reply, tools_executed = await chat_ollama_with_tools(
                     system_prompt, messages_for_llm, model_override=thread_model,

@@ -197,3 +197,5 @@ A probe is a durable `model.probe` task. It uses the same prompt and context for
 Turtle's local-only dialogue path now treats thread state as a thread card, not a thin log. In Discord threads, each meaningful exchange rewrites a markdown card under the runtime thread-state directory with the last user move, last Turtle move, continuity cue, and return rule. On the next reply inside that thread, the card is injected into the runtime environment so Turtle can return to written state before simulating memory.
 
 This is the first implementation of the Turtle memory principle: persistence is inscription plus return. The card is used quietly; Turtle should not foreground context limits unless they materially affect the conversation.
+
+Local thread dialogue uses the injected thread card directly and skips the conversational tool loop by default. Direct commands and capability-backed actions remain available, but ordinary thread replies should not spend model turns searching for state that the runtime has already placed in the prompt.
