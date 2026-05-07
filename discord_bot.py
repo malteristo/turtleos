@@ -596,10 +596,6 @@ async def handle_dialogue(message):
         messages_for_llm = [{"role": "user", "content": absorbed_block},
                             {"role": "assistant", "content": "I have this thread context. Let's continue."}] + messages_for_llm
 
-    # Micro-expression — body's visible reflex before the mind responds
-    if _reflex:
-        await message.channel.send(f"-# {_reflex}", silent=True)
-
     async with message.channel.typing():
         tool_report = ""
         is_gemini = thread_model.startswith("gemini-")
@@ -628,19 +624,14 @@ async def handle_dialogue(message):
                     system_prompt, messages_for_llm, thread_model, use_tools=True,
                     tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
                 tool_report = build_tool_report(tools_executed)
-            elif isinstance(message.channel, discord.Thread):
-                # Thread cards are already injected into the prompt. For local
-                # thread dialogue, avoid the tool loop by default so Qwen does
-                # not spend turns searching for state it already has.
+            else:
+                # Direct commands are handled before dialogue. For ordinary
+                # local replies, avoid the conversational tool loop so Qwen
+                # does not spend turns searching or routing while Discord waits.
                 reply = await chat_ollama(
                     system_prompt, messages_for_llm, model=thread_model,
                     num_ctx=32768, think=False)
                 tools_executed = []
-            else:
-                reply, tools_executed = await chat_ollama_with_tools(
-                    system_prompt, messages_for_llm, model_override=thread_model,
-                    tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
-                tool_report = build_tool_report(tools_executed)
 
             if not reply:
                 reply = "(no response generated)"
@@ -666,6 +657,8 @@ async def handle_dialogue(message):
             print(f"Dedup: removed {len(paragraphs) - len(deduped)} repeated paragraphs")
             reply = "\n\n".join(deduped)
 
+    if _reflex:
+        reply = f"-# {_reflex}\n\n{reply}"
     if tool_report:
         reply = f"{reply}\n\n-# ⚙️ {tool_report}"
     if attachment_extracted:

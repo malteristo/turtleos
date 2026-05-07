@@ -206,3 +206,5 @@ Local thread dialogue uses the injected thread card directly and skips the conve
 After moving daily dialogue to `qwen3.6:35b-a3b`, the proprioceptor became a local-model contention point: thread replies already had thread-card continuity, but the 9B proprioceptor often timed out at the 5s dialogue wait boundary. The local-only path now treats thread cards as the proprioceptive surface for Discord threads and skips the separate proprioceptor there.
 
 For non-thread practice messages, proprioception runs on `qwen3.5:4b` with a smaller context budget and bounded state excerpts. The goal is quick connective tissue, not a second dialogue mind.
+
+The reflex is folded into the final dialogue reply instead of sent as a standalone pre-message. Ordinary local dialogue also bypasses the conversational tool loop; explicit/direct commands remain the capability path. This prevents orphaned reflexes and keeps the local river responsive under Qwen.
