@@ -507,6 +507,11 @@ async def handle_dialogue(message):
         thread_use_api = USE_API
         thread_model = DIALOGUE_MODEL
 
+    # Seed first-turn thread cards before prompt assembly so new eddies can
+    # return to a written surface immediately instead of discovering absence.
+    if isinstance(message.channel, discord.Thread) and not read_thread_state(message.channel.name):
+        await _update_thread_state(message.channel, cfg, history)
+
     runtime_env = _build_runtime_env(message, cfg)
     triage_hint = f"- **Message triage:** {triage_cat}"
     if triage_cat == "deep":
@@ -967,6 +972,7 @@ async def on_thread_create(thread):
                 thread.id, thread.name,
                 parent_channel=parent_name, created=created,
             )
+            await _update_thread_state(thread, None, [])
             print(f"Joined + registered thread: {thread.name} (id: {thread.id})")
         except Exception as e:
             print(f"Joined thread: {thread.name} (id: {thread.id}) [registry failed: {e}]")
