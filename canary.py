@@ -4,6 +4,7 @@ canary.py — mechanical health check for the Turtle substrate.
 Exits 0 if green, 1 otherwise. Alerts to river on non-green.
 """
 import importlib.util
+import os
 import json
 import py_compile
 import subprocess
@@ -14,6 +15,9 @@ from pathlib import Path
 ALERT_CHANNEL = "1479428854513664030"
 SPIRIT_OPS = str(Path.home() / "turtleos" / "spirit_ops.py")
 VENV_PY = str(Path.home() / "turtleos" / "venv" / "bin" / "python3")
+
+if Path(VENV_PY).exists() and Path(sys.executable).resolve() != Path(VENV_PY).resolve():
+    os.execv(VENV_PY, [VENV_PY, *sys.argv])
 DISCORD_LOG = Path.home() / "turtleos" / "logs" / "discord.log"
 STATE_PATH = Path.home() / "turtleos" / "canary_state.json"
 TRIAGE_FALLBACK_STATE_PATH = Path.home() / "turtleos" / "canary_triage_fallback_state.json"
