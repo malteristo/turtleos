@@ -80,13 +80,14 @@ def chunk_message(text, limit=2000):
 
 
 def print_help():
-    print('Usage: spirit_ops.py <send|read|thread|threads|help> <channel_id> [text/limit]')
+    print('Usage: spirit_ops.py <send|read|fetch|thread|threads|help> <channel_id> [text/limit|message_id]')
     print('       spirit_ops.py send <channel_id> --file <path>')
     print('       command | spirit_ops.py send <channel_id> --stdin')
     print()
     print('Operations:')
     print('  send     — Send a message (auto-chunks if >2000 chars)')
     print('  read     — Read recent messages (full content, no truncation)')
+    print('  fetch    — Fetch one message by channel_id and message_id')
     print('  thread   — Create a thread from a message')
     print('  threads  — List active threads')
     print()
@@ -99,12 +100,18 @@ async def run(op, channel_id, text, client):
         print_help()
         return
 
-    if op == 'read':
-        # Delegate to discord_ops.py which has Message Content intent
+    if op in ('read', 'fetch'):
+        # Delegate to discord_ops.py which has Message Content intent.
         import subprocess
-        limit = text if text else '20'
+        if not channel_id:
+            print_help()
+            return
+        arg = text if text else ('20' if op == 'read' else '')
+        if op == 'fetch' and not arg:
+            print_help()
+            return
         result = subprocess.run(
-            [VENV_PY, DISCORD_OPS, 'read', str(channel_id), str(limit)],
+            [VENV_PY, DISCORD_OPS, op, str(channel_id), str(arg)],
             capture_output=True, text=True
         )
         print(result.stdout, end='')

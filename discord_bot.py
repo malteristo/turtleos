@@ -128,6 +128,7 @@ _CONTEXTUAL_ACTION_COMMANDS = {
     "absorb", "absorbed", "forget", "readiness", "signals", "load",
 }
 _CONTEXTUAL_COMMAND_RE = re.compile(r"`(![A-Za-z][\w-]*(?:\s+[^`]+)?)`")
+_DISCORD_MESSAGE_LINK_RE = re.compile(r"https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)")
 
 
 def _contextual_action_label(command: str) -> str:
@@ -376,11 +377,41 @@ def _summarize_message_snapshot(snapshot, index: int) -> str:
     return "\n".join(parts)
 
 
+def _snapshot_has_readable_content(snapshot) -> bool:
+    if (getattr(snapshot, "content", "") or "").strip():
+        return True
+    embeds = getattr(snapshot, "embeds", []) or []
+    if any((getattr(embed, "title", None) or getattr(embed, "description", None)) for embed in embeds):
+        return True
+    return bool(getattr(snapshot, "attachments", []) or [])
+
+
+def _forward_source_ref(message) -> tuple[int | None, int, int] | None:
+    snapshots = getattr(message, "message_snapshots", None) or []
+    if not snapshots:
+        return None
+    ref = getattr(message, "reference", None)
+    channel_id = getattr(ref, "channel_id", None)
+    message_id = getattr(ref, "message_id", None)
+    if not channel_id or not message_id:
+        return None
+    return getattr(ref, "guild_id", None), int(channel_id), int(message_id)
+
+
 def _extract_forwarded_context(message) -> str:
     snapshots = getattr(message, "message_snapshots", None) or []
     if not snapshots:
         return ""
     blocks = [_summarize_message_snapshot(snapshot, idx) for idx, snapshot in enumerate(snapshots, 1)]
+    source_ref = _forward_source_ref(message)
+    if source_ref:
+        guild_id, channel_id, message_id = source_ref
+        ref_bits = []
+        if guild_id:
+            ref_bits.append(f"guild_id={guild_id}")
+        ref_bits.append(f"channel_id={channel_id}")
+        ref_bits.append(f"message_id={message_id}")
+        blocks.append("[Forward source] " + " ".join(ref_bits))
     return "\n\n".join(blocks)
 
 
@@ -392,6 +423,56 @@ def _visible_message_content(message) -> tuple[str, str]:
             return f"{content}\n\n{forwarded_context}", forwarded_context
         return forwarded_context, forwarded_context
     return content, ""
+
+
+def _extract_discord_message_refs(text: str) -> list[tuple[int | None, int, int]]:
+    refs = []
+    seen = set()
+    for match in _DISCORD_MESSAGE_LINK_RE.finditer(text or ""):
+        guild_id, channel_id, message_id = (int(part) for part in match.groups())
+        key = (guild_id, channel_id, message_id)
+        if key not in seen:
+            seen.add(key)
+            refs.append(key)
+    return refs
+
+
+def _forwarded_snapshot_is_partial(message) -> bool:
+    snapshots = getattr(message, "message_snapshots", None) or []
+    return bool(snapshots) and not all(_snapshot_has_readable_content(snapshot) for snapshot in snapshots)
+
+
+def _format_dereferenced_message(source_message, *, label: str) -> str:
+    content = (source_message.content or "").strip()
+    parts = [f"[{label}] channel_id={source_message.channel.id} message_id={source_message.id}"]
+    author = getattr(source_message.author, "display_name", None) or source_message.author.name
+    parts.append(f"author: {author}")
+    created = getattr(source_message, "created_at", None)
+    if created:
+        parts.append(f"created: {created.isoformat()}")
+    if content:
+        parts.append(f"content:\n{content}")
+    forwarded = _extract_forwarded_context(source_message)
+    if forwarded:
+        parts.append(forwarded)
+    if len(parts) <= 3:
+        parts.append("no readable text content")
+    return "\n".join(parts)
+
+
+async def _fetch_discord_message_context(refs: list[tuple[int | None, int, int]], *, label: str, limit: int = 3) -> tuple[str, int]:
+    blocks = []
+    for _guild_id, channel_id, message_id in refs[:limit]:
+        try:
+            channel = await client.fetch_channel(channel_id)
+            source_message = await channel.fetch_message(message_id)
+            blocks.append(_format_dereferenced_message(source_message, label=label))
+        except Exception as e:
+            blocks.append(
+                f"[{label} unavailable] channel_id={channel_id} message_id={message_id} "
+                f"error={type(e).__name__}: {e}"
+            )
+    return "\n\n".join(blocks), len(blocks)
 
 
 async def handle_dialogue(message):
@@ -456,10 +537,29 @@ async def handle_dialogue(message):
                 url_source_count = len(urls)
                 attachment_note += f" [fetched {len(urls)} URL(s)]"
 
+    dereferenced_context = ""
+    dereferenced_count = 0
+    deref_refs = []
+    if _forwarded_snapshot_is_partial(message):
+        source_ref = _forward_source_ref(message)
+        if source_ref:
+            deref_refs.append(source_ref)
+    for ref in _extract_discord_message_refs(message.content or ""):
+        if ref not in deref_refs:
+            deref_refs.append(ref)
+    if deref_refs:
+        dereferenced_context, dereferenced_count = await _fetch_discord_message_context(
+            deref_refs, label="Dereferenced Discord message"
+        )
+        if dereferenced_context:
+            attachment_note += f" [dereferenced {dereferenced_count} Discord message(s)]"
+
     # Include fetched content in history so it persists across turns
     user_entry = f"[{message.author.display_name}]: {visible_content}{attachment_note}"
     if url_content:
         user_entry += f"\n\n[Fetched content]:\n{url_content[:6000]}"
+    if dereferenced_context:
+        user_entry += f"\n\n[Dereferenced Discord context]:\n{dereferenced_context[:6000]}"
     history.append({"role": "user", "content": user_entry})
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
@@ -531,6 +631,8 @@ async def handle_dialogue(message):
         source_flags.append(f"attachment metadata ({', '.join(attachment_names)})")
     if forwarded_context:
         source_flags.append("forwarded message snapshot")
+    if dereferenced_context:
+        source_flags.append(f"dereferenced Discord message ({dereferenced_count})")
 
     # Collect proprioceptor — worth waiting since dialogue call is the real bottleneck
     context_brief = None
