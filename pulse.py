@@ -282,19 +282,28 @@ def _classify_texture(pulse):
 
 
 def compose_river_entry(pulse, thread_count=0):
-    lines = []
-
-    live = _find_live_threads(pulse)
-    if live:
-        lines.append(f"Current: {live}")
+    what = _find_live_threads(pulse)
+    if not what:
+        what = "Turtle is present; no single practice thread is strongly pulling."
 
     doorway = _practice_doorway(pulse)
-    if doorway:
-        lines.append(f"Useful doorway: {doorway}")
+    texture = _describe_texture(pulse)
+    if doorway and texture:
+        so_what = f"{texture} {doorway}"
+    else:
+        so_what = doorway or texture or "Nothing looks urgent; orientation is enough."
 
-    gesture = _opening_gesture(pulse)
-    if gesture:
-        lines.append(gesture)
+    now_what = _opening_gesture(pulse)
+    if now_what.lower().startswith("suggested: "):
+        now_what = now_what.split(":", 1)[1].strip()
+    if not now_what:
+        now_what = "no action needed yet; keep watching."
+
+    lines = [
+        f"What: {what}",
+        f"So What: {so_what}",
+        f"Now What: {now_what}",
+    ]
 
     return "🐢 *enters the river*", "\n".join(lines)
 
