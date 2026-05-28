@@ -114,12 +114,108 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 |--------|---------------|---------|
 | `canary.py` | 232 | Standalone mechanical health check run by launchd; state-change alert dedup. |
 | `self_heal.py` | 154 | Self-healing helpers for service restarts and degraded states. |
+| `shell_harness.py` | 366 | Constrained, audited self-development inspection harness for read-only source inspection and syntax verification. |
+| `capabilities.py` | 110 | File-backed registry for Turtle skill/procedure cards used during self-development, diagnostics, and shakedowns. |
 | `spirit_ops.py` | 120 | Spirit-side Discord CLI for reading/sending. Needs import-safety and `--file` mode. |
 | `discord_ops.py` | 79 | Operator Discord CLI for read/send/thread operations. |
 | `tools.py` | 238 | Shell/tool helpers retained for operational use. |
 | `deploy_river.py` | 224 | Deployment helper for river assets. |
 
 *\* = lazy import to break circular dependency*
+
+### Native Runtime Slice: Task / Audit / Capability Body
+
+The native runtime is the first step toward making the Mac Mini the shell and Discord one interface into it. It runs beside the Discord bot rather than replacing the live dialogue path.
+
+```
+CLI / Discord adapter handoff
+    |
+    v
+Event (runtime/events.py)
+    |
+    v
+Task (runtime/tasks.py) + Audit JSONL (runtime/audit.py)
+    |
+    +--> Capability policy check (runtime/policy.py)
+    |
+    +--> Governed capability call
+          - practice.append_boom
+          - practice.write_session
+          - practice.write_proposal
+          - model.run_probe
+    |
+    v
+Artifact reference + task state for later inspection
+```
+
+| Module | Purpose |
+|---|---|
+| `cli.py` | Operator CLI for native runtime handoffs, task inspection, audit inspection, readiness, and provider-neutral model probes. |
+| `runtime/events.py` | Normalized event envelope: source, interface, principal, scope, trust level, timestamp, event id, correlation id, payload. |
+| `runtime/tasks.py` | Durable task records with state, artifact refs, audit refs, checkpoint, failure, and next action. |
+| `runtime/audit.py` | Append-only JSONL audit trail for events, task transitions, policy checks, capability calls, artifact validation, and provider results. |
+| `runtime/handoff.py` | Practice handoff execution path: event -> task -> policy -> practice artifact capability -> audit/task completion. |
+| `runtime/policy.py` | Capability registry and artifact path validation. Current policies are per-principal and root-bounded. |
+| `runtime/capabilities/practice.py` | Governed practice artifact writes: append boom, write session note, write proposal. |
+| `runtime/model_probe.py` | Provider-neutral model probe tasks for comparable outputs across Ollama, Anthropic, Gemini, and stub providers. |
+| `runtime/readiness.py` | Native runtime readiness sensorium: service state, model availability, task failures, and artifact visibility. |
+| `runtime/paths.py` | Registry-driven principal resolution for practice dir, runtime dir, native runtime dir, tasks dir, and audit dir. |
+| `runtime/adapters/discord.py` | Thin adapter that translates Discord message-like metadata into native runtime handoffs without leaking Discord objects into task/audit/capability code. |
+
+This slice implements the first vertical path from Proposal 037: handoff -> task -> audit -> artifact. Dialogue still runs through `discord_bot.py`. The native runtime currently proves durable task/audit semantics and bounded capabilities; it does not yet own model routing for live dialogue, long-running autonomous work, or a general tool system.
+
+### Self-Development Inspection Harness
+
+`shell_harness.py` is the current runtime guard for Turtle inspecting its own shell from Discord or the intake server. It deliberately implements the first safe slice of the self-development protocol: understand, verify, and prepare a patch plan without granting arbitrary command execution or write authority.
+
+Allowed command families:
+
+- `pwd`
+- `ls` with simple listing flags
+- `rg` with bounded search flags, plus a Python fallback when `rg` is unavailable
+- read-only `git`: `status`, `diff`, `log`, `branch --show-current`, `rev-parse --show-toplevel`, `show`
+- `python -m py_compile <files>` for Python syntax verification
+
+Guardrails:
+
+- Shell metacharacters are blocked; commands execute via parsed argv, not a shell string.
+- `cwd` and inspected paths must stay inside `~/turtleos`.
+- Git root must resolve exactly to `~/turtleos`.
+- Output is clipped to 6000 characters.
+- Each attempt is logged to the active runtime directory as `shell-actions.jsonl`, including requester, command, reason, allow/block decision, stdout/stderr, and whether git state changed during execution.
+- The harness records but does not allow mutation. It cannot edit files, stage, commit, restart services, install packages, or run arbitrary Python.
+
+Exposure points:
+
+- LLM tool `run_turtleos_shell` in `tos_tools.py`.
+- `/shell` endpoint in `intake_server.py`, restricted to localhost unless `TURTLE_SHELL_TOKEN` is configured; the harness allowlist still applies after endpoint authorization.
+- Procedure card `procedures/self-development-inspection.md`, which instructs Turtle to inspect, diagnose, and hand patch plans to Spirit/Mage unless a future write-authority procedure is explicitly installed.
+
+Traceability to `TURTLE_SPEC.md` §22.8: this implements the "Before changing code" inspection and classification phase, plus syntax verification. It does not implement the low-risk write/commit/restart path. That authority remains outside the harness until a separate write-authority procedure and runtime guard are designed.
+
+### Turtle Skills and Procedures
+
+`capabilities.py` implements a file-backed skill/procedure card registry. This is guidance infrastructure, not an authority system: cards teach Turtle how to approach recurring work, while actual permissions remain enforced by tools such as `shell_harness.py`, `tos_tools.py`, and the native runtime policy layer.
+
+Current card inventory:
+
+| Card | Kind | Purpose |
+|---|---|---|
+| `source-inspection` | skill | Inspect turtleOS source safely with read-only shell commands before proposing or making changes. |
+| `patch-planning` | skill | Convert source inspection into a precise, reviewable patch plan without editing files. |
+| `tool-diagnosis` | skill | Classify tool failures before retrying or escalating. |
+| `self-development-inspection` | procedure | First-pass self-development loop for understanding turtleOS code without making writes. |
+| `proposal-to-patch-plan` | procedure | Convert a proposal, shakedown, canary result, or Discord observation into a bounded patch plan. |
+| `tool-shakedown` | procedure | Exercise a newly added or changed tool through a narrow observable test. |
+
+Runtime integration:
+
+- `prompts.py` injects a compact index from `build_capability_summary()` into Turtle's system prompt.
+- LLM tools `list_turtle_capabilities` and `read_turtle_capability` in `tos_tools.py` let Turtle list cards and load full text before acting.
+- `tool_result.py` classifies successful capability list/read outputs as typed tool successes.
+- `canary.py` includes a `capability_index` smoke check so a broken registry becomes visible in the tools layer.
+
+Lifecycle boundary: cards are source files in the public turtleOS repo. They should describe reusable operator/practitioner procedures, not private lineage or local machine facts. Adding or changing cards changes Turtle's operating guidance and should be treated as production docs under `docs/development.md`.
 
 ## Circular Dependencies
 
@@ -447,6 +543,10 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | §18 Boundaries | `identity/soul.md` | Encoded in identity |
 | §19 The Offering | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §20-22 Intake / Outfacing / Shell-Shedding | `boom_thread.py`, `intake_server.py`, `outfacing.py`, `spirit_ops.py`, self-development workflow | Implemented in pieces |
+| §22.8 Self-Development Protocol / native runtime skeleton | `cli.py`, `runtime/events.py`, `runtime/tasks.py`, `runtime/audit.py`, `runtime/handoff.py`, `runtime/policy.py`, `runtime/capabilities/practice.py`, `runtime/readiness.py` | First vertical slice implemented: durable handoff/task/audit/artifact path |
+| §22.8 Self-Development Protocol / inspection harness | `shell_harness.py`, `tos_tools.py:run_turtleos_shell`, `intake_server.py:/shell`, `procedures/self-development-inspection.md` | Inspection-only slice implemented: read-only source inspection, git state checks, syntax verification, audited attempts |
+| §22.8 Self-Development Protocol / skills and procedures | `capabilities.py`, `skills/*.md`, `procedures/*.md`, `prompts.py`, `tos_tools.py`, `tool_result.py`, `canary.py` | Implemented as guidance cards and discovery tools; not an authorization layer |
+| §7 Cognitive Stack / provider comparison | `cli.py probe run`, `runtime/model_probe.py` | Implemented as review artifacts, not automatic model-routing decisions |
 | §23 Architecture & Traceability | This document, TURTLE_SPEC symlink/copy | This document |
 
 ### Partially Implemented / Active Gaps
@@ -476,9 +576,9 @@ Together, TURTLE_SPEC + ARCHITECTURE.md + soul.md + mage_registry.yaml + the tur
 
 The implementation currently contains several capabilities that should receive tighter spec traceability before they become major public extension points:
 
-- native runtime modules under `runtime/`
-- `cli.py` task/audit handoff flows
-- `shell_harness.py` self-development constraints
-- `capabilities.py`, `skills/`, and `procedures/`
+- native runtime beyond the first vertical slice: long-running tasks, general tools, live dialogue routing, and Discord notification outputs
+- `cli.py` command reference generation and operator docs
+- self-development write authority: current harness is inspection-only; runtime prompt/procedure wording should stay aligned until a real low-risk write path exists
+- skill/procedure lifecycle governance: when to add, update, deprecate, or test guidance cards
 - founding-room/founder-key capabilities, if they remain in the public product
 - `commands.py` command surface decomposition and generated command reference

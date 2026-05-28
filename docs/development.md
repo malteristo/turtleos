@@ -66,10 +66,16 @@ When lineage contains a public lesson, distill the lesson into current docs inst
 
 When implementation grows ahead of the spec, add the gap here or in `ARCHITECTURE.md`. Current known areas needing tighter traceability:
 
-- native runtime modules under `runtime/`
-- `cli.py` and task/audit handoff flows
-- `shell_harness.py` self-development constraints
-- `capabilities.py`, `skills/`, and `procedures/`
+- native runtime beyond the first vertical slice: long-running tasks, general tools, live dialogue routing, and Discord notification outputs
+- `cli.py` command reference generation and operator docs
+- self-development write authority: current shell harness is inspection-only; runtime prompt/procedure wording should stay aligned until a real low-risk write path exists
+- skill/procedure lifecycle governance: when to add, update, deprecate, or test guidance cards
 - founder/founding-room capabilities, if they remain in the public product
 - `commands.py` command surface decomposition and generated command reference
+
+Done in the first traceability pass:
+
+- `runtime/` and `cli.py` first vertical slice mapped in `ARCHITECTURE.md`: event intake, durable tasks, audit JSONL, bounded practice capabilities, model probes, runtime readiness, registry-driven paths, and the Discord adapter handoff.
+- `shell_harness.py` self-development inspection slice mapped in `ARCHITECTURE.md`: allowed read-only command families, path/git guardrails, audit log behavior, LLM tool and `/shell` exposure points, and the boundary that write/commit/restart authority is not implemented there.
+- `capabilities.py`, `skills/`, and `procedures/` mapped in `ARCHITECTURE.md`: file-backed guidance cards, prompt summary injection, list/read tools, typed result classification, canary smoke check, and the boundary that cards guide behavior but do not grant permissions.
 
