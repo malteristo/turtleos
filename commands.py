@@ -71,7 +71,7 @@ from load_command import cmd_load
 from eddy_spawn import spawn_eddy, should_offer_eddy, generate_topic, make_eddy_spawn_view, post_thread_opening
 from runtime.adapters.discord import submit_discord_practice_handoff
 
-INTAKE_PUBLIC_URL = os.environ.get("INTAKE_PUBLIC_URL", "http://100.110.46.104:8742/paste")
+INTAKE_PUBLIC_URL = os.environ.get("INTAKE_PUBLIC_URL", "http://localhost:8742/paste")
 
 
 # ─── Direct Commands ─────────────────────────────────────────────
@@ -1481,7 +1481,7 @@ async def cmd_release(message):
     active_sessions.pop(channel_id, None)
 
     embed = discord.Embed(title="Session Released", color=0x2ECC71)
-    embed.description = "Session note written. Conversation history cleared.\nRest well, Kermit."
+    embed.description = f"Session note written. Conversation history cleared.\nRest well, {get_mage_name()}."
 
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
     boom_count = count_items(boom)
@@ -1940,9 +1940,9 @@ async def cmd_admin(message, args):
             fpath = os.path.join(workshop, fname)
             if not os.path.exists(fpath):
                 open(fpath, "w").close()
-        template = os.path.expanduser("~/workshops/nesrine/system.md")
+        template = os.path.expanduser(os.environ.get("PRACTITIONER_SYSTEM_TEMPLATE", ""))
         dest = os.path.join(workshop, "system.md")
-        if os.path.exists(template) and not os.path.exists(dest):
+        if template and os.path.exists(template) and not os.path.exists(dest):
             import shutil
             shutil.copy2(template, dest)
 

@@ -1151,7 +1151,7 @@ async def on_message(message):
             return
         _processed_messages.append(message.id)
 
-        # Founder key entry: bind a founder's self-chosen emoji only after Kermit confirms.
+        # Founder key entry: bind a founder's self-chosen emoji only after the primary operator confirms.
         if await try_founder_key_entry(message):
             return
 

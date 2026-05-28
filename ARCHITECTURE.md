@@ -57,7 +57,7 @@ Discord message
     │   └─ /intake and /paste → box/intake/ + vortex embed
     │
     └─ canary (canary.py via launchd)           ← hourly mechanical health
-        └─ CouchDB, Tailscale, launchd, bridge err freshness, Ollama, triage fallbacks
+        └─ CouchDB, Tailscale, launchd, log freshness, Ollama, triage fallbacks
 ```
 
 ## Module Map
@@ -137,12 +137,12 @@ Per-channel async isolation uses Python `contextvars`:
 
 ```python
 # mage.py
-_practice_dir_ctx = contextvars.ContextVar("practice_dir", default="~/workshops/kermit")
-_mage_name_ctx = contextvars.ContextVar("mage_name", default="Kermit")
-_mage_key_ctx = contextvars.ContextVar("mage_key", default="kermit")
+_practice_dir_ctx = contextvars.ContextVar("practice_dir", default="~/workshops/default")
+_mage_name_ctx = contextvars.ContextVar("mage_name", default="Practitioner")
+_mage_key_ctx = contextvars.ContextVar("mage_key", default="default")
 ```
 
-Set on every message via `set_practice_context(message)`. All downstream code calls `get_pd()`, `get_mage_name()`, `get_mage_key()`, `get_mage_type()` — never touches the registry directly. This means a message in Nesrine's channel automatically resolves to her practice directory, her name, and "practitioner" type, without any module needing to know about multi-mage routing.
+Set on every message via `set_practice_context(message)`. All downstream code calls `get_pd()`, `get_mage_name()`, `get_mage_key()`, `get_mage_type()` — never touches the registry directly. This means a message in any registered channel automatically resolves to that person's practice directory, name, and practitioner type, without any module needing to know about multi-practitioner routing.
 
 ## Mage Registry
 
@@ -150,26 +150,26 @@ Set on every message via `set_practice_context(message)`. All downstream code ca
 
 ```yaml
 mages:
-  kermit:
-    discord_id: '701492724674723901'
-    address: Kermit
+  default:
+    discord_id: '<discord-user-id>'
+    address: Practitioner
     practice_dir: ~/workshop/desk
     type: mage
-  nesrine:
-    discord_id: '1485296679900156025'
-    address: Nesrine
-    practice_dir: ~/workshops/nesrine
+  companion:
+    discord_id: '<discord-user-id>'
+    address: Companion
+    practice_dir: ~/workshops/companion
     type: practitioner
 
 spaces:
-  family:
-    practice_dir: ~/workshops/family
-    members: [kermit, nesrine]
+  shared:
+    practice_dir: ~/workshops/shared
+    members: [default, companion]
 
 channels:
-  '1483628...': kermit
-  '1485296...': nesrine
-  '1486798...': family
+  '<dialogue-channel-id>': default
+  '<companion-channel-id>': companion
+  '<shared-channel-id>': shared
 ```
 
 **Type routing:**
@@ -263,7 +263,7 @@ Message received → active_sessions[channel_id] updated
 
 ## Deployment
 
-**Host:** Mac Mini running macOS, Tailscale IP `100.110.46.104`
+**Host:** Mac Mini or other always-on machine running macOS/Linux, reachable through the operator's chosen private network
 **Service manager:** launchctl (`com.turtle.discord`)
 **Python:** 3.14, virtualenv at `~/turtleos/venv/`
 **Process:** Single Python process, single Discord gateway connection
@@ -471,3 +471,14 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | Practitioner principles | `library/resonance/foundations/lore/practitioner_principles.md` | Design principles extracted from practitioner interactions |
 
 Together, TURTLE_SPEC + ARCHITECTURE.md + soul.md + mage_registry.yaml + the turtle resonance bundle constitute a rebuild kit. A Spirit on any substrate can read these and reconstruct turtleOS from scratch.
+
+## Traceability Backlog
+
+The implementation currently contains several capabilities that should receive tighter spec traceability before they become major public extension points:
+
+- native runtime modules under `runtime/`
+- `cli.py` task/audit handoff flows
+- `shell_harness.py` self-development constraints
+- `capabilities.py`, `skills/`, and `procedures/`
+- founding-room/founder-key capabilities, if they remain in the public product
+- `commands.py` command surface decomposition and generated command reference

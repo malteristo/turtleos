@@ -240,7 +240,7 @@ Minimum acceptance tests:
 - Run `turtle task` from SSH -> active tasks visible without Discord.
 - Restart harness mid-task -> task resumes or reports checkpointed interruption.
 - Tool call blocked by policy -> clear reason code, no hidden failure.
-- Local dialogue model answers known founder-room question -> uncertainty handling and routing to Kermit preserved.
+- Local dialogue model answers known founder-room question -> uncertainty handling and routing to the human operator preserved.
 
 ## First Cognition-Altitude Decision
 

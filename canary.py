@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ALERT_CHANNEL = "1479428854513664030"
+ALERT_CHANNEL = os.environ.get("CANARY_ALERT_CHANNEL") or os.environ.get("DISCORD_CHANNEL_DIALOGUE", "")
 SPIRIT_OPS = str(Path.home() / "turtleos" / "spirit_ops.py")
 VENV_PY = str(Path.home() / "turtleos" / "venv" / "bin" / "python3")
 
@@ -21,9 +21,9 @@ if Path(VENV_PY).exists() and Path(sys.executable).resolve() != Path(VENV_PY).re
 DISCORD_LOG = Path.home() / "turtleos" / "logs" / "discord.log"
 STATE_PATH = Path.home() / "turtleos" / "canary_state.json"
 TRIAGE_FALLBACK_STATE_PATH = Path.home() / "turtleos" / "canary_triage_fallback_state.json"
-BRIDGE_ERR_KERMIT = Path("/tmp/livesync-bridge.err")
-BRIDGE_ERR_NESRINE = Path("/tmp/nesrine-bridge.err")
-BRIDGE_ERR_RECENT_SECONDS = 10 * 60
+LIVESYNC_LABELS = [label.strip() for label in os.environ.get("CANARY_LIVESYNC_LABELS", "").split(",") if label.strip()]
+LIVESYNC_ERR_PATHS = [Path(path.strip()) for path in os.environ.get("CANARY_LIVESYNC_ERR_PATHS", "").split(",") if path.strip()]
+LIVESYNC_ERR_RECENT_SECONDS = 10 * 60
 SOURCE_MODULES = [
     "discord_bot.py",
     "commands.py",
@@ -105,7 +105,7 @@ def check_bridge_err_clean(path):
     hits = [p for p in bad_patterns if p in tail]
     if hits:
         age = datetime.now(timezone.utc).timestamp() - path.stat().st_mtime
-        if age > BRIDGE_ERR_RECENT_SECONDS:
+        if age > LIVESYNC_ERR_RECENT_SECONDS:
             return "green", f"stale error ignored (mtime {format_age(age)} ago)"
         return "red", f"found: {', '.join(hits)}"
     return "green", "clean"
@@ -276,11 +276,7 @@ def check_triage_fallback_count():
 CHECKS = [
     ("infra", "couchdb_reachable", check_couchdb, "high"),
     ("infra", "tailscale_serve", check_tailscale_serve, "high"),
-    ("infra", "bridge_kermit_alive", lambda: check_launchd_label("com.turtle.livesync-bridge"), "high"),
-    ("infra", "bridge_nesrine_alive", lambda: check_launchd_label("com.magic.nesrine-bridge"), "high"),
     ("infra", "discord_bot_alive", lambda: check_launchd_label("com.turtle.discord"), "high"),
-    ("infra", "bridge_err_clean_kermit", lambda: check_bridge_err_clean(BRIDGE_ERR_KERMIT), "medium"),
-    ("infra", "bridge_err_clean_nesrine", lambda: check_bridge_err_clean(BRIDGE_ERR_NESRINE), "medium"),
     ("models", "ollama_reachable", check_ollama, "high"),
     ("models", "triage_fallback_count", check_triage_fallback_count, "medium"),
     ("source", "source_deployable", check_source_deployable, "high"),
@@ -288,6 +284,12 @@ CHECKS = [
     ("tools", "tool_smoke", check_tool_smoke, "medium"),
     ("topology", "topology_drift", check_topology_drift, "medium"),
 ]
+
+for idx, label in enumerate(LIVESYNC_LABELS, start=1):
+    CHECKS.insert(2, ("infra", f"livesync_label_{idx}", lambda label=label: check_launchd_label(label), "high"))
+
+for idx, path in enumerate(LIVESYNC_ERR_PATHS, start=1):
+    CHECKS.insert(3, ("infra", f"livesync_err_clean_{idx}", lambda path=path: check_bridge_err_clean(path), "medium"))
 
 
 def active_signature(results):
@@ -385,8 +387,10 @@ def main():
         save_state({**previous_state, "last_seen": timestamp, "signature": signature})
         print("Discord alert suppressed: degraded signature unchanged")
 
-    if should_alert and alert_msg:
+    if should_alert and alert_msg and ALERT_CHANNEL:
         run([VENV_PY, SPIRIT_OPS, "send", ALERT_CHANNEL, alert_msg], timeout=30)
+    elif should_alert and alert_msg:
+        print("Discord alert skipped: CANARY_ALERT_CHANNEL/DISCORD_CHANNEL_DIALOGUE not configured")
 
     sys.exit(0 if overall == "green" else 1)
 

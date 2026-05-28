@@ -32,8 +32,7 @@
 |-----------|--------|-------|
 | `agent.py` | Removed | Formerly bridge command processor. SSH replaced all functions. |
 | `tools.py` | Present but unused | Legacy tool definitions. discord_bot.py has its own tool system. |
-| `sub_turtle_bot.py` | Backed up (.bak) | Formerly ran Consul/Scout as separate bots. Now thread model options. |
-| `consul/`, `scout/` | Present but inactive | Legacy identity directories. Models available via `!thread --model`. |
+| legacy sub-bots | Removed/archived | Separate service identities are not part of the current public architecture. Use thread model options instead. |
 
 ---
 
@@ -58,27 +57,18 @@
 │   ├── requirements.txt       # Python dependencies
 │   └── venv/                  # Python virtualenv
 │
-├── workshop/                  # Full magic repo clone
-│   ├── AGENTS.md              # Practice rules
-│   ├── MAGIC_SPEC.md          # Canonical law of magic
-│   ├── library/               # Great Library (lore, flows, resonance bundles)
-│   │   └── resonance/turtle/
-│   │       ├── TURTLE_SPEC.md # Canonical law of turtleOS
-│   │       ├── shell/         # Source for soul.md, system.md, role cards
-│   │       └── lore/          # 28 lore documents
-│   ├── system/                # Tomes, flows, core lore
-│   └── desk/                  # Mage workspace (boom, bright, intentions, proposals)
+├── workshop/                  # Optional full practice/workshop mirror
+│   └── desk/                  # Practice root for the operator's own instance
 │
-├── practice/                  # Practice state (symlinks to workshop/desk/)
-│   ├── boom.md -> workshop/desk/boom.md
-│   ├── bright.md -> workshop/desk/boom/bright.md
-│   ├── compass.md -> workshop/desk/intentions/compass.md
-│   ├── intentions -> workshop/desk/intentions/active
-│   ├── proposals -> workshop/desk/proposals
-│   ├── sessions -> workshop/desk/sessions
-│   ├── mirror -> workshop/desk/mirror
-│   ├── system.md              # Practice-layer system prompt (tOS core)
-│   └── thread-state/          # Per-thread state files
+├── workshops/                 # Per-practitioner practice roots
+│   └── <name>/
+│       ├── boom.md
+│       ├── bright.md
+│       ├── compass.md
+│       ├── intentions/
+│       ├── proposals/
+│       ├── sessions/
+│       └── thread-state/
 │
 └── .claude/                   # Claude Code configuration
     ├── channels/discord/      # cc-sessions Discord config
@@ -137,7 +127,7 @@ Message arrives after >15min quiet
 
 ```
 Practice state flows through the LiveSync-backed workshop mirror.
-  -> Kermit's practice root: ~/workshop/desk/
+  -> Primary practice root: often ~/workshop/desk/ on the operator's own instance
   -> Other practitioners: ~/workshops/<name>/
   -> Spirit reads local desk/ and uses SSH only for diagnostics or drift checks
 ```
@@ -158,7 +148,7 @@ Practice state flows through the LiveSync-backed workshop mirror.
 | **Bun** | bun | 1.3.11 | Runs Discord MCP plugin server |
 | **CouchDB** | couchdb | — | Practice vault (Obsidian LiveSync) |
 | **Caddy** | caddy | — | HTTPS reverse proxy |
-| **Tailscale** | tailscale | — | Secure networking (100.119.10.111) |
+| **Tailscale** | tailscale | — | Secure private networking |
 | **tmux** | tmux | — | Persistent terminal sessions |
 
 ---

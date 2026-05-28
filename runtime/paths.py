@@ -21,7 +21,7 @@ class RuntimePaths:
     audit_dir: Path
 
     @classmethod
-    def for_principal(cls, principal: str = "kermit", registry_path: Path | None = None) -> "RuntimePaths":
+    def for_principal(cls, principal: str = "default", registry_path: Path | None = None) -> "RuntimePaths":
         registry = _load_registry(registry_path or Path("mage_registry.yaml"))
         mages = registry.get("mages", {})
         if principal not in mages:

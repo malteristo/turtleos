@@ -14,11 +14,11 @@ from state import client, get_channel, CHANNELS
 
 # ─── Context Variables ───────────────────────────────────────────
 
-RUNTIME_DIR_DEFAULT = os.path.expanduser("~/workshops/kermit")
+RUNTIME_DIR_DEFAULT = os.path.expanduser("~/workshops/default")
 _practice_dir_ctx = contextvars.ContextVar("practice_dir", default=None)
 _runtime_dir_ctx = contextvars.ContextVar("runtime_dir", default=None)
-_mage_name_ctx = contextvars.ContextVar("mage_name", default="Kermit")
-_mage_key_ctx = contextvars.ContextVar("mage_key", default="kermit")
+_mage_name_ctx = contextvars.ContextVar("mage_name", default="Practitioner")
+_mage_key_ctx = contextvars.ContextVar("mage_key", default="default")
 _workshop_root_ctx = contextvars.ContextVar("workshop_root", default=None)
 
 
@@ -88,8 +88,6 @@ def _primary_mage_key():
     for key, mage in _MAGE_REGISTRY.get("mages", {}).items():
         if mage.get("primary"):
             return key
-    if "kermit" in _MAGE_REGISTRY.get("mages", {}):
-        return "kermit"
     mages = _MAGE_REGISTRY.get("mages", {})
     return next(iter(mages), None)
 
@@ -156,7 +154,9 @@ def _resolve_mage_info_for_channel(channel_id):
         space = _MAGE_REGISTRY.get("spaces", {}).get(mage_key, {})
         if space:
             return mage_key.capitalize(), mage_key
-    return "Kermit", "kermit"
+    key = _primary_mage_key() or "default"
+    mage = _MAGE_REGISTRY.get("mages", {}).get(key, {})
+    return mage.get("address", key.capitalize()), key
 
 
 def _resolve_workshop_root_for_channel(channel_id):

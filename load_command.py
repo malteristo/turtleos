@@ -204,7 +204,7 @@ async def cmd_load(message, args):
         await message.reply(
             "**Usage:** `!load <context>`\n"
             "Searches circles and resonance bundles.\n"
-            "Examples: `!load nesrine`, `!load romantic-partnership`, `!load travel`, `!load neurodiversity`",
+            "Examples: `!load practitioner-context`, `!load romantic-partnership`, `!load travel`, `!load neurodiversity`",
             mention_author=False,
         )
         return

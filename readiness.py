@@ -23,9 +23,14 @@ def _resolve_default_pd():
     try:
         from mage import _load_mage_registry
         registry = _load_mage_registry()
-        kermit = registry.get("mages", {}).get("kermit", {})
-        if kermit and kermit.get("practice_dir"):
-            resolved = os.path.expanduser(kermit["practice_dir"])
+        default_key = registry.get("default_mage")
+        mages = registry.get("mages", {})
+        primary = mages.get(default_key, {}) if default_key else next(
+            (mage for mage in mages.values() if mage.get("primary")),
+            next(iter(mages.values()), {}),
+        )
+        if primary and primary.get("practice_dir"):
+            resolved = os.path.expanduser(primary["practice_dir"])
             if os.path.isdir(resolved):
                 return resolved
     except Exception:

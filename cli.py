@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Turtle native runtime CLI")
-    parser.add_argument("--principal", default="kermit", help="registry principal to operate as")
+    parser.add_argument("--principal", default="default", help="registry principal to operate as")
     parser.add_argument("--registry", default="mage_registry.yaml", help="path to mage_registry.yaml")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -161,16 +161,7 @@ async def run():
 
     elif op == 'help':
         print("Usage: discord_ops.py <read|fetch|send|threads> <channel_id> [text/limit|message_id]")
-        print("Channels:")
-        print("  kermit:       1479428854513664030")
-        print("  nesrine:      1484973995823599757")
-        print("  family:       1491163697278881836  (text channel — river model)")
-        print("  heartbeat:    1479428858133479466")
-        print("  efferent:     1479428862776442942")
-        print("  river (alerts): 1479428854513664030")
-        print("  precognition: 1479428870401691731")
-        print("  care:         1479428874382213121")
-        print("  distress:     1479428878199033987")
+        print("Pass an explicit Discord channel ID from your local mage_registry.yaml or .env.")
 
     await client.close()
 

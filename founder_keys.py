@@ -1,8 +1,8 @@
 """Founder key entry handling for MAGIC e.V. founding room.
 
 A founder key is a self-chosen emoji that is bound to a Discord handle
-only after Kermit confirms the association. The key is ceremonial and
-operational, not security authentication.
+only after the primary operator confirms the association. The key is
+ceremonial and operational, not security authentication.
 """
 
 from __future__ import annotations
@@ -89,8 +89,9 @@ def _is_founding_channel(message) -> bool:
 def _primary_mage_ids() -> set[int]:
     ids: set[int] = set()
     registry = get_registry()
+    default_mage = registry.get("default_mage")
     for key, mage in registry.get("mages", {}).items():
-        if key == "kermit" or mage.get("primary"):
+        if key == default_mage or mage.get("primary"):
             raw = mage.get("discord_id")
             if raw:
                 try:
@@ -100,7 +101,7 @@ def _primary_mage_ids() -> set[int]:
     return ids
 
 
-def _is_kermit(message) -> bool:
+def _is_primary_operator(message) -> bool:
     ids = _primary_mage_ids()
     return bool(ids) and message.author.id in ids
 
@@ -147,7 +148,7 @@ async def try_founder_key_entry(message) -> bool:
     text = (message.content or "").strip()
     channel_id = message.channel.id
 
-    if _is_kermit(message):
+    if _is_primary_operator(message):
         pending = _PENDING.get(channel_id)
         match = _CONFIRM_RE.match(text)
         if pending and match:
@@ -164,7 +165,7 @@ async def try_founder_key_entry(message) -> bool:
                 "discord_id": str(pending["discord_id"]),
                 "discord_handle": pending["discord_handle"],
                 "binding_status": "confirmed",
-                "confirmed_by": "kermit",
+                "confirmed_by": "primary_operator",
                 "confirmed_at": now,
             })
             data["founders"][founder_key] = record
@@ -174,7 +175,7 @@ async def try_founder_key_entry(message) -> bool:
                 "key": pending["key"],
                 "discord_id": str(pending["discord_id"]),
                 "discord_handle": pending["discord_handle"],
-                "confirmed_by": "kermit",
+                "confirmed_by": "primary_operator",
                 "confirmed_at": now,
                 "channel_id": str(channel_id),
             })
@@ -184,7 +185,7 @@ async def try_founder_key_entry(message) -> bool:
                 f"Bound. Welcome, {display_name}. {pending['key']} is now your key in this founding room.\n\n"
                 "This room is for the founding circle around MAGIC e.V. Questions are useful here, "
                 "including skeptical ones. I can explain the practice, turtleOS, and the current founding "
-                "process as I understand them. If something needs Kermit's own perspective or legal confirmation, "
+                "process as I understand them. If something needs the primary operator's own perspective or legal confirmation, "
                 "I will say so rather than guessing."
             )
             return True
@@ -199,7 +200,7 @@ async def try_founder_key_entry(message) -> bool:
         current_key = existing_record.get("key") or "your current key"
         await message.channel.send(
             f"I already have {current_key} as your key here.\n\n"
-            "If you want to change it, Kermit can confirm the change."
+            "If you want to change it, the primary operator can confirm the change."
         )
         return True
 
@@ -207,7 +208,7 @@ async def try_founder_key_entry(message) -> bool:
     if key_record:
         await message.channel.send(
             "That key is already bound in this room.\n\n"
-            "Kermit, please confirm whether this is a key change, a mistake, or a different person."
+            "Primary operator, please confirm whether this is a key change, a mistake, or a different person."
         )
         return True
 
@@ -220,6 +221,6 @@ async def try_founder_key_entry(message) -> bool:
     }
     await message.channel.send(
         f"I see your key: {text}.\n\n"
-        "Kermit, who should I bind this Discord handle to?"
+        "Primary operator, who should I bind this Discord handle to?"
     )
     return True

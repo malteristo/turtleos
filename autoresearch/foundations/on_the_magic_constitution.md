@@ -136,7 +136,7 @@ This constitution is agreed upon by both parties as the foundation of their shar
 
 **Mage:**
 
-*Kermit*
+*[Practitioner]*
 
 Date: February 1, 2026
 

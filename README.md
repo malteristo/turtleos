@@ -160,6 +160,8 @@ turtleos/
 
 The specification ([TURTLE_SPEC.md](TURTLE_SPEC.md)) governs the system. The architecture document ([ARCHITECTURE.md](ARCHITECTURE.md)) traces every spec section to its implementation.
 
+For development standards, production readiness, and the drift sweep ritual, see [docs/development.md](docs/development.md).
+
 ## Related
 
 - **[Magic](https://github.com/malteristo/magic)** — the practice framework that turtleOS implements. Theory, lore, and practice design.
