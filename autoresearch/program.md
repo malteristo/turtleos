@@ -138,7 +138,7 @@ Spirit-in-Cursor runs the research cycle directly, using sub-agents or dedicated
 cd ~/turtleos/autoresearch
 claude -p "Read program.md and the foundation documents it references. \
   Execute Phase B: evaluate current tOS against your criteria. \
-  Write your evaluation to ~/practice/proposals/autoresearch-eval-$(date +%Y-%m-%d).md"
+  Write your evaluation to ~/workshop/desk/proposals/autoresearch-eval-$(date +%Y-%m-%d).md"
 ```
 
 ### Scheduled (weekly, via launchd)

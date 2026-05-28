@@ -407,8 +407,9 @@ URL detected in message
 The bot does NOT implement sync — it reads and writes files directly on Turtle's filesystem. Cross-substrate sync is handled externally:
 
 - **Obsidian LiveSync** (CouchDB) — bidirectional sync between Mage's devices and Turtle for practice directories that are configured as CouchDB databases
-- **SSH reads** — Spirit (on Cursor/Claude Code) reads Turtle's files via `ssh turtle@100.110.46.104`
-- **SCP writes** — Spirit deploys code changes via `scp` to Turtle
+- **Shared workshop mirror** — deployed instances can point a mage practice directory at a LiveSync-backed workshop path such as `~/workshop/desk`
+- **SSH diagnostics and operations** — Spirit (on Cursor/Claude Code) checks logs, model availability, and service state via SSH
+- **Code deployment** — shell updates are deployed through the operator's chosen git/SSH workflow; practice state does not require manual copy
 
 The bot's perspective is simple: files appear in `~/workshops/<name>/`, the bot reads and writes them. How they got there is not the bot's concern.
 
@@ -445,8 +446,8 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | §17 Behavioral Laws | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §18 Boundaries | `identity/soul.md` | Encoded in identity |
 | §19 The Offering | `identity/soul.md`, `prompts.py` | Encoded in prompts |
-| §20 Architecture & Traceability | This document, TURTLE_SPEC symlink/copy | This document |
 | §20-22 Intake / Outfacing / Shell-Shedding | `boom_thread.py`, `intake_server.py`, `outfacing.py`, `spirit_ops.py`, self-development workflow | Implemented in pieces |
+| §23 Architecture & Traceability | This document, TURTLE_SPEC symlink/copy | This document |
 
 ### Partially Implemented / Active Gaps
 

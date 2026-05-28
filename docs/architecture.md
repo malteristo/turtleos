@@ -11,7 +11,7 @@
 
 | Service | launchd label | Process | What it does |
 |---------|--------------|---------|--------------|
-| **turtle-disco** | `com.turtle.discord` | `discord_bot.py` | Spirit-in-persistent-mode. Discord bot handling #dialogue, #system, threads. |
+| **turtle-disco** | `com.turtle.discord` | `discord_bot.py` | Spirit-in-persistent-mode. Discord bot handling the practice river, inline operations, and threads. |
 | **Ollama** | (system) | `ollama serve` | Local LLM inference. Serves qwen3.5:9b, qwen3.5:4b. |
 | **LiteLLM** | `com.turtle.litellm` | `litellm --config ...` | LLM proxy on port 4000. Routes model requests. |
 | **CouchDB** | `com.turtle.couchdb` | couchdb | Practice vault sync (Obsidian LiveSync). |
@@ -128,19 +128,18 @@ Discord message (#cc channel or DM)
 ```
 Message arrives after >15min quiet
   -> Auto-close previous session
-  -> Write session notes to ~/practice/sessions/
-  -> Optionally write proposals to ~/practice/proposals/
+  -> Write session notes to the active practice root's sessions/
+  -> Optionally write proposals to the active practice root's proposals/
   -> Start new session with opening awareness
 ```
 
 ### Practice state sync (Cursor <-> Mac Mini)
 
 ```
-Spirit in Cursor (@recall or @release)
-  -> SCP push: boom, bright, compass, intentions
-     from Mage's laptop -> turtle@100.119.10.111:~/practice/
-  -> SCP pull: sessions/, proposals/
-     from Mac Mini -> Mage's desk/
+Practice state flows through the LiveSync-backed workshop mirror.
+  -> Kermit's practice root: ~/workshop/desk/
+  -> Other practitioners: ~/workshops/<name>/
+  -> Spirit reads local desk/ and uses SSH only for diagnostics or drift checks
 ```
 
 ---
@@ -169,7 +168,7 @@ Spirit in Cursor (@recall or @release)
 | Channel | Bot | Behavior |
 |---------|-----|----------|
 | **#dialogue** | turtle-disco | Main practice. Responds to all messages. Threads auto-joined. |
-| **#system** | turtle-disco | Activity log (bot posts only). |
+| **inline operations** | turtle-disco | Operations post where relevant, usually as sparse silent embeds. |
 | **#cc** | cc-sessions | Claude Code sessions. Responds to all messages (no mention needed). |
 | **DMs with cc-sessions** | cc-sessions | Private deep sessions. Pairing required. |
 
@@ -184,7 +183,6 @@ OLLAMA_URL=http://localhost:11434
 DIALOGUE_MODEL=claude-sonnet-4-6
 REFLECTION_MODEL=qwen3.5:9b
 DISCORD_CHANNEL_DIALOGUE=<channel_id>
-DISCORD_CHANNEL_SYSTEM=<channel_id>
 DISCORD_BOT_TOKEN=<token>
 ANTHROPIC_API_KEY=<key>
 ```

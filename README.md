@@ -134,7 +134,7 @@ Practitioners are registered in `mage_registry.yaml`, created locally from `mage
 
 ```
 turtleos/
-├── TURTLE_SPEC.md      # Canonical specification (22 sections)
+├── TURTLE_SPEC.md      # Canonical specification (23 sections)
 ├── ARCHITECTURE.md     # Implementation guide — module map, data flow, design decisions
 ├── identity/soul.md    # AI identity / system prompt
 ├── discord_bot.py      # Entry point
