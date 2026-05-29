@@ -14,6 +14,21 @@ A change is ready to push when it is coherent from law to implementation:
 
 Production does not mean perfect. It means the repository does not knowingly publish contradictions between spec, docs, and runtime behavior.
 
+## Development Chapters
+
+Treat coherent turtleOS work as development chapters: bounded arcs that begin from a concrete friction or capability need, integrate the spec, implement the smallest useful slice, verify it, and harvest the lesson before moving on.
+
+Chapter pattern:
+
+1. **Name the tension** — What friction, gap, or future capability is being served?
+2. **Check the spec** — If `TURTLE_SPEC.md` already governs the behavior, trace to it. If not, draft the smallest amendment and get sanction before treating it as canonical.
+3. **Implement the slice** — Prefer the lowest-risk useful slice. Keep authority narrower than the eventual vision until it has earned trust.
+4. **Document operation** — Update `ARCHITECTURE.md`, operator docs, prompts, skills, or procedures so the implementation can be used and rebuilt.
+5. **Verify by consequence** — Run checks proportionate to the blast radius.
+6. **Harvest** — Record what the chapter taught: what pattern should repeat, what remains intentionally deferred, and what future authority would require.
+
+Example chapter: the read-only live update surface. The tension was safe updates for a live shell. The spec now defines the live shell update protocol in `TURTLE_SPEC.md` §22.8. The implemented slice stops at `update check/plan`, with tests and canary source coverage, while automated apply/restart remains deferred until the read-only surface proves itself in real updates.
+
 ## Drift Sweep Ritual
 
 Run this before pushing any change that affects topology, runtime behavior, autonomy, model routing, practice files, channels, or operator workflow.
@@ -62,12 +77,54 @@ Keep private:
 
 When lineage contains a public lesson, distill the lesson into current docs instead of publishing the raw lineage artifact.
 
+## Update Ritual
+
+turtleOS updates are live-service operations governed by `TURTLE_SPEC.md` §22.8. The first supported update surface is read-only awareness:
+
+```bash
+python cli.py update check
+python cli.py update plan
+```
+
+These commands inspect git state and print JSON. They do not pull, merge, restart services, write runtime task/audit state, modify practice files, or touch private configuration.
+
+Use `check` to answer:
+
+- which repository and upstream/base ref are being compared
+- whether the working tree is dirty
+- whether the checkout is ahead, behind, diverged, or up to date
+- whether the local tracking ref appears stale compared with the remote head
+
+Use `plan` when an update appears available. It lists available commits, changed files, impact buckets, the approval tier, and whether a restart is likely.
+
+Manual apply remains an operator action:
+
+1. Run `python cli.py update check` and `python cli.py update plan`.
+2. Confirm the source of truth and approval tier.
+3. Ensure the working tree is clean.
+4. Record the current SHA as the rollback target.
+5. Apply the update manually with the operator's chosen git workflow.
+6. Run syntax checks for changed Python files.
+7. For update-surface changes, run `python -m unittest tests.test_runtime_update`.
+8. Run `python canary.py` before any restart decision and again after restart if restarted.
+9. Report the result in the relevant craft/admin surface.
+
+Consequence tiers:
+
+- Documentation-only updates can be operator-reviewed and usually require no restart.
+- Runtime Python changes require Spirit/operator review and may require a bot restart after verification.
+- Dependency changes require explicit operator approval and an install plan.
+- Protected or governance files (`TURTLE_SPEC.md`, private config, launchd plists, identity files) require explicit Mage/operator approval before applying.
+
+Do not add automated `git pull`, dependency install, service restart, or rollback behavior until read-only update awareness has proven reliable in real live updates.
+
 ## Traceability Backlog
 
 When implementation grows ahead of the spec, add the gap here or in `ARCHITECTURE.md`. Current known areas needing tighter traceability:
 
 - native runtime beyond the first vertical slice: long-running tasks, general tools, live dialogue routing, and Discord notification outputs
 - `cli.py` command reference generation and operator docs
+- audited update apply: preflight, explicit approval, verification, restart gating, and rollback after read-only `update check/plan` proves reliable
 - self-development write authority: current shell harness is inspection-only; runtime prompt/procedure wording should stay aligned until a real low-risk write path exists
 - skill/procedure lifecycle governance: when to add, update, deprecate, or test guidance cards
 - founder/founding-room capabilities, if they remain in the public product
@@ -76,6 +133,7 @@ When implementation grows ahead of the spec, add the gap here or in `ARCHITECTUR
 Done in the first traceability pass:
 
 - `runtime/` and `cli.py` first vertical slice mapped in `ARCHITECTURE.md`: event intake, durable tasks, audit JSONL, bounded practice capabilities, model probes, runtime readiness, registry-driven paths, and the Discord adapter handoff.
+- `runtime/update.py` and `cli.py update check/plan` mapped in `ARCHITECTURE.md`: read-only live shell update awareness from `TURTLE_SPEC.md` §22.8, divergence checks, impact classification, and manual apply ritual guidance.
 - `shell_harness.py` self-development inspection slice mapped in `ARCHITECTURE.md`: allowed read-only command families, path/git guardrails, audit log behavior, LLM tool and `/shell` exposure points, and the boundary that write/commit/restart authority is not implemented there.
 - `capabilities.py`, `skills/`, and `procedures/` mapped in `ARCHITECTURE.md`: file-backed guidance cards, prompt summary injection, list/read tools, typed result classification, canary smoke check, and the boundary that cards guide behavior but do not grant permissions.
 

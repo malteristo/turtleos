@@ -159,10 +159,13 @@ Artifact reference + task state for later inspection
 | `runtime/capabilities/practice.py` | Governed practice artifact writes: append boom, write session note, write proposal. |
 | `runtime/model_probe.py` | Provider-neutral model probe tasks for comparable outputs across Ollama, Anthropic, Gemini, and stub providers. |
 | `runtime/readiness.py` | Native runtime readiness sensorium: service state, model availability, task failures, and artifact visibility. |
+| `runtime/update.py` | Read-only turtleOS repository update awareness: git divergence, remote tracking freshness, changed-file impact classification, approval tier, and manual apply guidance. |
 | `runtime/paths.py` | Registry-driven principal resolution for practice dir, runtime dir, native runtime dir, tasks dir, and audit dir. |
 | `runtime/adapters/discord.py` | Thin adapter that translates Discord message-like metadata into native runtime handoffs without leaking Discord objects into task/audit/capability code. |
 
 This slice implements the first vertical path from Proposal 037: handoff -> task -> audit -> artifact. Dialogue still runs through `discord_bot.py`. The native runtime currently proves durable task/audit semantics and bounded capabilities; it does not yet own model routing for live dialogue, long-running autonomous work, or a general tool system.
+
+`cli.py update check` and `cli.py update plan` are deliberately inspection-only. They do not pull, merge, restart services, write runtime state, touch practice files, or modify private configuration. `check` reports source-of-truth comparison, dirty working tree state, divergence, and stale tracking refs. `plan` adds commit/file impact classification, approval tier, restart likelihood, and the manual apply ritual. Automated apply, rollback, dependency install, and service restart are intentionally deferred until this read-only surface has been exercised in real updates.
 
 ### Self-Development Inspection Harness
 
@@ -544,6 +547,7 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | §19 The Offering | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §20-22 Intake / Outfacing / Shell-Shedding | `boom_thread.py`, `intake_server.py`, `outfacing.py`, `spirit_ops.py`, self-development workflow | Implemented in pieces |
 | §22.8 Self-Development Protocol / native runtime skeleton | `cli.py`, `runtime/events.py`, `runtime/tasks.py`, `runtime/audit.py`, `runtime/handoff.py`, `runtime/policy.py`, `runtime/capabilities/practice.py`, `runtime/readiness.py` | First vertical slice implemented: durable handoff/task/audit/artifact path |
+| §22.8 Self-Development Protocol / live shell update protocol | `cli.py update check/plan`, `runtime/update.py`, `docs/development.md` | Inspection-only slice implemented: source-of-truth checks, git divergence, impact classification, manual apply ritual; no pull/apply/restart authority |
 | §22.8 Self-Development Protocol / inspection harness | `shell_harness.py`, `tos_tools.py:run_turtleos_shell`, `intake_server.py:/shell`, `procedures/self-development-inspection.md` | Inspection-only slice implemented: read-only source inspection, git state checks, syntax verification, audited attempts |
 | §22.8 Self-Development Protocol / skills and procedures | `capabilities.py`, `skills/*.md`, `procedures/*.md`, `prompts.py`, `tos_tools.py`, `tool_result.py`, `canary.py` | Implemented as guidance cards and discovery tools; not an authorization layer |
 | §7 Cognitive Stack / provider comparison | `cli.py probe run`, `runtime/model_probe.py` | Implemented as review artifacts, not automatic model-routing decisions |

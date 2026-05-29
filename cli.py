@@ -13,6 +13,7 @@ from runtime.model_probe import submit_model_probe
 from runtime.paths import RuntimePaths
 from runtime.readiness import RuntimeReadiness
 from runtime.tasks import TaskStore
+from runtime.update import check_update, plan_update
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,6 +83,17 @@ def build_parser() -> argparse.ArgumentParser:
     probe_run.add_argument("--scope", default="model-probe")
     probe_run.add_argument("--trust-level", default="operator")
     probe_run.set_defaults(func=cmd_probe_run)
+
+    update = subparsers.add_parser("update", help="inspect turtleOS repository update status")
+    update_subparsers = update.add_subparsers(dest="update_command", required=True)
+    update_check = update_subparsers.add_parser("check", help="read-only source-of-truth and divergence report")
+    update_check.add_argument("--repo", type=Path, default=Path.cwd(), help="path inside the turtleOS git checkout")
+    update_check.add_argument("--base-ref", help="base ref to compare against, default: upstream or origin/main")
+    update_check.set_defaults(func=cmd_update_check)
+    update_plan = update_subparsers.add_parser("plan", help="read-only update plan with impact classification")
+    update_plan.add_argument("--repo", type=Path, default=Path.cwd(), help="path inside the turtleOS git checkout")
+    update_plan.add_argument("--base-ref", help="base ref to compare against, default: upstream or origin/main")
+    update_plan.set_defaults(func=cmd_update_plan)
     return parser
 
 
@@ -191,6 +203,16 @@ def cmd_probe_run(args: argparse.Namespace) -> int:
     )
     print_json({"task_id": task.task_id, "state": task.state, "artifact_refs": task.artifact_refs})
     return 0 if task.state == "completed" else 1
+
+
+def cmd_update_check(args: argparse.Namespace) -> int:
+    print_json(check_update(repo=args.repo, base_ref=args.base_ref))
+    return 0
+
+
+def cmd_update_plan(args: argparse.Namespace) -> int:
+    print_json(plan_update(repo=args.repo, base_ref=args.base_ref))
+    return 0
 
 
 def runtime_paths(args: argparse.Namespace) -> RuntimePaths:

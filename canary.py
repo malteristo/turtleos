@@ -36,6 +36,7 @@ SOURCE_MODULES = [
     "shell_harness.py",
     "tos_tools.py",
     "tool_result.py",
+    "runtime/update.py",
 ]
 
 
@@ -121,7 +122,7 @@ def check_ollama():
 def check_source_deployable():
     failures = []
     for rel in SOURCE_MODULES:
-        path = Path(__file__).with_name(rel)
+        path = Path(__file__).parent / rel
         if not path.exists():
             failures.append(f"{rel}: missing")
             continue

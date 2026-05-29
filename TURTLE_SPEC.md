@@ -1095,6 +1095,22 @@ Turtle's shell code (`~/turtleos/`) is Turtle's own body. Self-development is go
 3. **Classify** — Identify which authority tier applies. If the change is not clearly a low-risk practice-experience fix, route to Spirit.
 4. **Track** — Write or update a proposal/issue in the shared workshop (`desk/proposals/`, `desk/turtle_issues.md`, or the active Craft Turtle thread) describing the change, the reasoning, the expected effect, and the verification plan.
 
+**Live shell update protocol:**
+
+Updating the live `~/turtleos/` checkout is distinct from ordinary low-risk shell editing. A live update may replace many files at once, alter deployed behavior implicitly, or require service restart. Therefore it begins with read-only update awareness, even when the expected change is low-risk.
+
+1. **Check** — Compare the live checkout with its intended source of truth. Report branch, current SHA, upstream/base ref, dirty working tree state, ahead/behind/diverged status, and stale tracking refs.
+2. **Plan** — If updates are available, list commits, changed files, consequence tier, likely restart need, verification steps, and rollback target.
+3. **Approve** — Apply authority by consequence:
+   - documentation-only updates may proceed after operator review
+   - runtime code updates require Spirit/operator approval
+   - dependency, private config, launchd, persistence, identity, or governance-adjacent updates require explicit Mage/operator approval
+4. **Apply manually until proven** — Automated pull, merge, dependency install, restart, and rollback are not part of the first live update surface. They may be added only after read-only check/plan has proven reliable across real updates.
+5. **Verify** — Run syntax checks, relevant unit/smoke checks, and canary before any restart decision. If restart occurs, run canary again after reconnect.
+6. **Chronicle** — Record what changed, what was verified, and any rollback target in the relevant craft/admin surface.
+
+Read-only update awareness may be exposed as runtime tooling. Apply/restart authority must remain separately gated and traceable.
+
 **When changing low-risk shell code:**
 5. **Savepoint** — Ensure the current state is recoverable through git before changing code.
 6. **Implement** — Write the smallest change that resolves the issue. Test with syntax validation (`python -c "import module"`) and any relevant smoke check.
