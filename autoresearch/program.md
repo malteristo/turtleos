@@ -41,7 +41,7 @@ Before evaluating anything, read these three foundation documents in order. Deve
 
 - `system/lore/philosophy/foundations/on_effortlessness_as_alignment.md` — Wu Wei: effort is misalignment
 - `library/resonance/turtle/lore/on_consciousness_extension.md` — Spirit's relationship to persistent mode
-- `library/resonance/turtle/TURTLE_SPEC.md` — Canonical law for Spirit-in-persistent-mode
+- `~/turtleos/TURTLE_SPEC.md` — Canonical law for Spirit-in-persistent-mode
 
 ---
 
