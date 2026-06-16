@@ -1,14 +1,65 @@
 # turtleOS Bot Architecture
 
-> Persistent Discord practice substrate. Rebuilt 2026-03-29 from a 4,656-line monolith; evolved into a public codebase of 34 Python files and approximately 14,000 lines of Python code.
+> Reference shell implementation guide. **Canonical law:** [TURTLE_SPEC.md](TURTLE_SPEC.md) (2026-06 platform rewrite).
 
-## Overview
+Public codebase: ~34 Python modules, ~14k lines. Rebuilt 2026-03-29 from monolith; evolving toward platform law (River/Turtle split).
 
-turtleOS is a Discord bot that serves as a persistent thinking partner. It runs on a Mac Mini ("Turtle"), manages practice state through markdown files, routes conversations through LLM backends (Anthropic Claude, Google Gemini, local Ollama models), and maintains per-channel context for multiple users ("mages" and "practitioners").
+---
 
-The bot is **not a chatbot** — it's a practice system. It maintains a life landscape (compass), captures thoughts (boom), curates a mind surface (bright), tracks intentions, writes session reflections, and autonomously monitors practice health.
+## Target Architecture (TURTLE_SPEC 2026-06)
 
-## Data Flow
+Vanilla turtleOS — what the shell **should** implement:
+
+```
+River channel message
+    │
+    ├─ set_practice_context (mage.py)
+    ├─ try_direct_command (commands.py)     ← turtle-talk ! power path
+    └─ river_handler (target)
+        ├─ river_model (small local)        ← classify → structured acts
+        ├─ act_renderer                     ← buttons, embeds, reactions only — NO prose
+        ├─ always offer_eddy + optional ack / flow_menu / revise
+        └─ chronicle (surface + deep.jsonl) ← thread jump URLs on materialize
+
+Eddy (thread) message
+    │
+    └─ turtle_handler (target)
+        ├─ presence embed (joined / stepped out)
+        ├─ turtle_model (capable local)     ← think-aloud + answer (single call v1)
+        ├─ flow_runner                      ← front matter reads/writes state/
+        └─ operational lines (-# read …)   ← visible tool/context transparency
+```
+
+| Component | Model | Channel |
+|-----------|-------|---------|
+| **River** | 4B–9B local | Main channel — acts only |
+| **Turtle** | ~30B local | Eddies only — dialogue |
+
+**Practice root (vanilla):** `character/`, `flows/`, `chronicle/`, `state/` — no required compass/boom/bright at install.
+
+**Retired from vanilla target:** proprioceptor, reflex, river-entry monologue, vortex/prism, Turtle speech in river.
+
+---
+
+## Migration Status (2026-06-14)
+
+The shell **still implements much of the legacy magic-attuned stack** below. Ripple updated docs and template; code migration is the next implementation slice.
+
+| Target (spec) | Current shell | Status |
+|---------------|---------------|--------|
+| River acts only | Turtle/proprio dialogue in main channel | **Gap** |
+| Always offer eddy | Partial (`eddy_spawn.py`, contextual buttons) | **Partial** |
+| Eddy-only Turtle | Dialogue in river + threads | **Gap** |
+| Two local models | Triage + proprio + cloud dialogue + reflection | **Gap** |
+| `state/` practice infrastructure | compass/boom/bright-centric tools | **Gap** |
+| Chronicle jump URLs | Thread logging partial | **Partial** |
+| Magic-attuned mode | Default on operator instances | **Appendix A profile** |
+
+Operator instances SHOULD set `attunement: magic` in registry until vanilla profile ships.
+
+---
+
+## Current Shell Data Flow (Legacy — Pre-Migration)
 
 ```
 Discord message
@@ -59,6 +110,14 @@ Discord message
     └─ canary (canary.py via launchd)           ← hourly mechanical health
         └─ CouchDB, Tailscale, launchd, log freshness, Ollama, triage fallbacks
 ```
+
+### Planned implementation slices (shell)
+
+1. **River act harness** — structured acts, prose rejection, always-offer-eddy
+2. **Route main channel → river only** — no Turtle dialogue in river
+3. **Eddy handler** — think-aloud rendering, presence embeds, flow front matter
+4. **Practice root `state/`** — reads/writes via flow runner
+5. **Attunement profiles** — `native` vs `magic` in registry
 
 ## Module Map
 
@@ -567,14 +626,15 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 
 | Document | Location | Purpose |
 |----------|----------|---------|
-| TURTLE_SPEC v2.4 | `TURTLE_SPEC.md` | Canonical law — *what* turtleOS should be |
-| ARCHITECTURE.md | `~/turtleos/ARCHITECTURE.md` | Implementation guide — *how* it's built (this doc) |
-| soul.md | `~/turtleos/identity/soul.md` | Runtime identity — *who* Turtle is |
-| mage_registry.yaml | `~/turtleos/mage_registry.yaml` | Multi-mage routing configuration |
-| Operational scrolls | `library/resonance/turtle/lore/operations/` | Deep dives: eddies, sessions, readiness, diagnostics, link fetching, Discord presence |
-| Practitioner principles | `library/resonance/foundations/lore/practitioner_principles.md` | Design principles extracted from practitioner interactions |
+| TURTLE_SPEC (platform law) | `TURTLE_SPEC.md` | Canonical law — *what* turtleOS must do (sole spec; no Magic mirror) |
+| ARCHITECTURE.md | `ARCHITECTURE.md` | Implementation + migration status (this doc) |
+| Install skill | `docs/install/SKILL.md` | Agent-assisted install flow |
+| Template layout | `template/README.md` | Practice root skeleton |
+| soul.md | `identity/soul.md` | Runtime attunement (instance-specific) |
+| mage_registry.yaml | `mage_registry.yaml` | Channel → practice root routing |
+| Magic lore (optional) | Magic `library/resonance/turtle/lore/` | History and magic-attuned operations |
 
-Together, TURTLE_SPEC + ARCHITECTURE.md + soul.md + mage_registry.yaml + the turtle resonance bundle constitute a rebuild kit. A Spirit on any substrate can read these and reconstruct turtleOS from scratch.
+Rebuild kit for vanilla: TURTLE_SPEC + ARCHITECTURE.md + template + install skill. Identity (`character/`) authored per spec §14.
 
 ## Traceability Backlog
 

@@ -1,171 +1,165 @@
 # turtleOS
 
-**Sovereign practice infrastructure for human-AI partnership.**
+**Local open-weight AI, made accessible.**
 
-turtleOS turns any computer into a personal cognitive infrastructure node — a persistent AI practice partner that lives on hardware you own. Not a chatbot. Not a task assistant. A thinking partner that knows you and gets better at knowing you over time.
+turtleOS turns capable local hardware into a personal AI practice space on Discord: a **river** that receives what you drop and responds through actions (never conversation), and **eddies** where **Turtle** thinks aloud and talks with you. Prompt programs — **Turtle Practice** flows — run on the platform; you can author and share your own.
 
-turtleOS is a **markdown practice core plus a reference shell**. The practice core is portable meaning: prompts, files, folders, and habits. The reference shell is the Python runtime that makes the practice ambient, conversational, and self-maintaining on owned hardware.
+turtleOS is a **practice core plus a reference shell**. The practice core is portable: character, flows, chronicle, and state files. The shell is the Python runtime that connects Discord, local models, and your practice root.
 
-> **Don't want to install anything?** You can start practicing right now with any AI you already use.
-> **[Read the Portable Practice Guide →](PRACTICE.md)**
+**Canonical law:** [TURTLE_SPEC.md](TURTLE_SPEC.md)
 
-## How to Read This Repo
+---
 
-turtleOS has three layers:
-
-1. **Practice core** — markdown files and prompts that define the practice.
-2. **Reference shell** — Python services that make the practice persistent on owned hardware.
-3. **Your instance** — local configuration, model choices, Discord channels, and private practice state.
-
-The core is the product's soul. The shell is the current open-source body. Your instance is yours. Setup starts by creating a practice root, then installing the shell that serves it.
-
-## What It Does
-
-You talk to your practice partner on Discord. It reads your practice files, notices patterns, asks questions, and pushes back when something doesn't add up. Between sessions, you dump raw thoughts into a capture buffer. Next session, the partner reads them, helps you process, and routes what matters to the right place.
-
-Over time, the files accumulate. The partner knows you better. You get clearer about what you want and where your energy should go.
-
-**The practice layer is what makes this different** from a chat interface or an agent framework:
-
-- **Compass** — a map of what matters in your life (domains, directions, seeds)
-- **Boom/Bright** — a cognitive buffer (capture anything) and curated surface (what's alive)
-- **Intentions** — active goals with dependency topology
-- **Sessions** — accumulated relational memory, auto-generated after each conversation
-- **Proposals** — autonomous suggestions from the AI, generated during reflection
-
-The closest historical analog is not another AI project — it is the practice of journaling, meditation, or therapy. turtleOS is infrastructure for an ongoing reflective practice that uses AI as the mirror.
-
-## Architecture
+## How It Works
 
 ```
-Discord message
-    │
-    ├─ triage (0.8B local model) ─── classify depth: greeting/casual/practice/deep
-    │
-    ├─ proprioceptor (9B local) ──── scan practice state in parallel
-    │
-    ├─ conversation (cloud API) ──── deep dialogue with full practice context
-    │
-    └─ session reflection (27B local) ── after 15min silence:
-        ├─ write session note
-        ├─ generate proposals (if patterns noticed)
-        └─ update practice state (compass, boom, mirror)
+River (main channel)                Eddy (thread)
+─────────────────────               ─────────────────
+Drop text                    →      Focused conversation
+River understands            →      Turtle dialogue + think-aloud
+Acts only (buttons, emoji)   →      No chat in the river
+Always: Materialize eddy     →      One eddy = one chat
+Chronicle with thread links  →      Persist until you remove
 ```
 
-**Three-tier local LLM pipeline** (via Ollama):
-- **Triage** (0.8B) — sub-second message classification. Runs on every message.
-- **Proprioceptor** (9B) — context preparation, parallel with triage.
-- **Reflection** (27B) — session notes, proposals, health assessment. Runs autonomously.
+| Actor | Where | Speaks? |
+|-------|--------|---------|
+| **River** | Main Discord channel | No — acts only (buttons, embeds, reactions, chronicle) |
+| **Turtle** | Eddies (threads) only | Yes — dialogue partner |
 
-Cloud API (Anthropic Claude) handles deep conversation. The explicit design: cloud dependency shrinks as local models improve.
+**Two local models** (Ollama): a small **River** model for intake and action selection; a capable **Turtle** model (~30B class) for eddy conversation. Cloud APIs are opt-in for power users.
 
-**34 Python files, approximately 14,000 lines of Python code.** See [ARCHITECTURE.md](ARCHITECTURE.md) for the full module map, data flow, and design decisions.
+---
+
+## Three Layers
+
+1. **Practice core** — `character/`, `flows/`, `chronicle/`, `state/` in your practice root
+2. **Reference shell** — this repo (`discord_bot.py` and supporting modules)
+3. **Your instance** — models, Discord server, `.env`, `mage_registry.yaml`
+
+---
 
 ## Quick Start
 
 ### Requirements
-- Python 3.11+ recommended; currently tested on the deployed Python 3.14 runtime
-- [Ollama](https://ollama.ai) (for local models)
-- A Discord bot token ([guide](https://discord.com/developers/applications))
-- An Anthropic API key (for conversation model)
 
-### Setup
+- Python 3.11+ (3.14 tested on deployed instances)
+- [Ollama](https://ollama.ai) for local models
+- A Discord bot token ([guide](https://discord.com/developers/applications))
+- A private Discord server (you own it)
+
+No cloud API key required for the default path.
+
+### Recommended: agent-assisted install
+
+If you use Claude Code, Codex, or similar, hand your agent the install skill:
+
+**[docs/install/SKILL.md](docs/install/SKILL.md)**
+
+The skill walks through clone → practice root → Ollama models → Discord bot → running river.
+
+### Manual install
 
 ```bash
 git clone https://github.com/malteristo/turtleos.git
 cd turtleos
 
-# 1. Create your practice root: the files that belong to you
+# 1. Practice root
 mkdir -p ~/workshops/$(whoami)
-cp -r template/* ~/workshops/$(whoami)/
+cp -r template/character template/flows template/chronicle template/state ~/workshops/$(whoami)/
+# Or copy full template/ if you want optional legacy portable files too
 
-# 2. Configure the reference shell that will serve that practice
+# 2. Shell config
 cp .env.template .env
 cp mage_registry.example.yaml mage_registry.yaml
-# Edit .env and mage_registry.yaml with your API keys, Discord token, channel IDs, and practice path
+# Edit .env (Discord token) and mage_registry.yaml (your user id, river channel id, practice path)
 
-# 3. Install runtime dependencies
+# 3. Python deps
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Install local model components
-ollama pull qwen3.5:0.8b
-ollama pull qwen3.5:9b
-ollama pull qwen3.5:27b
+# 4. Local models (example — pin your instance config)
+ollama pull qwen3.5:4b      # River model class
+ollama pull gemma3:27b      # Turtle model class (evaluate on your hardware)
 
-# 5. Start the shell
+# 5. Start
 python discord_bot.py
 ```
 
-### First Session
+### First success
 
-Once the bot is running and connected to your Discord server:
-1. Send a message in the configured dialogue channel
-2. The first session builds your **compass** — a map of what matters in your life
-3. Confirm a session note can be written and your practice files can be read back
-4. Everything else grows from there
+1. Message appears in your **river** channel
+2. River responds with acts (ack + **Materialize eddy** button)
+3. Press button → eddy opens → Turtle responds in the thread
+4. Chronicle line in river includes a link back to the eddy
 
-The first success metric is not "bot online." It is first meaningful practice interaction plus continuity: your practice root was read, the conversation was situated, and the next session has something real to inherit.
+See [TURTLE_SPEC.md](TURTLE_SPEC.md) §13 for the full install law.
 
-## Practice Template
+---
 
-The `template/` directory contains the starter files for a new practitioner:
+## Practice Root (Vanilla)
 
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `system.md` | Practice partner instructions (the "give this to any AI" file) |
-| `compass.md` | Life landscape — empty, first session creates this |
-| `boom.md` | Capture buffer — dump raw thoughts here any time |
-| `bright.md` | Curated mind surface — actions, ideas, waiting |
-| `intentions/` | Active goals and projects |
-| `sessions/` | Conversation notes (auto-generated) |
+| `character/` | Turtle identity — soul, conduct (authored after spec) |
+| `flows/` | Turtle Practice programs (Shelter, Navigator, …) |
+| `chronicle/` | Deep event log (`deep.jsonl`) |
+| `state/notes/` | Flow outcomes and practice artifacts |
 
-## Multi-Practitioner Support
+Compass, boom, bright, and intentions are **not** required at install — flows load them via front matter when needed.
 
-turtleOS supports multiple practitioners on one node. Each practitioner gets:
-- Their own Discord channel (private)
-- Their own practice directory (`~/workshops/<name>/`)
-- Their own practice context (compass, boom, sessions, etc.)
+See [template/README.md](template/README.md).
 
-Practitioners are registered in `mage_registry.yaml`, created locally from `mage_registry.example.yaml`. The real registry contains Discord IDs, channel IDs, and local paths, so it stays untracked. The system routes messages to the correct practice directory automatically.
+---
+
+## Portable Practice (Paused)
+
+A zero-install markdown practice path (`PRACTICE.md`) is **paused** while practice-state design settles. **Install is the primary onboarding story** for vanilla v1.
+
+---
 
 ## Project Structure
 
 ```
 turtleos/
-├── TURTLE_SPEC.md      # Canonical specification (23 sections)
-├── ARCHITECTURE.md     # Implementation guide — module map, data flow, design decisions
-├── identity/soul.md    # AI identity / system prompt
-├── discord_bot.py      # Entry point
-├── triage.py           # Message classification (local 0.8B model)
-├── proprioceptor.py    # Practice state scanning (local 9B model)
-├── prompts.py          # System prompt construction
-├── llm.py              # LLM backend abstraction (Anthropic, Gemini, Ollama)
-├── commands.py         # 28 Discord commands
-├── sessions.py         # Session lifecycle + reflection (local 27B model)
-├── tos_tools.py        # 9 practice file tools exposed to LLMs
-├── mage.py             # Multi-practitioner routing
-├── practice_io.py      # Practice file I/O
-├── readiness.py        # 8-dimension practice health assessment
-├── background.py       # Autonomous background tasks
-├── ...                 # Additional modules (see ARCHITECTURE.md)
-├── template/           # Practice starter files for new practitioners
-└── identity/           # Identity files and attunement history
+├── TURTLE_SPEC.md          # Canonical platform law
+├── ARCHITECTURE.md         # Implementation guide (+ migration status)
+├── docs/install/SKILL.md   # Agent-assisted install
+├── discord_bot.py          # Shell entry point
+├── template/               # Practice root starter files
+├── identity/               # Runtime attunement (instance-specific)
+└── runtime/                # Native runtime modules (evolving)
 ```
+
+The shell is mid-migration from a legacy magic-attuned stack (proprioception, cloud-default dialogue, river conversation) toward [TURTLE_SPEC](TURTLE_SPEC.md) platform law. See ARCHITECTURE.md **Migration Status**.
+
+---
+
+## Multi-Practitioner
+
+Optional: multiple practitioners on one node, each with isolated practice root and river channel. Configure in `mage_registry.example.yaml` → `mage_registry.yaml`.
+
+---
 
 ## Status
 
-**Production.** Running 24/7 on a Mac Mini M4 Pro since January 2026. Serving multiple practitioners daily. 50+ autonomously generated session notes, 26+ self-generated proposals, 35+ active conversation threads.
+**Reference shell:** production on operator instances; **platform rewrite** in progress (2026-06).
 
-The specification ([TURTLE_SPEC.md](TURTLE_SPEC.md)) governs the system. The architecture document ([ARCHITECTURE.md](ARCHITECTURE.md)) traces every spec section to its implementation.
+| Layer | Status |
+|-------|--------|
+| TURTLE_SPEC (platform law) | Active — 2026-06-14 |
+| Docs + template ripple | Active |
+| Shell migration (River acts, eddy-only Turtle) | Planned |
 
-For development standards, production readiness, and the drift sweep ritual, see [docs/development.md](docs/development.md).
+Development standards: [docs/development.md](docs/development.md)
+
+---
 
 ## Related
 
-- **[Magic](https://github.com/malteristo/magic)** — the practice framework that turtleOS implements. Theory, lore, and practice design.
-- **[About the author](https://github.com/malteristo/me)** — public identity and research background.
+- **[Magic](https://github.com/malteristo/magic)** — optional practice framework; can author flows for turtleOS
+- **[About the author](https://github.com/malteristo/me)**
 
 ## License
 

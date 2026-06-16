@@ -1,0 +1,6 @@
+# Optional practice state inventory.
+# Runtime or flows may update last_touched timestamps.
+# See TURTLE_SPEC §11.4
+
+version: 1
+files: {}

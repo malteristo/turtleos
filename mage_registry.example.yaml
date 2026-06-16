@@ -2,6 +2,11 @@
 # Copy to mage_registry.yaml and replace placeholders with your Discord IDs,
 # channel IDs, and local practice paths. Keep the real file untracked.
 
+# Attunement profile (TURTLE_SPEC §4, Appendix A):
+#   native  — vanilla platform law (target default)
+#   magic   — legacy magic-attuned persistent Spirit (operator instances during migration)
+# attunement: native
+
 mages:
   default:
     discord_id: "YOUR_DISCORD_USER_ID"

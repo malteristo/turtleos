@@ -1,3 +1,13 @@
+# Portable Practice — Paused
+
+> **Status (2026-06-14):** This path is **paused** pending practice-state design ([TURTLE_SPEC.md](TURTLE_SPEC.md) §11.4, §13.2). Vanilla v1 onboarding is the **turtleOS install** — local models, Discord river, eddies. See [README.md](README.md).
+
+---
+
+The content below describes an earlier zero-install offering (markdown files + any AI). It remains for reference until we determine how portable practice relates to the new platform `state/` infrastructure and Turtle Practice flows.
+
+---
+
 # Practice Without Installing Anything
 
 You don't need a Mac Mini, Discord, or any infrastructure to start practicing. You need a conversation with an AI — any AI — and a few files.
@@ -28,7 +38,7 @@ Download or copy these files from the [`template/`](template/) directory:
 
 | File | What It Is |
 |------|-----------|
-| [`system.md`](template/system.md) | The practice partner prompt — this is the core |
+| [`system.md`](template/system.md) | The practice partner prompt — legacy portable core |
 | [`compass.md`](template/compass.md) | Your life landscape (starts empty) |
 | [`boom.md`](template/boom.md) | Capture buffer for raw thoughts |
 | [`bright.md`](template/bright.md) | Curated surface — actions, ideas, waiting |
@@ -101,17 +111,7 @@ No one is locked out. Everyone benefits from the practice.
 
 This portable practice is complete in itself. You can do this indefinitely and it will serve you well.
 
-If you want **persistence** — a partner that runs 24/7, generates session notes autonomously, sends practice invitations, and heals itself when things break — that's what the full [turtleOS](README.md) deployment gives you. Your files transfer directly:
-
-| Portable | turtleOS |
-|----------|----------|
-| `compass.md` | Same file, read automatically |
-| `boom.md` | Same file, processed proactively |
-| `bright.md` | Same file, maintained collaboratively |
-| `intentions/` | Same directory, checked on regularly |
-| `sessions/` | Auto-generated after every conversation |
-
-Nothing is lost. The practice deepens. The partner becomes persistent.
+If you want **persistence** — a river, eddies, local models, Turtle Practice flows — that is what the full [turtleOS install](README.md) provides. Practice-state portability between portable and installed paths is a design chapter (TURTLE_SPEC §11.4).
 
 ---
 
@@ -121,4 +121,4 @@ If you're an AI agent with file access, this practice is for you too. See [`temp
 
 ---
 
-*The practice is the thing. Not the infrastructure, not the AI model, not the setup. The practice. Start with what's on your mind.*
+*The practice is the thing. For vanilla v1, start with [install](README.md#quick-start).*

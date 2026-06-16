@@ -1,7 +1,10 @@
 # turtleOS Architecture — Current State
 
-**Updated:** 2026-03-21
-**Source of truth for:** what runs, how it connects, what is deprecated
+> **Product architecture (target + migration):** see [`ARCHITECTURE.md`](../ARCHITECTURE.md) and [`TURTLE_SPEC.md`](../TURTLE_SPEC.md) (2026-06 platform rewrite).  
+> **This document:** operator infrastructure snapshot on the Mac Mini — may lag product law.
+
+**Updated:** 2026-03-21 (infra); product law 2026-06-14  
+**Source of truth for:** what runs on deployed instances, how services connect, what is deprecated
 
 ---
 
