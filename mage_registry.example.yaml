@@ -6,6 +6,9 @@
 #   native  — vanilla platform law (target default)
 #   magic   — legacy magic-attuned persistent Spirit (operator instances during migration)
 # attunement: native
+#
+# Two-bot native mode (TURTLE_SPEC §5.8): set RIVER_BOT_TOKEN in .env and run river_bot.py
+# (com.turtle.river). River bot posts acts in the main channel; Turtle bot speaks in eddies.
 
 mages:
   default:

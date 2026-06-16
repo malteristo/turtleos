@@ -146,6 +146,11 @@ async def interoception_loop():
         _state.interoception_startup = False
         return
 
+    from mage import suppress_turtle_river_voice
+
+    if suppress_turtle_river_voice():
+        return
+
     dialogue = get_channel("dialogue")
     if dialogue:
         set_practice_context_for_channel(dialogue.id)
@@ -234,6 +239,10 @@ async def _check_signal_drip():
 async def _check_practice_invitation():
     """Evaluate practice state and send the highest-priority invitation."""
     from datetime import datetime, timedelta
+    from mage import suppress_turtle_river_voice
+
+    if suppress_turtle_river_voice():
+        return
 
     today = datetime.now().strftime("%Y-%m-%d")
 

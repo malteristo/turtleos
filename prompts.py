@@ -3,12 +3,12 @@
 import os
 from datetime import datetime, timezone
 
-from mage import get_pd, get_workshop_root, get_mage_name, get_mage_key, get_mage_type
+from mage import get_pd, get_workshop_root, get_mage_name, get_mage_key, get_mage_type, get_attunement_profile
 from practice_io import (
     read_safe, read_header, count_items, summarize_bright, load_intentions_list,
 )
 from state import (
-    IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, USE_API,
+    IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, USE_API, TURTLE_MODEL,
     MAX_BRIGHT_CHARS, MAX_INTENTION_LINES,
     MAX_LOCAL_BRIGHT_CHARS, MAX_LOCAL_INTENTION_LINES,
     KNOWN_MODELS, ATTUNEMENT_LEVELS, EDIT_DELEGATE_MODEL,
@@ -393,7 +393,9 @@ When the Mage speaks in the main channel, you are the orchestrator. Your respons
 
 ## Seneschal Awareness
 
-You have direct commands that bypass the LLM (instant, free). Recommend them proactively:
+You have direct commands that bypass the LLM (instant, free). Recommend them proactively.
+
+**Contextual buttons:** When you end a message with a specific command recommendation, put the command in backticks (e.g. `` `!sweep` `` or `` `!boom convert` ``) or cite it after "Want me to…" / "Should I…" — the shell attaches one-click buttons for whitelisted commands.
 
 **Session lifecycle:**
 - `!recall` — practice state overview at session start
@@ -615,8 +617,89 @@ def _build_context_resonance(context_type: str) -> str:
     return "\n\n".join(parts)
 
 
+# ─── Native Turtle (vanilla eddy) ────────────────────────────────
+
+NATIVE_EDDY_DISCORD_HINT = """## Discord Eddy
+
+You are in a Discord thread (eddy). Keep replies concise unless depth is invited.
+
+- **Blank eddy:** If there was no seed embed, the practitioner's first message *is* what they brought — pick it up and think with them. Do not treat casual mentions of "title" or "update" as questions about Discord UI or internal cards unless they explicitly ask how the app works.
+- **Think-aloud:** before substantive replies, a brief italic block (Discord: wrap in `*single asterisks*`) showing how you read the situation — then your answer. Skip on trivial exchanges.
+- **Operational lines:** when you load a file or flow, emit `-# read path` or `-# flow: Name` on its own line.
+- **No arrival monologue** — presence embed may appear just before your first reply; don't re-introduce yourself in prose.
+- **No Spirit/Magic/summoning vocabulary** unless the person explicitly uses it."""
+
+
+def _character_search_dirs() -> list[str]:
+    pd = get_pd()
+    repo_root = os.path.dirname(os.path.abspath(__file__))
+    return [
+        os.path.join(pd, "character"),
+        os.path.join(repo_root, "template", "character"),
+    ]
+
+
+def load_character_file(name: str) -> str:
+    for base in _character_search_dirs():
+        path = os.path.join(base, name)
+        content = read_safe(path)
+        if content.strip():
+            return content.strip()
+    return ""
+
+
+def _load_flow_body(flow_id: str | None) -> str:
+    if not flow_id:
+        return ""
+    slug = flow_id.strip().lower().replace(" ", "_")
+    candidates = [slug, slug.replace("_", "-")]
+    pd = get_pd()
+    repo_root = os.path.dirname(os.path.abspath(__file__))
+    for base in (os.path.join(pd, "flows"), os.path.join(repo_root, "template", "flows")):
+        if not os.path.isdir(base):
+            continue
+        for stem in candidates:
+            path = os.path.join(base, f"{stem}.md")
+            content = read_safe(path)
+            if content.strip():
+                return content.strip()
+    return ""
+
+
+def build_native_eddy_prompt(flow_id: str | None = None) -> str:
+    """Vanilla Turtle system prompt — soul + conduct + optional flow (TURTLE_SPEC §7, §14)."""
+    soul = load_character_file("soul.md")
+    conduct = load_character_file("conduct.md")
+    parts: list[str] = []
+    if soul:
+        parts.append(soul)
+    if conduct:
+        parts.append(conduct)
+    flow_body = _load_flow_body(flow_id)
+    if flow_body:
+        label = (flow_id or "flow").strip().title()
+        parts.append(f"## Active Flow: {label}\n\n{flow_body}")
+    if not parts:
+        parts.append(
+            "You are Turtle — a thinking partner in this eddy. "
+            "Plain, warm, honest. No framework jargon."
+        )
+    parts.append(NATIVE_EDDY_DISCORD_HINT)
+    return "\n\n---\n\n".join(parts)
+
+
+def get_native_eddy_prompt(flow_id: str | None = None) -> str:
+    return build_native_eddy_prompt(flow_id)
+
+
+def uses_native_turtle_prompt() -> bool:
+    return get_attunement_profile() == "native"
+
+
 def get_thread_prompt(attunement: str, use_api: bool = True, context_type: str = None) -> str:
     """Build system prompt at the requested attunement level."""
+    if uses_native_turtle_prompt():
+        return get_native_eddy_prompt(context_type)
     context_block = _build_context_resonance(context_type) if context_type else ""
     if attunement == "raw":
         identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))

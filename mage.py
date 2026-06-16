@@ -52,6 +52,53 @@ def get_registry():
     return _MAGE_REGISTRY
 
 
+def get_attunement_profile() -> str:
+    """Return attunement profile: native (vanilla platform law) or magic (legacy)."""
+    profile = (_MAGE_REGISTRY.get("attunement") or "magic").strip().lower()
+    if profile not in ("native", "magic"):
+        return "magic"
+    return profile
+
+
+def is_river_message(message) -> bool:
+    """True when message is in the main river channel (not an eddy/thread)."""
+    if isinstance(message.channel, discord.Thread):
+        return False
+    ch_id = message.channel.id
+    if str(ch_id) not in _MAGE_REGISTRY.get("channels", {}):
+        dialogue = get_channel("dialogue")
+        if not dialogue or ch_id != dialogue.id:
+            return False
+    ch_type = _get_channel_type(ch_id)
+    if ch_type in ("river", "hosted-river"):
+        return True
+    if ch_type is None and get_attunement_profile() == "native":
+        return True
+    return False
+
+
+def uses_native_river(message) -> bool:
+    """True when this message should use the River act harness (not Turtle dialogue)."""
+    return get_attunement_profile() == "native" and is_river_message(message)
+
+
+def river_bot_enabled() -> bool:
+    """True when a separate River bot token is configured (two-bot native mode)."""
+    from river_state import river_bot_configured
+
+    return river_bot_configured()
+
+
+def turtle_handles_native_river(message) -> bool:
+    """True when Turtle (single-bot fallback) should run the River harness."""
+    return uses_native_river(message) and not river_bot_enabled()
+
+
+def suppress_turtle_river_voice() -> bool:
+    """True when Turtle must not post proactive voice in the parent river channel."""
+    return get_attunement_profile() == "native"
+
+
 def _get_channel_mage(channel_id):
     """Extract mage key from channel entry (supports both string and dict formats)."""
     entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))

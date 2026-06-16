@@ -47,9 +47,9 @@ The shell **still implements much of the legacy magic-attuned stack** below. Rip
 
 | Target (spec) | Current shell | Status |
 |---------------|---------------|--------|
-| River acts only | Turtle/proprio dialogue in main channel | **Gap** |
-| Always offer eddy | Partial (`eddy_spawn.py`, contextual buttons) | **Partial** |
-| Eddy-only Turtle | Dialogue in river + threads | **Gap** |
+| River acts only | Turtle/proprio dialogue in main channel | **Slice 1 shipped** (`river_handler.py`; gated by `attunement: native`) |
+| Always offer eddy | Partial (`eddy_spawn.py`, contextual buttons) | **Slice 1** — always via River harness |
+| Eddy-only Turtle | Dialogue in river + threads | **Partial** — river gated; threads still legacy Turtle |
 | Two local models | Triage + proprio + cloud dialogue + reflection | **Gap** |
 | `state/` practice infrastructure | compass/boom/bright-centric tools | **Gap** |
 | Chronicle jump URLs | Thread logging partial | **Partial** |
@@ -113,9 +113,12 @@ Discord message
 
 ### Planned implementation slices (shell)
 
-1. **River act harness** — structured acts, prose rejection, always-offer-eddy
-2. **Route main channel → river only** — no Turtle dialogue in river
-3. **Eddy handler** — think-aloud rendering, presence embeds, flow front matter
+1. **River act harness** — structured acts, prose rejection *(shipped 2026-06-16; enable with `attunement: native`)*
+1b. **River bot split** — separate Discord app for river acts (`river_bot.py`, `RIVER_BOT_TOKEN`) *(shipped 2026-06-16)*
+2. **Route main channel → river only** — no Turtle dialogue in river *(shipped — native + River bot)*
+3. **Eddy handler** — native character in `prompts.py`, skip triage/proprio in eddies *(shipped 2026-06-16; `TURTLE_MODEL`)*
+3b. **Eddy Door** — pinned Materialize, blank eddy, rename on first message *(shipped 2026-06-16)*
+3c. **Native entry polish** — no control panel / config card / pre-message presence in vanilla eddies *(shipped 2026-06-16)*
 4. **Practice root `state/`** — reads/writes via flow runner
 5. **Attunement profiles** — `native` vs `magic` in registry
 

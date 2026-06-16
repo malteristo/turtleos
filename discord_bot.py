@@ -49,7 +49,7 @@ load_env()
 from state import (
     client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS, _processed_messages,
     get_channel_lock, get_channel,
-    IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API,
+    IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API, TURTLE_MODEL,
     HAS_GEMINI, GOOGLE_API_KEY,
     MAX_DIALOGUE_HISTORY, EDDY_DEFAULT,
     dialogue_histories, active_sessions,
@@ -63,7 +63,8 @@ from mage import (
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
     get_registry, _resolve_mage_from_author,
-    get_thread_member_ids,
+    get_thread_member_ids, uses_native_river, river_bot_enabled, turtle_handles_native_river,
+    suppress_turtle_river_voice, get_attunement_profile,
 )
 
 from practice_io import (
@@ -88,6 +89,7 @@ from triage import triage_message, prewarm_triage
 
 from prompts import (
     get_system_prompt, get_thread_prompt, build_thread_summary,
+    get_native_eddy_prompt, uses_native_turtle_prompt,
 )
 
 from readiness import startup_readiness_check
@@ -100,7 +102,10 @@ from helpers import (
 
 from sessions import session_monitor, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
-from eddy_spawn import should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction, is_intake_thread, handle_intake_message, generate_topic
+from eddy_spawn import (
+    should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction,
+    is_intake_thread, handle_intake_message, generate_topic, ensure_native_presence,
+)
 from intake_server import start_intake_server
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
@@ -128,6 +133,15 @@ _CONTEXTUAL_ACTION_COMMANDS = {
     "absorb", "absorbed", "forget", "readiness", "signals", "load",
 }
 _CONTEXTUAL_COMMAND_RE = re.compile(r"`(![A-Za-z][\w-]*(?:\s+[^`]+)?)`")
+_RECOMMENDATION_CUE_RE = re.compile(
+    r"\b(?:want me to|should i|would you like (?:me to )?|i(?:'d| would) recommend(?: running)?|try(?: running)?|you could run)\b",
+    re.IGNORECASE,
+)
+_PLAIN_COMMAND_RE = re.compile(
+    r"!(?:boom convert|boom thread|boom add|eddy-check|readiness|diagnose|threads|recall|release|signals|absorb|absorbed|forget|sweep|propose|status|bright|compass|intentions|fetch|thread|sync|load|boom|new)"
+    r"(?:\s+[^.\n`»]+)?",
+    re.IGNORECASE,
+)
 _DISCORD_MESSAGE_LINK_RE = re.compile(r"https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)")
 
 
@@ -142,8 +156,14 @@ def _contextual_action_label(command: str) -> str:
         return f"Create thread: {topic[:42]}" if topic else "Create thread"
     if cmd == "new":
         return "Open eddy"
-    if cmd == "boom" and rest.startswith("thread"):
-        return "Boom thread"
+    if cmd == "boom":
+        rest_lower = rest.lower()
+        if rest_lower.startswith("convert"):
+            return "Run boom convert"
+        if rest_lower.startswith("thread"):
+            return "Boom thread"
+        if rest_lower.startswith("add"):
+            return "Add to boom"
     labels = {
         "status": "Show status",
         "diagnose": "Run diagnose",
@@ -166,17 +186,65 @@ def _contextual_action_label(command: str) -> str:
     return labels.get(cmd, f"Run !{cmd}")
 
 
+def _recommendation_tail(reply: str) -> str:
+    """Paragraph most likely to hold a local recommendation (skip trace/footer lines)."""
+    paragraphs = []
+    for block in reply.split("\n\n"):
+        block = block.strip()
+        if not block or block.startswith("-#"):
+            continue
+        paragraphs.append(block)
+    if paragraphs:
+        return paragraphs[-1]
+    lines = [ln for ln in reply.splitlines() if ln.strip() and not ln.strip().startswith("-#")]
+    return "\n".join(lines[-6:])
+
+
+def _trim_contextual_command(command: str) -> str:
+    """Keep only the invocable prefix — drop trailing prose after the command."""
+    text = command.strip().rstrip("?.!,;:")
+    text = text.lstrip("!")
+    if not text:
+        return "!"
+    parts = text.split()
+    cmd = parts[0].lower()
+    if cmd == "boom" and len(parts) >= 2:
+        sub = parts[1].lower()
+        if sub in ("convert", "thread", "add"):
+            if sub in ("convert",):
+                return "!boom convert"
+            return "!" + " ".join(parts)
+    if cmd == "thread":
+        return "!" + " ".join(parts)
+    if cmd in ("absorb", "fetch", "load", "forget", "propose", "new") and len(parts) > 1:
+        return "!" + " ".join(parts)
+    return "!" + parts[0].lower()
+
+
+def _append_contextual_action(actions: list, seen: set, command: str) -> None:
+    command = _trim_contextual_command(command)
+    cmd = command.lstrip("!").split(None, 1)[0].lower()
+    if cmd not in _CONTEXTUAL_ACTION_COMMANDS:
+        return
+    key = command.lower()
+    if key in seen:
+        return
+    seen.add(key)
+    actions.append((_contextual_action_label(command), command))
+
+
 def _extract_contextual_actions(reply: str) -> list[tuple[str, str]]:
     # Find direct commands Turtle recommended so the shell can attach buttons.
     actions = []
     seen = set()
     for match in _CONTEXTUAL_COMMAND_RE.finditer(reply):
-        command = match.group(1).strip()
-        cmd = command.lstrip("!").split(None, 1)[0].lower()
-        if cmd not in _CONTEXTUAL_ACTION_COMMANDS or command in seen:
-            continue
-        seen.add(command)
-        actions.append((_contextual_action_label(command), command))
+        _append_contextual_action(actions, seen, match.group(1).strip())
+
+    # Phase 2: natural-language recommendations often cite !commands without backticks.
+    tail = _recommendation_tail(reply)
+    if _RECOMMENDATION_CUE_RE.search(tail):
+        for match in _PLAIN_COMMAND_RE.finditer(tail):
+            _append_contextual_action(actions, seen, match.group(0).strip())
 
     # More than three command mentions is usually help text, not a local recommendation.
     if len(actions) > 3:
@@ -257,6 +325,80 @@ def _build_runtime_env(message, cfg):
         lines.append("**Context boundary:** Raw attunement. "
                       "Be direct and focused on the topic at hand.")
 
+    return "\n".join(lines) + "\n\n"
+
+
+async def _retire_legacy_river_chrome(channel) -> int:
+    """Remove pinned Spirit Control Panel and other magic-era river chrome (native mode)."""
+    if not channel:
+        return 0
+    removed = 0
+    targets: list[discord.Message] = []
+    seen_ids: set[int] = set()
+
+    def _is_control_panel(msg: discord.Message) -> bool:
+        if msg.author != client.user:
+            return False
+        for embed in msg.embeds or []:
+            title = embed.title or ""
+            if title.startswith("\U0001f3ae") or "Spirit Control Panel" in title:
+                return True
+        return False
+
+    try:
+        async for msg in channel.pins():
+            if _is_control_panel(msg) and msg.id not in seen_ids:
+                targets.append(msg)
+                seen_ids.add(msg.id)
+    except discord.HTTPException:
+        pass
+    try:
+        async for msg in channel.history(limit=40):
+            if _is_control_panel(msg) and msg.id not in seen_ids:
+                targets.append(msg)
+                seen_ids.add(msg.id)
+    except discord.HTTPException:
+        pass
+
+    for msg in targets:
+        try:
+            await msg.unpin()
+        except discord.HTTPException:
+            pass
+        try:
+            await msg.delete()
+            removed += 1
+        except discord.HTTPException as exc:
+            print(f"Control panel delete failed ({msg.id}): {exc}")
+    if removed:
+        print(f"Retired {removed} legacy control panel(s) in #{getattr(channel, 'name', channel.id)}")
+    return removed
+
+
+def _build_native_runtime_env(message, cfg):
+    """Minimal runtime block for vanilla native eddies."""
+    channel = message.channel
+    parent = channel.parent if isinstance(channel, discord.Thread) else None
+    channel_name = parent.name if parent else (channel.name if hasattr(channel, "name") else "(DM)")
+    thread_name = channel.name if isinstance(channel, discord.Thread) else None
+
+    lines = [
+        "## Eddy Context",
+        f"- **River channel:** #{channel_name}",
+    ]
+    if thread_name:
+        lines.append(f"- **Eddy:** {thread_name}")
+    if (cfg or {}).get("blank_eddy") or (cfg or {}).get("awaiting_title"):
+        lines.append(
+            "- **Entry:** Blank eddy — the practitioner's first message is what they brought; "
+            "engage it directly (not a UI test unless they clearly mean Discord)."
+        )
+    lines.append(f"- **Practitioner:** {get_mage_name()}")
+    lines.append(f"- **Model:** {TURTLE_MODEL} (local Turtle)")
+    flow_id = (cfg or {}).get("context_type")
+    if flow_id:
+        lines.append(f"- **Flow:** {flow_id}")
+    lines.append("")
     return "\n".join(lines) + "\n\n"
 
 
@@ -478,23 +620,23 @@ async def _fetch_discord_message_context(refs: list[tuple[int | None, int, int]]
 async def handle_dialogue(message):
     channel_id = message.channel.id
     visible_content, forwarded_context = _visible_message_content(message)
+    native_eddy = isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt()
 
-    # Run triage and proprioceptor in parallel — tissue prepares while classification runs.
-    # Threads already receive an injected thread card, so skip proprioception there;
-    # the card is the continuity tissue and avoids extra local-model contention.
-    triage_task = asyncio.create_task(triage_message(visible_content))
-    proprioceptor_task = None
-    if not isinstance(message.channel, discord.Thread):
-        proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
-
-    triage = await triage_task
-    triage_cat = triage.get("category", "practice")
-    print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {visible_content[:80]}")
-
-    # Cancel proprioceptor for trivial messages — not needed
-    if proprioceptor_task and triage_cat not in ("practice", "deep", "link"):
-        proprioceptor_task.cancel()
+    if native_eddy:
+        triage = {"category": "practice", "needs_state": False}
         proprioceptor_task = None
+        triage_cat = "practice"
+    else:
+        triage_task = asyncio.create_task(triage_message(visible_content))
+        proprioceptor_task = None
+        if not isinstance(message.channel, discord.Thread):
+            proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
+        triage = await triage_task
+        triage_cat = triage.get("category", "practice")
+        print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {visible_content[:80]}")
+        if proprioceptor_task and triage_cat not in ("practice", "deep", "link"):
+            proprioceptor_task.cancel()
+            proprioceptor_task = None
 
     history = get_history(channel_id)
 
@@ -596,7 +738,15 @@ async def handle_dialogue(message):
         # INT-023: Context loads silently. Healthy state needs no announcement.
 
     cfg = thread_configs.get(channel_id)
-    if cfg:
+    if native_eddy:
+        ctx = (cfg or {}).get("context_type")
+        if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
+            from mage import get_channel_default_context
+            ctx = get_channel_default_context(message.channel.parent_id)
+        system_prompt = get_native_eddy_prompt(ctx)
+        thread_use_api = False
+        thread_model = (cfg or {}).get("model") or TURTLE_MODEL
+    elif cfg:
         ctx = cfg.get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
             from mage import get_channel_default_context
@@ -609,18 +759,27 @@ async def handle_dialogue(message):
         thread_use_api = USE_API
         thread_model = DIALOGUE_MODEL
 
-    # Seed first-turn thread cards before prompt assembly so new eddies can
-    # return to a written surface immediately instead of discovering absence.
-    if isinstance(message.channel, discord.Thread) and not read_thread_state(message.channel.name):
+    # Thread cards are magic-era persistence — native eddies use visible history only.
+    if (
+        isinstance(message.channel, discord.Thread)
+        and not native_eddy
+        and not read_thread_state(message.channel.name)
+    ):
         await _update_thread_state(message.channel, cfg, history)
 
-    runtime_env = _build_runtime_env(message, cfg)
-    triage_hint = f"- **Message triage:** {triage_cat}"
-    if triage_cat == "deep":
-        triage_hint += " (take your time, go deep)"
-    elif triage_cat in ("greeting", "casual"):
-        triage_hint += " (keep it light and brief)"
-    runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
+    if native_eddy:
+        runtime_env = _build_native_runtime_env(message, cfg)
+        system_prompt = runtime_env + system_prompt
+    else:
+        runtime_env = _build_runtime_env(message, cfg)
+        triage_hint = f"- **Message triage:** {triage_cat}"
+        if triage_cat == "deep":
+            triage_hint += " (take your time, go deep)"
+        elif triage_cat in ("greeting", "casual"):
+            triage_hint += " (keep it light and brief)"
+        runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
+        system_prompt = runtime_env + system_prompt
+
     source_flags = []
     if url_content:
         if content_from_boom_capture:
@@ -634,7 +793,7 @@ async def handle_dialogue(message):
     if dereferenced_context:
         source_flags.append(f"dereferenced Discord message ({dereferenced_count})")
 
-    # Collect proprioceptor — worth waiting since dialogue call is the real bottleneck
+    # Proprioceptor — retired for native eddies (TURTLE_SPEC §8.1)
     context_brief = None
     proprioceptor_time = None
     if proprioceptor_task:
@@ -664,16 +823,15 @@ async def handle_dialogue(message):
                 _tissue_brief = " ".join(l.strip() for l in _rest).replace("BRIEF:", "", 1).strip()
                 break
 
-    # Inject proprioceptor brief into dialogue model system prompt
-    if _tissue_brief and context_brief:
-        source_flags.append("practice-state context brief")
-        proprioceptor_block = (
-            "## Proprioceptive Context (connective tissue model)\n\n"
-            f"{_tissue_brief}\n\n"
-        )
-        system_prompt = runtime_env + proprioceptor_block + system_prompt
-    else:
-        system_prompt = runtime_env + system_prompt
+    # Inject proprioceptor brief into dialogue model system prompt (magic-attuned path only)
+    if not native_eddy:
+        if _tissue_brief and context_brief:
+            source_flags.append("practice-state context brief")
+            proprioceptor_block = (
+                "## Proprioceptive Context (connective tissue model)\n\n"
+                f"{_tissue_brief}\n\n"
+            )
+            system_prompt = proprioceptor_block + system_prompt
 
 
     messages_for_llm = list(history)
@@ -699,8 +857,16 @@ async def handle_dialogue(message):
                             {"role": "assistant", "content": "I have this thread context. Let's continue."}] + messages_for_llm
 
     async with message.channel.typing():
+        if native_eddy:
+            try:
+                await ensure_native_presence(message.channel)
+            except Exception as exc:
+                print(f"Native presence failed: {exc}")
         tool_report = ""
         is_gemini = thread_model.startswith("gemini-")
+        if native_eddy:
+            thread_label = message.channel.name if isinstance(message.channel, discord.Thread) else "eddy"
+            print(f"Native Turtle [{thread_label}]: {thread_model} prompt={len(system_prompt)} chars")
         try:
             if is_gemini and HAS_GEMINI and GOOGLE_API_KEY:
                 reply, tools_executed = await chat_gemini(system_prompt, messages_for_llm, model=thread_model, attachments=attachments)
@@ -759,17 +925,17 @@ async def handle_dialogue(message):
             print(f"Dedup: removed {len(paragraphs) - len(deduped)} repeated paragraphs")
             reply = "\n\n".join(deduped)
 
-    if _reflex:
+    if _reflex and not native_eddy:
         reply = f"-# {_reflex}\n\n{reply}"
     if tool_report:
         reply = f"{reply}\n\n-# ⚙️ {tool_report}"
     if attachment_extracted:
         source_flags.append("extracted attachment text")
     source_trace = _build_source_trace(source_flags)
-    if source_trace:
+    if source_trace and not native_eddy:
         reply = f"{reply}\n\n-# {source_trace}"
     history.append({"role": "assistant", "content": reply})
-    contextual_actions = _extract_contextual_actions(reply)
+    contextual_actions = _extract_contextual_actions(reply) if not native_eddy else []
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
     if contextual_actions:
@@ -867,7 +1033,7 @@ async def on_ready():
                     break
         except Exception:
             pass
-        if should_post:
+        if should_post and not suppress_turtle_river_voice():
             from pulse import scan_pulse, compose_river_entry, save_river_state
             try:
                 set_practice_context_for_channel(dialogue.id)
@@ -991,6 +1157,15 @@ async def on_ready():
         except Exception as e:
             print(f"Thread registry backfill failed: {e}")
 
+        if suppress_turtle_river_voice():
+            try:
+                from river_handler import _iter_river_channels
+
+                for ch in _iter_river_channels(client):
+                    await _retire_legacy_river_chrome(ch)
+            except Exception as exc:
+                print(f"Legacy river chrome retirement failed: {exc}")
+
         has_panel = False
         try:
             async for m in dialogue.pins():
@@ -1012,7 +1187,7 @@ async def on_ready():
                         break
             except Exception:
                 pass
-        if not has_panel:
+        if not has_panel and not suppress_turtle_river_voice():
             try:
                 embed = discord.Embed(
                     title="\U0001f3ae Spirit Control Panel",
@@ -1056,6 +1231,14 @@ async def on_ready():
     
     # Intake server starts earlier in on_ready and is guarded by _intake_runner.
 
+    if get_attunement_profile() == "native" and not river_bot_enabled():
+        try:
+            from river_handler import ensure_eddy_door
+
+            await ensure_eddy_door(client)
+        except Exception as exc:
+            print(f"Eddy door setup failed: {exc}")
+
     print("on_ready complete")
 
 
@@ -1069,6 +1252,23 @@ async def on_thread_create(thread):
                 await thread.add_user(discord.Object(id=int(uid)))
             except Exception:
                 pass
+
+        pending = None
+        if river_bot_enabled() and thread.parent_id:
+            import asyncio
+            from eddy_spawn import pop_pending_native_eddy, finalize_native_eddy_from_river
+
+            for _ in range(5):
+                pending = pop_pending_native_eddy(thread.id, thread.parent_id)
+                if pending:
+                    break
+                await asyncio.sleep(0.15)
+            if pending:
+                try:
+                    await finalize_native_eddy_from_river(thread, pending)
+                except Exception as exc:
+                    print(f"Native eddy finalize failed: {exc}")
+
         # Phase 1 Eyes: register new thread
         try:
             parent_name = thread.parent.name if thread.parent else "unknown"
@@ -1078,7 +1278,8 @@ async def on_thread_create(thread):
                 parent_channel=parent_name, created=created,
             )
             await _update_thread_state(thread, None, [])
-            print(f"Joined + registered thread: {thread.name} (id: {thread.id})")
+            label = " (river→turtle)" if pending else ""
+            print(f"Joined + registered thread: {thread.name} (id: {thread.id}){label}")
         except Exception as e:
             print(f"Joined thread: {thread.name} (id: {thread.id}) [registry failed: {e}]")
 
@@ -1142,6 +1343,16 @@ async def on_message(message):
         else:
             return
 
+    if isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt():
+        try:
+            starter = message.channel.starter_message
+            if starter is None:
+                starter = await message.channel.fetch_start_message()
+            if starter and message.id == starter.id:
+                return
+        except Exception:
+            pass
+
     if is_practice_channel(message):
         if await try_direct_command(message):
             return
@@ -1176,7 +1387,35 @@ async def on_message(message):
                 _boom_fetched_content[message.id] = fetched_content
             # Fall through to handle_dialogue below
 
-        # Auto-detect thread-worthy content in main channel
+        # Native river: acts only — River bot when configured, else Turtle fallback
+        if river_bot_enabled() and uses_native_river(message):
+            return
+
+        if turtle_handles_native_river(message):
+            from river_handler import handle_river_message
+
+            lock = get_channel_lock(message.channel.id)
+            async with lock:
+                await handle_river_message(message)
+            return
+
+        # Blank eddy rename (single-bot fallback — River bot handles this when split)
+        if (
+            isinstance(message.channel, discord.Thread)
+            and message.channel.parent_id
+            and not river_bot_enabled()
+        ):
+            from eddy_spawn import is_awaiting_title
+            from river_handler import handle_eddy_first_message
+
+            if is_awaiting_title(message.channel.id, message.channel.parent_id):
+                lock = get_channel_lock(message.channel.id)
+                async with lock:
+                    await handle_eddy_first_message(message)
+                    await handle_dialogue(message)
+                return
+
+        # Auto-detect thread-worthy content in main channel (legacy magic attunement)
         offer_eddy = (
             not isinstance(message.channel, discord.Thread)
             and should_offer_eddy(message)

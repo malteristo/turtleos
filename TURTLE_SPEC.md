@@ -194,6 +194,17 @@ It does **not** need conversational quality. It needs reliable **action selectio
 
 Recommended class: 4B–9B local, always resident. Exact checkpoint is instance configuration, not platform law.
 
+### 5.8. River vs Turtle Identity (Discord)
+
+Vanilla native installs SHOULD use **two Discord applications**:
+
+| Bot | Role in river channel | Role in eddies |
+|-----|----------------------|----------------|
+| **River bot** | Acts only — reactions, buttons, embeds, chronicle | Creates thread + seed on materialize |
+| **Turtle bot** | Silent (no user-message replies) | Dialogue, tools, presence ("Turtle joined") |
+
+Practitioners MUST be able to distinguish River acts from Turtle dialogue by bot name and avatar. Single-bot mode MAY remain as a migration fallback when `RIVER_BOT_TOKEN` is unset.
+
 ---
 
 ## 6. Chronicle
@@ -241,12 +252,12 @@ Cross-eddy memory, curated distillates, and what Turtle/River may read across ti
 
 When an eddy is materialized:
 
-1. Seed message is posted (user's original river input).
-2. **Presence embed** in the eddy — compact system line (e.g. `Turtle joined`) — not conversational prose.
-3. Turtle reads seed + thread context (initially empty).
-4. Turtle responds — opening the focused conversation.
+1. **Seeded eddy:** the practitioner's river input is posted as a seed embed.
+2. **Blank eddy (Eddy Door):** no seed at materialize — the practitioner's **first message** is the opening.
+3. **Presence embed** — compact system line (`Turtle joined`) — not conversational prose. For blank eddies, presence is deferred until the first practitioner message, immediately before Turtle's first reply (§7.7).
+4. Turtle reads the opening + thread history and responds.
 
-No Turtle speech in the river. No river-entry arrival monologue.
+No Turtle speech in the river. No model/attunement config chrome in vanilla v1 eddies (legacy Magic-attuned UI). No arrival monologue.
 
 ### 7.3. Think-Aloud
 

@@ -11,9 +11,11 @@ Also supports:
 """
 
 import asyncio
+import json
 import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 import discord
 
@@ -572,6 +574,329 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
 
     print(f"Eddy spawned: {topic} (id: {thread.id}) from message {message.id}")
     return thread
+
+
+def _pending_native_eddy_path(thread_id: int, parent_channel_id: int) -> Path:
+    from mage import set_practice_context_for_channel, get_runtime_dir
+
+    set_practice_context_for_channel(parent_channel_id)
+    pending_dir = Path(get_runtime_dir()) / "thread-state" / "pending"
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    return pending_dir / f"{thread_id}.json"
+
+
+def write_pending_native_eddy(thread_id: int, parent_channel_id: int, payload: dict) -> None:
+    path = _pending_native_eddy_path(thread_id, parent_channel_id)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def pop_pending_native_eddy(thread_id: int, parent_channel_id: int) -> dict | None:
+    path = _pending_native_eddy_path(thread_id, parent_channel_id)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        data = None
+    path.unlink(missing_ok=True)
+    return data
+
+
+BLANK_EDDY_NAME = "…"
+
+
+def _awaiting_title_path(thread_id: int, parent_channel_id: int) -> Path:
+    from mage import set_practice_context_for_channel, get_runtime_dir
+
+    set_practice_context_for_channel(parent_channel_id)
+    awaiting_dir = Path(get_runtime_dir()) / "thread-state" / "awaiting-title"
+    awaiting_dir.mkdir(parents=True, exist_ok=True)
+    return awaiting_dir / f"{thread_id}.json"
+
+
+def write_awaiting_title(thread_id: int, parent_channel_id: int, extra: dict | None = None) -> None:
+    path = _awaiting_title_path(thread_id, parent_channel_id)
+    payload = {
+        "thread_id": thread_id,
+        "parent_channel_id": parent_channel_id,
+        **(extra or {}),
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def is_awaiting_title(thread_id: int, parent_channel_id: int) -> bool:
+    return _awaiting_title_path(thread_id, parent_channel_id).exists()
+
+
+def pop_awaiting_title(thread_id: int, parent_channel_id: int) -> dict | None:
+    path = _awaiting_title_path(thread_id, parent_channel_id)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        data = None
+    path.unlink(missing_ok=True)
+    return data
+
+
+def _materialize_client(message):
+    channel = getattr(message, "channel", message)
+    return _materialize_client_for_channel(channel)
+
+
+async def finalize_native_eddy_from_river(thread: discord.Thread, pending: dict) -> None:
+    """Turtle bot joins a native eddy — config only, no entry chrome until first turn."""
+    from commands import thread_configs
+    from state import client
+
+    eddy_type = pending.get("eddy_type", EDDY_DEFAULT)
+    thread_configs[thread.id] = {
+        "model": pending.get("model"),
+        "use_api": pending.get("use_api", False),
+        "attunement": pending.get("attunement", "semi"),
+        "model_label": pending.get("model_label", "local"),
+        "eddy_type": eddy_type,
+        "context_type": pending.get("context_type"),
+        "created": datetime.now(timezone.utc),
+        "native_vanilla": True,
+        "blank_eddy": pending.get("blank_eddy", False),
+        "awaiting_title": pending.get("awaiting_title", False),
+        "presence_posted": False,
+    }
+
+    parent_id = thread.parent_id
+    if parent_id:
+        from mage import get_thread_member_ids
+
+        for uid in get_thread_member_ids(parent_id):
+            try:
+                user = await client.fetch_user(int(uid))
+                await thread.add_user(user)
+            except Exception:
+                pass
+
+    print(f"Turtle joined native eddy (silent): {thread.name} (id: {thread.id})")
+
+
+async def ensure_native_presence(thread: discord.Thread) -> bool:
+    """Post §7.7 presence once, immediately before Turtle's first reply in this eddy."""
+    from commands import thread_configs
+
+    cfg = thread_configs.get(thread.id)
+    if not cfg or not cfg.get("native_vanilla") or cfg.get("presence_posted"):
+        return False
+    embed = discord.Embed(description="Turtle joined", color=0x57F287)
+    await thread.send(embed=embed, silent=True)
+    cfg["presence_posted"] = True
+    return True
+
+
+async def spawn_river_eddy(
+    message,
+    topic: str | None = None,
+    flow_id: str | None = None,
+    eddy_type: str = "standard",
+):
+    """Materialize eddy from River act — seed message; Turtle joins when split-bot."""
+    from commands import thread_configs, _build_config_line, ThreadConfigView
+    from llm import resolve_model
+    from mage import get_thread_member_ids, river_bot_enabled, get_attunement_profile
+    from thread_registry import register_thread
+    from state import TURTLE_MODEL
+
+    bot_client = _materialize_client(message)
+    text = message.content.strip()
+    if not topic:
+        topic = await generate_topic(text or "check-in")
+
+    if get_attunement_profile() == "native":
+        model_id = TURTLE_MODEL
+        use_api = False
+    else:
+        model_id, use_api = resolve_model("local")
+    attunement = "semi"
+    eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 10080)
+    split_bot = river_bot_enabled()
+
+    try:
+        thread = await message.create_thread(
+            name=topic[:100],
+            auto_archive_duration=eddy_archive,
+        )
+    except discord.HTTPException as e:
+        if e.code == 160004:
+            return None
+        print(f"River eddy spawn failed: {e}")
+        return None
+
+    config = {
+        "model": model_id,
+        "use_api": use_api,
+        "attunement": attunement,
+        "model_label": "local",
+        "eddy_type": eddy_type,
+        "context_type": flow_id,
+        "topic": topic,
+    }
+
+    if split_bot:
+        write_pending_native_eddy(
+            thread.id,
+            message.channel.id,
+            config,
+        )
+    else:
+        thread_configs[thread.id] = {
+            **config,
+            "created": datetime.now(timezone.utc),
+            "native_vanilla": get_attunement_profile() == "native",
+            "presence_posted": False,
+        }
+
+    seed_embed = _build_seed_embed(
+        message.author.display_name,
+        text or "(no text)",
+    )
+    seed_embed.set_footer(text="seed from river")
+    await thread.send(embed=seed_embed)
+
+    if not split_bot:
+        parent_id = message.channel.id
+        for uid in get_thread_member_ids(parent_id):
+            try:
+                user = await bot_client.fetch_user(int(uid))
+                await thread.add_user(user)
+            except Exception:
+                pass
+
+    register_thread(
+        thread.id,
+        topic,
+        parent_channel=message.channel.name if hasattr(message.channel, "name") else "river",
+        model="local",
+        attunement=attunement,
+        eddy_type=eddy_type,
+    )
+
+    try:
+        from river_handler import _append_chronicle
+        from mage import get_pd
+
+        _append_chronicle(
+            get_pd(),
+            f"🌀 opened: {topic}",
+            {"thread_id": str(thread.id), "jump_url": thread.jump_url, "flow_id": flow_id},
+        )
+    except Exception as exc:
+        print(f"Chronicle write failed: {exc}")
+
+    print(f"River eddy materialized: {topic} (id: {thread.id}) split_bot={split_bot}")
+    return thread
+
+
+async def spawn_blank_river_eddy(
+    channel,
+    *,
+    flow_id: str | None = None,
+    eddy_type: str = "standard",
+):
+    """Open a blank native eddy from the standing door — no seed until first message."""
+    from mage import get_thread_member_ids, river_bot_enabled, get_attunement_profile
+    from thread_registry import register_thread
+    from state import TURTLE_MODEL
+
+    bot_client = _materialize_client_for_channel(channel)
+    if get_attunement_profile() == "native":
+        model_id = TURTLE_MODEL
+        use_api = False
+    else:
+        from llm import resolve_model
+
+        model_id, use_api = resolve_model("local")
+    attunement = "semi"
+    eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 10080)
+    split_bot = river_bot_enabled()
+
+    try:
+        thread = await channel.create_thread(
+            name=BLANK_EDDY_NAME,
+            auto_archive_duration=eddy_archive,
+            type=discord.ChannelType.public_thread,
+        )
+    except discord.HTTPException as e:
+        print(f"Blank river eddy spawn failed: {e}")
+        return None
+
+    config = {
+        "model": model_id,
+        "use_api": use_api,
+        "attunement": attunement,
+        "model_label": "local",
+        "eddy_type": eddy_type,
+        "context_type": flow_id,
+        "topic": BLANK_EDDY_NAME,
+        "blank_eddy": True,
+        "awaiting_title": True,
+        "presence_posted": False,
+    }
+
+    if split_bot:
+        write_pending_native_eddy(thread.id, channel.id, config)
+        write_awaiting_title(thread.id, channel.id, {"flow_id": flow_id})
+    else:
+        from commands import thread_configs
+
+        thread_configs[thread.id] = {
+            **config,
+            "created": datetime.now(timezone.utc),
+            "native_vanilla": True,
+            "presence_posted": False,
+        }
+        write_awaiting_title(thread.id, channel.id, {"flow_id": flow_id})
+
+        for uid in get_thread_member_ids(channel.id):
+            try:
+                user = await bot_client.fetch_user(int(uid))
+                await thread.add_user(user)
+            except Exception:
+                pass
+
+    register_thread(
+        thread.id,
+        BLANK_EDDY_NAME,
+        parent_channel=channel.name if hasattr(channel, "name") else "river",
+        model="local",
+        attunement=attunement,
+        eddy_type=eddy_type,
+    )
+
+    try:
+        from river_handler import _append_chronicle
+        from mage import get_pd
+
+        _append_chronicle(
+            get_pd(),
+            f"🌀 opened blank eddy",
+            {"thread_id": str(thread.id), "jump_url": thread.jump_url, "flow_id": flow_id},
+        )
+    except Exception as exc:
+        print(f"Chronicle write failed: {exc}")
+
+    print(f"Blank river eddy opened (id: {thread.id}) split_bot={split_bot}")
+    return thread
+
+
+def _materialize_client_for_channel(channel):
+    from mage import river_bot_enabled
+
+    if river_bot_enabled():
+        from river_state import river_client
+
+        return river_client
+    from state import client
+
+    return client
 
 
 def _build_seed_embed(author_name: str, content: str, url_content: str = "") -> discord.Embed:
