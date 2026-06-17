@@ -100,8 +100,12 @@ def _run(cmd: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
 
 
 def _parse_thread_id(spawn_stdout: str) -> str | None:
+    text = spawn_stdout.strip()
+    start = text.find("{")
+    if start == -1:
+        return None
     try:
-        data = json.loads(spawn_stdout)
+        data = json.loads(text[start:])
         return str(data.get("thread_id")) if data.get("status") == "ok" else None
     except json.JSONDecodeError:
         return None
