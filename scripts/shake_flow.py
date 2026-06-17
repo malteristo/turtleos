@@ -170,8 +170,9 @@ def check_live(flow_id: str, wait_seconds: int) -> list[str]:
         errors.append(f"spirit !release failed: {exc}")
 
     time.sleep(20)
-    from mage import get_pd
+    from mage import get_pd, set_practice_context_for_channel
 
+    set_practice_context_for_channel(int(thread_id))
     checkpoint = Path(get_pd()) / spec_cfg["checkpoint_rel"]
     if not checkpoint.is_file():
         errors.append(f"checkpoint not written: {checkpoint}")

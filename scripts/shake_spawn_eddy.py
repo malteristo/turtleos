@@ -32,6 +32,8 @@ def load_env() -> dict[str, str]:
             continue
         key, val = line.split("=", 1)
         values[key.strip()] = val.strip()
+    for key, val in values.items():
+        os.environ.setdefault(key, val)
     return values
 
 
@@ -55,10 +57,10 @@ def resolve_river_channel_id(env: dict[str, str]) -> int:
 
 
 async def main_async(args: argparse.Namespace) -> dict:
+    env = load_env()
     import discord
     from eddy_spawn import spawn_blank_river_eddy
 
-    env = load_env()
     token = env.get("DISCORD_BOT_TOKEN")
     if not token:
         raise RuntimeError("DISCORD_BOT_TOKEN not found in ~/turtleos/.env")
