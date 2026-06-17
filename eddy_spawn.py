@@ -800,6 +800,7 @@ async def spawn_blank_river_eddy(
     *,
     flow_id: str | None = None,
     eddy_type: str = "standard",
+    topic: str | None = None,
 ):
     """Open a blank native eddy from the standing door — no seed until first message."""
     from mage import get_thread_member_ids, river_bot_enabled, get_attunement_profile
@@ -817,10 +818,11 @@ async def spawn_blank_river_eddy(
     attunement = "semi"
     eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 10080)
     split_bot = river_bot_enabled()
+    thread_name = (topic or BLANK_EDDY_NAME)[:100]
 
     try:
         thread = await channel.create_thread(
-            name=BLANK_EDDY_NAME,
+            name=thread_name,
             auto_archive_duration=eddy_archive,
             type=discord.ChannelType.public_thread,
         )
@@ -835,7 +837,7 @@ async def spawn_blank_river_eddy(
         "model_label": "local",
         "eddy_type": eddy_type,
         "context_type": flow_id,
-        "topic": BLANK_EDDY_NAME,
+        "topic": thread_name,
         "blank_eddy": True,
         "awaiting_title": True,
         "presence_posted": False,
@@ -864,7 +866,7 @@ async def spawn_blank_river_eddy(
 
     register_thread(
         thread.id,
-        BLANK_EDDY_NAME,
+        thread_name,
         parent_channel=channel.name if hasattr(channel, "name") else "river",
         model="local",
         attunement=attunement,

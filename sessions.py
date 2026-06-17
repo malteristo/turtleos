@@ -10,7 +10,7 @@ import re
 
 from state import (
     active_sessions, SESSION_TIMEOUT_SECONDS, MIN_EXCHANGES_FOR_REFLECTION,
-    SESSION_REFLECTION_COOLDOWN, last_reflection_time,
+    MIN_EXCHANGES_FOR_CHECKPOINT, SESSION_REFLECTION_COOLDOWN, last_reflection_time,
     IDENTITY_DIR, REFLECTION_MODEL,
     thread_configs, EDDY_DEFAULT,
 )
@@ -40,124 +40,147 @@ async def session_monitor():
             await close_session(channel_id)
 
 
-async def close_session(channel_id: int):
-    active_sessions[channel_id]["closed"] = True
-    set_practice_context_for_channel(channel_id)
-    history = get_history(channel_id)
-    if len(history) < MIN_EXCHANGES_FOR_REFLECTION:
-        return
-
-    now_ts = datetime.now(timezone.utc).timestamp()
-    last_ref = last_reflection_time.get(channel_id, 0)
-    if now_ts - last_ref < SESSION_REFLECTION_COOLDOWN:
-        print(f"Session reflection skipped for {channel_id} — cooldown ({int((now_ts - last_ref) / 60)}m since last)")
-        return
-    last_reflection_time[channel_id] = now_ts
-
-    mage_name = get_mage_name()
-    conversation = "\n".join(
-        f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content']}" for m in history
-    )
-    # Cross-channel awareness: when reflecting on a thread, include
-    # recent parent-channel messages so the reflection model knows
-    # what Spirit/others said in the main channel.
-    cross_channel_context = ""
-    ch = client.get_channel(channel_id)
-    if ch and hasattr(ch, "parent_id") and ch.parent_id:
-        parent_history = get_history(ch.parent_id)
-        if parent_history:
-            recent_parent = parent_history[-10:]
-            cross_channel_context = "\n".join(
-                f"{mage_name if m['role'] == 'user' else 'Spirit/Turtle'}: {m['content'][:200]}"
-                for m in recent_parent
-            )
-            cross_channel_context = (
-                f"\n\nRECENT MAIN CHANNEL CONTEXT (for awareness — do NOT repeat or re-propose what was already addressed here):\n{cross_channel_context}\n"
-            )
-
-    reflection_prompt = (
-        f"The following conversation with {mage_name} just ended (15 minutes of silence). "
-        "Reflect autonomously.\n\n"
-        "Write a SESSION NOTE:\n---SESSION_NOTE---\n"
-        "What was discussed: (2-3 lines)\nWhat emerged: (insights, decisions)\n"
-        "Thread for next time: (if any)\n---END_SESSION_NOTE---\n\n"
-        "If you noticed something about the practice system that could be improved, write:\n"
-        "---PROPOSAL---\nTitle:\nProblem:\nProposed change:\nExpected benefit:\n---END_PROPOSAL---\n\n"
-        "Skip PROPOSAL if nothing stood out. Especially skip if the improvement was already addressed "
-        "in recent main channel messages.\n\n"
-        f"THE CONVERSATION:\n{conversation}"
-        f"{cross_channel_context}"
-    )
-
-    try:
-        reflection = await chat_ollama(get_system_prompt(),
-                                         [{"role": "user", "content": reflection_prompt}],
-                                         model=REFLECTION_MODEL)
-        if not reflection:
-            return
-
-        today = local_now().strftime("%Y-%m-%d")
-
-        if "---SESSION_NOTE---" in reflection and "---END_SESSION_NOTE---" in reflection:
-            note = reflection.split("---SESSION_NOTE---")[1].split("---END_SESSION_NOTE---")[0].strip()
-            session_dir = Path(get_pd()) / "sessions"
-            session_dir.mkdir(parents=True, exist_ok=True)
-            session_path = session_dir / f"{today}.md"
-            suffix = 1
-            while session_path.exists():
-                suffix += 1
-                session_path = session_dir / f"{today}-{suffix}.md"
-            session_path.write_text(f"# Session — {today}\n\n{note}\n")
-            print(f"Session note: {session_path}")
-
-            session_channel = client.get_channel(channel_id)
-            await log_activity(f"Session note: `sessions/{session_path.name}`", "\U0001f4dd", channel=session_channel)
-
-        if "---PROPOSAL---" in reflection and "---END_PROPOSAL---" in reflection:
-            proposal = reflection.split("---PROPOSAL---")[1].split("---END_PROPOSAL---")[0].strip()
-            proposal_dir = Path(get_pd()) / "proposals"
-            proposal_dir.mkdir(parents=True, exist_ok=True)
-            proposal_path = proposal_dir / f"{today}-reflection.md"
-            suffix = 1
-            while proposal_path.exists():
-                suffix += 1
-                proposal_path = proposal_dir / f"{today}-reflection-{suffix}.md"
-            proposal_path.write_text(f"# Proposal — {today}\n\n{proposal}\n")
-            print(f"Proposal: {proposal_path}")
-
-            title_line = ""
-            for line in proposal.split("\n"):
-                if line.strip().startswith("Title:"):
-                    title_line = line.strip().replace("Title:", "").strip()
-                    break
-            session_channel = client.get_channel(channel_id)
-            label = f"**{title_line}**" if title_line else f"`proposals/{proposal_path.name}`"
-            await log_activity(f"Proposal captured: {label}", "💡", channel=session_channel)
-
-    except Exception as e:
-        print(f"Session reflection failed for {channel_id}: {type(e).__name__}: {e}")
-
-    # ── Native flow checkpoint (state/ writes via flow_runner) ──
+async def _write_flow_checkpoint_if_needed(
+    channel_id: int,
+    history: list[dict],
+    mage_name: str,
+) -> list[str]:
+    """Write native flow checkpoints — independent of reflection cooldown."""
+    if len(history) < MIN_EXCHANGES_FOR_CHECKPOINT:
+        return []
     try:
         from mage import get_attunement_profile
         from flow_runner import load_flow_spec, write_flow_checkpoint
 
-        if get_attunement_profile() == "native":
-            cfg = thread_configs.get(channel_id) or {}
-            flow_id = cfg.get("context_type")
-            spec = load_flow_spec(flow_id)
-            if spec and spec.writes:
-                written = write_flow_checkpoint(spec, history, mage_name)
-                if written:
-                    session_channel = client.get_channel(channel_id)
-                    rel = written[0]
-                    await log_activity(f"Flow checkpoint: `{rel}`", "\U0001f4be", channel=session_channel)
-                    print(f"Flow checkpoint for {spec.title}: {', '.join(written)}")
+        if get_attunement_profile() != "native":
+            return []
+        cfg = thread_configs.get(channel_id) or {}
+        flow_id = cfg.get("context_type")
+        spec = load_flow_spec(flow_id)
+        if not spec or not spec.writes:
+            return []
+        written = write_flow_checkpoint(spec, history, mage_name)
+        if written:
+            session_channel = client.get_channel(channel_id)
+            rel = written[0]
+            await log_activity(f"Flow checkpoint: `{rel}`", "\U0001f4be", channel=session_channel)
+            print(f"Flow checkpoint for {spec.title}: {', '.join(written)}")
+        return written
     except Exception as e:
         print(f"Flow checkpoint failed for {channel_id}: {type(e).__name__}: {e}")
+        return []
+
+
+async def close_session(channel_id: int):
+    active_sessions[channel_id]["closed"] = True
+    set_practice_context_for_channel(channel_id)
+    history = get_history(channel_id)
+    mage_name = get_mage_name()
+
+    await _write_flow_checkpoint_if_needed(channel_id, history, mage_name)
+
+    if len(history) < MIN_EXCHANGES_FOR_REFLECTION:
+        return
+
+    conversation = "\n".join(
+        f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content']}" for m in history
+    )
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    last_ref = last_reflection_time.get(channel_id, 0)
+    reflection = None
+    on_cooldown = now_ts - last_ref < SESSION_REFLECTION_COOLDOWN
+    if on_cooldown:
+        print(
+            f"Session reflection skipped for {channel_id} — cooldown "
+            f"({int((now_ts - last_ref) / 60)}m since last)"
+        )
+    else:
+        last_reflection_time[channel_id] = now_ts
+        cross_channel_context = ""
+        ch = client.get_channel(channel_id)
+        if ch and hasattr(ch, "parent_id") and ch.parent_id:
+            parent_history = get_history(ch.parent_id)
+            if parent_history:
+                recent_parent = parent_history[-10:]
+                cross_channel_context = "\n".join(
+                    f"{mage_name if m['role'] == 'user' else 'Spirit/Turtle'}: {m['content'][:200]}"
+                    for m in recent_parent
+                )
+                cross_channel_context = (
+                    "\n\nRECENT MAIN CHANNEL CONTEXT (for awareness — do NOT repeat or re-propose "
+                    "what was already addressed here):\n"
+                    f"{cross_channel_context}\n"
+                )
+
+        reflection_prompt = (
+            f"The following conversation with {mage_name} just ended (15 minutes of silence). "
+            "Reflect autonomously.\n\n"
+            "Write a SESSION NOTE:\n---SESSION_NOTE---\n"
+            "What was discussed: (2-3 lines)\nWhat emerged: (insights, decisions)\n"
+            "Thread for next time: (if any)\n---END_SESSION_NOTE---\n\n"
+            "If you noticed something about the practice system that could be improved, write:\n"
+            "---PROPOSAL---\nTitle:\nProblem:\nProposed change:\nExpected benefit:\n---END_PROPOSAL---\n\n"
+            "Skip PROPOSAL if nothing stood out. Especially skip if the improvement was already addressed "
+            "in recent main channel messages.\n\n"
+            f"THE CONVERSATION:\n{conversation}"
+            f"{cross_channel_context}"
+        )
+
+        try:
+            reflection = await chat_ollama(
+                get_system_prompt(),
+                [{"role": "user", "content": reflection_prompt}],
+                model=REFLECTION_MODEL,
+            )
+            if reflection:
+                today = local_now().strftime("%Y-%m-%d")
+
+                if "---SESSION_NOTE---" in reflection and "---END_SESSION_NOTE---" in reflection:
+                    note = reflection.split("---SESSION_NOTE---")[1].split("---END_SESSION_NOTE---")[0].strip()
+                    session_dir = Path(get_pd()) / "sessions"
+                    session_dir.mkdir(parents=True, exist_ok=True)
+                    session_path = session_dir / f"{today}.md"
+                    suffix = 1
+                    while session_path.exists():
+                        suffix += 1
+                        session_path = session_dir / f"{today}-{suffix}.md"
+                    session_path.write_text(f"# Session — {today}\n\n{note}\n")
+                    print(f"Session note: {session_path}")
+
+                    session_channel = client.get_channel(channel_id)
+                    await log_activity(
+                        f"Session note: `sessions/{session_path.name}`",
+                        "\U0001f4dd",
+                        channel=session_channel,
+                    )
+
+                if "---PROPOSAL---" in reflection and "---END_PROPOSAL---" in reflection:
+                    proposal = reflection.split("---PROPOSAL---")[1].split("---END_PROPOSAL---")[0].strip()
+                    proposal_dir = Path(get_pd()) / "proposals"
+                    proposal_dir.mkdir(parents=True, exist_ok=True)
+                    proposal_path = proposal_dir / f"{today}-reflection.md"
+                    suffix = 1
+                    while proposal_path.exists():
+                        suffix += 1
+                        proposal_path = proposal_dir / f"{today}-reflection-{suffix}.md"
+                    proposal_path.write_text(f"# Proposal — {today}\n\n{proposal}\n")
+                    print(f"Proposal: {proposal_path}")
+
+                    title_line = ""
+                    for line in proposal.split("\n"):
+                        if line.strip().startswith("Title:"):
+                            title_line = line.strip().replace("Title:", "").strip()
+                            break
+                    session_channel = client.get_channel(channel_id)
+                    label = f"**{title_line}**" if title_line else f"`proposals/{proposal_path.name}`"
+                    await log_activity(f"Proposal captured: {label}", "💡", channel=session_channel)
+
+        except Exception as e:
+            print(f"Session reflection failed for {channel_id}: {type(e).__name__}: {e}")
 
     # ── Outfacing signal evaluation (Mage channel only) ──
-    if get_mage_type() != "practitioner" and len(history) >= MIN_EXCHANGES_FOR_SIGNAL:
+    if reflection and get_mage_type() != "practitioner" and len(history) >= MIN_EXCHANGES_FOR_SIGNAL:
         try:
             should_evaluate, reason = should_evaluate_outfacing_signal(conversation, reflection)
             if not should_evaluate:
