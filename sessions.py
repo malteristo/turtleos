@@ -137,6 +137,25 @@ async def close_session(channel_id: int):
     except Exception as e:
         print(f"Session reflection failed for {channel_id}: {type(e).__name__}: {e}")
 
+    # ── Native flow checkpoint (state/ writes via flow_runner) ──
+    try:
+        from mage import get_attunement_profile
+        from flow_runner import load_flow_spec, write_flow_checkpoint
+
+        if get_attunement_profile() == "native":
+            cfg = thread_configs.get(channel_id) or {}
+            flow_id = cfg.get("context_type")
+            spec = load_flow_spec(flow_id)
+            if spec and spec.writes:
+                written = write_flow_checkpoint(spec, history, mage_name)
+                if written:
+                    session_channel = client.get_channel(channel_id)
+                    rel = written[0]
+                    await log_activity(f"Flow checkpoint: `{rel}`", "\U0001f4be", channel=session_channel)
+                    print(f"Flow checkpoint for {spec.title}: {', '.join(written)}")
+    except Exception as e:
+        print(f"Flow checkpoint failed for {channel_id}: {type(e).__name__}: {e}")
+
     # ── Outfacing signal evaluation (Mage channel only) ──
     if get_mage_type() != "practitioner" and len(history) >= MIN_EXCHANGES_FOR_SIGNAL:
         try:

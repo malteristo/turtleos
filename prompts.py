@@ -648,26 +648,10 @@ def load_character_file(name: str) -> str:
     return ""
 
 
-def _load_flow_body(flow_id: str | None) -> str:
-    if not flow_id:
-        return ""
-    slug = flow_id.strip().lower().replace(" ", "_")
-    candidates = [slug, slug.replace("_", "-")]
-    pd = get_pd()
-    repo_root = os.path.dirname(os.path.abspath(__file__))
-    for base in (os.path.join(pd, "flows"), os.path.join(repo_root, "template", "flows")):
-        if not os.path.isdir(base):
-            continue
-        for stem in candidates:
-            path = os.path.join(base, f"{stem}.md")
-            content = read_safe(path)
-            if content.strip():
-                return content.strip()
-    return ""
-
-
 def build_native_eddy_prompt(flow_id: str | None = None) -> str:
     """Vanilla Turtle system prompt — soul + conduct + optional flow (TURTLE_SPEC §7, §14)."""
+    from flow_runner import build_flow_prompt_sections
+
     soul = load_character_file("soul.md")
     conduct = load_character_file("conduct.md")
     parts: list[str] = []
@@ -675,10 +659,8 @@ def build_native_eddy_prompt(flow_id: str | None = None) -> str:
         parts.append(soul)
     if conduct:
         parts.append(conduct)
-    flow_body = _load_flow_body(flow_id)
-    if flow_body:
-        label = (flow_id or "flow").strip().title()
-        parts.append(f"## Active Flow: {label}\n\n{flow_body}")
+    flow_sections, _spec = build_flow_prompt_sections(flow_id)
+    parts.extend(flow_sections)
     if not parts:
         parts.append(
             "You are Turtle — a thinking partner in this eddy. "
