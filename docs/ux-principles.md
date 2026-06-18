@@ -185,18 +185,45 @@ Inside eddies (character layer — `template/character/conduct.md`):
 
 Flows are prompt programs loaded when `context_type` / `flow_id` is set at spawn (from flow menu). Flow front matter governs reads/writes under `state/`.
 
-**Flow menu (bar):** lists only **installed** flows — `.md` files under `practice/flows/` or `template/flows/`. Today that is often just **Shelter** until more flows ship. The River prompt’s default flow names (Navigator, Thread, Companion) are browse hints, not guaranteed menu entries.
+**Flow menu (bar):** lists only **installed** flows — `.md` files under `practice/flows/` or `template/flows/`. Template ships **Shelter**, **Navigator**, **Thread**, **Companion**; practitioners see whatever is installed under their practice root.
 
-**Flow eddy entry (target UX — 2026-06-18 dogfood):**
+**Two entry paths:** flows **without** `intake` in front matter (e.g. Shelter) vs flows **with** `intake` declared (Navigator v1). Intake makes a flow feel like a **program** (contract → prepare → handoff), not a dressed-up prompt.
+
+#### Intake-free flow eddy (Shelter)
 
 | Step | What the practitioner should see |
 |------|----------------------------------|
 | Pick flow from bar | Thread titled **flow name** (e.g. `Shelter`), not generic `new eddy` |
 | Enter thread | **One River orientation embed** — what this flow is, whether a checkpoint file exists |
 | First message | Practitioner speaks; River adds Turtle; thread may rename to topic |
-| First Turtle reply | Shelter voice + compact presence tag (shell-injected) |
+| First Turtle reply | Flow voice + compact presence tag (shell-injected) |
 
-River does **preparation**, not dialogue — orientation embed is an allowed exception to “acts not words” (setup only, silent, no chatbot tone).
+#### River intake (flows with `intake` front matter — Navigator v1)
+
+**Why:** A menu + checkpoint file is not enough — practitioners still experience “talk to the model with a system prompt.” River intake separates **preparation** (River) from **dialogue** (Turtle) and makes the handoff legible on the timeline.
+
+| Step | What the practitioner should see |
+|------|----------------------------------|
+| Pick flow from bar | Thread titled **flow name** (e.g. `Navigator`) |
+| Enter thread | **Orientation embed** — entry contract, checkpoint hint, **[Prepare]** and (if `skippable`) **[Skip — I'll talk]** |
+| Prepare | Discord **modal** (text fields only, ≤5) → **summary embed** + **[Begin with Turtle]** |
+| Begin | `river added turtle` (system line) → **Turtle speaks first** without the practitioner typing |
+| Skip | Short embed: first message will bring Turtle in (classic path) |
+
+**Split-bot rule:** River **cannot** call Turtle dialogue. After **Begin**, River writes a handoff file under `thread-state/intake-handoff/{thread_id}.json`; Turtle’s watcher picks it up and posts the opening. Do **not** auto-open on modal submit alone — **Begin** must remain explicit so `river added turtle` + Turtle’s reply stay legible.
+
+**Intake artifact:** Field values write to the path in front matter (e.g. `state/notes/navigator-intake.md`) and load into Turtle’s prompt. Flow conduct must **not** re-ask captured fields (see `template/flows/navigator.md` CRITICAL block).
+
+**Shelter stays intake-free:** zero-question Pop 1 and a Prepare modal fight each other — do not add intake to Shelter without redesigning entry.
+
+**Dogfood notes:**
+
+- **Stale buttons after bot restart:** Discord persistent views die on restart; Prepare/Begin on old embeds fail silently. Dogfood on a **fresh flow eddy** after deploy.
+- **Modals are text-only:** selects and rich controls belong on embeds/buttons, not inside the modal.
+
+River does **preparation**, not dialogue — orientation and intake embeds are allowed exceptions to “acts not words” (setup only, silent, no chatbot tone).
+
+**Implementation:** `flow_intake_handler.py` (Prepare/Skip/Begin, modal, summary); `flow_intake_opening.py` (handoff file + watcher + Turtle opening); `flow_runner.py` (`intake` front matter); `eddy_spawn.prepare_flow_eddy_entry`.
 
 **Session capture — checkpoint vs release:**
 
@@ -242,7 +269,7 @@ River timeline: … → click [new eddy]
   → thread renames → Turtle joined → reply
 ```
 
-### 5.2 Open flow eddy from bar
+### 5.2 Open intake-free flow eddy from bar (Shelter)
 
 ```
 Click [flow menu] → select Shelter
@@ -251,6 +278,19 @@ Click [flow menu] → select Shelter
   → first message → river added turtle → Turtle reply in flow voice
   → 15 min idle → flow checkpoint + session note (if thresholds met)
 ```
+
+### 5.2b Open intake flow eddy from bar (Navigator)
+
+```
+Click [flow menu] → select Navigator
+  → thread titled "Navigator"
+  → orientation embed: entry contract + [Prepare] [Skip — I'll talk]
+  → Prepare → modal (intention, territory) → summary embed + [Begin with Turtle]
+  → Begin → river added turtle → Turtle opening (intake in prompt, no re-ask)
+  → dialogue continues → checkpoint on idle / !checkpoint / !release
+```
+
+Skip path: orientation → practitioner’s first message → `river added turtle` → normal first-reply flow (no auto-opening).
 
 ### 5.3 Drop text in river (no eddy yet)
 
@@ -287,7 +327,7 @@ Practitioner posts in river
 | Topic | Spec | This doc |
 |-------|------|----------|
 | Eddy affordance | §5.3–5.4, §17 — standing bar | §3.1, §5.1 |
-| Flow entry | §5.4, §7.2 — orientation embed | §4.5, §5.2 |
+| Flow entry | §5.4, §7.2 — orientation embed; intake (when declared) | §4.5, §5.2, §5.2b |
 | Checkpoint / release | §8.4, §17 | §4.5 |
 | Native system lines | §7.7 | §4.6 |
 | Rejected UX | §7.7 (partial) | §6 (full inventory) |
@@ -319,7 +359,7 @@ Before merging a change that touches practitioner-facing behavior:
 |---------|--------|
 | River acts + bar | `river_handler.py`, `river_bot.py` |
 | Eddy spawn + presence | `eddy_spawn.py` |
-| Flow loading | `flow_runner.py`, `practice_root/flows/` |
+| Flow loading + intake | `flow_runner.py`, `flow_intake_handler.py`, `flow_intake_opening.py`, `practice/flows/`, `template/flows/` |
 | River model prompt | `template/character/river_prompt.md` |
 | Turtle character | `template/character/soul.md`, `conduct.md` |
 | Platform law | `TURTLE_SPEC.md` §5, §7, §17 |
@@ -339,6 +379,7 @@ Before merging a change that touches practitioner-facing behavior:
 | 2026-06-18 | Dogfood: flow menu shows installed flows only; flow eddy entry needs River orientation; flow checkpoint inference on close; pinned-in-eddy rejected |
 | 2026-06-18 | **Checkpoint vs release** — `checkpoint_session` on idle/`!checkpoint`; `!release` user-only; River chronicle on capture |
 | 2026-06-18 | **TURTLE_SPEC amended** — §5.3–5.4 bar, §7.7 system lines, §8.4 checkpoint law, §17 updated; §7 here now tracks alignment not drift |
+| 2026-06-18 | **River intake v1** — Prepare/Skip/Begin, modal → summary → explicit Begin, split-bot handoff file + Turtle auto-opening; §4.5 + §5.2b; Navigator template; Shelter remains intake-free |
 
 ---
 
