@@ -20,6 +20,8 @@ from flow_runner import (
     resolve_flow_for_close,
     list_resolvable_flow_ids,
     strip_model_operational_lines,
+    strip_question_sentences,
+    apply_flow_reply_guard,
 )
 
 
@@ -86,6 +88,37 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertEqual(len(stripped_meta), 1)
         self.assertNotIn("No question", cleaned_meta)
         self.assertIn("You made it.", cleaned_meta)
+
+    def test_strip_question_sentences(self) -> None:
+        raw = (
+            "I'm here with you. There's no need to carry it alone right now. "
+            "Would you like to just sit with it for a moment, or is there one small thing?"
+        )
+        cleaned, stripped = strip_question_sentences(raw)
+        self.assertEqual(len(stripped), 1)
+        self.assertNotIn("?", cleaned)
+        self.assertIn("I'm here with you.", cleaned)
+
+    def test_apply_flow_reply_guard_shelter_first_reply(self) -> None:
+        raw = "I'm here. Would you like to sit with it?"
+        cleaned, notes = apply_flow_reply_guard(raw, "shelter", [])
+        self.assertNotIn("?", cleaned)
+        self.assertTrue(notes)
+        self.assertIn("I'm here.", cleaned)
+
+    def test_apply_flow_reply_guard_skips_after_first_reply(self) -> None:
+        history = [{"role": "assistant", "content": "first"}]
+        raw = "Still here. Want to talk?"
+        cleaned, notes = apply_flow_reply_guard(raw, "shelter", history)
+        self.assertEqual(cleaned, raw)
+        self.assertEqual(notes, [])
+
+    def test_build_flow_prompt_sections_shelter_turn_override_last(self) -> None:
+        from prompts import build_native_eddy_prompt
+
+        prompt = build_native_eddy_prompt("shelter")
+        self.assertIn("Turn override (final", prompt)
+        self.assertGreater(prompt.rfind("Turn override"), prompt.rfind("Discord Eddy"))
 
     def test_list_flow_ids_dedupes_practice_over_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

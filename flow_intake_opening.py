@@ -126,6 +126,12 @@ async def deliver_flow_intake_opening(client, thread_id: int, parent_id: int, fl
         if stripped_ops:
             print(f"Intake opening stripped ops: {stripped_ops}")
 
+        from flow_runner import apply_flow_reply_guard
+
+        reply, guard_notes = apply_flow_reply_guard(reply, flow_id, [])
+        if guard_notes:
+            print(f"Intake opening flow guard: {guard_notes}")
+
         from eddy_spawn import post_flow_presence_if_needed
 
         await post_flow_presence_if_needed(channel, cfg)

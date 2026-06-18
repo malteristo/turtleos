@@ -1031,11 +1031,15 @@ async def _continue_dialogue_turn(
             reply = "\n\n".join(deduped)
 
     if native_eddy:
-        from flow_runner import strip_model_operational_lines
+        from flow_runner import apply_flow_reply_guard, strip_model_operational_lines
 
         reply, stripped_ops = strip_model_operational_lines(reply)
         if stripped_ops:
             print(f"Stripped model operational lines: {stripped_ops}")
+        flow_id = (cfg or {}).get("context_type")
+        reply, guard_notes = apply_flow_reply_guard(reply, flow_id, history)
+        if guard_notes:
+            print(f"Flow reply guard: {guard_notes}")
     if _reflex and not native_eddy:
         reply = f"-# {_reflex}\n\n{reply}"
     if tool_report:

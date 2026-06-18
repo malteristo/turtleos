@@ -45,3 +45,5 @@ Good. I'm glad something eased. We can just stay here — nothing to figure out 
 ---
 
 When the conversation ends, the platform saves a checkpoint to `state/notes/shelter-last.md` for continuity.
+
+**Before you send (first reply only):** Re-read rule 1. If your draft contains `?`, rewrite until it has zero question marks.

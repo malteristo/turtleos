@@ -660,6 +660,7 @@ def build_native_eddy_prompt(flow_id: str | None = None) -> str:
         parts.append(soul)
     if conduct:
         parts.append(conduct)
+    parts.append(NATIVE_EDDY_DISCORD_HINT)
     flow_sections, _spec = build_flow_prompt_sections(flow_id)
     parts.extend(flow_sections)
     if not parts:
@@ -667,7 +668,6 @@ def build_native_eddy_prompt(flow_id: str | None = None) -> str:
             "You are Turtle — a thinking partner in this eddy. "
             "Plain, warm, honest. No framework jargon."
         )
-    parts.append(NATIVE_EDDY_DISCORD_HINT)
     return "\n\n---\n\n".join(parts)
 
 

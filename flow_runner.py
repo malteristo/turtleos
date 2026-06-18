@@ -193,6 +193,49 @@ def strip_model_operational_lines(text: str) -> tuple[str, list[str]]:
     return cleaned, stripped
 
 
+_SHELTER_FIRST_REPLY_FALLBACK = (
+    "You made it. There's no rush here.\n\n"
+    "I'm here with you. You don't have to explain anything."
+)
+
+
+def strip_question_sentences(text: str) -> tuple[str, list[str]]:
+    """Remove sentences containing question marks."""
+    stripped: list[str] = []
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept: list[str] = []
+    for sent in sentences:
+        if not sent.strip():
+            continue
+        if "?" in sent:
+            stripped.append(sent.strip())
+        else:
+            kept.append(sent.strip())
+    cleaned = " ".join(kept).strip()
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned, stripped
+
+
+def apply_flow_reply_guard(
+    text: str,
+    flow_id: str | None,
+    history: list[dict],
+) -> tuple[str, list[str]]:
+    """Shell enforcement when flow turn contracts are violated."""
+    if flow_id != "shelter":
+        return text, []
+    if any(m.get("role") == "assistant" for m in history):
+        return text, []
+    if "?" not in text:
+        return text, []
+    cleaned, stripped = strip_question_sentences(text)
+    notes = [f"stripped question sentence: {s}" for s in stripped]
+    if not cleaned.strip():
+        cleaned = _SHELTER_FIRST_REPLY_FALLBACK
+        notes.append("used shelter first-reply fallback")
+    return cleaned, notes
+
+
 def read_flow_intake(spec: FlowSpec, practice_dir: str | None = None) -> str:
     if not spec.intake:
         return ""
@@ -291,6 +334,13 @@ def build_flow_prompt_sections(
         sections.append(
             "## Flow Intake (River captured — do not re-ask these)\n\n"
             f"### {rel}\n\n{intake_content[:4000]}"
+        )
+    if spec.flow_id == "shelter":
+        sections.append(
+            "## Turn override (final — wins over character defaults)\n\n"
+            "If this is your **first reply** in this eddy: presence only. "
+            "**Zero question marks.** Do not offer choices, invites, or 'would you like' — "
+            "just be here."
         )
     return sections, spec
 
