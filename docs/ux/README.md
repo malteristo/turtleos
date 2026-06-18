@@ -89,6 +89,7 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | 2026-06-18 | **Intake rename on Begin** — thread retitled from intention/territory before Turtle joins |
 | 2026-06-18 | **SSRF hardening** — `url_validate.py` shared across link read, content_fetch, `!fetch` |
 | 2026-06-18 | **UX doc split** — `docs/ux/` topic files; link-reading principles; stub `ux-principles.md` |
+| 2026-06-18 | **Flow trace + deploy** — shell-inject flow presence; Shelter meta/question guards; Mini at `28feb48` |
 
 ---
 
