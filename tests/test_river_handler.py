@@ -97,5 +97,35 @@ class PendingEddyTests(unittest.TestCase):
             self.assertIsNone(pop_pending_native_eddy(123, 456))
 
 
+class NativeRiverEddyRoutingTests(unittest.TestCase):
+    def test_new_eddy_name_not_intake_when_awaiting_title(self) -> None:
+        from eddy_spawn import is_intake_thread, is_native_river_eddy, write_awaiting_title
+        from unittest.mock import MagicMock, patch
+
+        thread = MagicMock()
+        thread.name = "new eddy"
+        thread.id = 555
+        thread.parent_id = 999
+
+        with patch("eddy_spawn._awaiting_title_path") as mock_path:
+            tmp = Path("/tmp/test_native_eddy_routing.json")
+            tmp.unlink(missing_ok=True)
+            mock_path.return_value = tmp
+            write_awaiting_title(555, 999)
+            self.assertTrue(is_native_river_eddy(thread))
+            self.assertFalse(is_intake_thread(thread))
+            tmp.unlink(missing_ok=True)
+
+    def test_new_eddy_name_is_intake_without_native_marker(self) -> None:
+        from eddy_spawn import is_intake_thread
+        from unittest.mock import MagicMock
+
+        thread = MagicMock()
+        thread.name = "new eddy"
+        thread.id = 556
+        thread.parent_id = 999
+        self.assertTrue(is_intake_thread(thread))
+
+
 if __name__ == "__main__":
     unittest.main()

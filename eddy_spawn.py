@@ -370,13 +370,37 @@ async def route_to_eddy(message, target_thread, url_content: str = ""):
 
 
 
+def _is_thread_channel(channel) -> bool:
+    return getattr(channel, "parent_id", None) is not None
+
+
+def is_native_river_eddy(channel) -> bool:
+    """River-materialized blank eddy — not the legacy vortex/intake thread."""
+    if not _is_thread_channel(channel):
+        return False
+    parent_id = channel.parent_id
+    if is_awaiting_title(channel.id, parent_id):
+        return True
+    try:
+        from commands import thread_configs
+
+        cfg = thread_configs.get(channel.id)
+        if cfg and cfg.get("native_vanilla"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def is_intake_thread(channel) -> bool:
     """Check if a channel is the standing intake eddy.
 
     Matches by name (case-insensitive, stripped) or emoji prefix + known pattern.
     Examples: "new thread", "🌀 new eddy", "🌀 intake"
     """
-    if not isinstance(channel, discord.Thread):
+    if not _is_thread_channel(channel):
+        return False
+    if is_native_river_eddy(channel):
         return False
     name = channel.name.strip()
     name_lower = name.lower()
@@ -754,6 +778,7 @@ async def spawn_river_eddy(
         "context_type": flow_id,
         "topic": thread_name,
         "awaiting_title": True,
+        "blank_eddy": True,
     }
 
     write_awaiting_title(thread.id, message.channel.id, {"flow_id": flow_id})
