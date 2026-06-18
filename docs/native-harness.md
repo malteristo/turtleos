@@ -233,7 +233,9 @@ Archive old shell. Keep current code as lineage/reference. New harness becomes `
 Minimum acceptance tests:
 
 - Click "Create thread" contextual action -> thread created, parent channel receives clickable link.
-- Share X/YouTube/web link from phone -> fetched or paste fallback offered within 10 seconds.
+- Share X/YouTube/web link from phone -> **Reading… → Read** status embed within 10 seconds, then grounded Turtle reply; failure shows paste/`!fetch` ladder (§9.5).
+- Long message with incidental URL -> **Read article / Skip** offer without blocking first reply.
+- Article over 8k chars -> status embed shows **N/M in context** and `box/intake/` spill path.
 - Ask "what did you just read?" -> Turtle can show source trace and resident pages.
 - Let session go quiet -> session note written, readiness recorded, channel gets concise closure.
 - Trigger one scheduled interoception -> event logged, sensorium updated, output rendered, no duplicate noise.

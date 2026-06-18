@@ -20,6 +20,8 @@ import shutil
 
 import httpx
 
+from url_validate import assert_fetch_url_allowed, ssrf_httpx_request_hook
+
 
 _VENV_BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin")
 
@@ -65,6 +67,15 @@ SUPPORTED_ATTACHMENT_TYPES = {
 MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024  # 20MB
 
 
+def _fetch_http_client(**kwargs) -> httpx.AsyncClient:
+    """httpx client with SSRF validation on every request (incl. redirects)."""
+    hooks = kwargs.pop("event_hooks", None) or {}
+    request_hooks = list(hooks.get("request") or [])
+    request_hooks.insert(0, ssrf_httpx_request_hook)
+    hooks["request"] = request_hooks
+    return httpx.AsyncClient(event_hooks=hooks, **kwargs)
+
+
 async def extract_urls(text):
     """Extract URLs from message text. Returns list of URL strings."""
     return _URL_PATTERN.findall(text)
@@ -78,7 +89,7 @@ async def _direct_fetch(url, timeout=15):
         return None, "trafilatura not installed"
 
     try:
-        async with httpx.AsyncClient(
+        async with _fetch_http_client(
             timeout=httpx.Timeout(timeout),
             follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
@@ -118,7 +129,7 @@ async def _wayback_fetch(url, timeout=15):
     """Layer 4: Try Wayback Machine for archived version."""
     wayback_api = f"https://archive.org/wayback/available?url={url}"
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout), follow_redirects=True) as http:
+        async with _fetch_http_client(timeout=httpx.Timeout(timeout), follow_redirects=True) as http:
             api_resp = await http.get(wayback_api)
             if api_resp.status_code != 200:
                 return None, "wayback API unavailable"
@@ -148,7 +159,7 @@ async def _jina_fetch(url, timeout=20):
     """Layer 2: Jina Reader — renders JavaScript, returns clean markdown."""
     jina_url = f"https://r.jina.ai/{url}"
     try:
-        async with httpx.AsyncClient(
+        async with _fetch_http_client(
             timeout=httpx.Timeout(timeout),
             follow_redirects=True,
             headers={
@@ -176,6 +187,12 @@ async def _jina_fetch(url, timeout=20):
 async def fetch_url_content(url, timeout=15):
     """Fetch readable text from a URL using graceful degradation.
     Tries: direct fetch → wayback archive. Returns (content, source_type) or (None, attempts_report)."""
+    from url_validate import validate_fetch_url
+
+    blocked = validate_fetch_url(url)
+    if blocked:
+        return None, f"SSRF blocked: {blocked}"
+
     attempts = []
 
     # Layer 1: Direct fetch
@@ -310,7 +327,7 @@ async def _twitter_cli_fetch(url):
         urls_in_tweet = re.findall(r"https?://t\.co/\S+", text)
         if urls_in_tweet:
             linked_content = []
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10), follow_redirects=True) as http:
+            async with _fetch_http_client(timeout=httpx.Timeout(10), follow_redirects=True) as http:
                 for tco in urls_in_tweet[:3]:
                     try:
                         link_resp = await http.get(tco, follow_redirects=True)
@@ -352,7 +369,7 @@ async def fetch_twitter(url):
 
     oembed_url = f"https://publish.twitter.com/oembed?url={url}&omit_script=true"
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10), follow_redirects=True) as http:
+        async with _fetch_http_client(timeout=httpx.Timeout(10), follow_redirects=True) as http:
             resp = await http.get(oembed_url)
             if resp.status_code != 200:
                 return None, f"oembed HTTP {resp.status_code}"
@@ -549,7 +566,7 @@ async def _yt_dlp_fetch(url, timeout=30):
                 for fmt in sub_list:
                     if fmt.get("ext") == "json3" and fmt.get("url"):
                         try:
-                            async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as http:
+                            async with _fetch_http_client(timeout=httpx.Timeout(15)) as http:
                                 resp = await http.get(fmt["url"])
                                 if resp.status_code == 200:
                                     sub_data = resp.json()
@@ -595,69 +612,13 @@ def detect_platform(url):
 async def process_urls(urls, max_urls=3):
     """Fetch and process URLs using graceful degradation.
     Includes LITL safety check and link depth transparency reporting."""
-    results = []
-    for url in urls[:max_urls]:
-        platform = detect_platform(url)
-        content, source_type = None, None
-        attempts = []
-        nested_urls_found = []
+    from link_read import fetch_urls_for_dialogue, format_fetch_results_for_dialogue
 
-        if platform == "twitter":
-            content, source_type = await fetch_twitter(url)
-            if not content:
-                attempts.append(f"twitter oembed: {source_type}")
-        elif platform == "youtube":
-            content, source_type = await fetch_youtube_transcript(url)
-            if not content:
-                attempts.append(f"youtube transcript: {source_type}")
-                content, source_type = await _yt_dlp_fetch(url)
-                if not content:
-                    attempts.append(f"yt-dlp: {source_type}")
-        elif platform == "reddit":
-            content, source_type = await fetch_reddit(url)
-            if not content:
-                attempts.append(f"reddit rdt-cli: {source_type}")
-
-        if not content:
-            content, source_type = await fetch_url_content(url)
-            if not content:
-                attempts.append(source_type)
-
-        if content:
-            nested_urls_found = _URL_PATTERN.findall(content)
-            nested_urls_found = [u for u in nested_urls_found
-                                 if u != url
-                                 and not u.startswith("https://t.co/")
-                                 and "twitter.com" not in u
-                                 and "x.com" not in u]
-
-            litl_hits = litl_check(content)
-            if litl_hits:
-                results.append(
-                    f"[URL: {url} (via {source_type})]\n"
-                    f"[LITL WARNING: Content contains instruction-like patterns: "
-                    f"{litl_hits[:3]}. Presenting raw content with caution.]\n"
-                    f"{content[:6000]}"
-                )
-                print(f"LITL detected in {url}: {litl_hits[:3]}")
-            else:
-                entry = f"[URL: {url} (via {source_type})]\n{content[:8000]}"
-                if nested_urls_found[:3]:
-                    entry += "\n\n[Link depth report: Found nested URLs in this content:"
-                    for nu in nested_urls_found[:3]:
-                        np = detect_platform(nu)
-                        entry += f"\n  - {nu} ({np or 'web'} — not yet explored)"
-                    entry += "\n  Tell me if you want me to explore any of these.]"
-                results.append(entry)
-        else:
-            attempts_str = " → ".join(attempts) if attempts else "unknown"
-            results.append(
-                f"[URL: {url}]\n"
-                f"[Tried: {attempts_str}]\n"
-                f"[Could not extract content. Options: share a screenshot, "
-                f"paste the text directly, or try `!fetch {url} --fresh`.]"
-            )
-    return "\n\n---\n\n".join(results) if results else ""
+    results = await fetch_urls_for_dialogue(urls, max_urls=max_urls)
+    for result in results:
+        if result.ok and result.litl_hits:
+            print(f"LITL detected in {result.url}: {result.litl_hits[:3]}")
+    return format_fetch_results_for_dialogue(results)
 
 
 async def extract_attachments(message):

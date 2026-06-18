@@ -6,6 +6,7 @@ import discord
 
 from flow_runner import (
     FlowIntakeField,
+    FlowSpec,
     flow_orientation_description,
     format_intake_summary,
     load_flow_spec,
@@ -16,6 +17,91 @@ from mage import get_pd, set_practice_context_for_channel
 
 # discord.py 2.7+ — TextStyle.paragraph (not TextInputStyle)
 _TEXT_PARAGRAPH = discord.TextStyle.paragraph
+
+_RENAME_ELIGIBLE_THREAD_NAMES = frozenset({"new eddy", "blank eddy"})
+
+
+def intake_topic_seed(values: dict[str, str]) -> str:
+    """Build generate_topic input from captured intake fields."""
+    intention = (values.get("intention") or "").strip()
+    territory = (values.get("territory") or "").strip()
+    if intention and territory:
+        return f"{intention} — {territory}"
+    return intention or territory
+
+
+def should_rename_thread_from_intake(current_name: str, flow_title: str) -> bool:
+    """True when thread still carries flow materialize title, not a practitioner topic."""
+    current = (current_name or "").strip().lower()
+    if current in _RENAME_ELIGIBLE_THREAD_NAMES:
+        return True
+    return current == (flow_title or "").strip().lower()
+
+
+async def rename_thread_from_flow_intake(
+    thread: discord.Thread,
+    flow_id: str,
+    parent_id: int,
+) -> str | None:
+    """Retitle eddy from intake capture on Begin — before Turtle joins."""
+    from eddy_spawn import generate_topic
+    from thread_registry import update_thread_name
+
+    set_practice_context_for_channel(parent_id)
+    spec = load_flow_spec(flow_id, get_pd())
+    if not spec or not spec.intake:
+        return None
+
+    if not should_rename_thread_from_intake(thread.name or "", spec.title):
+        return None
+
+    seed = intake_topic_seed(read_flow_intake_values(spec, get_pd()))
+    if not seed:
+        return None
+
+    title = (await generate_topic(seed))[:100]
+    if not title or title.strip().lower() == (thread.name or "").strip().lower():
+        return None
+
+    try:
+        await thread.edit(name=title)
+        update_thread_name(thread.id, title)
+    except discord.HTTPException as exc:
+        print(f"Intake thread rename failed: {exc}")
+        return None
+
+    try:
+        from commands import thread_configs
+
+        if thread.id in thread_configs:
+            thread_configs[thread.id]["topic"] = title
+    except Exception:
+        pass
+
+    print(f"Intake thread rename: {thread.id} -> {title}")
+    return title
+
+
+def _intake_summary_message_id(awaiting: dict | None) -> int | None:
+    """Message id of the green summary embed — used to edit in place on re-Prepare."""
+    if not awaiting:
+        return None
+    raw = awaiting.get("intake_summary_message_id")
+    try:
+        msg_id = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return msg_id if msg_id > 0 else None
+
+
+def _build_intake_summary_embed(spec: FlowSpec, values: dict[str, str]) -> discord.Embed:
+    summary_embed = discord.Embed(
+        title=f"Prepared for {spec.title}",
+        description=format_intake_summary(spec, values),
+        color=0x57F287,
+    )
+    summary_embed.set_footer(text="When this looks right, begin with Turtle.")
+    return summary_embed
 
 
 def _parse_intake_custom_id(custom_id: str, prefix: str) -> tuple[int, int, str] | None:
@@ -46,11 +132,13 @@ class FlowIntakeModal(discord.ui.Modal):
         title: str,
         fields: list[FlowIntakeField],
         prefill: dict[str, str] | None = None,
+        summary_message_id: int | None = None,
     ):
         super().__init__(title=title[:45])
         self._thread_id = thread_id
         self._parent_id = parent_id
         self._flow_id = flow_id
+        self._summary_message_id = summary_message_id
         self._field_ids: list[str] = []
         defaults = prefill or {}
         for field in fields[:5]:
@@ -73,7 +161,7 @@ class FlowIntakeModal(discord.ui.Modal):
             self.add_item(text_input)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        from eddy_spawn import patch_awaiting_title
+        from eddy_spawn import patch_awaiting_title, read_awaiting_title
 
         spec = load_flow_spec(self._flow_id)
         if not spec or not spec.intake:
@@ -89,11 +177,6 @@ class FlowIntakeModal(discord.ui.Modal):
 
         set_practice_context_for_channel(self._parent_id)
         write_flow_intake(spec, values, get_pd())
-        patch_awaiting_title(
-            self._thread_id,
-            self._parent_id,
-            intake_ready=True,
-        )
 
         thread = interaction.channel
         if not isinstance(thread, discord.Thread):
@@ -102,15 +185,36 @@ class FlowIntakeModal(discord.ui.Modal):
             )
             return
 
-        summary_embed = discord.Embed(
-            title=f"Prepared for {spec.title}",
-            description=format_intake_summary(spec, values),
-            color=0x57F287,
-        )
-        summary_embed.set_footer(text="When this looks right, begin with Turtle.")
+        summary_embed = _build_intake_summary_embed(spec, values)
         view = FlowIntakeSummaryView(self._thread_id, self._parent_id, self._flow_id)
         interaction.client.add_view(view)
-        await interaction.response.send_message(embed=summary_embed, view=view, silent=True)
+
+        target_id = self._summary_message_id
+        if not target_id:
+            awaiting = read_awaiting_title(self._thread_id, self._parent_id)
+            target_id = _intake_summary_message_id(awaiting)
+
+        await interaction.response.defer(ephemeral=True)
+
+        summary_id: int | None = None
+        if target_id:
+            try:
+                summary_msg = await thread.fetch_message(target_id)
+                await summary_msg.edit(embed=summary_embed, view=view)
+                summary_id = target_id
+            except discord.HTTPException:
+                summary_id = None
+
+        if summary_id is None:
+            summary_msg = await thread.send(embed=summary_embed, view=view, silent=True)
+            summary_id = int(summary_msg.id)
+
+        patch_awaiting_title(
+            self._thread_id,
+            self._parent_id,
+            intake_ready=True,
+            intake_summary_message_id=summary_id,
+        )
 
 
 class FlowIntakeSummaryView(discord.ui.View):
@@ -128,6 +232,46 @@ class FlowIntakeSummaryView(discord.ui.View):
         )
         begin_btn.callback = self._on_begin
         self.add_item(begin_btn)
+        edit_btn = discord.ui.Button(
+            label="Edit",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"river:flow:intake:edit:{thread_id}:{parent_id}:{flow_id}",
+        )
+        edit_btn.callback = self._on_edit
+        self.add_item(edit_btn)
+
+    async def _on_edit(self, interaction: discord.Interaction) -> None:
+        custom_id = interaction.custom_id or (interaction.data or {}).get("custom_id", "")
+        parsed = _parse_intake_custom_id(custom_id, "edit")
+        if not parsed:
+            await interaction.response.send_message("Invalid intake edit.", ephemeral=True)
+            return
+        thread_id, parent_id, flow_id = parsed
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread) or thread.id != thread_id:
+            await interaction.response.send_message(
+                "Open this from the flow eddy thread.", ephemeral=True
+            )
+            return
+        spec = load_flow_spec(flow_id)
+        if not spec or not spec.intake or not spec.intake.fields:
+            await interaction.response.send_message(
+                "Intake is not configured for this flow.", ephemeral=True
+            )
+            return
+        set_practice_context_for_channel(parent_id)
+        prefill = read_flow_intake_values(spec, get_pd())
+        summary_message_id = interaction.message.id if interaction.message else None
+        modal = FlowIntakeModal(
+            thread_id=thread_id,
+            parent_id=parent_id,
+            flow_id=flow_id,
+            title=f"{spec.title} — edit",
+            fields=spec.intake.fields,
+            prefill=prefill,
+            summary_message_id=summary_message_id,
+        )
+        await interaction.response.send_modal(modal)
 
     async def _on_begin(self, interaction: discord.Interaction) -> None:
         custom_id = interaction.custom_id or (interaction.data or {}).get("custom_id", "")
@@ -226,6 +370,9 @@ async def complete_flow_intake_handoff(
 
     set_practice_context_for_channel(parent_id)
     pop_awaiting_title(thread.id, parent_id)
+
+    if not skipped:
+        await rename_thread_from_flow_intake(thread, flow_id, parent_id)
 
     await river_add_turtle_to_eddy(thread)
 

@@ -603,7 +603,7 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | §13 Control Panel | `commands.py:ControlPanelView` | Fully implemented |
 | §14 Cross-Substrate Coherence | External LiveSync/SSH plus `spirit_ops.py`, `discord_ops.py`, symlinked spec/identity | Implemented externally; laptop-closed invariant remains a topology decision |
 | §15 Seneschal (Admin) | `commands.py:cmd_admin()` | Fully implemented |
-| §16 Link Fetching / Content Reach | `content_fetch.py`, `intake_server.py`, `commands.py` paste endpoint | Implemented with graceful paste fallback |
+| §16 Link Fetching / Content Reach | `content_fetch.py`, `link_read.py`, `url_validate.py`, `intake_server.py`, `commands.py` paste endpoint | Implemented — eddy dialogue read + SSRF validation (§9.5) |
 | §17 Behavioral Laws | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §18 Boundaries | `identity/soul.md` | Encoded in identity |
 | §19 The Offering | `identity/soul.md`, `prompts.py` | Encoded in prompts |

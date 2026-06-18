@@ -14,6 +14,9 @@ $PY scripts/shake_flow.py shelter
 echo "=== shake: eddy bar flow menu (offline) ==="
 $PY scripts/shake_eddy_bar.py
 
+echo "=== shake: link read (offline) ==="
+$PY scripts/shake_link_read.py
+
 if [[ "${SHAKE_LIVE:-0}" == "1" ]]; then
   echo "=== shake: flow shelter (live Discord) ==="
   $PY scripts/shake_flow.py shelter --live --wait "${SHAKE_WAIT:-45}"

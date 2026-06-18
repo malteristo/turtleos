@@ -112,15 +112,22 @@ from background import practice_health_loop, interoception_loop, daily_reminders
 from founder_keys import try_founder_key_entry
 
 from commands import (
-    try_direct_command, DIRECT_COMMANDS, ControlPanelView, LinkFetchView,
+    try_direct_command, DIRECT_COMMANDS, ControlPanelView,
     ThreadConfigView, send_with_actions,
 )
 
 from content_fetch import (
     extract_urls as _extract_urls,
-    fetch_url_content as _fetch_url_content,
-    process_urls as _process_urls,
     extract_attachments as _extract_attachments,
+)
+
+from link_read import (
+    DIALOGUE_INJECT_MAX,
+    external_urls,
+    should_auto_fetch_urls,
+    fetch_urls_with_status,
+    maybe_refine_thread_name_from_fetch,
+    post_link_offer,
 )
 
 # Boom thread fetched content cache (message.id -> content string)
@@ -665,19 +672,23 @@ async def handle_dialogue(message):
     url_content = _boom_fetched_content.pop(message.id, "")
     url_source_count = 0
     content_from_boom_capture = False
-    _urls_already_processed = False
+    pending_incidental_urls: list[str] = []
     if url_content:
         attachment_note += " [content from boom capture]"
-        _urls_already_processed = True
         content_from_boom_capture = True
     else:
         urls = await _extract_urls(visible_content)
-        if urls:
-            _urls_already_processed = True
-            url_content = await _process_urls(urls)
+        external = external_urls(urls)
+        if external and should_auto_fetch_urls(visible_content, external):
+            fetch_results, url_content = await fetch_urls_with_status(message.channel, external)
             if url_content:
-                url_source_count = len(urls)
-                attachment_note += f" [fetched {len(urls)} URL(s)]"
+                url_source_count = len(external)
+                attachment_note += f" [fetched {url_source_count} URL(s)]"
+                if isinstance(message.channel, discord.Thread):
+                    await maybe_refine_thread_name_from_fetch(message.channel, fetch_results)
+        elif external:
+            urls = external
+            pending_incidental_urls = external
 
     dereferenced_context = ""
     dereferenced_count = 0
@@ -699,13 +710,101 @@ async def handle_dialogue(message):
     # Include fetched content in history so it persists across turns
     user_entry = f"[{message.author.display_name}]: {visible_content}{attachment_note}"
     if url_content:
-        user_entry += f"\n\n[Fetched content]:\n{url_content[:6000]}"
+        user_entry += f"\n\n[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
     if dereferenced_context:
         user_entry += f"\n\n[Dereferenced Discord context]:\n{dereferenced_context[:6000]}"
     history.append({"role": "user", "content": user_entry})
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
 
+    await _continue_dialogue_turn(
+        message,
+        history,
+        triage_cat=triage_cat,
+        native_eddy=native_eddy,
+        attachments=attachments,
+        attachment_names=attachment_names,
+        attachment_note=attachment_note,
+        attachment_extracted=attachment_extracted,
+        url_content=url_content,
+        content_from_boom_capture=content_from_boom_capture,
+        url_source_count=url_source_count,
+        urls=urls,
+        forwarded_context=forwarded_context,
+        dereferenced_context=dereferenced_context,
+        dereferenced_count=dereferenced_count,
+        proprioceptor_task=proprioceptor_task,
+        pending_incidental_urls=pending_incidental_urls,
+    )
+
+
+async def run_link_read_followup(
+    interaction: discord.Interaction,
+    source_message_id: int,
+    urls: list[str],
+) -> None:
+    """Second turn after Read article on an incidental link."""
+    channel = interaction.channel
+    if not isinstance(channel, discord.Thread):
+        return
+    source = await channel.fetch_message(source_message_id)
+    fetch_results, url_content = await fetch_urls_with_status(channel, urls)
+    await maybe_refine_thread_name_from_fetch(channel, fetch_results)
+    history = get_history(channel.id)
+    history.append(
+        {
+            "role": "user",
+            "content": (
+                f"[Link read requested: {urls[0]}]\n\n"
+                f"[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
+            ),
+        }
+    )
+    if len(history) > MAX_DIALOGUE_HISTORY:
+        history.pop(0)
+    native_eddy = uses_native_turtle_prompt()
+    await _continue_dialogue_turn(
+        source,
+        history,
+        triage_cat="link",
+        native_eddy=native_eddy,
+        attachments=[],
+        attachment_names=[],
+        attachment_note=" [link read followup]",
+        attachment_extracted=False,
+        url_content=url_content,
+        content_from_boom_capture=False,
+        url_source_count=len(urls),
+        urls=urls,
+        forwarded_context="",
+        dereferenced_context="",
+        dereferenced_count=0,
+        proprioceptor_task=None,
+        pending_incidental_urls=[],
+    )
+
+
+async def _continue_dialogue_turn(
+    message,
+    history,
+    *,
+    triage_cat: str,
+    native_eddy: bool,
+    attachments,
+    attachment_names,
+    attachment_note: str,
+    attachment_extracted: bool,
+    url_content: str,
+    content_from_boom_capture: bool,
+    url_source_count: int,
+    urls: list,
+    forwarded_context: str,
+    dereferenced_context: str,
+    dereferenced_count: int,
+    proprioceptor_task,
+    pending_incidental_urls: list[str] | None = None,
+):
+    channel_id = message.channel.id
     now = datetime.now(timezone.utc)
     is_new_session = channel_id not in active_sessions or active_sessions[channel_id]["closed"]
     if channel_id not in active_sessions:
@@ -954,15 +1053,6 @@ async def handle_dialogue(message):
     # Super-ego: think aloud after sustained conversation
     asyncio.ensure_future(maybe_reflect(message.channel, history))
 
-    if urls and not _urls_already_processed:
-        external_urls = [u for u in urls if "discord" not in urlparse(u).netloc]
-        if external_urls:
-            view = LinkFetchView(external_urls)
-            await message.channel.send(
-                f"\U0001f517 `!fetch {external_urls[0]}`",
-                view=view,
-            )
-
     if isinstance(message.channel, discord.Thread):
         await _update_thread_state(message.channel, cfg, history)
         # Phase 1 Eyes: update thread registry on every exchange
@@ -981,6 +1071,14 @@ async def handle_dialogue(message):
                 update_thread_activity(message.channel.id)
             except Exception as e:
                 print(f"Registry update failed: {e}")
+
+    if pending_incidental_urls:
+        await post_link_offer(
+            message.channel,
+            message.id,
+            pending_incidental_urls,
+            message.client,
+        )
 
 
 # ─── Event Handlers ──────────────────────────────────────────────

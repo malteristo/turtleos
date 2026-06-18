@@ -163,7 +163,7 @@ After each practitioner river message, the harness MUST ensure the eddy bar rema
 
 **v1 routing policy:** No semantic routing to existing eddies. Each materialize is a **new thread**. Semantic merge is deferred (§16).
 
-**UX resonance surface:** `docs/ux-principles.md` — living doc for practitioner-facing patterns; amend together with this spec when UX law changes.
+**UX resonance surface:** [docs/ux/README.md](docs/ux/README.md) — living collection for practitioner-facing patterns; amend together with this spec when UX law changes.
 
 ### 5.4. Eddy Materialize (Bar Path)
 
@@ -326,6 +326,8 @@ Transparency is **mostly conversational** — Turtle explains gaps, active flows
 
 The shell harness MAY inject **compact presence tags** for active flows and loaded state files (e.g. `Shelter · loaded shelter-last.md`) — visible trust signals, not chat. In native attunement, operational `-#` lines MUST NOT be emitted by the model; the shell owns load visibility.
 
+**Link reading:** URL fetch progress and outcomes MUST appear as **silent embeds** on the eddy timeline (Reading → Read, or failure/opt-in offers). Turtle MUST NOT narrate fetch mechanics in conversational voice; the practitioner sees trace in embeds only (§9.5).
+
 Magic-attuned instances MAY retain model-emitted operational lines where attunement requires them.
 
 ### 7.7. Presence Indicators
@@ -441,6 +443,31 @@ Standing wave, manual-release, metabolic Sunday sweep, and harvest/calcification
 **v1:** Text in the river → eddy offer → text seed in eddy.
 
 **Later:** Images, image+text seeds, attachment-aware title inference.
+
+### 9.5 Link Reading (Eddy Dialogue)
+
+Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and responds with awareness of the page. turtleOS MUST make fetch **progress and outcomes visible on the eddy timeline** — embed-only trace, not prose in Turtle's voice (§7.6).
+
+**Two modes (do not conflate):**
+
+| Mode | Trigger | Output | Cache |
+|------|---------|--------|-------|
+| **Read for dialogue** | URL in eddy chat (auto or opt-in) | Extract injected into turn context | No `link-resonance/` write |
+| **Distill for library** | `!fetch <url>` | Distilled summary embed | Yes — `link-resonance/` |
+
+**Auto-read (URL-primary):** External URL only; ≤120 characters of non-URL commentary; or explicit read/summarize cues. Discord message links are excluded.
+
+**Incidental links:** Long messages with buried URLs MUST NOT auto-fetch on the first turn. Shell posts a **Read article / Skip** opt-in; Read triggers a follow-up turn with fetch.
+
+**Visible trace:** Silent embed lifecycle — **Reading…** → **Read** (host, char counts, **N/M in context**, spill path when applicable, LITL flag, paste/`!fetch` hints on failure). Fetch runs during typing indicator.
+
+**Long pages:** Full extract MAY spill to `box/intake/{timestamp}-{slug}.md`; prompt receives an excerpt (default 8k chars) plus file pointer.
+
+**Thread naming:** In split-bot mode, **River owns eddy titles** — link-read MUST NOT rename practitioner- or flow-chosen thread names. Single-bot fallback MAY rename only blank eddies (`new eddy`, `blank eddy`) or bare host slugs.
+
+**Failure ladder:** retry, `/paste` endpoint, screenshot, paste in chat, `!fetch` for distill-only.
+
+**Implementation:** `link_read.py`, `content_fetch.py`, `discord_bot.handle_dialogue`.
 
 ---
 
@@ -714,6 +741,10 @@ Flow and state loads MUST be visible to the practitioner — via shell-injected 
 
 Turtle admits uncertainty and context limits inside eddies. No fabricated recall.
 
+### The Law of Visible Link Read (Eddies)
+
+When Turtle reads a URL for dialogue, the practitioner MUST see progress and outcome on the timeline — via embeds, not fetch prose in Turtle's voice. Read-for-dialogue and distill-for-library (`!fetch`) remain distinct operations.
+
 ### The Law of Minimal Default
 
 Ship the smallest practice root that satisfies the product promise. Depth comes from flows and state, not mandatory Magic files.
@@ -734,7 +765,7 @@ Ship the smallest practice root that satisfies the product promise. Depth comes 
 When this spec changes, update in order:
 
 1. `TURTLE_SPEC.md` (this file) — canonical, sole source
-2. `docs/ux-principles.md` — practitioner UX resonance (patterns, rejected UX, journeys)
+2. `docs/ux/README.md` — practitioner UX resonance (patterns, journeys, rejected UX, review checklist)
 3. `README.md`, `ARCHITECTURE.md`, `PRACTICE.md` — scope alignment
 4. `template/` — skeleton practice root (`character/`, `flows/`, `chronicle/`, `state/`)
 5. Installation skill — agent-assisted install (§13.4)
@@ -764,6 +795,8 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-14 | Platform rewrite — River/Turtle split, vanilla v1 law, decoupling from Spirit-default identity |
 | 2026-06-14 | Resonance pass — Turtle Practice terminology, always-offer-eddy, act catalog, state/, chronicle links, presence indicators, single canonical spec |
 | 2026-06-18 | Native eddy bar (replaces per-message offer_eddy / Eddy Door); split-bot system lines; flow eddy orientation; checkpoint vs release (§8.4); chronicle checkpoint events |
+| 2026-06-18 | Eddy link reading (§9.5) — visible embed trace, read vs `!fetch`, spill, Read/Skip for incidental URLs; Law of Visible Link Read |
+| 2026-06-18 | UX doc split — `docs/ux/` topic collection replaces monolithic `docs/ux-principles.md` |
 
 ---
 

@@ -465,7 +465,7 @@ async def cmd_help(message):
         ("`!load <context>`", "Load workshop resonance (circles, bundles)"),
     ]
     fetch_cmds = [
-        ("`!fetch <url>`", "Fetch & distill a URL's resonance"),
+        ("`!fetch <url>`", "Distill & cache a URL in link-resonance/ (library)"),
         ("`!fetch <url> --fresh`", "Refetch (ignore cache)"),
     ]
     infra_cmds = [
@@ -1001,87 +1001,11 @@ def _paste_endpoint_for(url: str) -> str:
     return f"{INTAKE_PUBLIC_URL}?{urlencode({'url': url})}"
 
 
-class LinkFetchView(discord.ui.View):
-    def __init__(self, urls: list[str]):
-        super().__init__(timeout=3600)
-        self.urls = urls[:3]
-        for i, url in enumerate(self.urls):
-            btn = discord.ui.Button(
-                label=f"Fetch {urlparse(url).netloc}"[:40],
-                custom_id=f"fetch:{i}:{hash(url) % 100000}",
-                style=discord.ButtonStyle.secondary,
-                emoji="\U0001f517",
-                row=i,
-            )
-            btn.callback = self._make_callback(url)
-            self.add_item(btn)
-
-    def _make_callback(self, url: str):
-        async def callback(interaction: discord.Interaction):
-            await interaction.response.defer(ephemeral=False)
-
-            cached = _get_cached_resonance(url)
-            if cached:
-                lines = cached.split("\n")
-                title = lines[0].lstrip("# ").strip() if lines else url
-                embed = discord.Embed(
-                    title=f"\U0001f517 {title}",
-                    description=truncate("\n".join(lines[5:]), 2000),
-                    color=0x3498DB,
-                )
-                embed.set_footer(text="Cached resonance")
-                await interaction.followup.send(embed=embed)
-                return
-
-            raw_content, source_type = None, None
-            platform = _detect_platform(url)
-            if platform == "twitter":
-                raw_content, source_type = await _fetch_twitter(url)
-            elif platform == "youtube":
-                raw_content, source_type = await _fetch_youtube_transcript(url)
-            if not raw_content:
-                raw_content, source_type = await _fetch_url_content(url)
-
-            if not raw_content:
-                paste_url = _paste_endpoint_for(url)
-                await interaction.followup.send(
-                    f"\U0001f517 Could not fetch `{url}` ({source_type}). "
-                    f"Paste the text here so Turtle can process it with source context: {paste_url}"
-                )
-                return
-
-            litl_hits = _litl_check(raw_content)
-            if litl_hits:
-                await interaction.followup.send(
-                    f"⚠️ Content from `{url}` contains instruction-like patterns. "
-                    "Presenting with caution."
-                )
-
-            resonance = await _distill_resonance(raw_content, url)
-            _cache_resonance(url, resonance, title=url)
-
-            embed = discord.Embed(
-                title=f"\U0001f517 {url}",
-                description=truncate(resonance, 2000),
-                color=0x3498DB,
-            )
-            embed.set_footer(text=f"Fetched via {source_type or 'direct'} • !fetch <url> to refetch")
-            await interaction.followup.send(embed=embed)
-
-            for child in self.children:
-                child.disabled = True
-            try:
-                await interaction.message.edit(view=self)
-            except Exception:
-                pass
-
-        return callback
-
-
 async def cmd_fetch(message, args):
     if not args:
         await message.reply(
-            "Usage: `!fetch <url>` — fetch and distill a URL's resonance\n"
+            "Usage: `!fetch <url>` — distill and cache resonance in `link-resonance/`\n"
+            "For dialogue read, drop the URL in chat (auto-read) or use **Read article** on incidental links.\n"
             "Copy-paste friendly: `!fetch https://example.com/article`",
             mention_author=False,
         )
@@ -1093,6 +1017,16 @@ async def cmd_fetch(message, args):
         await message.reply(f"Not a valid URL: `{url}`", mention_author=False)
         return
 
+    from url_validate import validate_fetch_url
+
+    blocked = validate_fetch_url(url)
+    if blocked:
+        await message.reply(
+            f"Cannot fetch `{url}` — {blocked}",
+            mention_author=False,
+        )
+        return
+
     cached = _get_cached_resonance(url)
     if cached:
         lines = cached.split("\n")
@@ -1102,7 +1036,7 @@ async def cmd_fetch(message, args):
             description=truncate("\n".join(lines[5:]), 2000),
             color=0x3498DB,
         )
-        embed.set_footer(text="Cached resonance • add --fresh to refetch")
+        embed.set_footer(text="Cached resonance • add --fresh to refetch • drop URL in chat for dialogue read")
         await message.reply(embed=embed, mention_author=False)
         if "--fresh" not in " ".join(args):
             return
@@ -1142,7 +1076,7 @@ async def cmd_fetch(message, args):
         description=truncate(resonance, 2000),
         color=0x3498DB,
     )
-    embed.set_footer(text=f"Fetched via {source_type or 'direct'} • resonance cached")
+    embed.set_footer(text=f"Distilled via {source_type or 'direct'} • cached in link-resonance/ • drop URL in chat for dialogue read")
     await message.reply(embed=embed, mention_author=False)
 
 

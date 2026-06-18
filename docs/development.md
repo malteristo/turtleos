@@ -36,7 +36,7 @@ Run this before pushing any change that affects topology, runtime behavior, auto
 Check:
 
 - `TURTLE_SPEC.md` — canonical product law
-- `docs/ux-principles.md` — applied practitioner UX (review when behavior feels wrong)
+- `docs/ux/README.md` — applied practitioner UX (review when behavior feels wrong); topic files under `docs/ux/`
 - `README.md` — public product frame and setup path
 - `ARCHITECTURE.md` — implementation traceability
 - `docs/architecture.md` — deployed/current-state operator map
@@ -109,7 +109,8 @@ Manual apply remains an operator action:
 7. For update-surface changes, run `python -m unittest tests.test_runtime_update`.
 8. Run `python canary.py` before any restart decision and again after restart if restarted.
 9. Run flow shakedown: `python scripts/shake_flow.py shelter` (offline) and `SHAKE_LIVE=1 python scripts/shake_flow.py shelter --live` on the Mini after restart when flow_runner or native eddy behavior changed.
-10. Report the result in the relevant craft/admin surface.
+10. Run link-read shakedown: `python scripts/shake_link_read.py` (offline) after link_read / content_fetch / dialogue fetch changes; `--live` on Mini when dogfooding.
+11. Report the result in the relevant craft/admin surface.
 
 Consequence tiers:
 

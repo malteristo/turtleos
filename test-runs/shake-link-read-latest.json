@@ -1,0 +1,8 @@
+{
+  "capability": "link_read/eddy-dialogue",
+  "status": "pass",
+  "live": false,
+  "checks": {
+    "offline": "ok"
+  }
+}
