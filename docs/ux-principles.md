@@ -206,7 +206,7 @@ Flows are prompt programs loaded when `context_type` / `flow_id` is set at spawn
 |------|----------------------------------|
 | Pick flow from bar | Thread titled **flow name** (e.g. `Navigator`) |
 | Enter thread | **Orientation embed** — entry contract, checkpoint hint, **[Prepare]** and (if `skippable`) **[Skip — I'll talk]** |
-| Prepare | Discord **modal** (text fields only, ≤5) → **summary embed** + **[Begin with Turtle]** |
+| Prepare | Discord **modal** (text fields only, ≤5) → **summary embed** + **[Begin with Turtle]** — **return visits prefill** from prior intake file (`state/notes/{flow}-intake.md`) |
 | Begin | `river added turtle` (system line) → **Turtle speaks first** without the practitioner typing |
 | Skip | Short embed: first message will bring Turtle in (classic path) |
 

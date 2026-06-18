@@ -9,6 +9,7 @@ from flow_runner import (
     flow_orientation_description,
     format_intake_summary,
     load_flow_spec,
+    read_flow_intake_values,
     write_flow_intake,
 )
 from mage import get_pd, set_practice_context_for_channel
@@ -44,18 +45,21 @@ class FlowIntakeModal(discord.ui.Modal):
         flow_id: str,
         title: str,
         fields: list[FlowIntakeField],
+        prefill: dict[str, str] | None = None,
     ):
         super().__init__(title=title[:45])
         self._thread_id = thread_id
         self._parent_id = parent_id
         self._flow_id = flow_id
         self._field_ids: list[str] = []
+        defaults = prefill or {}
         for field in fields[:5]:
             field_id = field.id.strip()
             if not field_id:
                 continue
             label = (field.label or field_id).strip()[:45]
             placeholder = field.placeholder[:100] if field.placeholder else None
+            prior = (defaults.get(field_id) or "").strip()
             text_input = discord.ui.TextInput(
                 label=label,
                 custom_id=field_id[:100],
@@ -63,6 +67,7 @@ class FlowIntakeModal(discord.ui.Modal):
                 required=field.required,
                 max_length=1000,
                 placeholder=placeholder,
+                default=prior[:1000] if prior else None,
             )
             self._field_ids.append(field_id)
             self.add_item(text_input)
@@ -176,12 +181,15 @@ class FlowIntakeOrientationView(discord.ui.View):
                 "Intake is not configured for this flow.", ephemeral=True
             )
             return
+        set_practice_context_for_channel(self._parent_id)
+        prefill = read_flow_intake_values(spec, get_pd())
         modal = FlowIntakeModal(
             thread_id=self._thread_id,
             parent_id=self._parent_id,
             flow_id=self._flow_id,
             title=f"{spec.title} — prepare",
             fields=spec.intake.fields,
+            prefill=prefill,
         )
         await interaction.response.send_modal(modal)
 

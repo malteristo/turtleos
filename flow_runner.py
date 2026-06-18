@@ -198,6 +198,33 @@ def read_flow_intake(spec: FlowSpec, practice_dir: str | None = None) -> str:
     return read_safe(str(path)).strip()
 
 
+def parse_flow_intake_markdown(text: str) -> dict[str, str]:
+    """Parse ## field_id sections from a written intake artifact."""
+    values: dict[str, str] = {}
+    if not text.strip():
+        return values
+    current_id: str | None = None
+    buf: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            if current_id is not None:
+                values[current_id] = "\n".join(buf).strip()
+            current_id = line[3:].strip()
+            buf = []
+            continue
+        if current_id is None:
+            continue
+        buf.append(line)
+    if current_id is not None:
+        values[current_id] = "\n".join(buf).strip()
+    return values
+
+
+def read_flow_intake_values(spec: FlowSpec, practice_dir: str | None = None) -> dict[str, str]:
+    """Field values from the last intake capture — used to prefill return visits."""
+    return parse_flow_intake_markdown(read_flow_intake(spec, practice_dir))
+
+
 def write_flow_intake(
     spec: FlowSpec,
     values: dict[str, str],
@@ -341,10 +368,16 @@ def flow_entry_blurb(spec: FlowSpec, practice_dir: str | None = None) -> str:
 def flow_orientation_description(spec: FlowSpec, practice_dir: str | None = None) -> str:
     """Rich orientation when flow declares River intake."""
     pd = practice_dir or get_pd()
+    prefill = read_flow_intake_values(spec, pd)
+    prepare_line = (
+        "• **Prepare** — review or update your last answers (recommended)"
+        if prefill
+        else "• **Prepare** — two short questions (recommended)"
+    )
     lines = [
         _flow_summary_line(spec),
         "",
-        "• **Prepare** — two short questions (recommended)",
+        prepare_line,
         "• **Skip** — talk freely; Turtle joins on your first message",
         "",
         _checkpoint_line(spec, pd),

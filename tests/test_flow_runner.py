@@ -154,6 +154,29 @@ class FlowRunnerTests(unittest.TestCase):
             self.assertIn("Flow Intake", joined)
             self.assertIn("do not re-ask", joined.lower())
 
+    def test_read_flow_intake_values_for_prefill(self) -> None:
+        from flow_runner import parse_flow_intake_markdown, read_flow_intake_values
+
+        raw = (
+            "# Navigator — intake\n**Captured:** 2026-06-18\n\n"
+            "## intention\n\nShip turtleOS\n\n## territory\n\nInstall friction\n"
+        )
+        parsed = parse_flow_intake_markdown(raw)
+        self.assertEqual(parsed["intention"], "Ship turtleOS")
+        self.assertEqual(parsed["territory"], "Install friction")
+
+        spec = load_flow_spec("navigator")
+        assert spec is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            write_flow_intake(
+                spec,
+                {"intention": "Return visit goal", "territory": "Still stuck on deploy"},
+                tmp,
+            )
+            values = read_flow_intake_values(spec, tmp)
+            self.assertEqual(values["intention"], "Return visit goal")
+            self.assertEqual(values["territory"], "Still stuck on deploy")
+
     def test_flow_orientation_description(self) -> None:
         from flow_runner import flow_orientation_description
 
@@ -162,6 +185,11 @@ class FlowRunnerTests(unittest.TestCase):
         text = flow_orientation_description(spec)
         self.assertIn("Prepare", text)
         self.assertIn("Skip", text)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            write_flow_intake(spec, {"intention": "Prior goal", "territory": ""}, tmp)
+            text_return = flow_orientation_description(spec, tmp)
+            self.assertIn("review or update", text_return)
 
     def test_flow_entry_blurb(self) -> None:
         spec = load_flow_spec("shelter")
