@@ -11,9 +11,14 @@ $PY scripts/shake_river.py
 echo "=== shake: flow shelter (offline) ==="
 $PY scripts/shake_flow.py shelter
 
+echo "=== shake: eddy bar flow menu (offline) ==="
+$PY scripts/shake_eddy_bar.py
+
 if [[ "${SHAKE_LIVE:-0}" == "1" ]]; then
   echo "=== shake: flow shelter (live Discord) ==="
   $PY scripts/shake_flow.py shelter --live --wait "${SHAKE_WAIT:-45}"
+  echo "=== shake: eddy bar flow menu (live Discord) ==="
+  $PY scripts/shake_eddy_bar.py --live --wait "${SHAKE_WAIT:-50}"
 fi
 
 echo "=== canary ==="
