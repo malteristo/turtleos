@@ -105,6 +105,7 @@ from boom_thread import handle_boom_thread_message
 from eddy_spawn import (
     should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction,
     is_intake_thread, handle_intake_message, generate_topic, ensure_native_presence,
+    post_flow_presence_if_needed,
 )
 from intake_server import start_intake_server
 from proprioceptor import prepare_context_brief
@@ -961,6 +962,11 @@ async def _continue_dialogue_turn(
                 await ensure_native_presence(message.channel)
             except Exception as exc:
                 print(f"Native presence failed: {exc}")
+            cfg = thread_configs.get(channel_id) or cfg
+            try:
+                await post_flow_presence_if_needed(message.channel, cfg)
+            except Exception as exc:
+                print(f"Flow presence failed: {exc}")
         tool_report = ""
         is_gemini = thread_model.startswith("gemini-")
         if native_eddy:

@@ -225,5 +225,43 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertIsNotNone(resolved)
 
 
+class FlowPresenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_post_flow_presence_if_needed(self) -> None:
+        from eddy_spawn import post_flow_presence_if_needed
+
+        channel = MagicMock()
+        channel.id = 999001
+        sent: list[str] = []
+
+        async def _send(text: str) -> None:
+            sent.append(text)
+
+        channel.send = _send
+
+        cfg = {"context_type": "shelter", "flow_presence_posted": False}
+        spec = load_flow_spec("shelter")
+        assert spec is not None
+        expected = f"-# {flow_presence_line(spec)}"
+        with unittest.mock.patch("mage.get_attunement_profile", return_value="native"):
+            posted = await post_flow_presence_if_needed(channel, cfg)
+        self.assertTrue(posted)
+        self.assertEqual(sent, [expected])
+        self.assertTrue(cfg.get("flow_presence_posted"))
+
+        sent.clear()
+        self.assertFalse(await post_flow_presence_if_needed(channel, cfg))
+
+    async def test_post_flow_presence_skips_non_native(self) -> None:
+        from eddy_spawn import post_flow_presence_if_needed
+
+        channel = MagicMock()
+        channel.id = 999002
+        channel.send = unittest.mock.AsyncMock()
+        cfg = {"context_type": "shelter", "flow_presence_posted": False}
+        with unittest.mock.patch("mage.get_attunement_profile", return_value="magic"):
+            self.assertFalse(await post_flow_presence_if_needed(channel, cfg))
+        channel.send.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

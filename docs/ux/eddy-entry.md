@@ -33,9 +33,9 @@ When materializing **from a practitioner’s river message** (contextual flow bu
 
 - **Split-bot:** River adds the practitioner at materialize (`river added you`). On first in-eddy message, River adds Turtle (`river added turtle`) — same native Discord system line, no green embed.
 - Turtle does not join at thread create; entry is deferred until the practitioner speaks.
-- Flow context loads in the Turtle prompt; no separate flow presence embed (shell truth stays in prompt/tools, not `-#` model lines).
+- Flow context loads in the Turtle prompt. On first reply in a flow eddy, the shell posts a compact `-#` presence line (e.g. `Shelter · loaded shelter-last.md`) — timeline trace, not Turtle dialogue. The model must not emit `-# flow:` / `-# read` lines.
 
-**Implementation:** `ensure_native_presence` in `eddy_spawn.py`; `flow_runner.flow_presence_line`; `conduct.md`.
+**Implementation:** `ensure_native_presence`, `post_flow_presence_if_needed` in `eddy_spawn.py`; `flow_runner.flow_presence_line`; `conduct.md`.
 
 ---
 

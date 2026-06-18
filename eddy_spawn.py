@@ -712,6 +712,7 @@ async def finalize_native_eddy_from_river(thread: discord.Thread, pending: dict)
         "blank_eddy": pending.get("blank_eddy", False),
         "awaiting_title": pending.get("awaiting_title", False),
         "presence_posted": False,
+        "flow_presence_posted": False,
     }
 
     print(f"Turtle native eddy config ready: {thread.name} (id: {thread.id})")
@@ -851,6 +852,34 @@ async def wait_for_native_eddy_handoff(thread) -> None:
                 await asyncio.sleep(0.1)
     except Exception:
         pass
+
+
+async def post_flow_presence_if_needed(channel, cfg) -> bool:
+    """Post shell-injected flow presence once before first Turtle reply (native only)."""
+    from commands import thread_configs
+    from flow_runner import flow_presence_line, load_flow_spec
+    from mage import get_attunement_profile
+
+    if get_attunement_profile() != "native":
+        return False
+    if not cfg or cfg.get("flow_presence_posted"):
+        return False
+    flow_id = cfg.get("context_type")
+    if not flow_id:
+        return False
+    spec = load_flow_spec(flow_id)
+    if not spec:
+        return False
+    line = flow_presence_line(spec)
+    try:
+        await channel.send(f"-# {line}")
+        cfg["flow_presence_posted"] = True
+        thread_configs[channel.id] = cfg
+        print(f"Flow presence posted: {line} (channel={channel.id})")
+        return True
+    except Exception as exc:
+        print(f"Flow presence failed: {type(exc).__name__}: {exc}")
+        return False
 
 
 async def ensure_native_presence(thread: discord.Thread) -> bool:
@@ -1014,6 +1043,7 @@ async def spawn_river_eddy(
             "created": datetime.now(timezone.utc),
             "native_vanilla": get_attunement_profile() == "native",
             "presence_posted": False,
+            "flow_presence_posted": False,
         }
 
     if not split_bot:
@@ -1100,6 +1130,7 @@ async def spawn_blank_river_eddy(
         "blank_eddy": True,
         "awaiting_title": True,
         "presence_posted": False,
+        "flow_presence_posted": False,
     }
 
     if split_bot:

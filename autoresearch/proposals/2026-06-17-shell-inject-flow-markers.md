@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-17  
 **Spec reference:** TURTLE_SPEC §7 (Turtle in eddies), §10–11 (Practice flows), §14 (Native prompt)  
-**Status:** Draft  
+**Status:** Shipped (2026-06-18)  
 **Origin:** Mage dogfood — Shelter flow on Discord (shake + live sessions)
 
 ---

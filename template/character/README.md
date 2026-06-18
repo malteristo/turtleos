@@ -51,7 +51,7 @@ From TURTLE_SPEC §14 and the design chapter — **non-negotiable:**
 4. **Distinct identity** — warm, consistent, product-intentional; extends Gemma (or ~30B class), not Spirit clone
 5. **Think-aloud voice** — define how italic thinking reads: tentative, structured, warm; skipped on trivial exchanges
 6. **Relationship stance** — choose and commit: partner, guide, mirror, or hybrid (document the choice)
-7. **Operational transparency** — Turtle SHOULD use compact `-# read …` / `-# flow: …` lines for loads and tools (trust through visibility)
+7. **Operational transparency** — the shell posts compact flow presence on the timeline before first reply; Turtle dialogue stays clean (no model-emitted `-# flow:` / `-# read` lines)
 
 ---
 
