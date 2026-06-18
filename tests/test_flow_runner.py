@@ -10,8 +10,10 @@ sys.modules.setdefault("discord.ui", MagicMock())
 from flow_runner import (
     load_flow_spec,
     read_state_bundle,
+    read_flow_intake,
     split_front_matter,
     write_flow_checkpoint,
+    write_flow_intake,
     build_flow_prompt_sections,
     flow_presence_line,
     flow_entry_blurb,
@@ -79,9 +81,87 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertIn("I'm here.", cleaned)
         self.assertIn("Still here.", cleaned)
 
-    def test_list_resolvable_flow_ids_includes_shelter(self) -> None:
+    def test_list_flow_ids_dedupes_practice_over_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            practice_flows = os.path.join(tmp, "flows")
+            template_flows = os.path.join(tmp, "template", "flows")
+            os.makedirs(practice_flows)
+            os.makedirs(template_flows)
+            with open(os.path.join(practice_flows, "shelter.md"), "w") as f:
+                f.write("---\ntitle: Shelter\n---\n")
+            with open(os.path.join(template_flows, "shelter.md"), "w") as f:
+                f.write("---\ntitle: Shelter\n---\n")
+            with open(os.path.join(template_flows, "navigator.md"), "w") as f:
+                f.write("---\ntitle: Navigator\n---\n")
+
+            import flow_runner as fr
+
+            old_dirs = fr._flow_search_dirs
+
+            def fake_dirs(pd=None):
+                return [practice_flows, template_flows]
+
+            fr._flow_search_dirs = fake_dirs
+            try:
+                self.assertEqual(fr.list_flow_ids(tmp), ["shelter", "navigator"])
+            finally:
+                fr._flow_search_dirs = old_dirs
+
+    def test_list_resolvable_flow_ids_includes_shipped_flows(self) -> None:
         flows = list_resolvable_flow_ids()
-        self.assertIn("shelter", flows)
+        for flow_id in ("shelter", "navigator", "thread", "companion"):
+            self.assertIn(flow_id, flows)
+        self.assertEqual(len(flows), len(set(flows)))
+
+    def test_load_shipped_flow_templates(self) -> None:
+        expected = {
+            "navigator": ("Navigator", "state/notes/navigator-last.md"),
+            "thread": ("Thread", "state/notes/thread-last.md"),
+            "companion": ("Companion", "state/notes/companion-last.md"),
+        }
+        for flow_id, (title, write_path) in expected.items():
+            spec = load_flow_spec(flow_id)
+            self.assertIsNotNone(spec, flow_id)
+            assert spec is not None
+            self.assertEqual(spec.title, title)
+            self.assertIn(write_path, spec.writes)
+
+    def test_navigator_intake_spec(self) -> None:
+        spec = load_flow_spec("navigator")
+        assert spec is not None
+        self.assertTrue(spec.entry_contract)
+        assert spec.intake is not None
+        self.assertEqual(spec.intake.path, "state/notes/navigator-intake.md")
+        self.assertTrue(spec.intake.skippable)
+        self.assertEqual(len(spec.intake.fields), 2)
+        self.assertEqual(spec.intake.fields[0].id, "intention")
+        self.assertTrue(spec.intake.fields[0].required)
+
+    def test_write_and_read_flow_intake(self) -> None:
+        spec = load_flow_spec("navigator")
+        assert spec is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            rel = write_flow_intake(
+                spec,
+                {"intention": "Ship turtleOS", "territory": "Install friction"},
+                tmp,
+            )
+            self.assertEqual(rel, "state/notes/navigator-intake.md")
+            content = read_flow_intake(spec, tmp)
+            self.assertIn("Ship turtleOS", content)
+            sections, _ = build_flow_prompt_sections("navigator", tmp)
+            joined = "\n".join(sections)
+            self.assertIn("Flow Intake", joined)
+            self.assertIn("do not re-ask", joined.lower())
+
+    def test_flow_orientation_description(self) -> None:
+        from flow_runner import flow_orientation_description
+
+        spec = load_flow_spec("navigator")
+        assert spec is not None
+        text = flow_orientation_description(spec)
+        self.assertIn("Prepare", text)
+        self.assertIn("Skip", text)
 
     def test_flow_entry_blurb(self) -> None:
         spec = load_flow_spec("shelter")

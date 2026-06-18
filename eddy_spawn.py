@@ -649,6 +649,31 @@ def write_awaiting_title(thread_id: int, parent_channel_id: int, extra: dict | N
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def read_awaiting_title(thread_id: int, parent_channel_id: int) -> dict | None:
+    path = _awaiting_title_path(thread_id, parent_channel_id)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def patch_awaiting_title(thread_id: int, parent_channel_id: int, **updates) -> None:
+    data = read_awaiting_title(thread_id, parent_channel_id) or {
+        "thread_id": thread_id,
+        "parent_channel_id": parent_channel_id,
+    }
+    data.update(updates)
+    write_awaiting_title(thread_id, parent_channel_id, data)
+
+
+def is_awaiting_flow_intake(thread_id: int, parent_channel_id: int) -> bool:
+    data = read_awaiting_title(thread_id, parent_channel_id)
+    return bool(data and data.get("awaiting_intake"))
+
+
 def is_awaiting_title(thread_id: int, parent_channel_id: int) -> bool:
     return _awaiting_title_path(thread_id, parent_channel_id).exists()
 
@@ -867,8 +892,9 @@ async def ensure_native_presence(thread: discord.Thread) -> bool:
 
 
 async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
-    """River orientation at flow eddy materialize — rename + one silent embed."""
+    """River orientation at flow eddy materialize — rename + intake or plain embed."""
     from flow_runner import flow_entry_blurb, load_flow_spec
+    from flow_intake_handler import post_flow_intake_orientation
     from mage import get_pd
     from thread_registry import update_thread_name
 
@@ -882,6 +908,20 @@ async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
         update_thread_name(thread.id, title)
     except discord.HTTPException as exc:
         print(f"Flow eddy rename failed: {exc}")
+
+    parent_id = thread.parent_id
+    if spec.intake and parent_id:
+        write_awaiting_title(
+            thread.id,
+            parent_id,
+            {
+                "flow_id": flow_id,
+                "awaiting_intake": True,
+                "intake_ready": False,
+            },
+        )
+        await post_flow_intake_orientation(thread, flow_id, bot_client)
+        return
 
     try:
         embed = discord.Embed(

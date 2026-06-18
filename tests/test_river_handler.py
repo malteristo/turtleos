@@ -78,6 +78,23 @@ class AwaitingTitleTests(unittest.TestCase):
             self.assertEqual(out["flow_id"], "shelter")
             self.assertFalse(is_awaiting_title(99, 456))
 
+    def test_awaiting_flow_intake(self) -> None:
+        from eddy_spawn import (
+            is_awaiting_flow_intake,
+            patch_awaiting_title,
+            write_awaiting_title,
+        )
+        from unittest.mock import patch
+
+        with patch("eddy_spawn._awaiting_title_path") as mock_path:
+            tmp = Path("/tmp/test_awaiting_intake.json")
+            tmp.unlink(missing_ok=True)
+            mock_path.return_value = tmp
+            write_awaiting_title(77, 456, {"flow_id": "navigator", "awaiting_intake": True})
+            self.assertTrue(is_awaiting_flow_intake(77, 456))
+            patch_awaiting_title(77, 456, awaiting_intake=False)
+            self.assertFalse(is_awaiting_flow_intake(77, 456))
+
 
 class PendingEddyTests(unittest.TestCase):
     def test_write_and_pop_pending(self) -> None:

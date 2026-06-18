@@ -16,6 +16,21 @@ from practice_io import read_safe
 
 
 @dataclass
+class FlowIntakeField:
+    id: str
+    label: str
+    placeholder: str
+    required: bool
+
+
+@dataclass
+class FlowIntakeSpec:
+    path: str
+    fields: list[FlowIntakeField]
+    skippable: bool = True
+
+
+@dataclass
 class FlowSpec:
     flow_id: str
     title: str
@@ -25,6 +40,8 @@ class FlowSpec:
     think_aloud: str
     model: str
     path: str
+    entry_contract: str = ""
+    intake: FlowIntakeSpec | None = None
 
 
 def split_front_matter(text: str) -> tuple[dict[str, Any], str]:
@@ -58,9 +75,40 @@ def resolve_flow_path(flow_id: str, practice_dir: str | None = None) -> str | No
     return None
 
 
+def _parse_intake_spec(meta: dict[str, Any], flow_id: str) -> FlowIntakeSpec | None:
+    raw = meta.get("intake")
+    if not raw or not isinstance(raw, dict):
+        return None
+    fields_raw = raw.get("fields") or []
+    fields: list[FlowIntakeField] = []
+    for item in fields_raw:
+        if not isinstance(item, dict):
+            continue
+        field_id = str(item.get("id") or "").strip()
+        if not field_id:
+            continue
+        fields.append(
+            FlowIntakeField(
+                id=field_id,
+                label=str(item.get("label") or field_id).strip(),
+                placeholder=str(item.get("placeholder") or "").strip(),
+                required=bool(item.get("required", False)),
+            )
+        )
+    if not fields:
+        return None
+    intake_path = str(raw.get("path") or f"state/notes/{flow_id}-intake.md").strip()
+    return FlowIntakeSpec(
+        path=intake_path,
+        fields=fields,
+        skippable=raw.get("skippable", True) is not False,
+    )
+
+
 def load_flow_spec(flow_id: str | None, practice_dir: str | None = None) -> FlowSpec | None:
     if not flow_id or not str(flow_id).strip():
         return None
+    slug = flow_id.strip().lower()
     path = resolve_flow_path(flow_id, practice_dir)
     if not path:
         return None
@@ -72,7 +120,7 @@ def load_flow_spec(flow_id: str | None, practice_dir: str | None = None) -> Flow
     writes = list(meta.get("writes") or [])
     title = (meta.get("title") or flow_id).strip()
     return FlowSpec(
-        flow_id=flow_id.strip().lower(),
+        flow_id=slug,
         title=title,
         body=body or raw.strip(),
         reads=[str(r).strip() for r in reads if str(r).strip()],
@@ -80,6 +128,8 @@ def load_flow_spec(flow_id: str | None, practice_dir: str | None = None) -> Flow
         think_aloud=str(meta.get("think_aloud") or "auto"),
         model=str(meta.get("model") or "default"),
         path=path,
+        entry_contract=str(meta.get("entry_contract") or "").strip(),
+        intake=_parse_intake_spec(meta, slug),
     )
 
 
@@ -138,6 +188,54 @@ def strip_model_operational_lines(text: str) -> tuple[str, list[str]]:
     return cleaned, stripped
 
 
+def read_flow_intake(spec: FlowSpec, practice_dir: str | None = None) -> str:
+    if not spec.intake:
+        return ""
+    pd = practice_dir or get_pd()
+    path = _safe_practice_path(spec.intake.path, pd)
+    if not path or not path.is_file():
+        return ""
+    return read_safe(str(path)).strip()
+
+
+def write_flow_intake(
+    spec: FlowSpec,
+    values: dict[str, str],
+    practice_dir: str | None = None,
+) -> str | None:
+    if not spec.intake:
+        return None
+    pd = practice_dir or get_pd()
+    path = _safe_practice_path(spec.intake.path, pd)
+    if not path:
+        return None
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [f"# {spec.title} — intake", f"**Captured:** {now}", ""]
+    for field in spec.intake.fields:
+        value = (values.get(field.id) or "").strip()
+        if value:
+            lines.append(f"## {field.id}\n\n{value}")
+            lines.append("")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    return spec.intake.path
+
+
+def format_intake_summary(spec: FlowSpec, values: dict[str, str]) -> str:
+    if not spec.intake:
+        return ""
+    parts: list[str] = []
+    for field in spec.intake.fields:
+        value = (values.get(field.id) or "").strip()
+        if not value:
+            continue
+        snippet = value if len(value) <= 280 else value[:277] + "..."
+        parts.append(f"**{field.label}:** {snippet}")
+    if not parts:
+        return "Intake captured — ready to begin."
+    return "\n\n".join(parts) + "\n\nTurtle will pick up from here — not from zero."
+
+
 def build_flow_prompt_sections(
     flow_id: str | None, practice_dir: str | None = None
 ) -> tuple[list[str], FlowSpec | None]:
@@ -155,6 +253,13 @@ def build_flow_prompt_sections(
             else:
                 blocks.append(f"### {rel}\n\n(empty — file not present yet)")
         sections.append("## Flow State (loaded)\n\n" + "\n\n".join(blocks))
+    intake_content = read_flow_intake(spec, practice_dir)
+    if intake_content:
+        rel = spec.intake.path if spec.intake else "intake"
+        sections.append(
+            "## Flow Intake (River captured — do not re-ask these)\n\n"
+            f"### {rel}\n\n{intake_content[:4000]}"
+        )
     return sections, spec
 
 
@@ -189,10 +294,15 @@ def write_flow_checkpoint(
 
 def list_flow_ids(practice_dir: str | None = None) -> list[str]:
     names: list[str] = []
+    seen: set[str] = set()
     for base in _flow_search_dirs(practice_dir):
         for name in sorted(os.listdir(base)):
             if name.endswith(".md") and not name.startswith("_"):
-                names.append(name[:-3])
+                fid = name[:-3]
+                if fid in seen:
+                    continue
+                seen.add(fid)
+                names.append(fid)
     return names
 
 
@@ -201,27 +311,45 @@ def list_resolvable_flow_ids(practice_dir: str | None = None) -> list[str]:
     return [fid for fid in list_flow_ids(practice_dir) if load_flow_spec(fid, practice_dir)]
 
 
-def flow_entry_blurb(spec: FlowSpec, practice_dir: str | None = None) -> str:
-    """One-screen orientation for River at flow eddy materialize."""
-    pd = practice_dir or get_pd()
-    summary = ""
+def _flow_summary_line(spec: FlowSpec) -> str:
+    if spec.entry_contract:
+        return spec.entry_contract
     for line in spec.body.splitlines():
         text = line.strip()
         if not text or text.startswith("#") or text.startswith("**") or text.startswith("---"):
             continue
         if text.startswith("*") and text.endswith("*"):
             continue
-        summary = text[:240]
-        break
-    if not summary:
-        summary = "Practice flow — speak when you are ready."
-    checkpoint = "Fresh start — no prior checkpoint."
+        return text[:240]
+    return "Practice flow — speak when you are ready."
+
+
+def _checkpoint_line(spec: FlowSpec, practice_dir: str) -> str:
     for rel in spec.reads:
-        path = _safe_practice_path(rel, pd)
+        path = _safe_practice_path(rel, practice_dir)
         if path and path.is_file() and path.stat().st_size > 40:
-            checkpoint = f"Last checkpoint: `{Path(rel).name}`"
-            break
-    return f"{summary}\n\n{checkpoint}"
+            return f"Last checkpoint: `{Path(rel).name}`"
+    return "Fresh start — no prior checkpoint."
+
+
+def flow_entry_blurb(spec: FlowSpec, practice_dir: str | None = None) -> str:
+    """One-screen orientation for River at flow eddy materialize."""
+    pd = practice_dir or get_pd()
+    return f"{_flow_summary_line(spec)}\n\n{_checkpoint_line(spec, pd)}"
+
+
+def flow_orientation_description(spec: FlowSpec, practice_dir: str | None = None) -> str:
+    """Rich orientation when flow declares River intake."""
+    pd = practice_dir or get_pd()
+    lines = [
+        _flow_summary_line(spec),
+        "",
+        "• **Prepare** — two short questions (recommended)",
+        "• **Skip** — talk freely; Turtle joins on your first message",
+        "",
+        _checkpoint_line(spec, pd),
+    ]
+    return "\n".join(lines)
 
 
 def resolve_flow_for_close(

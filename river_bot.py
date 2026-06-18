@@ -97,8 +97,10 @@ async def on_message(message: discord.Message):
         parent_id = message.channel.parent_id
         if not parent_id:
             return
-        from eddy_spawn import is_awaiting_title
+        from eddy_spawn import is_awaiting_title, is_awaiting_flow_intake
 
+        if is_awaiting_flow_intake(message.channel.id, parent_id):
+            return
         if not is_awaiting_title(message.channel.id, parent_id):
             return
         set_practice_context(message)

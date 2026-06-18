@@ -553,7 +553,11 @@ async def ensure_river_eddy_bar(client) -> None:
 
 async def handle_eddy_first_message(message: discord.Message) -> bool:
     """Rename blank eddy from the practitioner's first message. Returns True if handled."""
-    from eddy_spawn import generate_topic, pop_awaiting_title
+    from eddy_spawn import (
+        generate_topic,
+        is_awaiting_flow_intake,
+        pop_awaiting_title,
+    )
     from thread_registry import update_thread_name
 
     thread = message.channel
@@ -562,6 +566,9 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
     parent_id = thread.parent_id
     if not parent_id:
         return False
+    if is_awaiting_flow_intake(thread.id, parent_id):
+        return False
+
     awaiting = pop_awaiting_title(thread.id, parent_id)
     if not awaiting:
         return False

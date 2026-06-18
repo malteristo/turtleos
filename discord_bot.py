@@ -1074,6 +1074,16 @@ async def on_ready():
 
     asyncio.get_event_loop().create_task(prewarm_triage())
 
+    try:
+        from flow_intake_opening import start_intake_handoff_watcher
+        from mage import get_attunement_profile
+
+        if get_attunement_profile() == "native":
+            start_intake_handoff_watcher(client)
+            print("Intake handoff watcher started")
+    except Exception as exc:
+        print(f"Intake handoff watcher failed to start: {exc}")
+
     # Pre-warm delegate edit model to avoid cold-start latency
     async def _prewarm_edit_model():
         import urllib.request
@@ -1440,9 +1450,11 @@ async def on_message(message):
             and message.channel.parent_id
             and not river_bot_enabled()
         ):
-            from eddy_spawn import is_awaiting_title
+            from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
             from river_handler import handle_eddy_first_message
 
+            if is_awaiting_flow_intake(message.channel.id, message.channel.parent_id):
+                return
             if is_awaiting_title(message.channel.id, message.channel.parent_id):
                 lock = get_channel_lock(message.channel.id)
                 async with lock:
