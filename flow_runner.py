@@ -109,13 +109,33 @@ def read_state_bundle(spec: FlowSpec, practice_dir: str | None = None) -> dict[s
     return out
 
 
-def operational_lines(spec: FlowSpec, practice_dir: str | None = None) -> list[str]:
-    lines = [f"-# flow: {spec.title}"]
+def flow_presence_line(spec: FlowSpec, practice_dir: str | None = None) -> str:
+    """Human-readable flow presence for shell injection (not model prose)."""
+    pd = practice_dir or get_pd()
+    loaded: list[str] = []
     for rel in spec.reads:
-        path = _safe_practice_path(rel, practice_dir or get_pd())
+        path = _safe_practice_path(rel, pd)
         if path and path.is_file():
-            lines.append(f"-# read {rel}")
-    return lines
+            loaded.append(Path(rel).name)
+    if loaded:
+        return f"{spec.title} · loaded {', '.join(loaded)}"
+    return spec.title
+
+
+_FLOW_OPS_LINE = re.compile(r"^\s*-#\s*(?:flow:|read\s).*\s*$", re.MULTILINE | re.IGNORECASE)
+
+
+def strip_model_operational_lines(text: str) -> tuple[str, list[str]]:
+    """Remove model-emitted flow/read operational lines before Discord send."""
+    stripped: list[str] = []
+
+    def _collect(match: re.Match[str]) -> str:
+        stripped.append(match.group(0).strip())
+        return ""
+
+    cleaned = _FLOW_OPS_LINE.sub(_collect, text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned, stripped
 
 
 def build_flow_prompt_sections(
@@ -135,8 +155,6 @@ def build_flow_prompt_sections(
             else:
                 blocks.append(f"### {rel}\n\n(empty — file not present yet)")
         sections.append("## Flow State (loaded)\n\n" + "\n\n".join(blocks))
-    hint = operational_lines(spec, practice_dir)
-    sections.append("## Flow operational lines (emit on first reply)\n\n" + "\n".join(hint))
     return sections, spec
 
 

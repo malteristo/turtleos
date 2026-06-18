@@ -115,18 +115,14 @@ def ensure_offer_eddy(acts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         *acts,
         {
             "type": "offer_eddy",
-            "title": "check-in",
             "button_label": "Materialize eddy",
         },
     ]
 
 
 def finalize_parent_river_acts(acts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Standing Eddy Door is pinned — strip per-message materialize offers."""
-    filtered = [a for a in acts if a.get("type") != "offer_eddy"]
-    if filtered:
-        return filtered
-    return [{"type": "acknowledge", "emoji": "👋"}]
+    """Strip model offer_eddy/acknowledge — shell posts offer_eddy reply only."""
+    return [a for a in acts if a.get("type") not in ("offer_eddy", "acknowledge")]
 
 
 def fallback_acts(reason: str = "River model unavailable") -> list[dict[str, Any]]:
@@ -160,9 +156,11 @@ async def classify_river_acts(content: str, practice_dir: str | None = None) -> 
     acts, reason = parse_river_output(raw)
     if reason:
         print(f"River harness rejected output: {reason} — raw[:200]={raw[:200]!r}")
-        return fallback_acts("Could not parse river acts; acknowledging only.")
+        return fallback_acts("Could not parse river acts; offering materialize only.")
 
-    return finalize_parent_river_acts(acts)
+    # Model must not emit offer_eddy (standing door + prompt). Shell re-adds per-message
+    # materialize button so practitioners get a contextual button on every river post.
+    return ensure_offer_eddy(finalize_parent_river_acts(acts))
 
 
 def _append_chronicle(practice_dir: str, surface: str, deep: dict | None = None) -> None:
@@ -214,21 +212,22 @@ class RiverEddyDoorView(discord.ui.View):
         if not thread:
             await interaction.followup.send("Could not materialize eddy.", ephemeral=True)
             return
-        await interaction.followup.send(
-            f"Eddy **{thread.name}** — {thread.jump_url}\n"
-            f"-# Send your first message there to name it and talk with Turtle.",
-            ephemeral=True,
-        )
+        # Success: thread appears in sidebar — no ephemeral followup.
 
 
 class RiverEddyView(discord.ui.View):
     """Materialize-eddy button wired to native river spawn."""
 
-    def __init__(self, source_message: discord.Message, title: str, label: str):
+    def __init__(
+        self,
+        source_message: discord.Message,
+        label: str,
+        flow_id: str | None = None,
+    ):
         super().__init__(timeout=None)
         self._source = source_message
-        self._title = title
-        custom_id = f"river:eddy:{source_message.channel.id}:{source_message.id}:{title[:40]}"
+        self._flow_id = flow_id
+        custom_id = f"river:eddy:{source_message.channel.id}:{source_message.id}"
         button = discord.ui.Button(
             label=label[:80],
             custom_id=custom_id,
@@ -243,7 +242,7 @@ class RiverEddyView(discord.ui.View):
 
         await interaction.response.defer(ephemeral=True)
         try:
-            thread = await spawn_river_eddy(self._source, topic=self._title)
+            thread = await spawn_river_eddy(self._source, flow_id=self._flow_id)
         except Exception as exc:
             print(f"River eddy button failed: {type(exc).__name__}: {exc}")
             await interaction.followup.send(
@@ -254,17 +253,10 @@ class RiverEddyView(discord.ui.View):
         if not thread:
             await interaction.followup.send("Could not materialize eddy.", ephemeral=True)
             return
-        for child in self.children:
-            child.disabled = True
         try:
-            await interaction.message.edit(view=self)
-        except Exception:
-            pass
-        await interaction.followup.send(
-            f"Eddy **{thread.name}** — {thread.jump_url}\n"
-            f"-# Open the eddy and **send a message there** to talk with Turtle.",
-            ephemeral=True,
-        )
+            await interaction.message.delete()
+        except discord.HTTPException as exc:
+            print(f"River offer message delete failed: {exc}")
 
 
 class RiverFlowMenuView(discord.ui.View):
@@ -298,16 +290,20 @@ class RiverFlowMenuView(discord.ui.View):
                 print(f"River flow button failed: {exc}")
                 await interaction.followup.send("Could not open flow eddy.", ephemeral=True)
                 return
-            if thread:
-                await interaction.followup.send(
-                    f"Flow **{flow_name}** — {thread.mention}\n"
-                    f"-# Send your first message in the eddy to name it and start Turtle.",
-                    ephemeral=True,
-                )
-            else:
+            if not thread:
                 await interaction.followup.send("Could not open flow eddy.", ephemeral=True)
+                return
+            try:
+                await interaction.message.delete()
+            except discord.HTTPException as exc:
+                print(f"River flow menu delete failed: {exc}")
 
         return callback
+
+
+async def _reply_with_view(message: discord.Message, view: discord.ui.View) -> None:
+    """Reply to practitioner message with a button-only River post."""
+    await message.reply("\u200b", view=view, mention_author=False)
 
 
 async def render_acts(
@@ -323,37 +319,31 @@ async def render_acts(
     for act in acts:
         kind = act.get("type")
         if kind == "acknowledge":
-            emoji = act.get("emoji", "👋")
-            try:
-                await message.add_reaction(emoji)
-            except discord.HTTPException as exc:
-                print(f"River acknowledge failed: {exc}")
+            continue
 
         elif kind == "offer_eddy":
-            title = (act.get("title") or "check-in").strip()
-            label = act.get("button_label") or f'Materialize eddy: "{title}"'
-            view = RiverEddyView(message, title=title, label=label)
-            await message.channel.send(view=view, silent=True)
+            label = act.get("button_label") or "Materialize eddy"
+            view = RiverEddyView(message, label=label)
+            await _reply_with_view(message, view)
             summary["views"] += 1
 
         elif kind == "revise_offer":
-            title = (act.get("title") or "check-in").strip()
-            label = f'Revised: "{title}"'
-            view = RiverEddyView(message, title=title, label=label[:80])
-            await message.channel.send(view=view, silent=True)
+            label = act.get("button_label") or "Materialize eddy"
+            view = RiverEddyView(message, label=label[:80])
+            await _reply_with_view(message, view)
             summary["views"] += 1
 
         elif kind == "offer_flow_menu":
             flows = act.get("flows") or list_installed_flows(practice_dir)
             view = RiverFlowMenuView(flows, message)
-            await message.channel.send("-# Choose a flow:", view=view, silent=True)
+            await message.reply("-# Choose a flow:", view=view, mention_author=False)
             summary["views"] += 1
 
         elif kind == "offer_flow":
             flow_id = (act.get("flow_id") or "shelter").strip()
             label = f"Open {flow_id.title()}"
-            view = RiverEddyView(message, title=flow_id, label=label)
-            await message.channel.send(view=view, silent=True)
+            view = RiverEddyView(message, label=label, flow_id=flow_id)
+            await _reply_with_view(message, view)
             summary["views"] += 1
 
         elif kind == "error":

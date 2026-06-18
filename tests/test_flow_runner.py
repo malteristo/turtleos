@@ -13,6 +13,8 @@ from flow_runner import (
     split_front_matter,
     write_flow_checkpoint,
     build_flow_prompt_sections,
+    flow_presence_line,
+    strip_model_operational_lines,
 )
 
 
@@ -58,7 +60,21 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertIsNotNone(spec)
         joined = "\n".join(sections)
         self.assertIn("Shelter", joined)
-        self.assertIn("-# flow: Shelter", joined)
+        self.assertNotIn("-# flow:", joined)
+        self.assertNotIn("emit on first reply", joined)
+
+    def test_flow_presence_line(self) -> None:
+        spec = load_flow_spec("shelter")
+        assert spec is not None
+        self.assertEqual(flow_presence_line(spec), "Shelter")
+
+    def test_strip_model_operational_lines(self) -> None:
+        raw = "I'm here.\n\n-# flow: Shelter\n\n-# read state/notes/shelter-last.md\n\nStill here."
+        cleaned, stripped = strip_model_operational_lines(raw)
+        self.assertEqual(len(stripped), 2)
+        self.assertNotIn("-# flow:", cleaned)
+        self.assertIn("I'm here.", cleaned)
+        self.assertIn("Still here.", cleaned)
 
 
 if __name__ == "__main__":

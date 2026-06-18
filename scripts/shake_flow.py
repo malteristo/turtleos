@@ -29,7 +29,8 @@ FLOW_SPECS: dict[str, dict] = {
     "shelter": {
         "flow_id": "shelter",
         "checkpoint_rel": "state/notes/shelter-last.md",
-        "prompt_markers": ["-# flow: Shelter", "Shelter"],
+        "prompt_markers": ["Shelter", "Hold space"],
+        "presence_markers": ["Shelter"],
         "shake_message": "shake: heavy day, need shelter — just hold space with me",
         "followup_message": "thanks — that helped a little",
     },
@@ -53,6 +54,7 @@ def check_offline(flow_id: str) -> list[str]:
 
     from flow_runner import (
         build_flow_prompt_sections,
+        flow_presence_line,
         load_flow_spec,
         write_flow_checkpoint,
     )
@@ -70,6 +72,13 @@ def check_offline(flow_id: str) -> list[str]:
     for marker in spec_cfg["prompt_markers"]:
         if marker not in joined:
             errors.append(f"prompt missing marker: {marker}")
+    if "-# flow:" in joined or "emit on first reply" in joined:
+        errors.append("prompt still asks model to emit operational lines")
+
+    presence = flow_presence_line(spec)
+    for marker in spec_cfg.get("presence_markers", [spec.title]):
+        if marker not in presence:
+            errors.append(f"flow presence missing marker: {marker}")
 
     import tempfile
 

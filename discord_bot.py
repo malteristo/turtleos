@@ -925,6 +925,12 @@ async def handle_dialogue(message):
             print(f"Dedup: removed {len(paragraphs) - len(deduped)} repeated paragraphs")
             reply = "\n\n".join(deduped)
 
+    if native_eddy:
+        from flow_runner import strip_model_operational_lines
+
+        reply, stripped_ops = strip_model_operational_lines(reply)
+        if stripped_ops:
+            print(f"Stripped model operational lines: {stripped_ops}")
     if _reflex and not native_eddy:
         reply = f"-# {_reflex}\n\n{reply}"
     if tool_report:

@@ -42,8 +42,8 @@ def check_parse() -> list[str]:
     if not reason or "prose" not in reason:
         errors.append("prose should be rejected")
     out = finalize_parent_river_acts([{"type": "acknowledge", "emoji": "👋"}])
-    if out != [{"type": "acknowledge", "emoji": "👋"}]:
-        errors.append("finalize_parent_river_acts changed acknowledge-only acts")
+    if out != []:
+        errors.append("finalize_parent_river_acts should drop acknowledge-only acts")
     stripped = finalize_parent_river_acts([
         {"type": "acknowledge", "emoji": "👋"},
         {"type": "offer_eddy", "title": "x", "button_label": "Go"},
@@ -86,8 +86,8 @@ async def check_classify_live() -> list[str]:
             errors.append("classify returned empty acts")
             return errors
         types = [a.get("type") for a in acts]
-        if "offer_eddy" in types:
-            errors.append(f"parent river should not offer_eddy (standing door): {types}")
+        if "offer_eddy" not in types:
+            errors.append(f"parent river should include offer_eddy (per-message button): {types}")
         prose_types = [t for t in types if t not in (
             "acknowledge", "offer_eddy", "revise_offer", "offer_flow_menu",
             "offer_flow", "error", "chronicle",

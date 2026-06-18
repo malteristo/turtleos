@@ -38,14 +38,26 @@ class RiverHandlerTests(unittest.TestCase):
         acts = [
             {"type": "acknowledge", "emoji": "👋"},
             {"type": "offer_eddy", "title": "x", "button_label": "Go"},
+            {"type": "offer_flow_menu", "flows": ["Shelter"]},
         ]
         out = finalize_parent_river_acts(acts)
         self.assertEqual(len(out), 1)
-        self.assertEqual(out[0]["type"], "acknowledge")
+        self.assertEqual(out[0]["type"], "offer_flow_menu")
 
-    def test_finalize_parent_river_acts_default_acknowledge(self) -> None:
+    def test_finalize_parent_river_acts_strips_acknowledge(self) -> None:
+        acts = [{"type": "acknowledge", "emoji": "👋"}]
+        out = finalize_parent_river_acts(acts)
+        self.assertEqual(out, [])
+
+    def test_finalize_parent_river_acts_default_empty(self) -> None:
         out = finalize_parent_river_acts([])
-        self.assertEqual(out, [{"type": "acknowledge", "emoji": "👋"}])
+        self.assertEqual(out, [])
+
+    def test_classify_pipeline_adds_offer_eddy(self) -> None:
+        acts = [{"type": "acknowledge", "emoji": "👋"}]
+        out = ensure_offer_eddy(finalize_parent_river_acts(acts))
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["type"], "offer_eddy")
 
     def test_ensure_offer_eddy_adds_missing(self) -> None:
         acts = [{"type": "acknowledge", "emoji": "👋"}]
