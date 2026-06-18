@@ -1003,6 +1003,13 @@ async def on_ready():
     client.add_view(ControlPanelView())
     client.add_view(ThreadConfigView())
     print(f"Turtle online: {client.user}")
+    try:
+        from eddy_spawn import cache_turtle_bot_user_id
+
+        if client.user:
+            cache_turtle_bot_user_id(client.user.id)
+    except Exception as exc:
+        print(f"Turtle bot id cache failed: {exc}")
     print(f"tOS: {get_pd()} | Identity: {IDENTITY_DIR}")
     print(f"Dialogue: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
     print(f"Reflection: {REFLECTION_MODEL} (local)")
@@ -1251,7 +1258,6 @@ async def on_ready():
 @client.event
 async def on_thread_create(thread):
     if is_registered_parent_channel(thread.parent_id):
-        await thread.join()
         set_practice_context_for_channel(thread.parent_id)
 
         pending = None
@@ -1270,12 +1276,14 @@ async def on_thread_create(thread):
                 except Exception as exc:
                     print(f"Native eddy finalize failed: {exc}")
             else:
+                await thread.join()
                 for uid in get_thread_member_ids(thread.parent_id):
                     try:
                         await thread.add_user(discord.Object(id=int(uid)))
                     except Exception:
                         pass
         else:
+            await thread.join()
             for uid in get_thread_member_ids(thread.parent_id):
                 try:
                     await thread.add_user(discord.Object(id=int(uid)))

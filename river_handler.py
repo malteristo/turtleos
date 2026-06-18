@@ -577,6 +577,11 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
         title = thread.name
 
     update_thread_name(thread.id, title)
+
+    from eddy_spawn import river_add_turtle_to_eddy
+
+    await river_add_turtle_to_eddy(thread)
+
     try:
         from commands import thread_configs
 

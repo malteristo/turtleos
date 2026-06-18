@@ -154,7 +154,7 @@ River errors are **embed acts**, never apologetic chatbot paragraphs.
 | Materialize | Thread titled **`new eddy`**; Discord thread card in river |
 | First message | They speak first — that message **is** the opening |
 | Rename | River harness retitles thread from first message content (`generate_topic`) |
-| First Turtle reply | Optional `Turtle joined` presence embed (with flow line if flow active), then dialogue |
+| First Turtle reply | `river added turtle` system line, then dialogue |
 
 **Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`.
 
@@ -166,9 +166,9 @@ When materializing **from a practitioner’s river message** (contextual flow bu
 
 `Turtle joined` posts **once**, immediately before Turtle’s **first reply** — not at thread creation.
 
-- **Split-bot:** River adds the practitioner (`river added you`); Turtle does not `add_user` on river-materialized eddies.
-- Presence embed **title** is `Turtle joined`; flow detail goes in the description when active.
-- Shell injects flow presence; the model does **not** emit `-# flow:` / `-# read` operational lines (shell truth).
+- **Split-bot:** River adds the practitioner at materialize (`river added you`). On first in-eddy message, River adds Turtle (`river added turtle`) — same native Discord system line, no green embed.
+- Turtle does not join at thread create; entry is deferred until the practitioner speaks.
+- Flow context loads in the Turtle prompt; no separate flow presence embed (shell truth stays in prompt/tools, not `-#` model lines).
 
 **Implementation:** `ensure_native_presence` in `eddy_spawn.py`; `flow_runner.flow_presence_line`; `conduct.md`.
 

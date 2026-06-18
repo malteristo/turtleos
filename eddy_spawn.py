@@ -692,10 +692,107 @@ async def finalize_native_eddy_from_river(thread: discord.Thread, pending: dict)
     print(f"Turtle native eddy config ready: {thread.name} (id: {thread.id})")
 
 
+async def river_add_turtle_to_eddy(thread) -> bool:
+    """River adds Turtle to the eddy — Discord native 'river added turtle' system line."""
+    from mage import river_bot_enabled
+
+    if not river_bot_enabled():
+        return False
+
+    from river_state import river_client
+
+    guild = getattr(thread, "guild", None)
+    if guild is None:
+        parent = getattr(thread, "parent", None)
+        guild = getattr(parent, "guild", None) if parent else None
+
+    turtle_id = _resolve_turtle_bot_user_id(guild)
+    if not turtle_id:
+        print("River add turtle: could not resolve Turtle bot user id")
+        return False
+
+    try:
+        await thread.add_user(discord.Object(id=turtle_id))
+        print(f"River added Turtle to {thread.name!r} (id: {thread.id})")
+        return True
+    except discord.HTTPException as exc:
+        # Already a member — fine
+        if getattr(exc, "code", None) in (30083, 50025):
+            return True
+        print(f"River add turtle failed: {type(exc).__name__}: {exc}")
+        return False
+
+
+def _turtle_bot_id_cache_path() -> Path:
+    from mage import get_runtime_dir
+
+    cache_dir = Path(get_runtime_dir()) / "thread-state" / "river"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "turtle_bot_user_id"
+
+
+def cache_turtle_bot_user_id(user_id: int) -> None:
+    _turtle_bot_id_cache_path().write_text(str(user_id), encoding="utf-8")
+
+
+def _resolve_turtle_bot_user_id(guild) -> int | None:
+    import os
+
+    raw = os.environ.get("TURTLE_BOT_USER_ID", "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+
+    cache_path = _turtle_bot_id_cache_path()
+    if cache_path.exists():
+        try:
+            return int(cache_path.read_text(encoding="utf-8").strip())
+        except ValueError:
+            pass
+
+    if guild:
+        for member in guild.members:
+            if member.bot and member.name.lower() == "turtle":
+                return member.id
+
+    return None
+
+
+async def wait_for_native_eddy_handoff(thread) -> None:
+    """Turtle waits for River rename + add_user before first reply (split-bot)."""
+    import asyncio
+    from mage import river_bot_enabled
+
+    if not river_bot_enabled() or not _is_thread_channel(thread):
+        return
+
+    parent_id = thread.parent_id
+    for _ in range(40):
+        if not is_awaiting_title(thread.id, parent_id):
+            break
+        await asyncio.sleep(0.1)
+
+    try:
+        from state import client
+
+        if not client.user:
+            return
+        for _ in range(20):
+            try:
+                await thread.fetch_member(client.user.id)
+                return
+            except discord.HTTPException:
+                await asyncio.sleep(0.1)
+    except Exception:
+        pass
+
+
 async def ensure_native_presence(thread: discord.Thread) -> bool:
-    """Post §7.7 presence once, immediately before Turtle's first reply in this eddy."""
+    """Native presence — split-bot uses River add_user; single-bot uses thread.join()."""
     from commands import thread_configs
-    from mage import get_attunement_profile
+    from mage import get_attunement_profile, river_bot_enabled
 
     cfg = thread_configs.get(thread.id)
     if not cfg:
@@ -715,22 +812,19 @@ async def ensure_native_presence(thread: discord.Thread) -> bool:
     if cfg.get("presence_posted"):
         return False
 
-    flow_line = ""
-    ctx = cfg.get("context_type")
-    if ctx:
-        from flow_runner import load_flow_spec, flow_presence_line
+    if river_bot_enabled():
+        await wait_for_native_eddy_handoff(thread)
+        cfg["presence_posted"] = True
+        return False
 
-        spec = load_flow_spec(ctx)
-        if spec:
-            flow_line = flow_presence_line(spec)
-
-    embed = discord.Embed(title="Turtle joined", color=0x57F287)
-    if flow_line:
-        embed.description = flow_line
-    await thread.send(embed=embed, silent=True)
-    cfg["presence_posted"] = True
-    print(f"Native presence posted in {thread.name} (id: {thread.id})")
-    return True
+    try:
+        await thread.join()
+        cfg["presence_posted"] = True
+        print(f"Turtle joined {thread.name} (single-bot, id: {thread.id})")
+        return True
+    except discord.HTTPException as exc:
+        print(f"Turtle join failed: {type(exc).__name__}: {exc}")
+        return False
 
 
 async def spawn_river_eddy(
