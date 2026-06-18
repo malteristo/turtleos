@@ -100,7 +100,7 @@ from helpers import (
     preprocess_attachments,
 )
 
-from sessions import session_monitor, close_session, maybe_reflect
+from sessions import session_monitor, checkpoint_session, close_session, maybe_reflect
 from boom_thread import handle_boom_thread_message
 from eddy_spawn import (
     should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction,

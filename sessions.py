@@ -1,6 +1,9 @@
-"""turtleOS session lifecycle — timeout monitoring, reflection, session notes."""
+"""turtleOS session lifecycle — checkpoint (capture) vs release (explicit close)."""
+
+from __future__ import annotations
 
 import os
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -11,15 +14,15 @@ import re
 from state import (
     active_sessions, SESSION_TIMEOUT_SECONDS, MIN_EXCHANGES_FOR_REFLECTION,
     MIN_EXCHANGES_FOR_CHECKPOINT, SESSION_REFLECTION_COOLDOWN, last_reflection_time,
-    IDENTITY_DIR, REFLECTION_MODEL,
-    thread_configs, EDDY_DEFAULT,
+    REFLECTION_MODEL,
+    thread_configs,
 )
 from mage import get_pd, get_mage_name, get_mage_type, set_practice_context_for_channel
 from practice_io import read_safe
 from llm import chat_ollama
 from prompts import get_system_prompt
 from readiness import assess_readiness, save_readiness_trail
-from helpers import get_history, log_activity, split_message, local_now
+from helpers import get_history, log_activity, local_now
 from outfacing import (
     evaluate_outfacing_signal,
     save_signal_drafts,
@@ -27,6 +30,57 @@ from outfacing import (
     MIN_EXCHANGES_FOR_SIGNAL,
 )
 from state import client
+
+
+_TRIGGER_COPY = {
+    "idle": "just ended (15 minutes of silence)",
+    "manual": "the practitioner ran a manual checkpoint — capture resonance; the session continues",
+    "release": "the practitioner is explicitly releasing the session",
+}
+
+
+@dataclass
+class CheckpointResult:
+    trigger: str = "idle"
+    flow_writes: list[str] = field(default_factory=list)
+    session_note: str | None = None
+    proposal: str | None = None
+    paused: bool = False
+
+    @property
+    def captured_anything(self) -> bool:
+        return bool(self.flow_writes or self.session_note or self.proposal)
+
+
+def _trigger_phrase(trigger: str) -> str:
+    return _TRIGGER_COPY.get(trigger, _TRIGGER_COPY["idle"])
+
+
+def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> None:
+    """River-side structural memory — act, not eddy dialogue."""
+    if not result.captured_anything:
+        return
+    try:
+        from river_handler import _append_chronicle
+
+        parts: list[str] = []
+        if result.flow_writes:
+            parts.append(result.flow_writes[0])
+        if result.session_note:
+            parts.append(f"sessions/{result.session_note}")
+        label = ", ".join(parts)
+        _append_chronicle(
+            get_pd(),
+            f"💾 checkpoint ({result.trigger}): {label}",
+            {
+                "channel_id": str(channel_id),
+                "trigger": result.trigger,
+                "flow_writes": result.flow_writes,
+                "session_note": result.session_note,
+            },
+        )
+    except Exception as exc:
+        print(f"Checkpoint chronicle failed: {type(exc).__name__}: {exc}")
 
 
 @tasks.loop(seconds=60)
@@ -37,7 +91,7 @@ async def session_monitor():
             continue
         elapsed = (now - state["last_message"]).total_seconds()
         if elapsed >= SESSION_TIMEOUT_SECONDS:
-            await close_session(channel_id)
+            await checkpoint_session(channel_id, trigger="idle", mark_paused=True)
 
 
 async def _write_flow_checkpoint_if_needed(
@@ -50,13 +104,16 @@ async def _write_flow_checkpoint_if_needed(
         return []
     try:
         from mage import get_attunement_profile
-        from flow_runner import load_flow_spec, write_flow_checkpoint
+        from flow_runner import write_flow_checkpoint, resolve_flow_for_close
 
         if get_attunement_profile() != "native":
             return []
-        cfg = thread_configs.get(channel_id) or {}
-        flow_id = cfg.get("context_type")
-        spec = load_flow_spec(flow_id)
+
+        channel = client.get_channel(channel_id)
+        channel_name = getattr(channel, "name", None) if channel else None
+        spec = resolve_flow_for_close(
+            channel_id, history, thread_configs, channel_name=channel_name
+        )
         if not spec or not spec.writes:
             return []
         written = write_flow_checkpoint(spec, history, mage_name)
@@ -71,16 +128,27 @@ async def _write_flow_checkpoint_if_needed(
         return []
 
 
-async def close_session(channel_id: int):
-    active_sessions[channel_id]["closed"] = True
+async def checkpoint_session(
+    channel_id: int,
+    *,
+    trigger: str = "idle",
+    mark_paused: bool = True,
+) -> CheckpointResult:
+    """Capture resonance without clearing history. Idle timeout or ``!checkpoint``."""
+    result = CheckpointResult(trigger=trigger, paused=mark_paused)
+
+    if channel_id in active_sessions and mark_paused:
+        active_sessions[channel_id]["closed"] = True
+
     set_practice_context_for_channel(channel_id)
     history = get_history(channel_id)
     mage_name = get_mage_name()
 
-    await _write_flow_checkpoint_if_needed(channel_id, history, mage_name)
+    result.flow_writes = await _write_flow_checkpoint_if_needed(channel_id, history, mage_name)
 
     if len(history) < MIN_EXCHANGES_FOR_REFLECTION:
-        return
+        _append_resonance_chronicle(channel_id, result)
+        return result
 
     conversation = "\n".join(
         f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content']}" for m in history
@@ -114,7 +182,7 @@ async def close_session(channel_id: int):
                 )
 
         reflection_prompt = (
-            f"The following conversation with {mage_name} just ended (15 minutes of silence). "
+            f"The following conversation with {mage_name} {_trigger_phrase(trigger)}. "
             "Reflect autonomously.\n\n"
             "Write a SESSION NOTE:\n---SESSION_NOTE---\n"
             "What was discussed: (2-3 lines)\nWhat emerged: (insights, decisions)\n"
@@ -146,6 +214,7 @@ async def close_session(channel_id: int):
                         suffix += 1
                         session_path = session_dir / f"{today}-{suffix}.md"
                     session_path.write_text(f"# Session — {today}\n\n{note}\n")
+                    result.session_note = session_path.name
                     print(f"Session note: {session_path}")
 
                     session_channel = client.get_channel(channel_id)
@@ -165,6 +234,7 @@ async def close_session(channel_id: int):
                         suffix += 1
                         proposal_path = proposal_dir / f"{today}-reflection-{suffix}.md"
                     proposal_path.write_text(f"# Proposal — {today}\n\n{proposal}\n")
+                    result.proposal = proposal_path.name
                     print(f"Proposal: {proposal_path}")
 
                     title_line = ""
@@ -179,7 +249,6 @@ async def close_session(channel_id: int):
         except Exception as e:
             print(f"Session reflection failed for {channel_id}: {type(e).__name__}: {e}")
 
-    # ── Outfacing signal evaluation (Mage channel only) ──
     if reflection and get_mage_type() != "practitioner" and len(history) >= MIN_EXCHANGES_FOR_SIGNAL:
         try:
             should_evaluate, reason = should_evaluate_outfacing_signal(conversation, reflection)
@@ -202,27 +271,30 @@ async def close_session(channel_id: int):
         except Exception as e:
             print(f"Outfacing signal evaluation failed: {type(e).__name__}: {e}")
 
-    # ── Silent practice state extraction (especially valuable for practitioners) ──
     if get_mage_type() == "practitioner" and len(history) >= 4:
         await _extract_practice_state(conversation, mage_name)
 
     try:
-        result = assess_readiness()
-        save_readiness_trail(result)
-        impaired = [d for d in result["dimensions"] if d["status"] == "impaired"]
+        result_readiness = assess_readiness()
+        save_readiness_trail(result_readiness)
+        impaired = [d for d in result_readiness["dimensions"] if d["status"] == "impaired"]
         if impaired:
-            session_channel = client.get_channel(channel_id)
-            if session_channel:
-                names = ", ".join(d["name"] for d in impaired)
-                print(f"Post-session readiness: {names} impaired — internal signal, not surfaced to channel")
+            names = ", ".join(d["name"] for d in impaired)
+            print(f"Post-checkpoint readiness: {names} impaired — internal signal, not surfaced to channel")
     except Exception as e:
-        print(f"Post-session readiness check failed: {e}")
+        print(f"Post-checkpoint readiness check failed: {e}")
 
-    # Manual-release dissolution — metabolize and close when the conversation is done
     cfg = thread_configs.get(channel_id)
     if cfg and cfg.get("eddy_type") == "manual":
         await _manual_release_dissolve(channel_id, history)
 
+    _append_resonance_chronicle(channel_id, result)
+    return result
+
+
+async def close_session(channel_id: int) -> CheckpointResult:
+    """Backward-compatible alias — idle checkpoint semantics."""
+    return await checkpoint_session(channel_id, trigger="idle", mark_paused=True)
 
 
 async def maybe_reflect(channel, history: list[dict]):
@@ -359,7 +431,6 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
     thread_name = thread.name
     mage_name = get_mage_name()
 
-    # Capture essence via reflection model
     msgs = [
         f"{'Mage' if m['role'] == 'user' else 'Turtle'}: {m['content'][:300]}"
         for m in history
@@ -386,7 +457,6 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
         except Exception as e:
             print(f"Manual release essence capture failed for {thread_name}: {e}")
 
-    # Archive the conversation
     archive_dir = Path(get_pd()) / "thread-archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
     today = local_now().strftime("%Y-%m-%d")
@@ -399,11 +469,9 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
     archive_content += "## Conversation\n" + "\n".join(msgs[-20:]) + "\n"
     archive_path.write_text(archive_content)
 
-    # Clean up in-memory state
     thread_configs.pop(channel_id, None)
     mark_dissolved(channel_id)
 
-    # Notify parent channel
     parent = thread.parent
     if parent:
         summary = f"🍃 **{thread_name}** dissolved"
@@ -411,7 +479,6 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
             summary += f" — {entry_count} entries captured to boom"
         await parent.send(summary, silent=True)
 
-    # Archive the Discord thread
     try:
         await thread.edit(archived=True)
     except Exception:

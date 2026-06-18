@@ -866,6 +866,35 @@ async def ensure_native_presence(thread: discord.Thread) -> bool:
         return False
 
 
+async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
+    """River orientation at flow eddy materialize — rename + one silent embed."""
+    from flow_runner import flow_entry_blurb, load_flow_spec
+    from mage import get_pd
+    from thread_registry import update_thread_name
+
+    spec = load_flow_spec(flow_id)
+    if not spec:
+        return
+
+    title = spec.title[:100]
+    try:
+        await thread.edit(name=title)
+        update_thread_name(thread.id, title)
+    except discord.HTTPException as exc:
+        print(f"Flow eddy rename failed: {exc}")
+
+    try:
+        embed = discord.Embed(
+            title=f"{spec.title} eddy",
+            description=flow_entry_blurb(spec, get_pd()),
+            color=0x5865F2,
+        )
+        embed.set_footer(text="Speak when ready — Turtle joins on your first message.")
+        await thread.send(embed=embed, silent=True)
+    except Exception as exc:
+        print(f"Flow eddy orientation failed: {type(exc).__name__}: {exc}")
+
+
 async def spawn_river_eddy(
     message,
     topic: str | None = None,
@@ -880,7 +909,14 @@ async def spawn_river_eddy(
     from state import TURTLE_MODEL
 
     bot_client = _materialize_client(message)
-    thread_name = NEW_EDDY_NAME
+    flow_title = None
+    if flow_id:
+        from flow_runner import load_flow_spec
+
+        spec = load_flow_spec(flow_id)
+        if spec:
+            flow_title = spec.title[:100]
+    thread_name = flow_title or NEW_EDDY_NAME
 
     if get_attunement_profile() == "native":
         model_id = TURTLE_MODEL
@@ -958,13 +994,17 @@ async def spawn_river_eddy(
         eddy_type=eddy_type,
     )
 
+    if flow_id:
+        await prepare_flow_eddy_entry(thread, flow_id, bot_client)
+
     try:
         from river_handler import _append_chronicle
         from mage import get_pd
 
+        label = f"{thread_name} flow" if flow_id else thread_name
         _append_chronicle(
             get_pd(),
-            f"🌀 opened: {thread_name}",
+            f"🌀 opened: {label}",
             {"thread_id": str(thread.id), "jump_url": thread.jump_url, "flow_id": flow_id},
         )
     except Exception as exc:

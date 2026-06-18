@@ -185,7 +185,50 @@ Inside eddies (character layer — `template/character/conduct.md`):
 
 Flows are prompt programs loaded when `context_type` / `flow_id` is set at spawn (from flow menu). Flow front matter governs reads/writes under `state/`.
 
----
+**Flow menu (bar):** lists only **installed** flows — `.md` files under `practice/flows/` or `template/flows/`. Today that is often just **Shelter** until more flows ship. The River prompt’s default flow names (Navigator, Thread, Companion) are browse hints, not guaranteed menu entries.
+
+**Flow eddy entry (target UX — 2026-06-18 dogfood):**
+
+| Step | What the practitioner should see |
+|------|----------------------------------|
+| Pick flow from bar | Thread titled **flow name** (e.g. `Shelter`), not generic `new eddy` |
+| Enter thread | **One River orientation embed** — what this flow is, whether a checkpoint file exists |
+| First message | Practitioner speaks; River adds Turtle; thread may rename to topic |
+| First Turtle reply | Shelter voice + compact presence tag (shell-injected) |
+
+River does **preparation**, not dialogue — orientation embed is an allowed exception to “acts not words” (setup only, silent, no chatbot tone).
+
+**Session capture — checkpoint vs release:**
+
+Three operations — do not conflate them:
+
+| Operation | Trigger | Clears history | What it saves |
+|-----------|---------|----------------|---------------|
+| **`checkpoint_session`** | 15 min idle (automatic) or `!checkpoint` (manual) | **No** | Flow writes (≥2 exchanges); session note (≥4, reflection cooldown applies) |
+| **`release`** (`!release` only) | Practitioner explicit | **Yes** | Runs checkpoint first, then clears history + release embed |
+
+Idle marks the session **paused** (`active_sessions.closed`) so the monitor does not re-fire; the next message reopens it. Manual `!checkpoint` does **not** pause — practitioner continues.
+
+River records successful checkpoints in **chronicle** (`💾 checkpoint (idle|manual|release): …`) — structural memory, not eddy dialogue.
+
+Regular eddies: session notes today; **sediment** (cross-eddy resonance) deferred. Flow eddies: mechanical writes to flow `writes` paths.
+
+**Implementation:** `sessions.py` (`checkpoint_session`, `CheckpointResult`); `commands.py` (`cmd_checkpoint`, `cmd_release`); chronicle via `_append_resonance_chronicle`.
+
+### 4.6 Discord-native system lines (inventory)
+
+We **prefer Discord’s system lines** over custom “joined” embeds. The shell cannot author arbitrary system-line text — only trigger API actions that Discord renders.
+
+| Event | System line (approx.) | Who triggers |
+|-------|----------------------|--------------|
+| Materialize eddy | `river added {practitioner}` | River `thread.add_user` at spawn |
+| First in-eddy message | `river added turtle` | River `thread.add_user` before Turtle’s first reply |
+| First message / flow rename | `river changed the channel name: {title}` | River `thread.edit(name=…)` |
+| Practitioner @mention | Orange highlight on left | **Discord client** — not turtleOS |
+
+**Rejected:** green “Turtle joined” embed; fake system-line prose from bots.
+
+**Implementation:** `eddy_spawn.py` (`river_add_turtle_to_eddy`, `prepare_flow_eddy_entry`); `river_handler.py` `handle_eddy_first_message`.
 
 ## 5. Practitioner journeys (reference)
 
@@ -202,7 +245,11 @@ River timeline: … → click [new eddy]
 ### 5.2 Open flow eddy from bar
 
 ```
-Click [flow menu] → select Shelter → same as above with flow loaded
+Click [flow menu] → select Shelter
+  → thread card titled "Shelter" (not "new eddy")
+  → enter thread → River orientation embed (what flow is, checkpoint status)
+  → first message → river added turtle → Turtle reply in flow voice
+  → 15 min idle → flow checkpoint + session note (if thresholds met)
 ```
 
 ### 5.3 Drop text in river (no eddy yet)
@@ -221,6 +268,7 @@ Practitioner posts in river
 | Pattern | Why rejected |
 |---------|----------------|
 | **Pinned Eddy Door** | Discord pins live in a separate panel — not always visible |
+| **Pinned messages inside eddies** | Same panel problem; does not give durable “this is a flow eddy” signal (2026-06-18 dogfood) |
 | **Per-message Materialize on every river post** | Clutters timeline; superseded by standing bar (materialize always available at bottom) |
 | **Turtle speaking in the river** | Collapses River/Turtle identity |
 | **River conversational prose** | Breaks acts-not-words law |
@@ -287,6 +335,8 @@ Before merging a change that touches practitioner-facing behavior:
 | 2026-06-17 | Shell-inject flow presence; model no longer emits operational `-#` lines |
 | 2026-06-18 | **Eddy bar** replaces pinned door — bottom anchor, Discord thread embed, flow menu on bar; per-message `offer_eddy` removed from parent river |
 | 2026-06-18 | Split-bot handoff fix — River `add_user` on materialize; Turtle presence embed title; no Turtle `add_user` on river eddies |
+| 2026-06-18 | Dogfood: flow menu shows installed flows only; flow eddy entry needs River orientation; flow checkpoint inference on close; pinned-in-eddy rejected |
+| 2026-06-18 | **Checkpoint vs release** — `checkpoint_session` on idle/`!checkpoint`; `!release` user-only; River chronicle on capture |
 
 ---
 

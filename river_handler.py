@@ -238,9 +238,9 @@ class RiverEddyBarView(discord.ui.View):
         await _materialize_from_bar(interaction)
 
     async def _on_flow_menu(self, interaction: discord.Interaction):
-        from flow_runner import list_flow_ids
+        from flow_runner import list_resolvable_flow_ids
 
-        flows = list_flow_ids()
+        flows = list_resolvable_flow_ids()
         if not flows:
             await interaction.response.send_message("No flows installed.", ephemeral=True)
             return
@@ -562,9 +562,11 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
     parent_id = thread.parent_id
     if not parent_id:
         return False
-    if not pop_awaiting_title(thread.id, parent_id):
+    awaiting = pop_awaiting_title(thread.id, parent_id)
+    if not awaiting:
         return False
 
+    flow_id = awaiting.get("flow_id")
     content = message.content.strip()
     if message.attachments and not content:
         content = f"(attachment: {message.attachments[0].filename})"
@@ -589,6 +591,8 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
             thread_configs[thread.id]["topic"] = title
             thread_configs[thread.id]["awaiting_title"] = False
             thread_configs[thread.id]["blank_eddy"] = False
+            if flow_id and not thread_configs[thread.id].get("context_type"):
+                thread_configs[thread.id]["context_type"] = flow_id
     except Exception:
         pass
 

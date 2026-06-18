@@ -24,6 +24,7 @@ from state import (
     ATTUNEMENT_LEVELS, KNOWN_MODELS,
     thread_configs, absorbed_contexts,
     EDDY_TYPES, EDDY_DEFAULT, threads_flagged_for_release,
+    MIN_EXCHANGES_FOR_CHECKPOINT,
     THREAD_CONTEXTS,
     panel_selections,
     GOOGLE_API_KEY, HAS_GEMINI,
@@ -431,7 +432,8 @@ async def cmd_help(message):
                           color=EMBED_COLORS["help"])
     practice_cmds = [
         ("`!recall`", "Practice state overview — start of session"),
-        ("`!release`", "Close session, write reflection — end of session"),
+        ("`!checkpoint`", "Save resonance now — flow state + session note; keeps history"),
+        ("`!release`", "Close session — checkpoint, then clear history"),
         ("`!sweep`", "Process boom into bright (triage + update)"),
         ("`!boom`", "Show boom buffer"),
         ("`!boom add <thought>`", "Capture a thought"),
@@ -1466,6 +1468,44 @@ async def cmd_recall(message):
     await message.reply(embed=embed, mention_author=False)
 
 
+async def cmd_checkpoint(message):
+    channel_id = message.channel.id
+    history = get_history(channel_id)
+    if len(history) < MIN_EXCHANGES_FOR_CHECKPOINT:
+        await message.reply(
+            "Not enough conversation to checkpoint yet.",
+            mention_author=False,
+        )
+        return
+
+    from sessions import checkpoint_session
+
+    result = await checkpoint_session(channel_id, trigger="manual", mark_paused=False)
+
+    if not result.captured_anything:
+        await message.reply(
+            "Checkpoint ran — nothing new met the save threshold.",
+            mention_author=False,
+        )
+        return
+
+    lines: list[str] = []
+    if result.flow_writes:
+        lines.append(f"**Flow:** `{result.flow_writes[0]}`")
+    if result.session_note:
+        lines.append(f"**Session note:** `sessions/{result.session_note}`")
+    if result.proposal:
+        lines.append(f"**Proposal:** `proposals/{result.proposal}`")
+
+    embed = discord.Embed(
+        title="Checkpoint saved",
+        description="\n".join(lines),
+        color=0x5865F2,
+    )
+    embed.set_footer(text="History kept — continue when ready, or !release to close.")
+    await message.reply(embed=embed, mention_author=False)
+
+
 async def cmd_release(message):
     channel_id = message.channel.id
     history = get_history(channel_id)
@@ -1474,8 +1514,9 @@ async def cmd_release(message):
         return
 
     await message.reply("Closing session...", mention_author=False)
-    from sessions import close_session
-    await close_session(channel_id)
+    from sessions import checkpoint_session
+
+    await checkpoint_session(channel_id, trigger="release", mark_paused=True)
 
     dialogue_histories.pop(channel_id, None)
     active_sessions.pop(channel_id, None)
@@ -2128,6 +2169,7 @@ DIRECT_COMMANDS = {
     "sync": lambda msg, args: cmd_sync(msg),
     "sweep": lambda msg, args: cmd_sweep(msg),
     "recall": lambda msg, args: cmd_recall(msg),
+    "checkpoint": lambda msg, args: cmd_checkpoint(msg),
     "release": lambda msg, args: cmd_release(msg),
     "edit": lambda msg, args: cmd_edit(msg, args),
     "thread": lambda msg, args: cmd_thread(msg, args),
@@ -2165,7 +2207,8 @@ COMMAND_CONTEXT = {
     "eddy-check": "I scanned all threads for dissolution readiness and flagged any that exceeded their quiet threshold.",
     "fetch": "I fetched a URL and distilled its resonance — the essential insights from the linked content.",
     "recall": "I performed a recall — loaded practice state and recent sessions.",
-    "release": "I ran a session release — wrote reflection and cleared history.",
+    "checkpoint": "I ran a checkpoint — saved flow state and/or session note without clearing history.",
+    "release": "I ran a session release — checkpointed resonance and cleared history.",
     "readiness": "I ran a full practice-readiness assessment across all 8 dimensions.",
     "signals": "I showed the outfacing signal drafts -- Turtle-generated content awaiting Mage curation.",
     "attune": "I performed a self-attunement ritual -- read core practice lore, integrated understanding, and wrote a fresh attunement digest.",
@@ -2173,11 +2216,11 @@ COMMAND_CONTEXT = {
 }
 
 
-_PRACTITIONER_COMMANDS = {"status", "help", "recall", "release"}
+_PRACTITIONER_COMMANDS = {"status", "help", "recall", "checkpoint", "release"}
 
 CONTEXTUAL_ACTION_TIMEOUT = 3600
 CONTEXTUAL_ACTION_COMMANDS = {
-    "status", "diagnose", "sync", "sweep", "recall", "release",
+    "status", "diagnose", "sync", "sweep", "recall", "checkpoint", "release",
     "boom", "propose", "thread", "new", "threads", "eddy-check", "fetch",
     "absorb", "absorbed", "forget", "readiness", "signals", "load",
 }

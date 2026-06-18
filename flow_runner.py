@@ -194,3 +194,74 @@ def list_flow_ids(practice_dir: str | None = None) -> list[str]:
             if name.endswith(".md") and not name.startswith("_"):
                 names.append(name[:-3])
     return names
+
+
+def list_resolvable_flow_ids(practice_dir: str | None = None) -> list[str]:
+    """Flow ids that resolve to a spec — for menus and close-time inference."""
+    return [fid for fid in list_flow_ids(practice_dir) if load_flow_spec(fid, practice_dir)]
+
+
+def flow_entry_blurb(spec: FlowSpec, practice_dir: str | None = None) -> str:
+    """One-screen orientation for River at flow eddy materialize."""
+    pd = practice_dir or get_pd()
+    summary = ""
+    for line in spec.body.splitlines():
+        text = line.strip()
+        if not text or text.startswith("#") or text.startswith("**") or text.startswith("---"):
+            continue
+        if text.startswith("*") and text.endswith("*"):
+            continue
+        summary = text[:240]
+        break
+    if not summary:
+        summary = "Practice flow — speak when you are ready."
+    checkpoint = "Fresh start — no prior checkpoint."
+    for rel in spec.reads:
+        path = _safe_practice_path(rel, pd)
+        if path and path.is_file() and path.stat().st_size > 40:
+            checkpoint = f"Last checkpoint: `{Path(rel).name}`"
+            break
+    return f"{summary}\n\n{checkpoint}"
+
+
+def resolve_flow_for_close(
+    channel_id: int,
+    history: list[dict],
+    thread_configs: dict,
+    channel_name: str | None = None,
+    practice_dir: str | None = None,
+) -> FlowSpec | None:
+    """Resolve which flow checkpoint to write on session close."""
+    cfg = thread_configs.get(channel_id) or {}
+    flow_id = cfg.get("context_type")
+    if flow_id:
+        spec = load_flow_spec(flow_id, practice_dir)
+        if spec and spec.writes:
+            return spec
+
+    name = (channel_name or "").lower().replace("-", " ").replace("_", " ")
+    for fid in list_resolvable_flow_ids(practice_dir):
+        slug = fid.lower().replace("_", " ")
+        if slug in name or fid.lower() in name:
+            spec = load_flow_spec(fid, practice_dir)
+            if spec and spec.writes:
+                return spec
+
+    if len(history) < 2:
+        return None
+
+    blob = " ".join((m.get("content") or "") for m in history).lower()
+    if any(
+        phrase in blob
+        for phrase in (
+            "need shelter",
+            "shelter flow",
+            "!shelter",
+            "hold space with me",
+            "holding space",
+        )
+    ):
+        spec = load_flow_spec("shelter", practice_dir)
+        if spec and spec.writes:
+            return spec
+    return None

@@ -14,6 +14,9 @@ from flow_runner import (
     write_flow_checkpoint,
     build_flow_prompt_sections,
     flow_presence_line,
+    flow_entry_blurb,
+    resolve_flow_for_close,
+    list_resolvable_flow_ids,
     strip_model_operational_lines,
 )
 
@@ -75,6 +78,43 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertNotIn("-# flow:", cleaned)
         self.assertIn("I'm here.", cleaned)
         self.assertIn("Still here.", cleaned)
+
+    def test_list_resolvable_flow_ids_includes_shelter(self) -> None:
+        flows = list_resolvable_flow_ids()
+        self.assertIn("shelter", flows)
+
+    def test_flow_entry_blurb(self) -> None:
+        spec = load_flow_spec("shelter")
+        assert spec is not None
+        blurb = flow_entry_blurb(spec)
+        self.assertIn("Fresh start", blurb)
+
+    def test_resolve_flow_for_close_by_context_type(self) -> None:
+        spec = load_flow_spec("shelter")
+        assert spec is not None
+        configs = {123: {"context_type": "shelter"}}
+        history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "here"}]
+        resolved = resolve_flow_for_close(123, history, configs)
+        self.assertIsNotNone(resolved)
+        assert resolved is not None
+        self.assertEqual(resolved.title, "Shelter")
+
+    def test_resolve_flow_for_close_by_thread_name(self) -> None:
+        history = [{"role": "user", "content": "cats"}, {"role": "assistant", "content": "here"}]
+        resolved = resolve_flow_for_close(
+            456, history, {}, channel_name="seeking_shelter_from_rain"
+        )
+        self.assertIsNotNone(resolved)
+        assert resolved is not None
+        self.assertEqual(resolved.title, "Shelter")
+
+    def test_resolve_flow_for_close_by_shelter_phrase(self) -> None:
+        history = [
+            {"role": "user", "content": "heavy day, need shelter"},
+            {"role": "assistant", "content": "I'm here"},
+        ]
+        resolved = resolve_flow_for_close(789, history, {}, channel_name="new eddy")
+        self.assertIsNotNone(resolved)
 
 
 if __name__ == "__main__":

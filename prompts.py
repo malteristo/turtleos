@@ -399,7 +399,8 @@ You have direct commands that bypass the LLM (instant, free). Recommend them pro
 
 **Session lifecycle:**
 - `!recall` — practice state overview at session start
-- `!release` — close session, write reflection, clear history
+- `!checkpoint` — save resonance now (flow state + session note); keeps history
+- `!release` — explicit close: checkpoint, then clear history
 
 **Capture & process:**
 - `!boom add <thought>` — capture a thought (recommend when Mage shares something worth preserving)
