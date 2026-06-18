@@ -649,7 +649,6 @@ def _materialize_client(message):
 async def finalize_native_eddy_from_river(thread: discord.Thread, pending: dict) -> None:
     """Turtle bot joins a native eddy — config only, no entry chrome until first turn."""
     from commands import thread_configs
-    from state import client
 
     eddy_type = pending.get("eddy_type", EDDY_DEFAULT)
     thread_configs[thread.id] = {
@@ -666,38 +665,47 @@ async def finalize_native_eddy_from_river(thread: discord.Thread, pending: dict)
         "presence_posted": False,
     }
 
-    parent_id = thread.parent_id
-    if parent_id:
-        from mage import get_thread_member_ids
-
-        for uid in get_thread_member_ids(parent_id):
-            try:
-                user = await client.fetch_user(int(uid))
-                await thread.add_user(user)
-            except Exception:
-                pass
-
-    print(f"Turtle joined native eddy (silent): {thread.name} (id: {thread.id})")
+    print(f"Turtle native eddy config ready: {thread.name} (id: {thread.id})")
 
 
 async def ensure_native_presence(thread: discord.Thread) -> bool:
     """Post §7.7 presence once, immediately before Turtle's first reply in this eddy."""
     from commands import thread_configs
+    from mage import get_attunement_profile
 
     cfg = thread_configs.get(thread.id)
-    if not cfg or not cfg.get("native_vanilla") or cfg.get("presence_posted"):
+    if not cfg:
+        if get_attunement_profile() != "native":
+            return False
+        cfg = {
+            "native_vanilla": True,
+            "presence_posted": False,
+            "context_type": None,
+        }
+        thread_configs[thread.id] = cfg
+    elif not cfg.get("native_vanilla"):
+        if get_attunement_profile() != "native":
+            return False
+        cfg["native_vanilla"] = True
+
+    if cfg.get("presence_posted"):
         return False
-    desc = "Turtle joined"
+
+    flow_line = ""
     ctx = cfg.get("context_type")
     if ctx:
         from flow_runner import load_flow_spec, flow_presence_line
 
         spec = load_flow_spec(ctx)
         if spec:
-            desc = f"Turtle joined · {flow_presence_line(spec)}"
-    embed = discord.Embed(description=desc, color=0x57F287)
+            flow_line = flow_presence_line(spec)
+
+    embed = discord.Embed(title="Turtle joined", color=0x57F287)
+    if flow_line:
+        embed.description = flow_line
     await thread.send(embed=embed, silent=True)
     cfg["presence_posted"] = True
+    print(f"Native presence posted in {thread.name} (id: {thread.id})")
     return True
 
 
@@ -750,10 +758,20 @@ async def spawn_river_eddy(
 
     write_awaiting_title(thread.id, message.channel.id, {"flow_id": flow_id})
 
+    parent_id = message.channel.id
     if split_bot:
+        from mage import set_practice_context_for_channel
+
+        set_practice_context_for_channel(parent_id)
+        for uid in get_thread_member_ids(parent_id):
+            try:
+                user = await bot_client.fetch_user(int(uid))
+                await thread.add_user(user)
+            except Exception as exc:
+                print(f"River add_user failed for {uid}: {exc}")
         write_pending_native_eddy(
             thread.id,
-            message.channel.id,
+            parent_id,
             config,
         )
     else:

@@ -1253,11 +1253,6 @@ async def on_thread_create(thread):
     if is_registered_parent_channel(thread.parent_id):
         await thread.join()
         set_practice_context_for_channel(thread.parent_id)
-        for uid in get_thread_member_ids(thread.parent_id):
-            try:
-                await thread.add_user(discord.Object(id=int(uid)))
-            except Exception:
-                pass
 
         pending = None
         if river_bot_enabled() and thread.parent_id:
@@ -1274,6 +1269,18 @@ async def on_thread_create(thread):
                     await finalize_native_eddy_from_river(thread, pending)
                 except Exception as exc:
                     print(f"Native eddy finalize failed: {exc}")
+            else:
+                for uid in get_thread_member_ids(thread.parent_id):
+                    try:
+                        await thread.add_user(discord.Object(id=int(uid)))
+                    except Exception:
+                        pass
+        else:
+            for uid in get_thread_member_ids(thread.parent_id):
+                try:
+                    await thread.add_user(discord.Object(id=int(uid)))
+                except Exception:
+                    pass
 
         # Phase 1 Eyes: register new thread
         try:

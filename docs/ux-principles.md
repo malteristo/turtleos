@@ -284,6 +284,7 @@ Before merging a change that touches practitioner-facing behavior:
 | 2026-06-16 | Native river acts; two-bot split; Eddy Door (pinned) + blank eddy + deferred presence |
 | 2026-06-17 | Shell-inject flow presence; model no longer emits operational `-#` lines |
 | 2026-06-18 | **Eddy bar** replaces pinned door — bottom anchor, Discord thread embed, flow menu on bar; per-message `offer_eddy` removed from parent river |
+| 2026-06-18 | Split-bot handoff fix — River `add_user` on materialize; Turtle presence embed title; no Turtle `add_user` on river eddies |
 
 ---
 
