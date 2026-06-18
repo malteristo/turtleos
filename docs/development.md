@@ -36,6 +36,7 @@ Run this before pushing any change that affects topology, runtime behavior, auto
 Check:
 
 - `TURTLE_SPEC.md` — canonical product law
+- `docs/ux-principles.md` — applied practitioner UX (review when behavior feels wrong)
 - `README.md` — public product frame and setup path
 - `ARCHITECTURE.md` — implementation traceability
 - `docs/architecture.md` — deployed/current-state operator map

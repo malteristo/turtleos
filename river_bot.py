@@ -46,7 +46,7 @@ from mage import (
     set_practice_context,
     set_practice_context_for_channel,
 )
-from river_handler import ensure_eddy_door, handle_eddy_first_message, handle_river_message
+from river_handler import ensure_river_eddy_bar, handle_eddy_first_message, handle_river_message
 from river_state import river_bot_token, river_client
 from state import get_channel_lock
 
@@ -72,7 +72,7 @@ async def on_ready():
     print(f"Attunement profile: {get_attunement_profile()}")
     if get_attunement_profile() == "native":
         try:
-            await ensure_eddy_door(river_client)
+            await ensure_river_eddy_bar(river_client)
         except Exception as exc:
             print(f"Eddy door setup failed: {exc}")
     print("River bot ready — acts only in parent river channels")

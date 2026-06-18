@@ -6,7 +6,8 @@ turtleOS turns capable local hardware into a personal AI practice space on Disco
 
 turtleOS is a **practice core plus a reference shell**. The practice core is portable: character, flows, chronicle, and state files. The shell is the Python runtime that connects Discord, local models, and your practice root.
 
-**Canonical law:** [TURTLE_SPEC.md](TURTLE_SPEC.md)
+**Canonical law:** [TURTLE_SPEC.md](TURTLE_SPEC.md)  
+**Applied UX (dogfood / review):** [docs/ux-principles.md](docs/ux-principles.md)
 
 ---
 
@@ -18,7 +19,7 @@ River (main channel)                Eddy (thread)
 Drop text                    →      Focused conversation
 River understands            →      Turtle dialogue + think-aloud
 Acts only (buttons, emoji)   →      No chat in the river
-Always: Materialize eddy     →      One eddy = one chat
+Always: new eddy bar (bottom)  →      One eddy = one chat
 Chronicle with thread links  →      Persist until you remove
 ```
 

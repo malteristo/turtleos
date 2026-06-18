@@ -25,7 +25,6 @@ if "--import-only" not in sys.argv:
         sys.modules.setdefault("discord.ui", MagicMock())
 
 from river_handler import (
-    ensure_offer_eddy,
     finalize_parent_river_acts,
     load_river_prompt,
     list_installed_flows,
@@ -60,6 +59,8 @@ def check_prompt() -> list[str]:
         errors.append(f"river prompt too short ({len(prompt)} chars)")
     if "acts" not in prompt.lower() and "json" not in prompt.lower():
         errors.append("river prompt missing acts/json guidance")
+    if "eddy bar" not in prompt.lower() and "eddy door" not in prompt.lower():
+        errors.append("river prompt missing standing eddy bar guidance")
     return errors
 
 
@@ -86,10 +87,10 @@ async def check_classify_live() -> list[str]:
             errors.append("classify returned empty acts")
             return errors
         types = [a.get("type") for a in acts]
-        if "offer_eddy" not in types:
-            errors.append(f"parent river should include offer_eddy (per-message button): {types}")
+        if "offer_eddy" in types:
+            errors.append(f"parent river should not include offer_eddy (standing bar): {types}")
         prose_types = [t for t in types if t not in (
-            "acknowledge", "offer_eddy", "revise_offer", "offer_flow_menu",
+            "acknowledge", "revise_offer", "offer_flow_menu",
             "offer_flow", "error", "chronicle",
         )]
         if prose_types:

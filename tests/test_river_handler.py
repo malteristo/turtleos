@@ -8,7 +8,6 @@ sys.modules.setdefault("discord", MagicMock())
 sys.modules.setdefault("discord.ui", MagicMock())
 
 from river_handler import (
-    ensure_offer_eddy,
     finalize_parent_river_acts,
     parse_river_output,
     list_installed_flows,
@@ -53,21 +52,11 @@ class RiverHandlerTests(unittest.TestCase):
         out = finalize_parent_river_acts([])
         self.assertEqual(out, [])
 
-    def test_classify_pipeline_adds_offer_eddy(self) -> None:
+    def test_classify_pipeline_no_offer_eddy(self) -> None:
         acts = [{"type": "acknowledge", "emoji": "👋"}]
-        out = ensure_offer_eddy(finalize_parent_river_acts(acts))
-        self.assertEqual(len(out), 1)
-        self.assertEqual(out[0]["type"], "offer_eddy")
-
-    def test_ensure_offer_eddy_adds_missing(self) -> None:
-        acts = [{"type": "acknowledge", "emoji": "👋"}]
-        out = ensure_offer_eddy(acts)
-        self.assertEqual(len(out), 2)
-        self.assertEqual(out[-1]["type"], "offer_eddy")
-
-    def test_ensure_offer_eddy_idempotent(self) -> None:
-        acts = [{"type": "offer_eddy", "title": "a", "button_label": "b"}]
-        self.assertEqual(len(ensure_offer_eddy(acts)), 1)
+        out = finalize_parent_river_acts(acts)
+        self.assertEqual(out, [])
+        self.assertFalse(any(a.get("type") == "offer_eddy" for a in out))
 
     def test_list_installed_flows_defaults(self) -> None:
         flows = list_installed_flows("/nonexistent/practice")

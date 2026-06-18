@@ -1239,9 +1239,9 @@ async def on_ready():
 
     if get_attunement_profile() == "native" and not river_bot_enabled():
         try:
-            from river_handler import ensure_eddy_door
+            from river_handler import ensure_river_eddy_bar
 
-            await ensure_eddy_door(client)
+            await ensure_river_eddy_bar(client)
         except Exception as exc:
             print(f"Eddy door setup failed: {exc}")
 

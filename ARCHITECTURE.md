@@ -48,7 +48,7 @@ The shell **still implements much of the legacy magic-attuned stack** below. Rip
 | Target (spec) | Current shell | Status |
 |---------------|---------------|--------|
 | River acts only | Turtle/proprio dialogue in main channel | **Slice 1 shipped** (`river_handler.py`; gated by `attunement: native`) |
-| Always offer eddy | Partial (`eddy_spawn.py`, contextual buttons) | **Slice 1** — always via River harness |
+| Always offer eddy | Standing eddy bar at channel bottom | **Slice 2.7** — bar replaces per-message + pinned door |
 | Eddy-only Turtle | Dialogue in river + threads | **Partial** — river gated; threads still legacy Turtle |
 | Two local models | Triage + proprio + cloud dialogue + reflection | **Gap** |
 | `state/` practice infrastructure | compass/boom/bright-centric tools | **Gap** |

@@ -31,8 +31,8 @@ DEFAULT_FLOW_NAMES = ["Shelter", "Navigator", "Thread", "Companion"]
 
 RIVER_PROMPT_FALLBACK = """You classify river messages into structured acts only.
 Output a single JSON object: {"acts": [...]} — no prose, no markdown fences.
-A pinned Eddy Door handles materialize — parent river messages get acknowledge/flow acts only.
-Act types: acknowledge, revise_offer, offer_flow_menu, offer_flow, error.
+A standing eddy bar at the channel bottom handles materialize — parent river messages get acknowledge/flow acts only.
+Act types: acknowledge, offer_flow_menu, offer_flow, error.
 Do NOT emit offer_eddy in the parent river channel.
 """
 
@@ -108,21 +108,9 @@ def parse_river_output(raw: str) -> tuple[list[dict[str, Any]], str | None]:
     return normalized, None
 
 
-def ensure_offer_eddy(acts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if any(a.get("type") == "offer_eddy" for a in acts):
-        return acts
-    return [
-        *acts,
-        {
-            "type": "offer_eddy",
-            "button_label": "Materialize eddy",
-        },
-    ]
-
-
 def finalize_parent_river_acts(acts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Strip model offer_eddy/acknowledge — shell posts offer_eddy reply only."""
-    return [a for a in acts if a.get("type") not in ("offer_eddy", "acknowledge")]
+    """Strip model offer_eddy/acknowledge — standing eddy bar handles materialize."""
+    return [a for a in acts if a.get("type") not in ("offer_eddy", "acknowledge", "revise_offer")]
 
 
 def fallback_acts(reason: str = "River model unavailable") -> list[dict[str, Any]]:
@@ -158,9 +146,7 @@ async def classify_river_acts(content: str, practice_dir: str | None = None) -> 
         print(f"River harness rejected output: {reason} — raw[:200]={raw[:200]!r}")
         return fallback_acts("Could not parse river acts; offering materialize only.")
 
-    # Model must not emit offer_eddy (standing door + prompt). Shell re-adds per-message
-    # materialize button so practitioners get a contextual button on every river post.
-    return ensure_offer_eddy(finalize_parent_river_acts(acts))
+    return finalize_parent_river_acts(acts)
 
 
 def _append_chronicle(practice_dir: str, surface: str, deep: dict | None = None) -> None:
@@ -177,42 +163,130 @@ def _append_chronicle(practice_dir: str, surface: str, deep: dict | None = None)
             fh.write(json.dumps({"ts": ts, **deep}, ensure_ascii=False) + "\n")
 
 
-class RiverEddyDoorView(discord.ui.View):
-    """Persistent standing door — materialize blank eddy without a river message."""
+def _flow_display_name(flow_id: str) -> str:
+    return flow_id.replace("_", " ").title()
+
+
+async def _spawn_eddy_from_anchor(
+    channel: discord.abc.Messageable,
+    *,
+    flow_id: str | None = None,
+) -> discord.Thread | None:
+    """Spawn blank eddy via anchor message so Discord renders the thread list embed."""
+    from eddy_spawn import spawn_river_eddy
+
+    anchor = await channel.send("\u200b", silent=True)
+    return await spawn_river_eddy(anchor, flow_id=flow_id)
+
+
+async def _materialize_from_bar(
+    interaction: discord.Interaction,
+    *,
+    flow_id: str | None = None,
+) -> None:
+    """Delete bar, spawn eddy (Discord thread embed), repost bar at bottom."""
+    channel = interaction.channel
+    if not channel:
+        await interaction.followup.send("Could not find river channel.", ephemeral=True)
+        return
+    client = interaction.client
+    try:
+        await interaction.message.delete()
+    except discord.HTTPException as exc:
+        print(f"Eddy bar delete failed: {exc}")
+    try:
+        thread = await _spawn_eddy_from_anchor(channel, flow_id=flow_id)
+    except Exception as exc:
+        print(f"Eddy bar spawn failed: {type(exc).__name__}: {exc}")
+        await post_river_eddy_bar(channel, client)
+        await interaction.followup.send(
+            "Could not open eddy — try again or use `!thread`.",
+            ephemeral=True,
+        )
+        return
+    if not thread:
+        await post_river_eddy_bar(channel, client)
+        await interaction.followup.send("Could not open eddy.", ephemeral=True)
+        return
+    await post_river_eddy_bar(channel, client)
+
+
+class RiverEddyBarView(discord.ui.View):
+    """Standing bottom bar — new eddy + flow menu."""
 
     def __init__(self, channel_id: int):
         super().__init__(timeout=None)
         self._channel_id = channel_id
-        button = discord.ui.Button(
-            label="Materialize eddy",
-            custom_id=f"river:door:{channel_id}",
+        new_btn = discord.ui.Button(
+            label="new eddy",
+            custom_id=f"river:bar:new:{channel_id}",
             style=discord.ButtonStyle.secondary,
             emoji="🌀",
         )
-        button.callback = self._on_press
-        self.add_item(button)
+        new_btn.callback = self._on_new_eddy
+        self.add_item(new_btn)
+        flows_btn = discord.ui.Button(
+            label="flow menu",
+            custom_id=f"river:bar:menu:{channel_id}",
+            style=discord.ButtonStyle.secondary,
+        )
+        flows_btn.callback = self._on_flow_menu
+        self.add_item(flows_btn)
 
-    async def _on_press(self, interaction: discord.Interaction):
-        from eddy_spawn import spawn_blank_river_eddy
+    async def _on_new_eddy(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await _materialize_from_bar(interaction)
 
-        await interaction.response.defer(ephemeral=True)
-        channel = interaction.channel
-        if not channel:
-            await interaction.followup.send("Could not find river channel.", ephemeral=True)
+    async def _on_flow_menu(self, interaction: discord.Interaction):
+        from flow_runner import list_flow_ids
+
+        flows = list_flow_ids()
+        if not flows:
+            await interaction.response.send_message("No flows installed.", ephemeral=True)
             return
-        try:
-            thread = await spawn_blank_river_eddy(channel)
-        except Exception as exc:
-            print(f"Eddy door failed: {type(exc).__name__}: {exc}")
-            await interaction.followup.send(
-                "Could not materialize eddy — try again or use `!thread`.",
-                ephemeral=True,
+        view = RiverFlowPickerView(self._channel_id, flows)
+        interaction.client.add_view(view)
+        await interaction.response.edit_message(view=view)
+
+
+class RiverFlowPickerView(discord.ui.View):
+    """Flow picker opened from the standing eddy bar."""
+
+    def __init__(self, channel_id: int, flow_ids: list[str]):
+        super().__init__(timeout=None)
+        self._channel_id = channel_id
+        options = [
+            discord.SelectOption(
+                label=_flow_display_name(fid)[:100],
+                value=fid,
             )
-            return
-        if not thread:
-            await interaction.followup.send("Could not materialize eddy.", ephemeral=True)
-            return
-        # Success: thread appears in sidebar — no ephemeral followup.
+            for fid in flow_ids[:25]
+        ]
+        select = discord.ui.Select(
+            placeholder="Choose a practice flow…",
+            options=options,
+            custom_id=f"river:bar:pick:{channel_id}",
+        )
+        select.callback = self._on_pick
+        self.add_item(select)
+        back_btn = discord.ui.Button(
+            label="Back",
+            custom_id=f"river:bar:back:{channel_id}",
+            style=discord.ButtonStyle.secondary,
+        )
+        back_btn.callback = self._on_back
+        self.add_item(back_btn)
+
+    async def _on_pick(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") or []
+        flow_id = values[0] if values else None
+        await interaction.response.defer()
+        await _materialize_from_bar(interaction, flow_id=flow_id)
+
+    async def _on_back(self, interaction: discord.Interaction):
+        view = RiverEddyBarView(self._channel_id)
+        interaction.client.add_view(view)
+        await interaction.response.edit_message(view=view)
 
 
 class RiverEddyView(discord.ui.View):
@@ -257,35 +331,32 @@ class RiverEddyView(discord.ui.View):
             await interaction.message.delete()
         except discord.HTTPException as exc:
             print(f"River offer message delete failed: {exc}")
+        await ensure_bar_at_bottom(interaction.channel, interaction.client)
 
 
 class RiverFlowMenuView(discord.ui.View):
+    """Contextual flow menu on a practitioner river message."""
+
     def __init__(self, flows: list[str], source_message: discord.Message):
         super().__init__(timeout=3600)
         self._source = source_message
         for flow in flows[:4]:
+            flow_id = flow.strip().lower().replace(" ", "_")
             btn = discord.ui.Button(
                 label=flow[:80],
                 style=discord.ButtonStyle.primary,
-                custom_id=f"river:flow:{flow[:20]}",
+                custom_id=f"river:flow:{source_message.id}:{flow_id[:20]}",
             )
-            btn.callback = self._make_flow_callback(flow)
+            btn.callback = self._make_flow_callback(flow_id)
             self.add_item(btn)
 
-    def _make_flow_callback(self, flow_name: str):
+    def _make_flow_callback(self, flow_id: str):
         async def callback(interaction: discord.Interaction):
-            from eddy_spawn import spawn_blank_river_eddy
+            from eddy_spawn import spawn_river_eddy
 
             await interaction.response.defer(ephemeral=True)
-            channel = interaction.channel
-            if not channel:
-                await interaction.followup.send("Could not find river channel.", ephemeral=True)
-                return
             try:
-                thread = await spawn_blank_river_eddy(
-                    channel,
-                    flow_id=flow_name.lower(),
-                )
+                thread = await spawn_river_eddy(self._source, flow_id=flow_id)
             except Exception as exc:
                 print(f"River flow button failed: {exc}")
                 await interaction.followup.send("Could not open flow eddy.", ephemeral=True)
@@ -297,6 +368,9 @@ class RiverFlowMenuView(discord.ui.View):
                 await interaction.message.delete()
             except discord.HTTPException as exc:
                 print(f"River flow menu delete failed: {exc}")
+            client = interaction.client
+            if interaction.channel:
+                await ensure_bar_at_bottom(interaction.channel, client)
 
         return callback
 
@@ -320,18 +394,6 @@ async def render_acts(
         kind = act.get("type")
         if kind == "acknowledge":
             continue
-
-        elif kind == "offer_eddy":
-            label = act.get("button_label") or "Materialize eddy"
-            view = RiverEddyView(message, label=label)
-            await _reply_with_view(message, view)
-            summary["views"] += 1
-
-        elif kind == "revise_offer":
-            label = act.get("button_label") or "Materialize eddy"
-            view = RiverEddyView(message, label=label[:80])
-            await _reply_with_view(message, view)
-            summary["views"] += 1
 
         elif kind == "offer_flow_menu":
             flows = act.get("flows") or list_installed_flows(practice_dir)
@@ -371,16 +433,16 @@ async def render_acts(
     return summary
 
 
-def _eddy_door_state_path(practice_dir: str | None = None) -> str:
+def _eddy_bar_state_path() -> str:
     from mage import get_runtime_dir
 
     river_dir = os.path.join(get_runtime_dir(), "thread-state", "river")
     os.makedirs(river_dir, exist_ok=True)
-    return os.path.join(river_dir, "eddy_door.json")
+    return os.path.join(river_dir, "eddy_bar.json")
 
 
-def _load_eddy_door_state() -> dict[str, int]:
-    path = _eddy_door_state_path()
+def _load_eddy_bar_state() -> dict[str, int]:
+    path = _eddy_bar_state_path()
     if not os.path.exists(path):
         return {}
     try:
@@ -391,10 +453,10 @@ def _load_eddy_door_state() -> dict[str, int]:
         return {}
 
 
-def _save_eddy_door_message(channel_id: int, message_id: int) -> None:
-    state = _load_eddy_door_state()
+def _save_eddy_bar_message(channel_id: int, message_id: int) -> None:
+    state = _load_eddy_bar_state()
     state[str(channel_id)] = message_id
-    path = _eddy_door_state_path()
+    path = _eddy_bar_state_path()
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(state, fh)
 
@@ -422,50 +484,71 @@ def _iter_river_channels(client) -> list:
     return channels
 
 
-async def _channel_has_eddy_door(channel) -> bool:
-    state = _load_eddy_door_state()
-    msg_id = state.get(str(channel.id))
-    if msg_id:
-        try:
-            msg = await channel.fetch_message(msg_id)
-            return bool(msg)
-        except discord.HTTPException:
-            pass
+async def _remove_legacy_eddy_door(channel) -> None:
+    """Remove pinned Eddy Door messages from earlier river UX."""
     try:
-        async for msg in channel.pins():
-            for embed in msg.embeds or []:
-                if embed.title and embed.title.startswith("🌀 Eddy Door"):
-                    _save_eddy_door_message(channel.id, msg.id)
-                    return True
+        async for msg in channel.history(limit=50):
+            if not msg.embeds:
+                continue
+            title = msg.embeds[0].title or ""
+            if title.startswith("🌀 Eddy Door"):
+                try:
+                    await msg.unpin()
+                except discord.HTTPException:
+                    pass
+                try:
+                    await msg.delete()
+                except discord.HTTPException:
+                    pass
+                print(f"Removed legacy eddy door in #{getattr(channel, 'name', channel.id)}")
     except discord.HTTPException:
         pass
-    return False
 
 
-async def ensure_eddy_door(client) -> None:
-    """Deploy and pin the standing Materialize eddy door in each river channel."""
-    for channel in _iter_river_channels(client):
-        if await _channel_has_eddy_door(channel):
-            client.add_view(RiverEddyDoorView(channel.id))
-            print(f"Eddy door already present in #{getattr(channel, 'name', channel.id)}")
-            continue
-        embed = discord.Embed(
-            title="🌀 Eddy Door",
-            description="Open a focused conversation with Turtle.",
-            color=0x5865F2,
-        )
-        view = RiverEddyDoorView(channel.id)
+async def post_river_eddy_bar(channel, client) -> discord.Message | None:
+    """Post the standing new-eddy bar as the channel's last message."""
+    view = RiverEddyBarView(channel.id)
+    try:
+        msg = await channel.send("\u200b", view=view, silent=True)
+    except discord.HTTPException as exc:
+        print(f"Eddy bar post failed for {channel.id}: {exc}")
+        return None
+    _save_eddy_bar_message(channel.id, msg.id)
+    client.add_view(view)
+    return msg
+
+
+async def ensure_bar_at_bottom(channel, client) -> None:
+    """Keep the eddy bar as the last message in the river channel."""
+    state = _load_eddy_bar_state()
+    bar_id = state.get(str(channel.id))
+    if bar_id:
         try:
-            msg = await channel.send(embed=embed, view=view)
-            _save_eddy_door_message(channel.id, msg.id)
-            client.add_view(view)
+            bar_msg = await channel.fetch_message(bar_id)
+            async for last in channel.history(limit=1):
+                if last.id == bar_id:
+                    view = RiverEddyBarView(channel.id)
+                    client.add_view(view)
+                    try:
+                        await bar_msg.edit(view=view)
+                    except discord.HTTPException:
+                        pass
+                    return
             try:
-                await msg.pin()
-                print(f"Eddy door deployed and pinned in #{getattr(channel, 'name', channel.id)}")
-            except discord.HTTPException as exc:
-                print(f"Eddy door deployed (pin failed: {exc})")
-        except discord.HTTPException as exc:
-            print(f"Eddy door deploy failed for {channel.id}: {exc}")
+                await bar_msg.delete()
+            except discord.HTTPException:
+                pass
+        except discord.HTTPException:
+            pass
+    await post_river_eddy_bar(channel, client)
+
+
+async def ensure_river_eddy_bar(client) -> None:
+    """Deploy the standing eddy bar at the bottom of each river channel."""
+    for channel in _iter_river_channels(client):
+        await _remove_legacy_eddy_door(channel)
+        await ensure_bar_at_bottom(channel, client)
+        print(f"Eddy bar ready in #{getattr(channel, 'name', channel.id)}")
 
 
 async def handle_eddy_first_message(message: discord.Message) -> bool:
@@ -514,6 +597,16 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
     return True
 
 
+def _river_client_for_channel(channel):
+    from mage import river_bot_enabled
+
+    if river_bot_enabled():
+        from river_state import river_client
+
+        return river_client
+    return channel.guild._state._get_client() if channel.guild else None
+
+
 async def handle_river_message(message: discord.Message) -> None:
     """Entry point for native river channel messages (acts only, no Turtle prose)."""
     content = message.content.strip()
@@ -523,3 +616,7 @@ async def handle_river_message(message: discord.Message) -> None:
     acts = await classify_river_acts(content)
     summary = await render_acts(message, acts)
     print(f"River [{message.author.display_name}]: {summary['acts']} views={summary['views']}")
+
+    bar_client = _river_client_for_channel(message.channel)
+    if bar_client:
+        await ensure_bar_at_bottom(message.channel, bar_client)
