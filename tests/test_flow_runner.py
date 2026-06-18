@@ -81,6 +81,12 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertIn("I'm here.", cleaned)
         self.assertIn("Still here.", cleaned)
 
+        meta = "You made it.\n\n*(No question. End here.)*"
+        cleaned_meta, stripped_meta = strip_model_operational_lines(meta)
+        self.assertEqual(len(stripped_meta), 1)
+        self.assertNotIn("No question", cleaned_meta)
+        self.assertIn("You made it.", cleaned_meta)
+
     def test_list_flow_ids_dedupes_practice_over_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             practice_flows = os.path.join(tmp, "flows")

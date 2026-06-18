@@ -173,10 +173,14 @@ def flow_presence_line(spec: FlowSpec, practice_dir: str | None = None) -> str:
 
 
 _FLOW_OPS_LINE = re.compile(r"^\s*-#\s*(?:flow:|read\s).*\s*$", re.MULTILINE | re.IGNORECASE)
+_FLOW_META_LINE = re.compile(
+    r"^\s*\*\([^)]*(?:no question|end here)[^)]*\)\*\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
 
 
 def strip_model_operational_lines(text: str) -> tuple[str, list[str]]:
-    """Remove model-emitted flow/read operational lines before Discord send."""
+    """Remove model-emitted operational and flow-meta lines before Discord send."""
     stripped: list[str] = []
 
     def _collect(match: re.Match[str]) -> str:
@@ -184,6 +188,7 @@ def strip_model_operational_lines(text: str) -> tuple[str, list[str]]:
         return ""
 
     cleaned = _FLOW_OPS_LINE.sub(_collect, text)
+    cleaned = _FLOW_META_LINE.sub(_collect, cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
     return cleaned, stripped
 
