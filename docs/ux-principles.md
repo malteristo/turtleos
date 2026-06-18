@@ -164,9 +164,11 @@ When materializing **from a practitioner’s river message** (contextual flow bu
 
 ### 4.3 Deferred presence
 
-`Turtle joined` (and flow presence line, e.g. `Turtle joined · Shelter · loaded …`) posts **once**, immediately before Turtle’s **first reply** — not at thread creation.
+`Turtle joined` posts **once**, immediately before Turtle’s **first reply** — not at thread creation.
 
-Shell injects flow presence; the model does **not** emit `-# flow:` / `-# read` operational lines (shell truth).
+- **Split-bot:** River adds the practitioner (`river added you`); Turtle does not `add_user` on river-materialized eddies.
+- Presence embed **title** is `Turtle joined`; flow detail goes in the description when active.
+- Shell injects flow presence; the model does **not** emit `-# flow:` / `-# read` operational lines (shell truth).
 
 **Implementation:** `ensure_native_presence` in `eddy_spawn.py`; `flow_runner.flow_presence_line`; `conduct.md`.
 
