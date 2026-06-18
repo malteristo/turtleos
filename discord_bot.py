@@ -1103,8 +1103,13 @@ async def on_ready():
 
     if dialogue:
         try:
+            from eddy_spawn import should_defer_turtle_join
+
             active = dialogue.threads
             for t in active:
+                if should_defer_turtle_join(t):
+                    print(f"Skipped rejoin (native eddy): {t.name} (id: {t.id})")
+                    continue
                 try:
                     await t.join()
                     print(f"Rejoined thread: {t.name} (id: {t.id})")
@@ -1116,6 +1121,8 @@ async def on_ready():
             async for t in dialogue.archived_threads(limit=20):
                 archived_threads.append(t)
             for t in archived_threads:
+                if should_defer_turtle_join(t):
+                    continue
                 try:
                     await t.edit(archived=False)
                     await asyncio.sleep(0.5)
@@ -1263,25 +1270,32 @@ async def on_thread_create(thread):
         pending = None
         if river_bot_enabled() and thread.parent_id:
             import asyncio
-            from eddy_spawn import pop_pending_native_eddy, finalize_native_eddy_from_river
+            from eddy_spawn import (
+                finalize_native_eddy_from_river,
+                pop_pending_native_eddy,
+                should_defer_turtle_join,
+            )
 
-            for _ in range(5):
+            for _ in range(15):
                 pending = pop_pending_native_eddy(thread.id, thread.parent_id)
                 if pending:
                     break
-                await asyncio.sleep(0.15)
+                await asyncio.sleep(0.2)
+            defer = should_defer_turtle_join(thread, pending)
             if pending:
                 try:
                     await finalize_native_eddy_from_river(thread, pending)
                 except Exception as exc:
                     print(f"Native eddy finalize failed: {exc}")
-            else:
+            if not defer:
                 await thread.join()
                 for uid in get_thread_member_ids(thread.parent_id):
                     try:
                         await thread.add_user(discord.Object(id=int(uid)))
                     except Exception:
                         pass
+            else:
+                print(f"Deferred Turtle join: {thread.name} (id: {thread.id})")
         else:
             await thread.join()
             for uid in get_thread_member_ids(thread.parent_id):
@@ -1299,8 +1313,8 @@ async def on_thread_create(thread):
                 parent_channel=parent_name, created=created,
             )
             await _update_thread_state(thread, None, [])
-            label = " (river→turtle)" if pending else ""
-            print(f"Joined + registered thread: {thread.name} (id: {thread.id}){label}")
+            label = " (river→turtle, deferred)" if defer else (" (river→turtle)" if pending else "")
+            print(f"{'Deferred' if defer else 'Joined'} + registered thread: {thread.name} (id: {thread.id}){label}")
         except Exception as e:
             print(f"Joined thread: {thread.name} (id: {thread.id}) [registry failed: {e}]")
 

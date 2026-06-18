@@ -569,6 +569,10 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
     if message.attachments and not content:
         content = f"(attachment: {message.attachments[0].filename})"
 
+    from eddy_spawn import river_add_turtle_to_eddy
+
+    await river_add_turtle_to_eddy(thread)
+
     title = await generate_topic(content or "check-in")
     try:
         await thread.edit(name=title[:100])
@@ -577,10 +581,6 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
         title = thread.name
 
     update_thread_name(thread.id, title)
-
-    from eddy_spawn import river_add_turtle_to_eddy
-
-    await river_add_turtle_to_eddy(thread)
 
     try:
         from commands import thread_configs

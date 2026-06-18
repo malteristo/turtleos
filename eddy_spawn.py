@@ -692,6 +692,32 @@ async def finalize_native_eddy_from_river(thread: discord.Thread, pending: dict)
     print(f"Turtle native eddy config ready: {thread.name} (id: {thread.id})")
 
 
+def should_defer_turtle_join(thread, pending: dict | None = None) -> bool:
+    """Native river eddy — Turtle enters via River add_user on first practitioner message."""
+    from mage import river_bot_enabled
+
+    if not river_bot_enabled():
+        return False
+    if pending:
+        return True
+    if not _is_thread_channel(thread):
+        return False
+    if (getattr(thread, "name", "") or "").strip().lower() == BLANK_EDDY_NAME:
+        return True
+    parent_id = thread.parent_id
+    if parent_id and is_awaiting_title(thread.id, parent_id):
+        return True
+    try:
+        from commands import thread_configs
+
+        cfg = thread_configs.get(thread.id)
+        if cfg and cfg.get("native_vanilla") and not cfg.get("presence_posted"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 async def river_add_turtle_to_eddy(thread) -> bool:
     """River adds Turtle to the eddy — Discord native 'river added turtle' system line."""
     from mage import river_bot_enabled
@@ -710,6 +736,19 @@ async def river_add_turtle_to_eddy(thread) -> bool:
     if not turtle_id:
         print("River add turtle: could not resolve Turtle bot user id")
         return False
+
+    import asyncio
+
+    # Discord omits "X added Y" when Y is already a thread member (e.g. early join/rejoin).
+    try:
+        await thread.fetch_member(turtle_id)
+        try:
+            await thread.remove(discord.Object(id=turtle_id))
+            await asyncio.sleep(0.25)
+        except discord.HTTPException as exc:
+            print(f"River remove turtle before add: {type(exc).__name__}: {exc}")
+    except discord.HTTPException:
+        pass
 
     try:
         await thread.add_user(discord.Object(id=turtle_id))
