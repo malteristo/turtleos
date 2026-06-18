@@ -17,7 +17,7 @@ When implementation and this doc disagree, **implementation wins until someone u
 | **Rejected** | UX we tried or considered and explicitly do not want |
 | **Review checklist** | Questions to run before merging UX-touching changes |
 
-**Traceability:** Each pattern lists primary code paths. Spirit/Mage edits to UX should start here, then code, then (if law-level) TURTLE_SPEC.
+**Traceability:** Each pattern lists primary code paths. Spec amendments trace to `TURTLE_SPEC.md`. Spirit/Mage edits to UX should start here, then code, then spec when law-level.
 
 ---
 
@@ -280,18 +280,19 @@ Practitioner posts in river
 
 ---
 
-## 7. Spec alignment (intentional drift)
+## 7. Spec alignment
 
-Some TURTLE_SPEC sections predate shipped UX. **Current shell behavior:**
+**Status (2026-06-18):** `TURTLE_SPEC.md` amended to match shipped native UX. This doc remains the **practitioner-facing resonance surface** — patterns, journeys, rejected UX, and review checklist. Spec holds platform law; this doc holds how it should *feel*.
 
-| TURTLE_SPEC | Spec text (summary) | Applied UX (2026-06) |
-|-------------|---------------------|----------------------|
-| §5.3 | Every river message includes `offer_eddy` | **Standing bar** satisfies “always offer eddy” globally; not per-message buttons |
-| §5.4 | Button on each offer with inferred title | **Bar uses generic `new eddy`**; title inferred on **first in-eddy message** |
-| §7.2 | “Eddy Door” blank eddy | **Eddy bar** — same blank-entry semantics, different placement |
-| §17 Always Offer Eddy | Per-message affordance | **Always at bottom** via bar — amend spec when sanctioned |
+| Topic | Spec | This doc |
+|-------|------|----------|
+| Eddy affordance | §5.3–5.4, §17 — standing bar | §3.1, §5.1 |
+| Flow entry | §5.4, §7.2 — orientation embed | §4.5, §5.2 |
+| Checkpoint / release | §8.4, §17 | §4.5 |
+| Native system lines | §7.7 | §4.6 |
+| Rejected UX | §7.7 (partial) | §6 (full inventory) |
 
-When dogfooding confirms the bar model, update TURTLE_SPEC §5.3–5.4 and §17 to match.
+When dogfooding surfaces new friction, update **this doc first**, then propose spec amendments for law-level changes.
 
 ---
 
@@ -337,6 +338,7 @@ Before merging a change that touches practitioner-facing behavior:
 | 2026-06-18 | Split-bot handoff fix — River `add_user` on materialize; Turtle presence embed title; no Turtle `add_user` on river eddies |
 | 2026-06-18 | Dogfood: flow menu shows installed flows only; flow eddy entry needs River orientation; flow checkpoint inference on close; pinned-in-eddy rejected |
 | 2026-06-18 | **Checkpoint vs release** — `checkpoint_session` on idle/`!checkpoint`; `!release` user-only; River chronicle on capture |
+| 2026-06-18 | **TURTLE_SPEC amended** — §5.3–5.4 bar, §7.7 system lines, §8.4 checkpoint law, §17 updated; §7 here now tracks alignment not drift |
 
 ---
 

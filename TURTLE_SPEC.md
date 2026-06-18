@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-06-14 (platform rewrite, resonance pass)  
+**Version:** 2026-06-18 (native eddy bar, checkpoint law)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -52,7 +52,9 @@ This rewrite supersedes the prior **"Law of the Persistent Spirit"** framing as 
 | **Practice root** | Local directory holding character files, flows, chronicle, state, and optional practice artifacts. |
 | **Attunement** | Identity and conduct layer on the platform: native (default), craft, or magic-attuned. |
 | **Sediment** | Cross-eddy curated memory. **Deferred** — design chapter, not vanilla v1 (§16). |
-| **Chronicle** | Event log of structural actions (eddies opened, dissolved, etc.). Dual layer: surface + deep (§6). |
+| **Chronicle** | Event log of structural actions (eddies opened, dissolved, checkpoints, etc.). Dual layer: surface + deep (§6). |
+| **Checkpoint** | Automatic or manual capture of session resonance — flow state and/or session notes — **without** clearing eddy history (§8.4). |
+| **Release** | Practitioner-initiated session close — checkpoint first, then clear history (§8.4). |
 
 ---
 
@@ -136,33 +138,53 @@ Metaphor: the sea in *Moana*, the casita in *Encanto* — intelligence expressed
 
 ### 5.3. Intake Logic (Vanilla v1)
 
-Every inbound river message produces an **act bundle** — not a single either/or outcome.
+**Standing eddy bar:** The river channel maintains a **persistent bottom affordance** — always the last message in the timeline:
 
 ```text
-always:
-  offer_eddy(title)           # safety net — always present
-optional (as warranted):
-  acknowledge(emoji)          # low-key recognition
-  offer_flow_menu()           # when user signals flows / Turtle Practice
-  revise_offer(title)         # after user correction
-  execute_command(...)        # power-user !commands (§5.5)
+[ 🌀 new eddy ] [ flow menu ]
 ```
 
-**Always offer eddy:** Every river response MUST include a materialize-eddy affordance. Title is inferred when possible; generic label (`Materialize eddy`) when uncertain. This prevents false negatives when classification misses eddy-worthy input.
+This satisfies **always offer eddy** globally (§17). Practitioners materialize eddies by click — not from river prose.
 
-Acknowledgment and eddy offer **coexist** — e.g. `"hi"` → 👋 **and** a low-friction eddy offer such as `Open eddy: check-in`.
+**Per-message act bundle** (parent channel only — not inside eddies):
 
-**v1 routing policy:** No semantic routing to existing eddies. Each materialized eddy is a **new thread**. Semantic merge is deferred (§16).
+```text
+optional (as warranted):
+  acknowledge(emoji)          # low-key recognition; often suppressed when alone
+  offer_flow_menu()           # when user signals flows / Turtle Practice
+  offer_flow(flow_id)         # when one flow is clearly named
+  error(...)                  # degraded / parse failure
+not emitted in parent channel:
+  offer_eddy                  # superseded by standing bar
+  revise_offer                # bar path uses generic open + rename in eddy
+```
 
-### 5.4. Eddy Offer Shape
+After each practitioner river message, the harness MUST ensure the eddy bar remains the **last message** in the channel.
 
-When the River offers an eddy:
+**v1 routing policy:** No semantic routing to existing eddies. Each materialize is a **new thread**. Semantic merge is deferred (§16).
 
-1. Infer a concise **topic title** from the message (or use a generic label).
-2. Post an act with a button: **Materialize eddy: "[title]"** (label MAY vary; semantics MUST be clear).
-3. On press: spawn thread with that title, post the **seed message** (faithful copy of user input), invoke Turtle in the eddy context (§7.2).
+**UX resonance surface:** `docs/ux-principles.md` — living doc for practitioner-facing patterns; amend together with this spec when UX law changes.
 
-If the user says they were misunderstood and clarifies, the River posts a **revised offer** — different title/intent — without conversational reply.
+### 5.4. Eddy Materialize (Bar Path)
+
+**Blank eddy (`new eddy`):**
+
+1. Practitioner clicks **`new eddy`** on the standing bar.
+2. Bar message deletes; River creates a thread anchor; Discord renders the native **thread-list embed**.
+3. Thread opens as **`new eddy`** — no seed, no Turtle monologue.
+4. Fresh bar posts below the new thread card.
+5. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); Turtle replies.
+
+**Flow eddy (`flow menu` → select flow):**
+
+1. Same bar mechanics; spawn includes `flow_id`.
+2. Thread title is the **flow name** (e.g. `Shelter`) — not generic `new eddy`.
+3. River posts **one orientation embed** in the thread (what the flow is, checkpoint status) — setup act, not dialogue.
+4. Practitioner speaks first; Turtle joins on first message (§7.7).
+
+**Contextual offers (optional):** When the River model detects flow-browse intent on a **specific message**, it MAY attach a contextual flow button to that message. Coexists with the standing bar.
+
+**Legacy seeded path:** Materializing from a practitioner river message MAY still post a seed embed — not the default bar path.
 
 ### 5.5. River Commands
 
@@ -179,9 +201,11 @@ The River executes; it does not discuss.
 
 ### 5.6. Flow Discovery
 
-When the user's message signals intent to browse programs (e.g. mentions *flows*, *Turtle Practice*, or equivalent), the River emits **`offer_flow_menu`** — a select menu or button row of installed flows. No prose catalog.
+**Primary:** The standing eddy bar **`flow menu`** button opens a select menu of **installed flows** — markdown files under `practice_root/flows/` and shipped template flows. Only resolvable flows appear; prompt browse hints do not imply installed programs.
 
-A standing flow-browse affordance MAY appear alongside other acts on substantive messages.
+**Secondary:** When a river message signals intent to browse programs, the River MAY emit **`offer_flow_menu`** or **`offer_flow`** on that message.
+
+No prose catalog in the river.
 
 ### 5.7. River Model
 
@@ -200,8 +224,8 @@ Vanilla native installs SHOULD use **two Discord applications**:
 
 | Bot | Role in river channel | Role in eddies |
 |-----|----------------------|----------------|
-| **River bot** | Acts only — reactions, buttons, embeds, chronicle | Creates thread + seed on materialize |
-| **Turtle bot** | Silent (no user-message replies) | Dialogue, tools, presence ("Turtle joined") |
+| **River bot** | Acts only — bar, buttons, embeds, chronicle | Creates thread; adds practitioner at materialize; adds Turtle before first reply; renames thread |
+| **Turtle bot** | Silent (no user-message replies) | Dialogue, tools, flow-loaded prompts |
 
 Practitioners MUST be able to distinguish River acts from Turtle dialogue by bot name and avatar. Single-bot mode MAY remain as a migration fallback when `RIVER_BOT_TOKEN` is unset.
 
@@ -219,7 +243,8 @@ The River accumulates **events**, not conversation. The chronicle is how the sys
 |-------|-------------------|----------------|
 | Message received in river | Optional minimal line | Full payload + classification |
 | Eddy offered | Button act | Offer record + inferred title |
-| Eddy materialized | `🌀 opened: [title]` + **thread jump link** | Thread id, guild id, jump URL, seed hash, timestamp |
+| Eddy materialized | `🌀 opened: [title]` + **thread jump link** | Thread id, guild id, jump URL, flow_id if any, timestamp |
+| Resonance checkpoint | `💾 checkpoint (idle\|manual\|release): …` | Paths written, channel id, trigger |
 | Eddy dissolved | `🍃 dissolved: [title]` + link if archived | Archive pointer, actor |
 | Turtle entered eddy | Optional in river | Session start record |
 | Turtle exited eddy | Optional in river | Exit record, optional exit note path |
@@ -252,12 +277,13 @@ Cross-eddy memory, curated distillates, and what Turtle/River may read across ti
 
 When an eddy is materialized:
 
-1. **Seeded eddy:** the practitioner's river input is posted as a seed embed.
-2. **Blank eddy (Eddy Door):** no seed at materialize — the practitioner's **first message** is the opening.
-3. **Presence embed** — compact system line (`Turtle joined`) — not conversational prose. For blank eddies, presence is deferred until the first practitioner message, immediately before Turtle's first reply (§7.7).
-4. Turtle reads the opening + thread history and responds.
+1. **Blank eddy (bar — default):** no seed at materialize — the practitioner's **first message** is the opening. Thread title starts as **`new eddy`**; River retitles from first message content.
+2. **Flow eddy (bar flow menu):** thread titled from flow spec; River orientation embed in thread; practitioner speaks first (§5.4).
+3. **Seeded eddy (contextual / legacy):** practitioner's river input MAY be posted as a seed embed.
+4. **Deferred Turtle join:** Turtle does not join at thread create. On first in-eddy practitioner message, River adds Turtle, then Turtle replies (§7.7).
+5. Turtle reads thread history (plus flow prompt sections when `flow_id` is set) and responds.
 
-No Turtle speech in the river. No model/attunement config chrome in vanilla v1 eddies (legacy Magic-attuned UI). No arrival monologue.
+No Turtle speech in the river. No model/attunement config chrome in vanilla v1 eddies. No arrival monologue.
 
 ### 7.3. Think-Aloud
 
@@ -296,24 +322,30 @@ The agent harness (system prompt assembly, tool access, flow loading) is shaped 
 
 ### 7.6. Transparency in Eddies
 
-Transparency is **mostly conversational** — Turtle explains gaps, active flows, and uncertainty in dialogue. Additionally, Turtle SHOULD emit **compact operational lines** for tool and context actions — analogous to River acts, not chat:
+Transparency is **mostly conversational** — Turtle explains gaps, active flows, and uncertainty in dialogue.
 
-- `-# read state/capture.md`
-- `-# flow: Shelter`
-- `-# loaded 2 practice files`
+The shell harness MAY inject **compact presence tags** for active flows and loaded state files (e.g. `Shelter · loaded shelter-last.md`) — visible trust signals, not chat. In native attunement, operational `-#` lines MUST NOT be emitted by the model; the shell owns load visibility.
 
-Format: concise, Discord-native (`-#` small embed, or equivalent). Default for vanilla is **visible** — operational lines increase trust by showing attunement to available context. Verbose step-by-step logging is not required.
+Magic-attuned instances MAY retain model-emitted operational lines where attunement requires them.
 
 ### 7.7. Presence Indicators
 
-Turtle's join and exit MUST be visible in the eddy thread:
+Join and handoff MUST be visible in the eddy thread.
 
-| Event | Presentation |
-|-------|--------------|
-| **Enter** | Compact system embed — `Turtle joined` |
-| **Exit (idle unload)** | Compact system embed — `Turtle stepped out` |
+**Native split-bot (preferred):** Use **Discord-native system lines** where the API provides them — e.g. `river added [practitioner]`, `river added turtle`, `river changed the channel name: [title]`. The shell triggers these via API actions; it cannot author arbitrary system-line text.
 
-Optional exit note path on idle departure is deferred to v1.1 (§8.1, §16). The thread persists; only presence state changes.
+**Single-bot fallback:** Compact join embed or equivalent MAY be used when split-bot is unavailable.
+
+**Rejected for native v1:** Custom green "Turtle joined" embeds when Discord system lines suffice; Turtle speaking in the river; join before the practitioner speaks in a blank eddy.
+
+| Event | Native presentation |
+|-------|---------------------|
+| **Materialize** | `river added [practitioner]` |
+| **First in-eddy message** | `river added turtle` → Turtle reply |
+| **Rename from first message** | `river changed the channel name: …` |
+| **Exit (idle unload)** | Compact system embed — `Turtle stepped out` (when implemented) |
+
+Optional exit note on idle departure remains v1.1 (§8.1, §16). The thread persists; history is retained until **release** (§8.4).
 
 ---
 
@@ -330,7 +362,9 @@ Vanilla turtleOS uses **two local models**, not the legacy proprioceptive stack:
 
 **Retired from vanilla:** proprioceptor, reflex lines, CR routing, triage→proprio→cloud pipeline, reflection tier as separate pre-dialogue path.
 
-**Idle exit reflection (v1.1):** When Turtle steps out after extended pause, an optional short exit note MAY be written to `state/notes/` to aid re-entry. Not vanilla v1 core.
+**Session resonance (v1):** After idle timeout or manual checkpoint, the platform captures flow state and session notes without clearing history (§8.4). This replaces the deferred "idle exit reflection" as the v1 continuity mechanism for flow eddies and practice sessions.
+
+**Idle exit note (v1.1):** When Turtle steps out after extended pause, an optional short exit note MAY be written to `state/notes/` to aid re-entry — additive to checkpoint, not a substitute.
 
 ### 8.2. Think-Aloud Generation
 
@@ -347,6 +381,35 @@ Split think/answer across two model calls is permitted later for latency tuning;
 
 Power users MAY configure cloud API models for Turtle (or River). This is **explicit opt-in**, not install-default. Documentation MUST NOT imply cloud dependency for the core narrative.
 
+### 8.4. Session Resonance — Checkpoint and Release
+
+Practitioners leave sessions without announcing closure. The platform MUST capture resonance so nothing is swept away — without simulating an explicit "session ended" unless the practitioner chooses release.
+
+**Two operations — do not conflate:**
+
+| Operation | Trigger | Clears eddy history? |
+|-----------|---------|----------------------|
+| **Checkpoint** | 15 min idle (automatic) or `!checkpoint` (manual) | **No** |
+| **Release** | `!release` (practitioner explicit only) | **Yes** (after checkpoint) |
+
+**Checkpoint (`checkpoint_session`) writes:**
+
+| Target | Threshold | Notes |
+|--------|-----------|-------|
+| Flow `writes` paths (e.g. `state/notes/shelter-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from spawn tag, thread name, or flow signals |
+| Session notes (`sessions/YYYY-MM-DD.md`) | ≥4 exchanges | LLM reflection; cooldown applies |
+| Proposals / practice extraction | Per attunement | Magic-attuned and practitioner profiles as implemented |
+
+Idle checkpoint marks the session **paused** so the monitor does not re-fire; the next practitioner message reopens it. Manual `!checkpoint` does **not** pause — the practitioner continues.
+
+Successful checkpoints append a **chronicle** line (`💾 checkpoint …`) — River-side structural memory, not eddy dialogue.
+
+**Release** runs checkpoint first, then clears in-memory dialogue history and confirms to the practitioner. **Never** auto-release on idle.
+
+**Regular eddies (no flow):** session notes only at checkpoint thresholds today. **Sediment** (cross-eddy curated memory) remains deferred (§16).
+
+**Magic-attuned:** `sessions/`, `proposals/`, and extended practice files remain expected; checkpoint law applies equally.
+
 ---
 
 ## 9. The Eddy Model
@@ -359,11 +422,13 @@ An eddy is a Discord thread — a **bounded conversation** with its own history.
 
 | Phase | Behavior |
 |-------|----------|
-| **Offer** | River proposes; user approves via button |
-| **Materialize** | Thread created; seed posted; chronicle link; Turtle joins |
-| **Spin** | User and Turtle converse; think-aloud when warranted |
+| **Offer** | Standing eddy bar always visible at bottom; optional contextual flow acts |
+| **Materialize** | Thread created via bar click; chronicle link; practitioner added; Turtle deferred |
+| **Spin** | User and Turtle converse; think-aloud when warranted; thread may rename on first message |
+| **Checkpoint** | Idle or `!checkpoint` saves resonance; history retained |
 | **Persist** | Thread remains until user dissolves/archives — **no auto-dissolve** |
-| **Dissolve** | User-initiated (River command, turtle-talk, or control); chronicle records event |
+| **Release** | User `!release` — checkpoint + clear history |
+| **Dissolve** | User-initiated archive; chronicle records event |
 
 **No standing eddies at install:** No vortex thread, no boom thread, no pre-created system eddies.
 
@@ -391,13 +456,13 @@ The repository ships **Turtle Practice** — a library of flows (Shelter, Naviga
 
 Users run a flow by:
 
-- Materializing an eddy whose offer references a flow,
-- Choosing from **`offer_flow_menu`** in the river, or
-- Explicit invocation (turtle-talk command or button)
+- **`flow menu`** on the standing eddy bar (primary),
+- Contextual **`offer_flow_menu`** / **`offer_flow`** on a river message, or
+- Explicit invocation (turtle-talk command where implemented)
 
 ### 10.3. Front Matter Contract (Extensible)
 
-Flows with front matter participate in **persistent practice state** across sessions. Plain prompts without front matter run in-eddy only and do not read or write platform state.
+Flows with front matter participate in **persistent practice state** across sessions. On session **checkpoint**, declared `writes` paths MUST be updated from conversation tail. Plain prompts without front matter run in-eddy only and do not read or write platform state.
 
 ```yaml
 ---
@@ -600,7 +665,7 @@ Full seneschal, permission, and multi-server law from prior spec remains valid f
 | **Proprioception stack** | Retired from vanilla |
 | **River conversational mode** | Prohibited |
 | **Auto-dissolve / metabolic sweep** | Deferred |
-| **Idle exit reflection** — exit note on Turtle step-out | v1.1 |
+| **Idle exit reflection** — exit note on Turtle step-out | v1.1 (checkpoint is v1 — §8.4) |
 | **MV practice surface files** — capture/compass analog | v1.1 design chapter (§11.4) |
 | **Read-only practice file web view** | v1.1 optional |
 | **Portable PRACTICE.md path** | Paused (§13.2) |
@@ -619,7 +684,11 @@ The River communicates only through acts. Never break character with conversatio
 
 ### The Law of Always Offer Eddy
 
-Every river message includes a materialize-eddy affordance. The user always has a path into focused dialogue.
+The river channel MUST always expose a materialize-eddy affordance — via the **standing eddy bar** at the bottom of the timeline. The user always has a path into focused dialogue without hunting pins or side panels.
+
+### The Law of Checkpoint Before Sweep
+
+Idle timeout MUST checkpoint session resonance (flow state and/or session notes per thresholds). History MUST NOT be cleared on idle. Only explicit **release** clears history.
 
 ### The Law of Eddy Focus (Turtle)
 
@@ -639,7 +708,7 @@ When think-aloud fires, the user sees it — italicized, in the eddy, before the
 
 ### The Law of Visible Operations (Eddies)
 
-Turtle emits compact operational lines for loads and tools — trust through visible attunement.
+Flow and state loads MUST be visible to the practitioner — via shell-injected presence tags in native attunement, or compact operational lines where attunement requires them (§7.6).
 
 ### The Law of Substrate Honesty (Eddies)
 
@@ -665,12 +734,13 @@ Ship the smallest practice root that satisfies the product promise. Depth comes 
 When this spec changes, update in order:
 
 1. `TURTLE_SPEC.md` (this file) — canonical, sole source
-2. `README.md`, `ARCHITECTURE.md`, `PRACTICE.md` — scope alignment
-3. `template/` — skeleton practice root (`character/`, `flows/`, `chronicle/`, `state/`)
-4. Installation skill — agent-assisted install (§13.4)
-5. Shell code — River act harness, eddy-only routing, think-aloud rendering, presence embeds
-6. Magic bundle — stub pointer only (no mirror body)
-7. Live instances last — attunement profiles, not default rewrite
+2. `docs/ux-principles.md` — practitioner UX resonance (patterns, rejected UX, journeys)
+3. `README.md`, `ARCHITECTURE.md`, `PRACTICE.md` — scope alignment
+4. `template/` — skeleton practice root (`character/`, `flows/`, `chronicle/`, `state/`)
+5. Installation skill — agent-assisted install (§13.4)
+6. Shell code — River act harness, eddy bar, checkpoint/release, think-aloud rendering
+7. Magic bundle — stub pointer only (no mirror body)
+8. Live instances last — attunement profiles, not default rewrite
 
 ---
 
@@ -693,6 +763,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 |------|--------|
 | 2026-06-14 | Platform rewrite — River/Turtle split, vanilla v1 law, decoupling from Spirit-default identity |
 | 2026-06-14 | Resonance pass — Turtle Practice terminology, always-offer-eddy, act catalog, state/, chronicle links, presence indicators, single canonical spec |
+| 2026-06-18 | Native eddy bar (replaces per-message offer_eddy / Eddy Door); split-bot system lines; flow eddy orientation; checkpoint vs release (§8.4); chronicle checkpoint events |
 
 ---
 
