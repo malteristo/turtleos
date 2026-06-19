@@ -51,6 +51,25 @@ Skip path: orientation → practitioner’s first message → `river added turtl
 
 ---
 
+## Claim hosted river (invite-to-claim)
+
+Operator provisions with `!admin river-key <name> <emoji> [de|en]` and sends the channel invite privately.
+
+```
+Guest opens invite → private claim room (pinned instructions)
+  → sends river key emoji as single message
+  → bind + channel rename + permissions lock
+  → onboarding embed (Fluss / Wirbel or EN equivalent)
+  → eddy bar at bottom
+Guest opens eddy from bar → first message → river added turtle → Turtle reply (practitioner voice)
+```
+
+Operator river stays separate; hosted content must not appear in operator proposals verbatim.
+
+→ `docs/operations/hosted-river-boundaries.md` · `docs/chapters/design-hosted-river.md`
+
+---
+
 ## Drop text in river (no eddy yet)
 
 ```

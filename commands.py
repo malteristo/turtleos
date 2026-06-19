@@ -1759,8 +1759,13 @@ async def cmd_forget(message, args):
 async def cmd_readiness(message):
     set_practice_context(message)
     result = assess_readiness()
+    title = (
+        "🌊 Practice substrate"
+        if get_mage_type() == "practitioner"
+        else "🧭 Practice-Readiness Assessment"
+    )
     embed = discord.Embed(
-        title="🧭 Practice-Readiness Assessment",
+        title=title,
         description=result["summary"],
         color=0x2ECC71 if not result["highest_leverage"] else
               (0xE67E22 if result["highest_leverage"]["status"] == "degraded" else 0xE74C3C),
@@ -1781,7 +1786,8 @@ async def cmd_admin(message, args):
             "- `!admin channels` — channel topology with permissions\n"
             "- `!admin members` — server membership\n"
             "- `!admin audit` — permission health check\n"
-            "- `!admin onboard <username>` — create practice space for new mage\n",
+            "- `!admin onboard <username> [de|en]` — create hosted river + practitioner workshop\n"
+            "- `!admin river-key <name> <emoji> [de|en]` — invite-to-claim room + river key\n",
             mention_author=False
         )
         return
@@ -1873,6 +1879,9 @@ async def cmd_admin(message, args):
 
     elif subcmd == "onboard" and len(args) > 1:
         username = args[1]
+        locale = (args[2].lower() if len(args) > 2 else "en").strip()
+        if locale not in ("de", "en"):
+            locale = "en"
         guild = message.guild
 
         target_member = None
@@ -1923,38 +1932,105 @@ async def cmd_admin(message, args):
             "discord_id": str(target_member.id),
             "address": target_member.display_name,
             "practice_dir": f"~/workshops/{mage_key_val}",
-            "runtime_dir": f"~/workshops/{mage_key_val}"
+            "runtime_dir": f"~/workshops/{mage_key_val}",
+            "type": "practitioner",
+            "locale": locale,
         }
-        reg["channels"][str(new_ch.id)] = mage_key_val
+        reg["channels"][str(new_ch.id)] = {
+            "mage": mage_key_val,
+            "type": "hosted-river",
+            "default_context": None,
+            "description": f"Hosted practice surface for {target_member.display_name}",
+        }
         with open(registry_path, "w") as f:
             yaml.dump(reg, f, default_flow_style=False, allow_unicode=True)
         reload_mage_registry()
 
-        workshop = os.path.expanduser(f"~/workshops/{mage_key_val}")
-        os.makedirs(os.path.join(workshop, "sessions"), exist_ok=True)
-        os.makedirs(os.path.join(workshop, "intentions"), exist_ok=True)
-        os.makedirs(os.path.join(workshop, "proposals"), exist_ok=True)
-        os.makedirs(os.path.join(workshop, "thread-state"), exist_ok=True)
-        for fname in ("compass.md", "boom.md", "bright.md", "mirror.md"):
-            fpath = os.path.join(workshop, fname)
-            if not os.path.exists(fpath):
-                open(fpath, "w").close()
-        template = os.path.expanduser(os.environ.get("PRACTITIONER_SYSTEM_TEMPLATE", ""))
-        dest = os.path.join(workshop, "system.md")
-        if template and os.path.exists(template) and not os.path.exists(dest):
-            import shutil
-            shutil.copy2(template, dest)
+        from hosted_river_onboarding import seed_practitioner_workshop
+
+        workshop = seed_practitioner_workshop(mage_key_val, locale=locale)
 
         await message.reply(
             f"**Onboarding complete for {target_member.display_name}:**\n"
-            f"- Channel: `#{channel_name}` (private, sovereign)\n"
-            f"- Workshop: `~/workshops/{mage_key_val}/`\n"
-            f"- Registry: updated\n"
-            f"They can start talking to Turtle in their channel now.",
+            f"- Channel: `#{channel_name}` (hosted river, sovereign)\n"
+            f"- Workshop: `{workshop}`\n"
+            f"- Registry: `hosted-river` + practitioner\n"
+            f"- Onboarding embed: posts on next River bot restart (or re-run river)\n"
+            f"They write in the river; Turtle speaks in eddies.",
             mention_author=False
         )
         await log_activity(
             f"Onboarded **{target_member.display_name}** — `#{channel_name}` created, workshop initialized", "\U0001f331", channel=message.channel
+        )
+
+    elif subcmd == "river-key" and len(args) >= 3:
+        from river_keys import _looks_like_single_key, provision_unclaimed_river, _normalize_mage_key
+        from river_keys import _primary_operator_ids
+
+        if message.author.id not in _primary_operator_ids():
+            await message.reply("River key provisioning requires the primary operator.", mention_author=False)
+            return
+
+        display_name = args[1].strip()
+        river_key = args[2].strip()
+        locale = "en"
+        if len(args) > 3 and args[3].lower() in ("de", "en"):
+            locale = args[3].lower()
+
+        if not _looks_like_single_key(river_key):
+            await message.reply(
+                "River key must be a **single emoji** (the one your guest chose).",
+                mention_author=False,
+            )
+            return
+
+        mage_key = _normalize_mage_key(display_name)
+        guild = message.guild
+        if not guild:
+            await message.reply("River keys can only be provisioned from a server channel.", mention_author=False)
+            return
+
+        registry = get_registry()
+        if mage_key in registry.get("mages", {}) and registry["mages"][mage_key].get("discord_id"):
+            await message.reply(
+                f"`{mage_key}` is already bound. Use a different name or retire the old river first.",
+                mention_author=False,
+            )
+            return
+
+        for entry in registry.get("channels", {}).values():
+            if isinstance(entry, dict) and entry.get("mage") == mage_key and entry.get("type") == "unclaimed-river":
+                await message.reply(
+                    f"A claim room for `{mage_key}` already exists. Finish or remove it before creating another.",
+                    mention_author=False,
+                )
+                return
+
+        try:
+            channel, invite = await provision_unclaimed_river(
+                guild,
+                mage_key=mage_key,
+                display_name=display_name,
+                river_key=river_key,
+                locale=locale,
+            )
+        except discord.HTTPException as exc:
+            await message.reply(f"Could not create claim room: {exc}", mention_author=False)
+            return
+
+        await message.reply(
+            f"**River key ready for {display_name}** (`{mage_key}`)\n"
+            f"- Key: {river_key}\n"
+            f"- Claim room: #{channel.name}\n"
+            f"- Workshop: `~/workshops/{mage_key}/`\n"
+            f"- Invite (send privately): {invite.url}\n\n"
+            f"Tell them to open the link and send {river_key} in the channel.",
+            mention_author=False,
+        )
+        await log_activity(
+            f"Provisioned river key for **{display_name}** — #{channel.name}",
+            "\U0001f511",
+            channel=message.channel,
         )
 
     else:
@@ -2174,7 +2250,7 @@ COMMAND_CONTEXT = {
 }
 
 
-_PRACTITIONER_COMMANDS = {"status", "help", "recall", "checkpoint", "release"}
+_PRACTITIONER_COMMANDS = {"status", "help", "recall", "checkpoint", "release", "readiness"}
 
 CONTEXTUAL_ACTION_TIMEOUT = 3600
 CONTEXTUAL_ACTION_COMMANDS = {

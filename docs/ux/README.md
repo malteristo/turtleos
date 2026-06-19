@@ -68,7 +68,7 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | Turtle character | `template/character/soul.md`, `conduct.md` |
 | Session capture | `sessions.py`, `commands.py` |
 | Platform law | `TURTLE_SPEC.md` §5, §7, §9.5, §17 |
-| Shakedown | `scripts/shake_river.py`, `scripts/shake_flow.py`, `scripts/shake_link_read.py` |
+| Shakedown | `scripts/shake_river.py`, `scripts/shake_flow.py`, `scripts/shake_link_read.py`, `scripts/shake_hosted_river.py` |
 | Chapters (history) | `docs/chapters/2026-06-16-*.md`, `docs/chapters/2026-06-18-*.md` |
 
 ---

@@ -38,13 +38,59 @@ def _resolve_default_pd():
     return pd
 
 
+def assess_practitioner_substrate(pd=None) -> dict:
+    """Honest check for hosted practitioners — not operator 8-dimension readiness."""
+    pd = pd or _resolve_default_pd()
+    boom = read_safe(os.path.join(pd, "boom.md"))
+    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
+    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
+    boom_count = count_items(boom)
+    bright_count = count_items(bright)
+    has_compass = bool(compass.strip())
+    sessions_dir = os.path.join(pd, "sessions")
+    session_count = 0
+    if os.path.isdir(sessions_dir):
+        session_count = len([f for f in os.listdir(sessions_dir) if f.endswith(".md")])
+
+    empty = boom_count == 0 and bright_count == 0 and not has_compass and session_count == 0
+    if empty:
+        summary = (
+            "**Your space is fresh.** Nothing is broken — there is nothing to score yet. "
+            "Open a thread from the bar at the bottom when you want to talk."
+        )
+        dims = [{"name": "Practice substrate", "status": "ready", "detail": "empty — new relationship"}]
+        return {"dimensions": dims, "summary": summary, "highest_leverage": None}
+
+    parts = []
+    if boom_count:
+        parts.append(f"boom ({boom_count})")
+    if bright_count:
+        parts.append(f"bright ({bright_count})")
+    if has_compass:
+        parts.append("compass")
+    if session_count:
+        parts.append(f"{session_count} session(s)")
+    detail = ", ".join(parts) if parts else "light activity"
+    summary = f"**Practice substrate:** {detail}."
+    dims = [{"name": "Practice substrate", "status": "ready", "detail": detail}]
+    return {"dimensions": dims, "summary": summary, "highest_leverage": None}
+
+
 def assess_readiness(pd=None) -> dict:
     """Full 8-dimension practice-readiness assessment.
 
     Returns dict with 'dimensions' (list of dimension results),
     'summary' (formatted string), and 'highest_leverage' (what to fix first).
     Each dimension: {name, status, detail} where status is ready/degraded/impaired.
+
+    Practitioners on hosted rivers get an honest substrate check — not operator-style scoring.
     """
+    from mage import get_mage_type
+
+    pd = pd or _resolve_default_pd()
+    if get_mage_type() == "practitioner":
+        return assess_practitioner_substrate(pd)
+
     # Import here to avoid circular imports — these are background task references
     from sessions import session_monitor
     from background import interoception_loop, practice_health_loop, daily_reminders_loop, health_canary_loop

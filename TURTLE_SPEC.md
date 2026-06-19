@@ -678,9 +678,52 @@ Deliverables: `character/soul.md`, `character/conduct.md`, `character/river_prom
 
 turtleOS MAY host multiple practitioners via `mage_registry.yaml` — each with isolated practice root and river channel. Sovereign setup (own server) is recommended; hosted setup (trusted server) is permitted with explicit sovereignty tradeoff.
 
+### 15.1 Channel types
+
+| Type | Purpose |
+|------|---------|
+| `river` | Operator/practitioner main practice surface on their own server or as primary mage |
+| `hosted-river` | Sovereign practitioner's private river on an operator's server — same River harness as `river` |
+| `unclaimed-river` | Private claim room before first bind; becomes `hosted-river` on river key drop |
+| `shared` / future `shared-river` | Multi-member practice spaces (family, etc.) — separate design |
+
+### 15.2 Practitioner profile
+
+Hosted practitioners SHOULD be registered with `type: practitioner` in `mage_registry.yaml`. Their practice root (`~/workshops/<name>/`) MUST be isolated from the operator's and from other hosted practitioners.
+
+Eddies in hosted rivers use practitioner character files (`character/soul.md`, `character/conduct.md`) and optional `resonance.md` — not the operator's Magic practice stack.
+
+### 15.3 Onboarding
+
+Each bound hosted river MUST receive one-time onboarding (pinned embed) explaining:
+
+- Parent channel is acts-only (River); Turtle speaks in eddies only
+- Standing eddy bar at the bottom opens threads
+- Language and tone matched to practitioner locale (`de`, `en`, …)
+
+Onboarding MUST NOT use Magic framework vocabulary unless the practitioner introduces it first.
+
+Legacy binds MAY grandfather existing onboarding; new guests use the river-key claim path (§15.4).
+
+### 15.4 River keys (invite-to-claim)
+
+An operator MAY provision a hosted river for a guest:
+
+1. Guest chooses an emoji out of band; operator registers it as the **river key** (practice token, not authentication).
+2. Operator creates an **unclaimed-river** claim room (private: operator + bots + invitee via channel-specific invite).
+3. Guest drops the emoji in the claim room → platform binds `discord_id`, renames channel, locks permissions, posts onboarding, deploys eddy bar.
+
+Wrong keys MUST receive a clear rejection. Already-claimed rivers MUST NOT accept a second bind.
+
+Provisioning command surface: `!admin river-key` (operator implementation).
+
+### 15.5 Cross-practitioner boundaries
+
 Cross-practitioner content boundaries: pattern observations in operator proposals are allowed; quoting another practitioner's conversation is not.
 
-Full seneschal, permission, and multi-server law from prior spec remains valid for operators; see implementation `docs/architecture.md` during ripple pass.
+The operator MUST NOT surface hosted-river message content in the operator's river, proposals, or session notes. Hosted practitioners MUST NOT receive operator-style practice-readiness scoring on empty substrate — a fresh space is not "practice-ready," it is **new**.
+
+Full seneschal, permission, and multi-server law from prior spec remains valid for operators; see implementation `docs/architecture.md` and `docs/operations/hosted-river-boundaries.md`.
 
 ---
 
@@ -799,6 +842,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-18 | Native eddy bar (replaces per-message offer_eddy / Eddy Door); split-bot system lines; flow eddy orientation; checkpoint vs release (§8.4); chronicle checkpoint events |
 | 2026-06-18 | Eddy link reading (§9.5) — visible embed trace, read vs `!fetch`, spill, Read/Skip for incidental URLs; Law of Visible Link Read |
 | 2026-06-18 | UX doc split — `docs/ux/` topic collection replaces monolithic `docs/ux-principles.md` |
+| 2026-06-19 | §15 — hosted-river, unclaimed-river, practitioner onboarding, river keys (invite-to-claim), sovereignty boundaries |
 
 ---
 

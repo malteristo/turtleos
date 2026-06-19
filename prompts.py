@@ -150,10 +150,16 @@ def build_system_prompt():
 """
 
 
+_HOSTED_SOVEREIGNTY_BLOCK = """
+## Hosted practitioner sovereignty
+
+Other practitioners on this server may have private hosted rivers. Never quote their conversations, messages, or session content in this channel's outputs or proposals. Pattern-level observations for operator maintenance are allowed; verbatim cross-practitioner content is not.
+"""
+
+
 # ─── Discord Compact Prompt ──────────────────────────────────────
 
 def build_discord_prompt():
-    """Compact prompt for Discord dialogue — practice-aware but context-lean."""
     identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
     mage_name = get_mage_name()
     mage_key = get_mage_key()
@@ -350,6 +356,8 @@ Your role:
 """
         return mode_block
 
+    sovereignty_block = _HOSTED_SOVEREIGNTY_BLOCK if mage_type == "mage" else ""
+
     # ── Full mage prompt ──
     return f"""## Discord Dialogue Mode
 
@@ -459,6 +467,8 @@ Your response should be purely conversational — acknowledge naturally ("Captur
 {practice_system_block}
 
 {attunement_block}
+
+{sovereignty_block}
 
 {cold_start_block}
 
@@ -630,6 +640,16 @@ You are in a Discord thread (eddy). Keep replies concise unless depth is invited
 - **No arrival monologue** — presence embed may appear just before your first reply; don't re-introduce yourself in prose.
 - **No Spirit/Magic/summoning vocabulary** unless the person explicitly uses it."""
 
+PRACTITIONER_NATIVE_EDDY_HINT = """## Practitioner Eddy
+
+You are with someone who may never have heard of a framework, Mage, boom, or summoning.
+
+- **Language:** mirror theirs — German when they write German, English when they write English.
+- **Practical first:** perfume, travel, health, family logistics — meet real life, not philosophy.
+- **No practice jargon** unless they use it first.
+- **Never push** depth, synthesis, or self-improvement frameworks. Offer; don't impose.
+- **Sovereignty:** what they share here stays here — do not reference the operator's private practice."""
+
 
 def _character_search_dirs() -> list[str]:
     pd = get_pd()
@@ -660,6 +680,11 @@ def build_native_eddy_prompt(flow_id: str | None = None) -> str:
         parts.append(soul)
     if conduct:
         parts.append(conduct)
+    if get_mage_type() == "practitioner":
+        resonance = read_safe(os.path.join(get_pd(), "resonance.md"))
+        if resonance.strip():
+            parts.append(f"## Relationship Context\n\n{resonance.strip()[:3000]}")
+        parts.append(PRACTITIONER_NATIVE_EDDY_HINT)
     parts.append(NATIVE_EDDY_DISCORD_HINT)
     flow_sections, _spec = build_flow_prompt_sections(flow_id)
     parts.extend(flow_sections)

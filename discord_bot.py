@@ -112,6 +112,8 @@ from intake_server import start_intake_server
 from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
 from founder_keys import try_founder_key_entry
+from river_keys import try_river_key_claim
+from mage import _get_channel_type
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
@@ -1520,6 +1522,17 @@ async def on_message(message):
 
         # Founder key entry: bind a founder's self-chosen emoji only after the primary operator confirms.
         if await try_founder_key_entry(message):
+            return
+
+        # Unclaimed hosted river: river key claim (single-bot fallback when River bot absent)
+        if (
+            not isinstance(message.channel, discord.Thread)
+            and _get_channel_type(message.channel.id) == "unclaimed-river"
+        ):
+            lock = get_channel_lock(message.channel.id)
+            async with lock:
+                if await try_river_key_claim(message, client):
+                    return
             return
 
         # Intake thread: auto-spawn new threads from dropped content

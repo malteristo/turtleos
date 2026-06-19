@@ -46,7 +46,10 @@ from mage import (
     set_practice_context,
     set_practice_context_for_channel,
 )
+from mage import _get_channel_type
 from river_handler import ensure_river_eddy_bar, handle_eddy_first_message, handle_river_message
+from hosted_river_onboarding import ensure_hosted_river_onboarding
+from river_keys import try_river_key_claim
 from river_state import river_bot_token, river_client
 from state import get_channel_lock
 
@@ -73,8 +76,9 @@ async def on_ready():
     if get_attunement_profile() == "native":
         try:
             await ensure_river_eddy_bar(river_client)
+            await ensure_hosted_river_onboarding(river_client)
         except Exception as exc:
-            print(f"Eddy door setup failed: {exc}")
+            print(f"River startup setup failed: {exc}")
     print("River bot ready — acts only in parent river channels")
 
 
@@ -107,6 +111,13 @@ async def on_message(message: discord.Message):
         lock = get_channel_lock(message.channel.id)
         async with lock:
             await handle_eddy_first_message(message)
+        return
+
+    if _get_channel_type(message.channel.id) == "unclaimed-river":
+        lock = get_channel_lock(message.channel.id)
+        async with lock:
+            if await try_river_key_claim(message, river_client):
+                return
         return
 
     if not is_river_message(message):
