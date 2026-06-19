@@ -52,6 +52,14 @@ class CheckpointResult:
         return bool(self.flow_writes or self.session_note or self.proposal)
 
 
+@dataclass
+class DissolveResult:
+    thread_name: str
+    entry_count: int = 0
+    archive_path: str | None = None
+    jump_url: str | None = None
+
+
 def _trigger_phrase(trigger: str) -> str:
     return _TRIGGER_COPY.get(trigger, _TRIGGER_COPY["idle"])
 
@@ -419,17 +427,19 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
 
 
-async def _manual_release_dissolve(channel_id: int, history: list[dict]):
-    """Dissolve a manual-release thread — capture essence, archive, notify parent."""
+async def dissolve_eddy(channel_id: int, history: list[dict] | None = None) -> DissolveResult | None:
+    """Archive an eddy — essence capture, file archive, chronicle, parent act."""
     import discord
     from thread_registry import mark_dissolved
+    from state import threads_flagged_for_release
 
     thread = client.get_channel(channel_id)
     if not thread or not isinstance(thread, discord.Thread):
-        return
+        return None
 
     thread_name = thread.name
-    mage_name = get_mage_name()
+    jump_url = thread.jump_url
+    history = history or []
 
     msgs = [
         f"{'Mage' if m['role'] == 'user' else 'Turtle'}: {m['content'][:300]}"
@@ -455,7 +465,7 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
                     f.write(f"\n\n## Thread dissolved: {thread_name} ({timestamp})\n{essence}\n")
                 entry_count = sum(1 for line in essence.split("\n") if line.strip().startswith("-"))
         except Exception as e:
-            print(f"Manual release essence capture failed for {thread_name}: {e}")
+            print(f"Dissolve essence capture failed for {thread_name}: {e}")
 
     archive_dir = Path(get_pd()) / "thread-archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -466,10 +476,28 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
     archive_content += f"**Archived:** {today}\n**Messages:** {len(msgs)}\n\n"
     if essence:
         archive_content += f"## Essence\n{essence}\n\n"
-    archive_content += "## Conversation\n" + "\n".join(msgs[-20:]) + "\n"
+    if msgs:
+        archive_content += "## Conversation\n" + "\n".join(msgs[-20:]) + "\n"
     archive_path.write_text(archive_content)
 
+    try:
+        from river_handler import _append_chronicle
+
+        _append_chronicle(
+            get_pd(),
+            f"🍃 dissolved: {thread_name} ({jump_url})",
+            {
+                "thread_id": str(channel_id),
+                "jump_url": jump_url,
+                "archive": str(archive_path),
+                "boom_entries": entry_count,
+            },
+        )
+    except Exception as exc:
+        print(f"Dissolve chronicle failed: {type(exc).__name__}: {exc}")
+
     thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
     mark_dissolved(channel_id)
 
     parent = thread.parent
@@ -484,4 +512,15 @@ async def _manual_release_dissolve(channel_id: int, history: list[dict]):
     except Exception:
         pass
 
-    print(f"Manual release: {thread_name} dissolved ({entry_count} boom entries)")
+    print(f"Dissolved eddy: {thread_name} ({entry_count} boom entries)")
+    return DissolveResult(
+        thread_name=thread_name,
+        entry_count=entry_count,
+        archive_path=str(archive_path),
+        jump_url=jump_url,
+    )
+
+
+async def _manual_release_dissolve(channel_id: int, history: list[dict]):
+    """Dissolve a manual-release thread after checkpoint on release."""
+    await dissolve_eddy(channel_id, history)

@@ -40,6 +40,7 @@ Check:
 - `README.md` — public product frame and setup path
 - `ARCHITECTURE.md` — implementation traceability
 - `docs/architecture.md` — deployed/current-state operator map
+- `docs/turtle-talk.md` — `!` command inventory (spec §5.5); update with any command change
 - `CLAUDE.md` — agent/operator guidance
 - `.env.template` and `mage_registry.example.yaml` — public configuration examples
 - active prompts, skills, and procedures that instruct agents how to act

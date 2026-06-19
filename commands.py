@@ -33,6 +33,7 @@ from state import (
 
 from mage import (
     get_pd, get_runtime_dir, get_workshop_root, get_topology, get_mage_name, get_mage_key, get_mage_type,
+    get_attunement_profile,
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
     reload_mage_registry, get_registry,
@@ -434,61 +435,99 @@ async def cmd_diagnose(message):
     await message.reply(embed=embed, mention_author=False)
 
 
-async def cmd_help(message):
-    embed = discord.Embed(title="\U0001f422 Turtle Commands",
-                          description="Direct commands bypass the LLM — instant and free.",
-                          color=EMBED_COLORS["help"])
-    practice_cmds = [
-        ("`!recall`", "Practice state overview — start of session"),
-        ("`!checkpoint`", "Save resonance now — flow state + session note; keeps history"),
+def _help_lines(pairs: list[tuple[str, str]]) -> str:
+    return "\n".join(f"{cmd} — {desc}" for cmd, desc in pairs)
+
+
+def _help_embed_fields() -> list[tuple[str, str]]:
+    """Profile-aware turtle-talk sections. See docs/turtle-talk.md."""
+    mage_type = get_mage_type()
+    attunement = get_attunement_profile()
+    fields: list[tuple[str, str]] = []
+
+    river_cmds = [
+        ("**new eddy** · **flow menu**", "Standing bar — primary spawn (TURTLE_SPEC §5.4)"),
+        ("`!flows`", "List installed flows — same picker as **flow menu**"),
+        ("`!pin`", "Pin a message — reply with `!pin` or `!pin <message_id>`"),
+    ]
+    fields.append(("River (parent channel)", _help_lines(river_cmds)))
+
+    eddy_core = [
+        ("`!checkpoint`", "Save resonance — flow state + session note; keeps history"),
         ("`!release`", "Close session — checkpoint, then clear history"),
-        ("`!sweep`", "Process boom into bright (triage + update)"),
-        ("`!boom`", "Show boom buffer"),
-        ("`!boom add <thought>`", "Capture a thought"),
-        ("`!boom convert`", "Distill conversation into boom entries"),
-        ("`!boom thread`", "Capture thread essence to boom (in thread or `!boom thread <name>`)"),
-        ("`!bright`", "Show bright surface"),
-        ("`!compass`", "Show life compass"),
-        ("`!intentions`", "List active intentions"),
-    ]
-    file_cmds = [
-        ("`!ls [dir]`", "Browse practice files"),
-        ("`!read <file>`", "View a file (e.g. `!read intentions/turtle.md`)"),
-        ("`!search <query>`", "Search across all practice files"),
-        ("`!edit boom clear`", "Clear boom buffer"),
-        ("`!edit bright append <text>`", "Add item to bright"),
-        ("`!edit bright section <name> <text>`", "Add section to bright"),
-        ("`!edit compass set <text>`", "Set compass content"),
-        ("`!edit intention <name> <text>`", "Create/update intention"),
-    ]
-    thread_cmds = [
-        ("`!thread \"topic\" [--model M] [--type T]`", "Create focused thread (types: fast/slow/confluence/standing)"),
-        ("`!threads`", "List active threads with eddy types"),
-        ("`!thread-type <type>`", "Change thread's eddy type (in thread)"),
-        ("`!rename <title>`", "Rename this eddy to an exact title (in thread)"),
-        ("`!new [topic]`", "Auto-spawn thread from message (AI-named)"),
-        ("`!eddy-check`", "Scan threads for dissolution readiness"),
-        ("`!absorb <name>`", "Bring thread resonance into main channel"),
-        ("`!absorbed`", "Show absorbed thread contexts"),
-        ("`!forget [name]`", "Release absorbed context (all or one)"),
-        ("`!load <context>`", "Load workshop resonance (circles, bundles)"),
-    ]
-    fetch_cmds = [
-        ("`!fetch <url>`", "Distill & cache a URL in link-resonance/ (library)"),
-        ("`!fetch <url> --fresh`", "Refetch (ignore cache)"),
-    ]
-    infra_cmds = [
+        ("`!dissolve`", "Archive eddy + chronicle — distinct from `!release`"),
+        ("`!help`", "This inventory"),
         ("`!status`", "System dashboard"),
-        ("`!readiness`", "Full 8-dimension practice-readiness assessment"),
-        ("`!signals`", "Review, approve, or dismiss outfacing signal drafts"),
-        ("`!sync`", "Practice state freshness"),
-        ("`!diagnose`", "Full stack health check — services, sync, reachability"),
+        ("`!readiness`", "Practice-readiness check"),
+        ("`!rename <title>`", "Exact eddy title (in thread)"),
+        ("`!fetch <url>`", "Distill URL to library (not the same as auto link-read in chat)"),
+        ("`!read` / `!ls` / `!search`", "Browse practice files"),
     ]
-    embed.add_field(name="Practice", value="\n".join(f"{c} — {d}" for c, d in practice_cmds), inline=False)
-    embed.add_field(name="Files", value="\n".join(f"{c} — {d}" for c, d in file_cmds), inline=False)
-    embed.add_field(name="Threads", value="\n".join(f"{c} — {d}" for c, d in thread_cmds), inline=False)
-    embed.add_field(name="Links", value="\n".join(f"{c} — {d}" for c, d in fetch_cmds), inline=False)
-    embed.add_field(name="Infrastructure", value="\n".join(f"{c} — {d}" for c, d in infra_cmds), inline=False)
+    fields.append(("Eddy core (vanilla v1)", _help_lines(eddy_core)))
+
+    if mage_type == "practitioner":
+        fields.append((
+            "Note",
+            "Other `!` commands fall through to dialogue. Full map: `docs/turtle-talk.md` in turtleOS repo.",
+        ))
+        return fields
+
+    file_cmds = [
+        ("`!edit …`", "Direct writes — boom, bright, compass, intention"),
+    ]
+    fields.append(("Files (edits)", _help_lines(file_cmds)))
+
+    if attunement != "magic":
+        fields.append((
+            "Note",
+            "Magic-attuned overlay hidden (`attunement: native`). Inventory: `docs/turtle-talk.md`.",
+        ))
+        return fields
+
+    magic_practice = [
+        ("`!boom` / `!boom add` / `!boom convert`", "Capture buffer + distill conversation"),
+        ("`!boom thread`", "Thread essence → boom"),
+        ("`!bright` / `!compass` / `!intentions`", "Practice state views"),
+        ("`!sweep`", "Triage boom → bright"),
+        ("`!recall`", "Practice overview — *often redundant; state may already be loaded*"),
+        ("`!sync`", "Workshop freshness"),
+        ("`!load <context>`", "Workshop resonance bundles (not flow menu flows)"),
+        ("`!attune`", "Self-attunement scroll digest"),
+        ("`!propose`", "Capture proposal artifact"),
+    ]
+    fields.append(("Magic overlay — practice state", _help_lines(magic_practice)))
+
+    magic_threads = [
+        ("`!thread \"topic\" [flags]`", "Legacy spawn — prefer **new eddy** bar"),
+        ("`!threads`", "List active threads"),
+        ("`!thread-type` / `!new`", "Legacy eddy types / AI-named spawn"),
+        ("`!eddy-check`", "Metabolic sweep — *deferred in spec §16*"),
+        ("`!absorb` / `!absorbed` / `!forget`", "Cross-thread context in main channel"),
+        ("`!panel`", "Control panel UI"),
+    ]
+    fields.append(("Magic overlay — threads (legacy)", _help_lines(magic_threads)))
+
+    operator_cmds = [
+        ("`!diagnose`", "Full stack health (canary view)"),
+        ("`!signals` / `!drip`", "Outfacing drafts (Magic-attuned)"),
+        ("`!admin …`", "Operator tools incl. `river-key`"),
+    ]
+    fields.append(("Operator", _help_lines(operator_cmds)))
+    fields.append((
+        "Inventory",
+        "Full command map with spec cross-refs: `docs/turtle-talk.md`.",
+    ))
+    return fields
+
+
+async def cmd_help(message):
+    embed = discord.Embed(
+        title="\U0001f422 Turtle Commands",
+        description="Direct `!` commands bypass the LLM — instant and free. Layered per TURTLE_SPEC v1.",
+        color=EMBED_COLORS["help"],
+    )
+    for name, body in _help_embed_fields():
+        embed.add_field(name=name, value=truncate(body, 1020), inline=False)
     models_str = ", ".join(f"`{k}`" for k in KNOWN_MODELS.keys())
     embed.add_field(
         name="Models",
@@ -825,60 +864,29 @@ class EddyDissolutionView(discord.ui.View):
             await interaction.followup.send("Thread no longer accessible.", ephemeral=True)
             return
 
-        msgs = []
+        history = []
         async for m in thread.history(limit=50, oldest_first=True):
             if m.author == client.user or not m.author.bot:
-                role = "Mage" if not m.author.bot else "Spirit"
-                msgs.append(f"{role}: {m.content[:300]}")
+                history.append({
+                    "role": "user" if not m.author.bot else "assistant",
+                    "content": m.content[:300],
+                })
 
-        essence = ""
-        if len(msgs) >= 2:
-            conversation = "\n".join(msgs)
-            try:
-                result = await chat_ollama(
-                    f"This thread \"{self.thread_name}\" is being archived. "
-                    "Extract the essential insights worth keeping. Write as boom entries (- prefix). "
-                    "If nothing worth keeping: output (nothing to capture)",
-                    [{"role": "user", "content": conversation}],
-                    model=REFLECTION_MODEL, num_ctx=8192,
-                )
-                if result and "(nothing to capture)" not in result.lower():
-                    essence = result
-                    boom_path = os.path.join(get_pd(), "boom.md")
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    with open(boom_path, "a") as f:
-                        f.write(f"\n\n## Thread dissolved: {self.thread_name} ({timestamp})\n{essence}\n")
-            except Exception as e:
-                print(f"Essence capture failed for {self.thread_name}: {e}")
+        from sessions import dissolve_eddy
 
-        archive_dir = Path(get_pd()) / "thread-archive"
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        safe_name = re.sub(r'[^\w-]', '_', self.thread_name.lower())
-        archive_path = archive_dir / f"{today}_{safe_name}.md"
-        archive_content = f"# Thread Archive: {self.thread_name}\n\n"
-        archive_content += f"**Archived:** {today}\n"
-        archive_content += f"**Messages:** {len(msgs)}\n\n"
-        if essence:
-            archive_content += f"## Essence\n{essence}\n\n"
-        archive_content += "## Conversation\n" + "\n".join(msgs[-20:]) + "\n"
-        archive_path.write_text(archive_content)
+        result = await dissolve_eddy(self.thread_id, history)
+        if not result:
+            await interaction.followup.send("Could not archive thread.", ephemeral=True)
+            return
 
-        threads_flagged_for_release.pop(self.thread_id, None)
-        thread_configs.pop(self.thread_id, None)
+        dialogue_histories.pop(self.thread_id, None)
+        active_sessions.pop(self.thread_id, None)
 
-        try:
-            await thread.edit(archived=True)
-        except Exception:
-            pass
-
-        entry_count = sum(1 for line in essence.split("\n") if line.strip().startswith("- ")) if essence else 0
-        summary = f"📦 **{self.thread_name}** archived"
-        if entry_count:
-            summary += f" ��� {entry_count} entries captured to boom"
+        summary = f"📦 **{result.thread_name}** archived"
+        if result.entry_count:
+            summary += f" — {result.entry_count} entries captured to boom"
         await interaction.followup.send(summary)
-        dialogue = get_channel("dialogue")
-        print(f"Thread dissolved & archived: {self.thread_name} ({entry_count} boom entries)")  # 016 reroute: internal only
+        print(f"Thread dissolved & archived: {result.thread_name} ({result.entry_count} boom entries)")
 
         for child in self.children:
             child.disabled = True
@@ -989,6 +997,13 @@ async def eddy_dissolution_check():
 
 
 async def cmd_eddy_check(message, args):
+    if get_attunement_profile() != "magic":
+        await message.reply(
+            "`!eddy-check` is Magic-attuned legacy (metabolic sweep). "
+            "Vanilla v1: use `!dissolve` in an eddy when you're done — no auto-dissolve (TURTLE_SPEC §9.2).",
+            mention_author=False,
+        )
+        return
     async with message.channel.typing():
         flagged = await eddy_dissolution_check()
     if flagged:
@@ -1523,6 +1538,126 @@ async def cmd_release(message):
         embed.add_field(name="Note", value=f"Boom has **{boom_count}** items. Consider `!sweep` before you go.", inline=False)
 
     await message.reply(embed=embed, mention_author=False)
+
+
+async def cmd_dissolve(message, args):
+    """Archive eddy — essence, file archive, chronicle. Distinct from !release."""
+    if not isinstance(message.channel, discord.Thread):
+        await message.reply(
+            "Use `!dissolve` inside an eddy thread to archive it.",
+            mention_author=False,
+        )
+        return
+    if not is_practice_channel(message):
+        await message.reply("Use `!dissolve` in your practice eddies.", mention_author=False)
+        return
+
+    channel_id = message.channel.id
+    history = get_history(channel_id)
+    await message.reply("Dissolving eddy…", mention_author=False)
+
+    from sessions import dissolve_eddy
+
+    result = await dissolve_eddy(channel_id, history)
+    if not result:
+        await message.reply("Could not dissolve — thread not found.", mention_author=False)
+        return
+
+    dialogue_histories.pop(channel_id, None)
+    active_sessions.pop(channel_id, None)
+
+    lines = [f"**{result.thread_name}** archived."]
+    if result.entry_count:
+        lines.append(f"{result.entry_count} entries captured to boom.")
+    if result.jump_url:
+        lines.append(f"Chronicle: {result.jump_url}")
+    embed = discord.Embed(
+        title="Eddy dissolved",
+        description="\n".join(lines),
+        color=0x2ECC71,
+    )
+    await message.reply(embed=embed, mention_author=False)
+
+
+async def cmd_flows(message, args):
+    """River channel — open flow picker (same as standing bar flow menu)."""
+    if isinstance(message.channel, discord.Thread):
+        await message.reply(
+            "Run `!flows` in the river channel, or use **flow menu** on the standing bar.",
+            mention_author=False,
+        )
+        return
+    if not is_practice_channel(message):
+        await message.reply("Use `!flows` in your practice river channel.", mention_author=False)
+        return
+
+    from flow_runner import list_resolvable_flow_ids
+    from river_handler import RiverFlowPickerView
+
+    flows = list_resolvable_flow_ids()
+    if not flows:
+        await message.reply(
+            "No flows installed under your practice root (`flows/`).",
+            mention_author=False,
+        )
+        return
+
+    view = RiverFlowPickerView(message.channel.id, flows)
+    client.add_view(view)
+    names = ", ".join(f"`{fid.replace('_', ' ').title()}`" for fid in flows[:8])
+    extra = f" (+{len(flows) - 8} more)" if len(flows) > 8 else ""
+    embed = discord.Embed(
+        title="Practice flows",
+        description=(
+            f"**{len(flows)}** installed flow(s): {names}{extra}\n\n"
+            "Pick one to open an eddy (same as **flow menu** on the bar)."
+        ),
+        color=0x5865F2,
+    )
+    await message.reply(embed=embed, view=view, mention_author=False)
+
+
+async def cmd_pin(message, args):
+    """River moderation — pin a message (reply or message id)."""
+    if isinstance(message.channel, discord.Thread):
+        await message.reply(
+            "Use `!pin` in the river channel — reply to a message to pin it.",
+            mention_author=False,
+        )
+        return
+    if not is_practice_channel(message):
+        await message.reply("Use `!pin` in your practice river channel.", mention_author=False)
+        return
+
+    target = None
+    if message.reference and message.reference.message_id:
+        try:
+            target = await message.channel.fetch_message(message.reference.message_id)
+        except (discord.NotFound, discord.Forbidden):
+            target = None
+    elif args:
+        try:
+            target = await message.channel.fetch_message(int(args[0]))
+        except (ValueError, discord.NotFound, discord.Forbidden):
+            target = None
+
+    if not target:
+        await message.reply(
+            "Reply to a message with `!pin`, or `!pin <message_id>`.",
+            mention_author=False,
+        )
+        return
+
+    try:
+        await target.pin(reason=f"Pinned via !pin by {get_mage_name()}")
+        await message.add_reaction("📌")
+    except discord.Forbidden:
+        await message.reply(
+            "Cannot pin — the bot needs **Manage Messages** in this channel.",
+            mention_author=False,
+        )
+    except discord.HTTPException as exc:
+        await message.reply(f"Pin failed: {exc}", mention_author=False)
 
 
 async def cmd_edit(message, args):
@@ -2240,6 +2375,9 @@ DIRECT_COMMANDS = {
     "recall": lambda msg, args: cmd_recall(msg),
     "checkpoint": lambda msg, args: cmd_checkpoint(msg),
     "release": lambda msg, args: cmd_release(msg),
+    "dissolve": lambda msg, args: cmd_dissolve(msg, args),
+    "flows": lambda msg, args: cmd_flows(msg, args),
+    "pin": lambda msg, args: cmd_pin(msg, args),
     "edit": lambda msg, args: cmd_edit(msg, args),
     "thread": lambda msg, args: cmd_thread(msg, args),
     "threads": lambda msg, args: cmd_threads(msg, args),
@@ -2280,6 +2418,9 @@ COMMAND_CONTEXT = {
     "recall": "I performed a recall — loaded practice state and recent sessions.",
     "checkpoint": "I ran a checkpoint — saved flow state and/or session note without clearing history.",
     "release": "I ran a session release — checkpointed resonance and cleared history.",
+    "dissolve": "I dissolved the eddy — archived thread, wrote chronicle line, optional boom essence.",
+    "flows": "I opened the practice flow picker (same as the standing bar flow menu).",
+    "pin": "I pinned a message in the river channel.",
     "readiness": "I ran a full practice-readiness assessment across all 8 dimensions.",
     "signals": "I showed the outfacing signal drafts -- Turtle-generated content awaiting Mage curation.",
     "attune": "I performed a self-attunement ritual -- read core practice lore, integrated understanding, and wrote a fresh attunement digest.",
@@ -2287,7 +2428,10 @@ COMMAND_CONTEXT = {
 }
 
 
-_PRACTITIONER_COMMANDS = {"status", "help", "recall", "checkpoint", "release", "readiness"}
+_PRACTITIONER_COMMANDS = {
+    "status", "help", "recall", "checkpoint", "release", "dissolve",
+    "flows", "pin", "readiness", "rename", "fetch", "read", "ls", "search",
+}
 
 CONTEXTUAL_ACTION_TIMEOUT = 3600
 CONTEXTUAL_ACTION_COMMANDS = {

@@ -93,7 +93,7 @@
 Discord message (#dialogue or thread)
   -> discord_bot.py on_message()
   -> Filter: is it #dialogue or a #dialogue thread?
-  -> If command (!boom, !thread, etc.): execute directly
+  -> If command (!boom, !thread, etc.): execute directly — see `docs/turtle-talk.md` for layered inventory
   -> If conversation: build message history
   -> Read practice state (boom, bright, compass, intentions)
   -> Choose model:
