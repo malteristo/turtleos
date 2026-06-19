@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CRAFT_COALESCE_SECONDS = 5.0
-CRAFT_BACKLOG = "desk/craft/backlog.md"
-CRAFT_INTAKE_DIR = "desk/craft/intake"
+CRAFT_BACKLOG = "craft/backlog.md"
+CRAFT_INTAKE_DIR = "craft/intake"
 
 _buffers: dict[tuple[int, int], dict] = {}
 

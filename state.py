@@ -327,7 +327,7 @@ THREAD_CONTEXTS = {
             "5. **Handoff** — bounded finding or proposal for Spirit; you do not commit product changes.\n\n"
             "**Registration workflow:** Craft channel intake is handled by the shell — messages are "
             "coalesced (forward + optional comment), evidence is gathered, and an entry is appended "
-            "to `desk/craft/backlog.md` with a full artifact in `desk/craft/intake/`. "
+            "to `craft/backlog.md` with a full artifact in `craft/intake/`. "
             "Acknowledge registration briefly; do not re-run full intake narration when the shell "
             "already registered the issue.\n\n"
             "**Meta-practice allowed here:** reference turtleOS spec, architecture, proposals — "

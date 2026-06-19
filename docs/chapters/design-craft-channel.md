@@ -80,7 +80,7 @@ Craft channel intake is **shell-driven**, not LLM-narrated:
 
 1. **Coalesce** — forward + optional comment arrive as separate Discord messages; buffer 5s per author/channel and merge into one intake event.
 2. **Gather** — deterministic evidence: forward snapshots, source dereference, attachment visibility gaps, source message IDs.
-3. **Register** — write `desk/craft/intake/<id>.md` and append `desk/craft/backlog.md`.
+3. **Register** — write `craft/intake/<id>.md` and append `craft/backlog.md` (under practice root = workshop `desk/craft/`).
 4. **Acknowledge** — one concise reply pointing at the intake file and backlog; Spirit on Forge harvests at the next turtleOS chapter.
 
 This offloads bug/UX tracking from the Mage: drop friction in `#craft-turtle`, trust it is queued.

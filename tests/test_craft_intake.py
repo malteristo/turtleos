@@ -91,9 +91,9 @@ class CraftIntakeTests(unittest.TestCase):
             "dereferenced_context": "source body",
             "source_attachments": ["photo.png (image/png)"],
         }
-        ack = craft_intake.format_craft_ack(evidence, "desk/craft/intake/test.md", "2026-06-19-test")
+        ack = craft_intake.format_craft_ack(evidence, "craft/intake/test.md", "2026-06-19-test")
         self.assertIn("Registered", ack)
-        self.assertIn("desk/craft/backlog.md", ack)
+        self.assertIn("craft/backlog.md", ack)
         self.assertIn("coalesced 2 Discord messages", ack)
 
 

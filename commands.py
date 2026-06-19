@@ -744,10 +744,8 @@ async def cmd_rename(message, args):
         return
 
     if new_name == before:
-        await message.reply(f"Eddy title unchanged: **{new_name}**.", mention_author=False)
-    else:
-        await message.reply(f"Renamed eddy: **{before}** → **{new_name}**.", mention_author=False)
-    await log_activity(f"Eddy renamed: {before} → {new_name}", "✏️", channel=message.channel)
+        await message.reply(f"Already titled **{new_name}**.", mention_author=False)
+    # Success: Discord's system line ("turtle changed the channel name") is enough trace.
 
 
 # ─── Views ───────────────────────────────────────────────────────
@@ -2276,7 +2274,7 @@ COMMAND_CONTEXT = {
     "sweep": "I ran a boom sweep — processing boom items into bright/release/box.",
     # "threads" — handled directly in cmd_threads with actual thread data (016)
     "thread-type": "I changed the thread's eddy type (fast/slow/confluence/standing).",
-    "rename": "I renamed this eddy to the exact title the practitioner specified.",
+    "rename": "I renamed this eddy; Discord shows the channel-name system line.",
     "eddy-check": "I scanned all threads for dissolution readiness and flagged any that exceeded their quiet threshold.",
     "fetch": "I fetched a URL and distilled its resonance — the essential insights from the linked content.",
     "recall": "I performed a recall — loaded practice state and recent sessions.",
