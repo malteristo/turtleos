@@ -1,7 +1,7 @@
 # Design Chapter: Craft Channel (Builder Vocation on turtleOS)
 
 **Opened:** 2026-06-19  
-**Status:** Design — dedicated implementation chapter  
+**Status:** Implemented (platform slice, 2026-06-19) — per-channel `attunement: craft`, `THREAD CONTEXTS['craft']`, craft prompt routing, **registration pipeline** (`craft_intake.py`)  
 **Instance:** `#craft-turtle` (`1504544358546931752`)  
 **Spec trace:** TURTLE_SPEC §4 (attunement: craft), Appendix A (operator / magic-attuned patterns)
 
@@ -73,6 +73,17 @@ channels:
 | Global native attunement | Strips craft vocation in eddies |
 | Parent channel prompt | Magic-era `build_discord_prompt` (inconsistent) |
 | Last activity | Spirit shakedown May 2026; pre-v1 vocabulary |
+
+## Registration workflow (2026-06-19)
+
+Craft channel intake is **shell-driven**, not LLM-narrated:
+
+1. **Coalesce** — forward + optional comment arrive as separate Discord messages; buffer 5s per author/channel and merge into one intake event.
+2. **Gather** — deterministic evidence: forward snapshots, source dereference, attachment visibility gaps, source message IDs.
+3. **Register** — write `desk/craft/intake/<id>.md` and append `desk/craft/backlog.md`.
+4. **Acknowledge** — one concise reply pointing at the intake file and backlog; Spirit on Forge harvests at the next turtleOS chapter.
+
+This offloads bug/UX tracking from the Mage: drop friction in `#craft-turtle`, trust it is queued.
 
 ## Implementation slices (ordered)
 

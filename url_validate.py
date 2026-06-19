@@ -104,6 +104,6 @@ def assert_fetch_url_allowed(url: str) -> None:
         raise SSRFBlockedError(reason)
 
 
-def ssrf_httpx_request_hook(request) -> None:
+async def ssrf_httpx_request_hook(request) -> None:
     """httpx event hook — validate each request URL (including redirects)."""
-    assert_fetch_url(str(request.url))
+    assert_fetch_url_allowed(str(request.url))

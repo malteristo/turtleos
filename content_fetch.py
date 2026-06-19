@@ -628,6 +628,8 @@ async def extract_attachments(message):
     for att in message.attachments:
         ct = att.content_type or ""
         mime = ct.split(";")[0].strip().lower()
+        if not mime or mime == "application/octet-stream":
+            mime = _guess_attachment_mime(att.filename)
         if mime not in SUPPORTED_ATTACHMENT_TYPES:
             continue
         if att.size > MAX_ATTACHMENT_SIZE:
@@ -638,6 +640,33 @@ async def extract_attachments(message):
         except Exception as e:
             print(f"Attachment download failed ({att.filename}): {e}")
     return results
+
+
+def _guess_attachment_mime(filename: str) -> str:
+    """Infer MIME from extension when Discord omits content_type."""
+    lower = (filename or "").lower()
+    if lower.endswith((".jpg", ".jpeg", ".mp.jpg")):
+        return "image/jpeg"
+    if lower.endswith(".png"):
+        return "image/png"
+    if lower.endswith(".gif"):
+        return "image/gif"
+    if lower.endswith(".webp"):
+        return "image/webp"
+    if lower.endswith(".pdf"):
+        return "application/pdf"
+    return ""
+
+
+_ATTACHMENT_PREPROCESS_MODELS = ("gemini-2.5-flash", "gemini-2.0-flash")
+
+
+def _is_transient_gemini_error(exc: Exception) -> bool:
+    name = type(exc).__name__
+    if name in ("ServerError", "ServiceUnavailable", "ResourceExhausted", "TooManyRequests"):
+        return True
+    msg = str(exc).lower()
+    return any(token in msg for token in ("503", "429", "unavailable", "high demand", "resource exhausted"))
 
 
 async def preprocess_attachments(attachments, genai_module=None, api_key=None):
@@ -655,12 +684,26 @@ async def preprocess_attachments(attachments, genai_module=None, api_key=None):
             parts.append(f"The user attached an image: {filename}. Describe what you see in detail. If there is text, read all of it.")
         parts.append(genai_module.types.Part.from_bytes(data=data, mime_type=mime))
 
-    try:
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=parts,
-        )
-        return response.text or "[Could not extract content from attachment]"
-    except Exception as e:
-        print(f"Gemini preprocessing failed: {e}")
-        return f"[Attachment processing error: {type(e).__name__}]"
+    last_error = None
+    for model in _ATTACHMENT_PREPROCESS_MODELS:
+        for attempt in range(3):
+            try:
+                response = await client.aio.models.generate_content(
+                    model=model,
+                    contents=parts,
+                )
+                return response.text or "[Could not extract content from attachment]"
+            except Exception as e:
+                last_error = e
+                if _is_transient_gemini_error(e) and attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                print(f"Gemini preprocessing failed ({model}): {e}")
+                break
+    err_name = type(last_error).__name__ if last_error else "UnknownError"
+    names = ", ".join(filename for _, _, filename in attachments)
+    return (
+        f"[Attachment processing failed ({err_name}) for: {names}. "
+        "The image was received but vision extraction is temporarily unavailable — "
+        "ask the practitioner to retry, paste a description, or re-send the image.]"
+    )

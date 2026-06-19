@@ -90,7 +90,7 @@ from triage import triage_message, prewarm_triage
 
 from prompts import (
     get_system_prompt, get_thread_prompt, build_thread_summary,
-    get_native_eddy_prompt, uses_native_turtle_prompt,
+    get_native_eddy_prompt, get_craft_channel_prompt, uses_native_turtle_prompt,
 )
 
 from readiness import startup_readiness_check
@@ -113,7 +113,8 @@ from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
 from founder_keys import try_founder_key_entry
 from river_keys import try_river_key_claim
-from mage import _get_channel_type
+from mage import _get_channel_type, resolve_dialogue_channel_id
+from craft_intake import is_craft_intake_channel, schedule_craft_intake
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
@@ -430,8 +431,8 @@ async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history
     safe_name = re.sub(r'[^\w\-]', '_', thread.name.lower())
     state_path = os.path.join(get_thread_state_dir(), f"{safe_name}.md")
 
-    model_label = cfg["model_label"] if cfg else "default"
-    attunement = cfg["attunement"] if cfg else "semi"
+    model_label = (cfg or {}).get("model_label", "default")
+    attunement = (cfg or {}).get("attunement", "semi")
     msg_count = len(history)
     now = local_now().strftime("%Y-%m-%d %H:%M")
 
@@ -605,6 +606,17 @@ def _format_dereferenced_message(source_message, *, label: str) -> str:
         parts.append(f"created: {created.isoformat()}")
     if content:
         parts.append(f"content:\n{content}")
+    attachment_lines = []
+    for att in (getattr(source_message, "attachments", None) or [])[:5]:
+        name = getattr(att, "filename", "attachment")
+        content_type = getattr(att, "content_type", None) or "unknown"
+        url = getattr(att, "url", None)
+        line = f"{name} ({content_type})"
+        if url:
+            line += f" {url}"
+        attachment_lines.append(line)
+    if attachment_lines:
+        parts.append("attachments:\n" + "\n".join(f"- {line}" for line in attachment_lines))
     forwarded = _extract_forwarded_context(source_message)
     if forwarded:
         parts.append(forwarded)
@@ -628,10 +640,94 @@ async def _fetch_discord_message_context(refs: list[tuple[int | None, int, int]]
     return "\n\n".join(blocks), len(blocks)
 
 
+def _attachment_display_names(raw_attachments) -> str:
+    names = []
+    for att in raw_attachments[:5]:
+        ct = getattr(att, "content_type", None) or "unknown"
+        names.append(f"{getattr(att, 'filename', 'attachment')} ({ct})")
+    return ", ".join(names)
+
+
+async def _gather_dialogue_attachments(message):
+    """Collect downloadable attachments from the message or its reply parent."""
+    raw_attachments = list(message.attachments or [])
+    source_label = ""
+
+    ref = getattr(message, "reference", None)
+    if not raw_attachments and ref:
+        ref_msg = getattr(ref, "resolved", None)
+        if ref_msg is None and ref.message_id:
+            try:
+                ref_msg = await message.channel.fetch_message(ref.message_id)
+            except Exception as e:
+                print(f"Reply parent fetch failed: {e}")
+                ref_msg = None
+        if ref_msg and ref_msg.attachments:
+            raw_attachments = list(ref_msg.attachments)
+            source_label = "reply parent"
+
+    if not raw_attachments:
+        return [], [], "", raw_attachments, source_label
+
+    class _AttachmentCarrier:
+        attachments = raw_attachments
+
+    extracted = await _extract_attachments(_AttachmentCarrier())
+    names = [fn for _, _, fn in extracted]
+    note_parts = []
+    if names:
+        prefix = " [attached"
+        if source_label:
+            prefix += f" from {source_label}"
+        note_parts.append(f"{prefix}: {', '.join(names)}]")
+    unsupported = [
+        att.filename
+        for att in raw_attachments
+        if att.filename not in names
+    ]
+    if unsupported:
+        note_parts.append(f" [unsupported attachment: {', '.join(unsupported)}]")
+    return extracted, names, "".join(note_parts), raw_attachments, source_label
+
+
+async def _attachments_from_forward_chain(source_ref: tuple) -> tuple[list, list[str], str]:
+    """When a partial forward hides attachments, walk reply parent of the source message."""
+    _guild_id, channel_id, message_id = source_ref
+    try:
+        channel = await client.fetch_channel(channel_id)
+        source_message = await channel.fetch_message(message_id)
+        candidates = [source_message]
+        ref = getattr(source_message, "reference", None)
+        if ref and ref.message_id:
+            try:
+                candidates.append(await channel.fetch_message(ref.message_id))
+            except Exception as e:
+                print(f"Forward chain parent fetch failed: {e}")
+        for candidate in candidates:
+            if not candidate.attachments:
+                continue
+            class _AttachmentCarrier:
+                attachments = list(candidate.attachments)
+            extracted = await _extract_attachments(_AttachmentCarrier())
+            if extracted:
+                names = [fn for _, _, fn in extracted]
+                label = "forward source" if candidate.id == source_message.id else "forward trigger"
+                return extracted, names, f" [attached from {label}: {', '.join(names)}]"
+    except Exception as e:
+        print(f"Forward chain attachment fetch failed: {e}")
+    return [], [], ""
+
+
 async def handle_dialogue(message):
     channel_id = message.channel.id
     visible_content, forwarded_context = _visible_message_content(message)
-    native_eddy = isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt()
+    attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (
+        await _gather_dialogue_attachments(message)
+    )
+    if not visible_content.strip() and raw_attachments:
+        visible_content = f"(attachment: {_attachment_display_names(raw_attachments)})"
+    parent_ch_id = resolve_dialogue_channel_id(message)
+    native_eddy = isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt(parent_ch_id)
 
     if native_eddy:
         triage = {"category": "practice", "needs_state": False}
@@ -661,17 +757,7 @@ async def handle_dialogue(message):
             # Internal log only — operational noise, not surfaced to channel (016 principle)
             print(f"Thread memory context: {message.channel.name} ({len(loaded)} msgs) — {summary[:100]}")
 
-    attachments = []
-    attachment_names = []
     attachment_extracted = False
-    attachment_note = ""
-    if message.attachments:
-        attachments = await _extract_attachments(message)
-        if attachments:
-            attachment_names = [fn for _, _, fn in attachments]
-            fnames = ", ".join(attachment_names)
-            attachment_note = f" [attached: {fnames}]"
-
     urls = []
     url_content = _boom_fetched_content.pop(message.id, "")
     url_source_count = 0
@@ -711,6 +797,15 @@ async def handle_dialogue(message):
         if dereferenced_context:
             attachment_note += f" [dereferenced {dereferenced_count} Discord message(s)]"
 
+    if not attachments and _forwarded_snapshot_is_partial(message):
+        source_ref = _forward_source_ref(message)
+        if source_ref:
+            chain_attachments, chain_names, chain_note = await _attachments_from_forward_chain(source_ref)
+            if chain_attachments:
+                attachments = chain_attachments
+                attachment_names = chain_names
+                attachment_note += chain_note
+
     # Include fetched content in history so it persists across turns
     user_entry = f"[{message.author.display_name}]: {visible_content}{attachment_note}"
     if url_content:
@@ -730,6 +825,7 @@ async def handle_dialogue(message):
         attachment_names=attachment_names,
         attachment_note=attachment_note,
         attachment_extracted=attachment_extracted,
+        raw_attachments=raw_attachments,
         url_content=url_content,
         content_from_boom_capture=content_from_boom_capture,
         url_source_count=url_source_count,
@@ -766,7 +862,7 @@ async def run_link_read_followup(
     )
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
-    native_eddy = uses_native_turtle_prompt()
+    native_eddy = uses_native_turtle_prompt(resolve_dialogue_channel_id(source))
     await _continue_dialogue_turn(
         source,
         history,
@@ -776,6 +872,7 @@ async def run_link_read_followup(
         attachment_names=[],
         attachment_note=" [link read followup]",
         attachment_extracted=False,
+        raw_attachments=[],
         url_content=url_content,
         content_from_boom_capture=False,
         url_source_count=len(urls),
@@ -798,6 +895,7 @@ async def _continue_dialogue_turn(
     attachment_names,
     attachment_note: str,
     attachment_extracted: bool,
+    raw_attachments=None,
     url_content: str,
     content_from_boom_capture: bool,
     url_source_count: int,
@@ -840,21 +938,32 @@ async def _continue_dialogue_turn(
 
         # INT-023: Context loads silently. Healthy state needs no announcement.
 
+    parent_ch_id = resolve_dialogue_channel_id(message)
+    from mage import uses_craft_surface, get_channel_default_context
+
+    craft_surface = uses_craft_surface(parent_ch_id)
     cfg = thread_configs.get(channel_id)
     if native_eddy:
         ctx = (cfg or {}).get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
-            from mage import get_channel_default_context
             ctx = get_channel_default_context(message.channel.parent_id)
         system_prompt = get_native_eddy_prompt(ctx)
         thread_use_api = False
         thread_model = (cfg or {}).get("model") or TURTLE_MODEL
+    elif craft_surface:
+        ctx = (cfg or {}).get("context_type") if cfg else None
+        if not ctx:
+            ctx = get_channel_default_context(parent_ch_id) or "craft"
+        system_prompt = get_craft_channel_prompt(ctx)
+        thread_use_api = (cfg or {}).get("use_api", USE_API) if cfg else USE_API
+        thread_model = (cfg or {}).get("model", DIALOGUE_MODEL) if cfg else DIALOGUE_MODEL
     elif cfg:
         ctx = cfg.get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
-            from mage import get_channel_default_context
             ctx = get_channel_default_context(message.channel.parent_id)
-        system_prompt = get_thread_prompt(cfg["attunement"], cfg["use_api"], context_type=ctx)
+        system_prompt = get_thread_prompt(
+            cfg["attunement"], cfg["use_api"], context_type=ctx, channel_id=parent_ch_id
+        )
         thread_use_api = cfg["use_api"]
         thread_model = cfg["model"]
     else:
@@ -891,6 +1000,10 @@ async def _continue_dialogue_turn(
             source_flags.append(f"bot-fetched URL content ({url_source_count or len(urls)} URL(s))")
     if attachments:
         source_flags.append(f"attachment metadata ({', '.join(attachment_names)})")
+    elif raw_attachments:
+        source_flags.append(
+            f"attachment present but not extracted ({_attachment_display_names(raw_attachments)})"
+        )
     if forwarded_context:
         source_flags.append("forwarded message snapshot")
     if dereferenced_context:
@@ -982,9 +1095,19 @@ async def _continue_dialogue_turn(
             elif attachments and not is_gemini:
                 extraction = await preprocess_attachments(attachments) if attachments else ""
                 if extraction:
-                    attachment_extracted = True
                     messages_for_llm[-1] = dict(messages_for_llm[-1])
-                    messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + extraction
+                    block = extraction
+                    if extraction.startswith("[Attachment processing failed") and raw_attachments:
+                        url_lines = []
+                        for att in raw_attachments[:3]:
+                            url = getattr(att, "url", None)
+                            if url:
+                                url_lines.append(f"- {att.filename}: {url}")
+                        if url_lines:
+                            block += "\n[Attachment URLs for practitioner]:\n" + "\n".join(url_lines)
+                    messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + block
+                    if not extraction.startswith("[Attachment processing failed"):
+                        attachment_extracted = True
                 if thread_use_api:
                     reply, tools_executed = await chat_anthropic_with_model(
                         system_prompt, messages_for_llm, thread_model, use_tools=True,
@@ -1501,7 +1624,9 @@ async def on_message(message):
         else:
             return
 
-    if isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt():
+    if isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt(
+        resolve_dialogue_channel_id(message)
+    ):
         try:
             starter = message.channel.starter_message
             if starter is None:
@@ -1594,6 +1719,9 @@ async def on_message(message):
 
         lock = get_channel_lock(message.channel.id)
         async with lock:
+            if is_craft_intake_channel(message):
+                await schedule_craft_intake(message, client)
+                return
             await handle_dialogue(message)
 
         if offer_eddy:

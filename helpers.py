@@ -75,7 +75,14 @@ async def load_thread_history(thread: discord.Thread, max_messages: int = 50) ->
                 if content and not content.startswith("🧵"):
                     history.append({"role": "assistant", "content": content})
             elif not msg.author.bot:
-                history.append({"role": "user", "content": f"[{msg.author.display_name}]: {msg.content}"})
+                note = ""
+                content = msg.content or ""
+                if msg.attachments:
+                    fnames = ", ".join(a.filename for a in msg.attachments[:5])
+                    note = f" [attached: {fnames}]"
+                    if not content.strip():
+                        content = f"(attachment: {fnames})"
+                history.append({"role": "user", "content": f"[{msg.author.display_name}]: {content}{note}"})
     except Exception as e:
         print(f"Failed to load thread history for {thread.name}: {e}")
     if history and len(history) > MAX_DIALOGUE_HISTORY:

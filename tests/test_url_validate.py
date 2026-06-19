@@ -1,6 +1,13 @@
 import unittest
 
-from url_validate import SSRFBlockedError, assert_fetch_url_allowed, validate_fetch_url
+import httpx
+
+from url_validate import (
+    SSRFBlockedError,
+    assert_fetch_url_allowed,
+    ssrf_httpx_request_hook,
+    validate_fetch_url,
+)
 
 
 class UrlValidateAllowTests(unittest.TestCase):
@@ -47,6 +54,20 @@ class UrlValidateBlockTests(unittest.TestCase):
     def test_assert_raises(self) -> None:
         with self.assertRaises(SSRFBlockedError):
             assert_fetch_url_allowed("http://127.0.0.1/")
+
+
+class SsrfHttpxHookTests(unittest.IsolatedAsyncioTestCase):
+    async def test_hook_allows_public_https(self) -> None:
+        hooks = {"request": [ssrf_httpx_request_hook]}
+        async with httpx.AsyncClient(event_hooks=hooks, timeout=10) as http:
+            response = await http.get("https://example.com")
+        self.assertEqual(response.status_code, 200)
+
+    async def test_hook_blocks_localhost(self) -> None:
+        hooks = {"request": [ssrf_httpx_request_hook]}
+        async with httpx.AsyncClient(event_hooks=hooks, timeout=10) as http:
+            with self.assertRaises(SSRFBlockedError):
+                await http.get("http://127.0.0.1/")
 
 
 if __name__ == "__main__":

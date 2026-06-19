@@ -40,4 +40,11 @@ channels:
     default_context: null
     description: Private practice surface
 
+  "YOUR_CRAFT_CHANNEL_ID":
+    mage: default
+    type: craft
+    attunement: craft
+    default_context: craft
+    description: Craft Turtle builder surface — learning intake for harness/product friction
+
 default_mage: default

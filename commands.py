@@ -521,8 +521,9 @@ async def cmd_thread(message, args):
     if attunement_match:
         attunement = attunement_match.group(1)
     else:
-        from mage import get_attunement_profile
-        attunement = "native" if get_attunement_profile() == "native" else "semi"
+        from mage import get_effective_attunement
+        eff = get_effective_attunement(message.channel.id)
+        attunement = "native" if eff == "native" else "semi"
     valid_attunements = ATTUNEMENT_LEVELS | {"native"}
     if attunement not in valid_attunements:
         await message.reply(

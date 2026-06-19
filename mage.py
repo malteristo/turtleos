@@ -53,11 +53,54 @@ def get_registry():
 
 
 def get_attunement_profile() -> str:
-    """Return attunement profile: native (vanilla platform law) or magic (legacy)."""
+    """Return global attunement profile: native (vanilla platform law) or magic (legacy)."""
     profile = (_MAGE_REGISTRY.get("attunement") or "magic").strip().lower()
     if profile not in ("native", "magic"):
         return "magic"
     return profile
+
+
+def get_channel_attunement(channel_id) -> str | None:
+    """Per-channel attunement override from mage_registry (native, magic, craft)."""
+    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
+    if isinstance(entry, dict):
+        att = entry.get("attunement")
+        if att:
+            normalized = att.strip().lower()
+            if normalized in ("native", "magic", "craft"):
+                return normalized
+    return None
+
+
+def resolve_dialogue_channel_id(message_or_channel_id) -> int:
+    """Parent channel id for threads; channel id for parent channels."""
+    if hasattr(message_or_channel_id, "channel"):
+        channel = message_or_channel_id.channel
+    else:
+        channel = message_or_channel_id
+    if hasattr(channel, "parent_id") and channel.parent_id:
+        return channel.parent_id
+    return channel.id
+
+
+def get_effective_attunement(channel_id) -> str:
+    """Effective attunement for a channel: per-channel override, craft type, or global."""
+    ch_att = get_channel_attunement(channel_id)
+    if ch_att:
+        return ch_att
+    if _get_channel_type(channel_id) == "craft":
+        return "craft"
+    return get_attunement_profile()
+
+
+def uses_craft_surface(channel_id) -> bool:
+    """True when channel should use Craft Turtle vocation (semi-attuned builder mode)."""
+    return get_effective_attunement(channel_id) == "craft"
+
+
+def uses_native_eddy(channel_id) -> bool:
+    """True when eddies in this channel use vanilla native Turtle prompts."""
+    return get_effective_attunement(channel_id) == "native"
 
 
 def is_river_message(message) -> bool:

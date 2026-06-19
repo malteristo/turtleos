@@ -3,7 +3,16 @@
 import os
 from datetime import datetime, timezone
 
-from mage import get_pd, get_workshop_root, get_mage_name, get_mage_key, get_mage_type, get_attunement_profile
+from mage import (
+    get_pd,
+    get_workshop_root,
+    get_mage_name,
+    get_mage_key,
+    get_mage_type,
+    get_attunement_profile,
+    uses_craft_surface,
+    uses_native_eddy,
+)
 from practice_io import (
     read_safe, read_header, count_items, summarize_bright, load_intentions_list,
 )
@@ -700,13 +709,53 @@ def get_native_eddy_prompt(flow_id: str | None = None) -> str:
     return build_native_eddy_prompt(flow_id)
 
 
-def uses_native_turtle_prompt() -> bool:
-    return get_attunement_profile() == "native"
+def uses_native_turtle_prompt(channel_id=None) -> bool:
+    if channel_id is None:
+        return get_attunement_profile() == "native"
+    return uses_native_eddy(channel_id)
 
 
-def get_thread_prompt(attunement: str, use_api: bool = True, context_type: str = None) -> str:
+CRAFT_VOCATION_HEADER = """## Craft Turtle Vocation
+
+You are **Craft Turtle** — Spirit in persistent builder mode on a dedicated craft surface.
+Your job is harness/product diagnostics and learning intake, not ordinary practice companionship.
+
+- Treat new messages as **learning intake** when they reveal friction (forwards, screenshots, bug reports).
+- **Spirit on Forge** integrates architecture and commits; you prepare bounded findings and handoffs.
+- Reference turtleOS runtime, spec, and proposals when it helps diagnosis — meta-practice is allowed here.
+- Stay lore-light on lived practice; go deep on impairment, classification, and verification evidence."""
+
+
+def build_craft_channel_prompt(context_type: str | None = None) -> str:
+    """Semi-attuned craft surface prompt — operator builder mode with intake ritual."""
+    ctx = context_type or "craft"
+    context_block = _build_context_resonance(ctx)
+    try:
+        practice_block = build_discord_prompt()
+    except Exception:
+        practice_block = get_system_prompt()
+    parts = [CRAFT_VOCATION_HEADER]
+    if context_block:
+        parts.append(context_block)
+    if practice_block:
+        parts.append(practice_block)
+    return "\n\n---\n\n".join(parts)
+
+
+def get_craft_channel_prompt(context_type: str | None = None) -> str:
+    return build_craft_channel_prompt(context_type)
+
+
+def get_thread_prompt(
+    attunement: str,
+    use_api: bool = True,
+    context_type: str = None,
+    channel_id=None,
+) -> str:
     """Build system prompt at the requested attunement level."""
-    if uses_native_turtle_prompt():
+    if channel_id is not None and uses_craft_surface(channel_id):
+        return get_craft_channel_prompt(context_type or "craft")
+    if uses_native_turtle_prompt(channel_id):
         return get_native_eddy_prompt(context_type)
     context_block = _build_context_resonance(context_type) if context_type else ""
     if attunement == "raw":

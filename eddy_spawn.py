@@ -209,7 +209,8 @@ async def post_thread_opening(thread, topic: str, origin: str, source_text: str 
 
     from prompts import uses_native_turtle_prompt
 
-    if uses_native_turtle_prompt():
+    parent_id = thread.parent_id or thread.id
+    if uses_native_turtle_prompt(parent_id):
         source_excerpt = " ".join(source_text.split())[:700] if source_text else ""
         opening = _fallback_thread_opening(topic, origin, source_excerpt)
         for chunk in split_message(opening):
@@ -982,7 +983,7 @@ async def spawn_river_eddy(
     """Materialize eddy from River act — thread on source message; rename on first in-eddy post."""
     from commands import thread_configs
     from llm import resolve_model
-    from mage import get_thread_member_ids, river_bot_enabled, get_attunement_profile
+    from mage import get_thread_member_ids, river_bot_enabled, get_effective_attunement
     from thread_registry import register_thread
     from state import TURTLE_MODEL
 
@@ -996,7 +997,9 @@ async def spawn_river_eddy(
             flow_title = spec.title[:100]
     thread_name = flow_title or NEW_EDDY_NAME
 
-    if get_attunement_profile() == "native":
+    parent_id = message.channel.id
+    channel_att = get_effective_attunement(parent_id)
+    if channel_att == "native":
         model_id = TURTLE_MODEL
         use_api = False
         attunement = "native"
@@ -1051,7 +1054,7 @@ async def spawn_river_eddy(
         thread_configs[thread.id] = {
             **config,
             "created": datetime.now(timezone.utc),
-            "native_vanilla": get_attunement_profile() == "native",
+            "native_vanilla": channel_att == "native",
             "presence_posted": False,
             "flow_presence_posted": False,
         }
@@ -1102,12 +1105,13 @@ async def spawn_blank_river_eddy(
     topic: str | None = None,
 ):
     """Open a blank native eddy from the standing door — no seed until first message."""
-    from mage import get_thread_member_ids, river_bot_enabled, get_attunement_profile
+    from mage import get_thread_member_ids, river_bot_enabled, get_effective_attunement
     from thread_registry import register_thread
     from state import TURTLE_MODEL
 
     bot_client = _materialize_client_for_channel(channel)
-    if get_attunement_profile() == "native":
+    channel_att = get_effective_attunement(channel.id)
+    if channel_att == "native":
         model_id = TURTLE_MODEL
         use_api = False
     else:
@@ -1152,7 +1156,7 @@ async def spawn_blank_river_eddy(
         thread_configs[thread.id] = {
             **config,
             "created": datetime.now(timezone.utc),
-            "native_vanilla": True,
+            "native_vanilla": channel_att == "native",
             "presence_posted": False,
         }
         write_awaiting_title(thread.id, channel.id, {"flow_id": flow_id})
