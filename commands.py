@@ -17,6 +17,7 @@ from state import (
     client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS,
     get_channel,
     IDENTITY_DIR, OLLAMA_URL, DIALOGUE_MODEL, REFLECTION_MODEL, USE_API,
+    RIVER_MODEL, TURTLE_MODEL, TRIAGE_MODEL,
     EDIT_DELEGATE_MODEL,
     MAX_DIALOGUE_HISTORY, MAX_TOOL_ROUNDS,
     OBSIDIAN_VAULT, PRACTICE_WEB_BASE,
@@ -111,8 +112,15 @@ async def cmd_status(message):
     active_count = sum(1 for s in active_sessions.values() if not s["closed"])
 
     embed = discord.Embed(title="\U0001f422 Turtle Status", color=EMBED_COLORS["status_ok"], timestamp=now)
-    embed.add_field(name="Dialogue", value=f"`{DIALOGUE_MODEL}`\n({'API' if USE_API else 'local'})", inline=True)
-    embed.add_field(name="Reflection", value=f"`{REFLECTION_MODEL}`\n(local)", inline=True)
+    embed.add_field(name="River", value=f"`{RIVER_MODEL}`\n(local)", inline=True)
+    embed.add_field(name="Turtle", value=f"`{TURTLE_MODEL}`\n(local)", inline=True)
+    embed.add_field(name="Background", value=f"triage `{TRIAGE_MODEL}`\nreflect `{REFLECTION_MODEL}`", inline=True)
+    if USE_API or DIALOGUE_MODEL != TURTLE_MODEL:
+        embed.add_field(
+            name="Dialogue override",
+            value=f"`{DIALOGUE_MODEL}`\n({'API' if USE_API else 'local'})",
+            inline=True,
+        )
     embed.add_field(name="Ollama", value=ollama_status, inline=True)
     embed.add_field(name="Uptime", value=uptime, inline=True)
     embed.add_field(name="Sessions", value=str(active_count), inline=True)
@@ -481,7 +489,15 @@ async def cmd_help(message):
     embed.add_field(name="Links", value="\n".join(f"{c} — {d}" for c, d in fetch_cmds), inline=False)
     embed.add_field(name="Infrastructure", value="\n".join(f"{c} — {d}" for c, d in infra_cmds), inline=False)
     models_str = ", ".join(f"`{k}`" for k in KNOWN_MODELS.keys())
-    embed.add_field(name="Dialogue", value=f"Base: `{DIALOGUE_MODEL}` ({'API' if USE_API else 'local'})\nModels: {models_str}\nAttunement: `raw`, `semi`, `deep`", inline=False)
+    embed.add_field(
+        name="Models",
+        value=(
+            f"River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}`\n"
+            f"Overrides: {models_str}\n"
+            f"API opt-in: `claude`, `gemini-*` via `--model` or `DIALOGUE_MODEL`"
+        ),
+        inline=False,
+    )
     await message.reply(embed=embed, mention_author=False)
 
 
@@ -502,9 +518,17 @@ async def cmd_thread(message, args):
     model_str = model_match.group(1) if model_match else "local"
 
     attunement_match = re.search(r'--attunement\s+(\S+)', raw)
-    attunement = attunement_match.group(1) if attunement_match else "semi"
-    if attunement not in ATTUNEMENT_LEVELS:
-        await message.reply(f"Unknown attunement `{attunement}`. Use: {', '.join(sorted(ATTUNEMENT_LEVELS))}", mention_author=False)
+    if attunement_match:
+        attunement = attunement_match.group(1)
+    else:
+        from mage import get_attunement_profile
+        attunement = "native" if get_attunement_profile() == "native" else "semi"
+    valid_attunements = ATTUNEMENT_LEVELS | {"native"}
+    if attunement not in valid_attunements:
+        await message.reply(
+            f"Unknown attunement `{attunement}`. Use: {', '.join(sorted(valid_attunements))}",
+            mention_author=False,
+        )
         return
 
     type_match = re.search(r'--type\s+(\S+)', raw)

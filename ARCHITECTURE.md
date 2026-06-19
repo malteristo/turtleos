@@ -130,7 +130,8 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 
 | Module | Approx. lines | Purpose |
 |--------|---------------|---------|
-| `state.py` | 305 | Shared mutable state: bot client, config constants, locks, histories, model names, channel mappings, thread configs. |
+| `models.py` | ~100 | Two-stack model routing: River (Qwen), Turtle (Gemma), background stack, KNOWN_MODELS aliases, API opt-in. |
+| `state.py` | 305 | Shared mutable state: bot client, config constants, locks, histories, model re-exports, channel mappings, thread configs. |
 | `mage.py` | 250 | Mage/practitioner registry, channel→practice-dir routing, contextvars for per-channel async isolation. |
 | `practice_io.py` | 184 | File I/O helpers for practice directories: read, write, list, search, section extraction, links. |
 | `helpers.py` | 110 | Discord/practice utilities: message splitting, activity logging, history access, local time. |
@@ -381,24 +382,29 @@ Tools are defined in `tos_tools.py` as JSON schemas (`TOS_TOOLS` list), dispatch
 
 ## LLM Backend Selection
 
+Two-stack architecture (TURTLE_SPEC §8.1). Configuration lives in `models.py` and `.env`.
+
 ```
 Message arrives
     │
-    ├─ Triage: always Ollama local (TRIAGE_MODEL, ~0.8B)
+    ├─ River channel (native)
+    │   └─ RIVER_MODEL (Qwen ~4B) — structured acts only, no Turtle prose
     │
-    ├─ Dialogue: depends on channel config
-    │   ├─ API channels → DIALOGUE_MODEL (claude-sonnet-4-6)
-    │   ├─ Thread with --model flag → specified model
-    │   ├─ Gemini model → chat_gemini (supports native attachments)
-    │   └─ Local model → chat_ollama (REFLECTION_MODEL)
+    ├─ Eddy / thread (native)
+    │   ├─ Default → TURTLE_MODEL (Gemma ~31B)
+    │   ├─ !thread --model M → resolve_model(M) — local gemma/qwen or API claude/gemini
+    │   └─ think=False at Ollama API for Gemma
     │
-    ├─ Session reflection: always Ollama local (REFLECTION_MODEL)
-    ├─ Practice health: always Ollama local (REFLECTION_MODEL)
-    ├─ Delegate edits: always Ollama local (EDIT_DELEGATE_MODEL)
-    └─ Interoception: always Ollama local (REFLECTION_MODEL)
+    ├─ Magic-attuned main channel
+    │   └─ DIALOGUE_MODEL (defaults to TURTLE_MODEL; claude-* for API opt-in)
+    │
+    └─ Background (always local Qwen stack)
+        ├─ TRIAGE_MODEL — message classification
+        ├─ REFLECTION_MODEL — session reflection, health, interoception
+        └─ EDIT_DELEGATE_MODEL — delegate file edits
 ```
 
-Local models handle all autonomous/background work — no API tokens spent on reflection, health reads, or triage.
+**Instance defaults** (see `.env.template`): `RIVER_MODEL=qwen3.5:4b`, `TURTLE_MODEL=gemma4:31b`. Faster eddy fallback: `!thread --model gemma-26b`. Cloud dialogue remains opt-in via `DIALOGUE_MODEL=claude-*` or per-thread `--model claude`.
 
 ## Session Lifecycle
 

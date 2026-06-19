@@ -130,7 +130,7 @@ Use the tiered cognitive stack, updated for May 2026:
 
 - Triage: smallest local Qwen that classifies reliably, always `think=false` or template-equivalent.
 - Sensorium/proprioceptor: local fast model, structured output only.
-- Dialogue: local Qwen3/Qwen3.5/Qwen3.6 candidate by default once practice probes pass. Claude remains fallback.
+- Dialogue (eddies): local Gemma by default (`TURTLE_MODEL`); `gemma-26b` for faster override. Claude/Gemini API remains opt-in per thread or via `DIALOGUE_MODEL`.
 - Reflection: larger local Qwen, multi-pass allowed.
 - Research: largest local model that fits on the Mac Mini without degrading live dialogue.
 - Depth: Claude/frontier via explicit escalation or confidence threshold.

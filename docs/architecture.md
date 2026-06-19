@@ -97,8 +97,9 @@ Discord message (#dialogue or thread)
   -> If conversation: build message history
   -> Read practice state (boom, bright, compass, intentions)
   -> Choose model:
-      Thread with config? -> use thread's model/attunement
-      Main channel? -> DIALOGUE_MODEL (claude-sonnet-4-6 via LiteLLM)
+      Native river? -> RIVER_MODEL (Qwen, structured acts)
+      Native eddy / thread? -> TURTLE_MODEL (Gemma) or thread --model override
+      Magic-attuned main channel? -> DIALOGUE_MODEL (local or API opt-in)
   -> Send to LLM (Anthropic API or Ollama)
   -> Reply in Discord
   -> Update session tracking
@@ -146,7 +147,7 @@ Practice state flows through the LiveSync-backed workshop mirror.
 | **discord.py** | discord.py | — | Discord API wrapper |
 | **Anthropic SDK** | anthropic | — | For API model calls |
 | **LiteLLM** | litellm | 1.82.0 | LLM proxy, port 4000 |
-| **Ollama** | ollama | — | Local inference (qwen3.5:9b, qwen3.5:4b) |
+| **Ollama** | ollama | — | Local inference — River: Qwen 4b; Turtle: Gemma 31b; background: Qwen stack |
 | **Claude Code** | claude | 2.1.81 | cc-sessions (ephemeral-deep via Discord) |
 | **Bun** | bun | 1.3.11 | Runs Discord MCP plugin server |
 | **CouchDB** | couchdb | — | Practice vault (Obsidian LiveSync) |
@@ -173,7 +174,9 @@ Practice state flows through the LiveSync-backed workshop mirror.
 
 ```
 OLLAMA_URL=http://localhost:11434
-DIALOGUE_MODEL=claude-sonnet-4-6
+DIALOGUE_MODEL=gemma4:31b
+RIVER_MODEL=qwen3.5:4b
+TURTLE_MODEL=gemma4:31b
 REFLECTION_MODEL=qwen3.5:9b
 DISCORD_CHANNEL_DIALOGUE=<channel_id>
 DISCORD_BOT_TOKEN=<token>

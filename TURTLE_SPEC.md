@@ -357,10 +357,12 @@ Optional exit note on idle departure remains v1.1 (§8.1, §16). The thread pers
 
 Vanilla turtleOS uses **two local models**, not the legacy proprioceptive stack:
 
-| Component | Model | Trigger |
-|-----------|-------|---------|
-| **River** | Small local | Every river message |
-| **Turtle** | Capable local | Every eddy message |
+| Component | Model | Env var | Trigger |
+|-----------|-------|---------|---------|
+| **River** | Small local (Qwen class) | `RIVER_MODEL` | Every river message |
+| **Turtle** | Capable local (Gemma class) | `TURTLE_MODEL` | Every eddy message |
+
+Background work (triage, reflection, delegate edits) uses the Qwen stack — see `models.py` and `.env.template`.
 
 **Retired from vanilla:** proprioceptor, reflex lines, CR routing, triage→proprio→cloud pipeline, reflection tier as separate pre-dialogue path.
 

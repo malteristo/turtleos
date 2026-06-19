@@ -49,14 +49,22 @@ def get_channel(name):
 IDENTITY_DIR = os.path.expanduser("~/turtleos/identity")
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-DIALOGUE_MODEL = os.environ.get("DIALOGUE_MODEL", "llama3.3:70b")
-TURTLE_MODEL = os.environ.get("TURTLE_MODEL", os.environ.get("DIALOGUE_MODEL", "qwen3.5:9b"))
-REFLECTION_MODEL = os.environ.get("REFLECTION_MODEL", "llama3.3:70b")
-TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "qwen3.5:0.8b")
-RIVER_MODEL = os.environ.get("RIVER_MODEL", os.environ.get("TRIAGE_MODEL", "qwen3.5:4b"))
+
+# Two-stack model routing — see models.py (TURTLE_SPEC §8.1)
+from models import (
+    DIALOGUE_MODEL,
+    EDIT_DELEGATE_MODEL,
+    KNOWN_MODELS,
+    REFLECTION_MODEL,
+    RIVER_MODEL,
+    TRIAGE_MODEL,
+    TURTLE_MODEL,
+    format_stack_line,
+    model_stack,
+)
+
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-EDIT_DELEGATE_MODEL = os.environ.get("EDIT_DELEGATE_MODEL", "qwen3.5:4b")
 
 try:
     import anthropic
@@ -99,16 +107,6 @@ _processed_messages = collections.deque(maxlen=100)
 
 # Thread configuration
 ATTUNEMENT_LEVELS = {"raw", "semi", "deep"}
-KNOWN_MODELS = {
-    "local": None,
-    "claude": "claude-sonnet-4-6",
-    "gemini": "gemini-2.5-flash",
-    "gemini-flash": "gemini-2.5-flash",
-    "gemini-pro": "gemini-2.5-pro",
-    "qwen": "qwen3.5:9b",
-    "qwen-4b": "qwen3.5:4b",
-    "qwen-27b": "qwen3.5:27b",
-}
 
 thread_configs: dict[int, dict] = {}
 absorbed_contexts: dict[int, list[dict]] = {}  # channel_id -> [{name, digest, absorbed_at}]

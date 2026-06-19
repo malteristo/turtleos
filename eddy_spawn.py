@@ -207,6 +207,15 @@ async def post_thread_opening(thread, topic: str, origin: str, source_text: str 
         print(f'Thread opening suppressed for test thread: {topic}')
         return ""
 
+    from prompts import uses_native_turtle_prompt
+
+    if uses_native_turtle_prompt():
+        source_excerpt = " ".join(source_text.split())[:700] if source_text else ""
+        opening = _fallback_thread_opening(topic, origin, source_excerpt)
+        for chunk in split_message(opening):
+            await thread.send(chunk)
+        return opening
+
     opening = await compose_thread_opening(topic, origin, source_text)
     for chunk in split_message(opening):
         await thread.send(chunk)
@@ -990,9 +999,10 @@ async def spawn_river_eddy(
     if get_attunement_profile() == "native":
         model_id = TURTLE_MODEL
         use_api = False
+        attunement = "native"
     else:
         model_id, use_api = resolve_model("local")
-    attunement = "semi"
+        attunement = "semi"
     eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 10080)
     split_bot = river_bot_enabled()
 

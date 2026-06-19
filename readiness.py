@@ -9,7 +9,7 @@ from pathlib import Path
 from mage import get_pd, get_runtime_dir
 from practice_io import read_safe, count_items, file_age_hours, format_age
 from state import (
-    IDENTITY_DIR, DIALOGUE_MODEL, USE_API,
+    IDENTITY_DIR, DIALOGUE_MODEL, TURTLE_MODEL, RIVER_MODEL, USE_API,
     thread_configs, active_sessions,
 )
 
@@ -154,7 +154,11 @@ def assess_readiness(pd=None) -> dict:
     if USE_API and not os.environ.get("ANTHROPIC_API_KEY"):
         substrate_issues.append("API key missing")
     if not substrate_issues:
-        dims.append({"name": "Substrate Health", "status": "ready", "detail": f"{DIALOGUE_MODEL} + Ollama"})
+        dims.append({
+            "name": "Substrate Health",
+            "status": "ready",
+            "detail": f"River `{RIVER_MODEL}` · Turtle `{DIALOGUE_MODEL if USE_API else TURTLE_MODEL}` + Ollama",
+        })
     else:
         dims.append({"name": "Substrate Health", "status": "impaired", "detail": ", ".join(substrate_issues)})
 

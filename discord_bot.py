@@ -50,6 +50,7 @@ from state import (
     client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS, _processed_messages,
     get_channel_lock, get_channel,
     IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API, TURTLE_MODEL,
+    RIVER_MODEL,
     HAS_GEMINI, GOOGLE_API_KEY,
     MAX_DIALOGUE_HISTORY, EDDY_DEFAULT,
     dialogue_histories, active_sessions,
@@ -1119,9 +1120,11 @@ async def on_ready():
     except Exception as exc:
         print(f"Turtle bot id cache failed: {exc}")
     print(f"tOS: {get_pd()} | Identity: {IDENTITY_DIR}")
-    print(f"Dialogue: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
-    print(f"Reflection: {REFLECTION_MODEL} (local)")
-    print(f"Triage: {TRIAGE_MODEL} (local)")
+    print(f"River: {RIVER_MODEL} (local)")
+    print(f"Turtle: {TURTLE_MODEL} (local)")
+    if USE_API or DIALOGUE_MODEL != TURTLE_MODEL:
+        print(f"Dialogue override: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
+    print(f"Background: triage={TRIAGE_MODEL} reflection={REFLECTION_MODEL} (local)")
     print(f"Commands: {', '.join(DIRECT_COMMANDS.keys())}")
     prompt = get_system_prompt()
     print(f"System prompt: {len(prompt)} chars")
@@ -1624,7 +1627,10 @@ def main():
     if "--test" in sys.argv:
         print(f"Bot token: ...{token[-8:]}")
         print(f"Practice: {get_pd()} | Identity: {IDENTITY_DIR}")
-        print(f"Dialogue: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
+        print(f"River: {RIVER_MODEL} (local)")
+        print(f"Turtle: {TURTLE_MODEL} (local)")
+        if USE_API or DIALOGUE_MODEL != TURTLE_MODEL:
+            print(f"Dialogue override: {DIALOGUE_MODEL} ({'API' if USE_API else 'local'})")
         print(f"Reflection: {REFLECTION_MODEL} (local)")
         print(f"Channels: {', '.join(k for k,v in CHANNELS.items() if v)}")
         print(f"Commands: {', '.join(DIRECT_COMMANDS.keys())}")
