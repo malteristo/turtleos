@@ -465,6 +465,7 @@ async def cmd_help(message):
         ("`!thread \"topic\" [--model M] [--type T]`", "Create focused thread (types: fast/slow/confluence/standing)"),
         ("`!threads`", "List active threads with eddy types"),
         ("`!thread-type <type>`", "Change thread's eddy type (in thread)"),
+        ("`!rename <title>`", "Rename this eddy to an exact title (in thread)"),
         ("`!new [topic]`", "Auto-spawn thread from message (AI-named)"),
         ("`!eddy-check`", "Scan threads for dissolution readiness"),
         ("`!absorb <name>`", "Bring thread resonance into main channel"),
@@ -712,6 +713,41 @@ async def cmd_thread_type(message, args):
         mention_author=False,
     )
     await log_activity(f"Thread **{message.channel.name}** type: `{old_type}` → `{new_type}`", info['emoji'], channel=message.channel)
+
+
+async def cmd_rename(message, args):
+    """Rename the current eddy: !rename Your exact title"""
+    if not isinstance(message.channel, discord.Thread):
+        await message.reply(
+            "Use `!rename Your title` inside an eddy thread.",
+            mention_author=False,
+        )
+        return
+    if not is_practice_channel(message):
+        await message.reply("Use `!rename` in your practice channel threads.", mention_author=False)
+        return
+
+    from eddy_spawn import parse_rename_command, rename_eddy_thread
+
+    title = parse_rename_command(message.content)
+    if not title:
+        await message.reply(
+            "Usage: `!rename Your exact title` — quotes optional for multi-word names.",
+            mention_author=False,
+        )
+        return
+
+    before = message.channel.name
+    new_name, err = await rename_eddy_thread(message.channel, title)
+    if err:
+        await message.reply(err, mention_author=False)
+        return
+
+    if new_name == before:
+        await message.reply(f"Eddy title unchanged: **{new_name}**.", mention_author=False)
+    else:
+        await message.reply(f"Renamed eddy: **{before}** → **{new_name}**.", mention_author=False)
+    await log_activity(f"Eddy renamed: {before} → {new_name}", "✏️", channel=message.channel)
 
 
 # ─── Views ───────────────────────────────────────────────────────
@@ -2210,6 +2246,7 @@ DIRECT_COMMANDS = {
     "thread": lambda msg, args: cmd_thread(msg, args),
     "threads": lambda msg, args: cmd_threads(msg, args),
     "thread-type": lambda msg, args: cmd_thread_type(msg, args),
+    "rename": lambda msg, args: cmd_rename(msg, args),
     "eddy-check": lambda msg, args: cmd_eddy_check(msg, args),
     "fetch": lambda msg, args: cmd_fetch(msg, args),
     "absorb": lambda msg, args: cmd_absorb(msg, args),
@@ -2239,6 +2276,7 @@ COMMAND_CONTEXT = {
     "sweep": "I ran a boom sweep — processing boom items into bright/release/box.",
     # "threads" — handled directly in cmd_threads with actual thread data (016)
     "thread-type": "I changed the thread's eddy type (fast/slow/confluence/standing).",
+    "rename": "I renamed this eddy to the exact title the practitioner specified.",
     "eddy-check": "I scanned all threads for dissolution readiness and flagged any that exceeded their quiet threshold.",
     "fetch": "I fetched a URL and distilled its resonance — the essential insights from the linked content.",
     "recall": "I performed a recall — loaded practice state and recent sessions.",

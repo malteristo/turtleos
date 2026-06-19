@@ -700,6 +700,83 @@ def pop_awaiting_title(thread_id: int, parent_channel_id: int) -> dict | None:
     return data
 
 
+def normalize_eddy_title(raw: str) -> str:
+    """Normalize practitioner-supplied eddy title (exact words, no LLM)."""
+    title = (raw or "").strip()
+    if len(title) >= 2 and title[0] == title[-1] and title[0] in "\"'":
+        title = title[1:-1].strip()
+    return " ".join(title.split())[:100]
+
+
+def parse_rename_command(content: str) -> str | None:
+    match = re.match(r"!rename\s+(.+)", (content or "").strip(), re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    title = normalize_eddy_title(match.group(1))
+    return title or None
+
+
+async def _edit_eddy_thread_name(thread: discord.Thread, title: str) -> None:
+    """Edit thread name — prefer current client; fall back to River bot if needed."""
+    try:
+        await thread.edit(name=title)
+        return
+    except discord.HTTPException as primary:
+        from mage import river_bot_enabled
+
+        if not river_bot_enabled():
+            raise primary
+        from river_state import river_client
+
+        river_thread = river_client.get_channel(thread.id)
+        if river_thread is None:
+            river_thread = await river_client.fetch_channel(thread.id)
+        await river_thread.edit(name=title)
+
+
+async def rename_eddy_thread(thread: discord.Thread, title: str) -> tuple[str | None, str | None]:
+    """Rename an eddy to an exact practitioner title. Returns (new_name, error)."""
+    title = normalize_eddy_title(title)
+    if not title:
+        return None, "Title cannot be empty."
+    if _is_system_eddy(title):
+        return None, "That name is reserved for system threads."
+
+    parent_id = thread.parent_id
+    was_awaiting_title = bool(parent_id and is_awaiting_title(thread.id, parent_id))
+    before = thread.name
+
+    try:
+        await _edit_eddy_thread_name(thread, title)
+    except discord.HTTPException as exc:
+        return None, f"Could not rename thread ({type(exc).__name__})."
+
+    from thread_registry import update_thread_name
+
+    update_thread_name(thread.id, title)
+
+    try:
+        from commands import thread_configs
+
+        cfg = thread_configs.get(thread.id)
+        if cfg:
+            cfg["topic"] = title
+            cfg["awaiting_title"] = False
+            cfg["blank_eddy"] = False
+    except Exception:
+        pass
+
+    if was_awaiting_title and parent_id:
+        pop_awaiting_title(thread.id, parent_id)
+        from mage import river_bot_enabled
+
+        if river_bot_enabled():
+            await river_add_turtle_to_eddy(thread)
+
+    print(f"Eddy renamed: {before!r} -> {title!r} (id={thread.id})")
+    return title, None
+
+
 def _materialize_client(message):
     channel = getattr(message, "channel", message)
     return _materialize_client_for_channel(channel)

@@ -14,7 +14,7 @@ How practitioners enter eddies and what they see before Turtle speaks.
 |------|----------------------------|
 | Materialize | Thread titled **`new eddy`**; Discord thread card in river |
 | First message | They speak first — that message **is** the opening |
-| Rename | River harness retitles thread from first message content (`generate_topic`) |
+| Rename | River harness retitles thread from first message content (`generate_topic`); **`!rename Exact title`** anytime in-eddy for manual override |
 | First Turtle reply | `river added turtle` system line, then dialogue |
 
 **Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`.
