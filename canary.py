@@ -62,6 +62,20 @@ def format_age(seconds):
     return f"{hours // 24}d"
 
 
+def check_workshop_git_clone():
+    workshop = Path.home() / "workshop"
+    git_marker = workshop / ".git"
+    boom = workshop / "desk" / "boom.md"
+    if not git_marker.exists():
+        return "red", f"no git clone at {workshop}"
+    if not boom.exists():
+        return "yellow", "clone present but desk/boom.md missing"
+    rc, out, _ = run(["git", "-C", str(workshop), "rev-parse", "--short", "HEAD"])
+    if rc != 0:
+        return "yellow", f"git HEAD unreadable: {out.strip()}"
+    return "green", f"HEAD {out.strip()}"
+
+
 def check_couchdb():
     rc, out, _ = run(["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:5984/"])
     if rc == 0 and out.strip() == "401":
@@ -275,8 +289,7 @@ def check_triage_fallback_count():
 
 
 CHECKS = [
-    ("infra", "couchdb_reachable", check_couchdb, "high"),
-    ("infra", "tailscale_serve", check_tailscale_serve, "high"),
+    ("infra", "workshop_git_clone", check_workshop_git_clone, "high"),
     ("infra", "discord_bot_alive", lambda: check_launchd_label("com.turtle.discord"), "high"),
     ("models", "ollama_reachable", check_ollama, "high"),
     ("models", "triage_fallback_count", check_triage_fallback_count, "medium"),

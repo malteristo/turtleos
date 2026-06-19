@@ -16,9 +16,6 @@ from .tasks import Task, TaskStore
 SERVICE_LABELS = [
     "com.turtle.discord",
     "com.turtle.canary",
-    "com.turtle.livesync-bridge",
-    "com.turtle.livesync-tunnel",
-    "com.turtle.couchdb",
     "com.turtle.caddy",
 ]
 
@@ -78,7 +75,7 @@ class RuntimeReadiness:
                 "last_exit_code": _int_or_none(exit_raw),
             }
 
-        required = ["com.turtle.discord", "com.turtle.couchdb"]
+        required = ["com.turtle.discord"]
         missing_required = [label for label in required if labels[label]["status"] == "missing"]
         return {
             "status": "impaired" if missing_required else "ready",
