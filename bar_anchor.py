@@ -39,6 +39,14 @@ async def ensure_channel_bars(channel, client=None) -> None:
 
         if not is_lifecycle_bar_active(channel.id):
             return
+        from mage import river_bot_enabled
+
+        if river_bot_enabled():
+            bar_client = get_lifecycle_bar_client(channel)
+            if not bar_client:
+                return
+            await ensure_eddy_lifecycle_bar_at_bottom(channel, bar_client)
+            return
         bar_client = client or get_lifecycle_bar_client(channel)
         if bar_client:
             await ensure_eddy_lifecycle_bar_at_bottom(channel, bar_client)

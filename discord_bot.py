@@ -96,7 +96,7 @@ from prompts import (
 from readiness import startup_readiness_check
 
 from helpers import (
-    local_now, get_history, log_activity, split_message,
+    local_now, get_history, log_activity, split_message, sync_history,
     load_thread_history, summarize_thread_context,
     preprocess_attachments,
 )
@@ -631,6 +631,7 @@ async def handle_dialogue(message):
         if loaded:
             dialogue_histories[channel_id] = loaded
             history = dialogue_histories[channel_id]
+            sync_history(channel_id)
             print(f"Thread memory restored: {message.channel.name} ({len(loaded)} messages)")
             summary = summarize_thread_context(loaded, message.channel.name)
             # Internal log only — operational noise, not surfaced to channel (016 principle)
@@ -743,6 +744,7 @@ async def run_link_read_followup(
     )
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
+    sync_history(channel.id)
     native_eddy = uses_native_turtle_prompt(resolve_dialogue_channel_id(source))
     await _continue_dialogue_turn(
         source,
@@ -1089,6 +1091,8 @@ async def _continue_dialogue_turn(
             pending_incidental_urls,
             message.client,
         )
+
+    sync_history(channel_id)
 
 
 # ─── Event Handlers ──────────────────────────────────────────────

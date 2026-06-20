@@ -22,7 +22,7 @@ from practice_io import read_safe
 from llm import chat_ollama
 from prompts import get_system_prompt
 from readiness import assess_readiness, save_readiness_trail
-from helpers import get_history, log_activity, local_now
+from helpers import get_history, log_activity, local_now, reload_history
 from outfacing import (
     evaluate_outfacing_signal,
     save_signal_drafts,
@@ -150,7 +150,7 @@ async def checkpoint_session(
         active_sessions[channel_id]["closed"] = True
 
     set_practice_context_for_channel(channel_id)
-    history = get_history(channel_id)
+    history = reload_history(channel_id)
     mage_name = get_mage_name()
 
     result.flow_writes = await _write_flow_checkpoint_if_needed(channel_id, history, mage_name)

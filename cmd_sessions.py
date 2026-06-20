@@ -6,15 +6,15 @@ import os
 
 import discord
 
-from helpers import get_history
+from helpers import clear_history, get_history, reload_history
 from mage import get_mage_name, get_pd, is_practice_channel
 from practice_io import count_items, read_safe
-from state import MIN_EXCHANGES_FOR_CHECKPOINT, active_sessions, dialogue_histories
+from state import MIN_EXCHANGES_FOR_CHECKPOINT, active_sessions
 
 
 async def cmd_checkpoint(message):
     channel_id = message.channel.id
-    history = get_history(channel_id)
+    history = reload_history(channel_id)
     if len(history) < MIN_EXCHANGES_FOR_CHECKPOINT:
         await message.reply(
             "Not enough conversation to checkpoint yet.",
@@ -52,7 +52,7 @@ async def cmd_checkpoint(message):
 
 async def cmd_release(message):
     channel_id = message.channel.id
-    history = get_history(channel_id)
+    history = reload_history(channel_id)
     if len(history) < 2:
         await message.reply("Not enough conversation to release. Just go — rest well.", mention_author=False)
         return
@@ -60,13 +60,22 @@ async def cmd_release(message):
     await message.reply("Closing session...", mention_author=False)
     from sessions import checkpoint_session
 
-    await checkpoint_session(channel_id, trigger="release", mark_paused=True)
+    result = await checkpoint_session(channel_id, trigger="release", mark_paused=True)
 
-    dialogue_histories.pop(channel_id, None)
+    clear_history(channel_id)
     active_sessions.pop(channel_id, None)
 
     embed = discord.Embed(title="Session Released", color=0x2ECC71)
-    embed.description = f"Session note written. Conversation history cleared.\nRest well, {get_mage_name()}."
+    lines: list[str] = ["Conversation history cleared."]
+    if result.flow_writes:
+        lines.insert(0, f"**Flow:** `{result.flow_writes[0]}`")
+    if result.session_note:
+        lines.insert(0, f"**Session note:** `sessions/{result.session_note}`")
+    if result.proposal:
+        lines.insert(0, f"**Proposal:** `proposals/{result.proposal}`")
+    if not result.captured_anything:
+        lines.insert(0, "No new resonance captured this release.")
+    embed.description = "\n".join(lines) + f"\n\nRest well, {get_mage_name()}."
 
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
     boom_count = count_items(boom)
@@ -93,7 +102,7 @@ async def cmd_dissolve(message, args):
         return
 
     channel_id = message.channel.id
-    history = get_history(channel_id)
+    history = reload_history(channel_id)
     from_lifecycle_bar = getattr(message, "from_lifecycle_bar", False)
     discord_client = getattr(message, "discord_client", None)
 
@@ -107,7 +116,7 @@ async def cmd_dissolve(message, args):
         await message.reply("Could not dissolve — thread not found.", mention_author=False)
         return
 
-    dialogue_histories.pop(channel_id, None)
+    clear_history(channel_id)
     active_sessions.pop(channel_id, None)
 
     lines = [f"**{result.thread_name}** archived."]

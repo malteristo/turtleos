@@ -75,6 +75,9 @@ def inject_act_digest(channel_id: int, cmd: str, summary: str) -> None:
     history.append({"role": "user", "content": f"[Act: !{cmd}] {text}"})
     if len(history) > MAX_DIALOGUE_HISTORY:
         del history[0 : len(history) - MAX_DIALOGUE_HISTORY]
+    from helpers import sync_history
+
+    sync_history(channel_id)
 
 
 async def send_with_actions(channel, message: str, actions: list[tuple[str, str]]):

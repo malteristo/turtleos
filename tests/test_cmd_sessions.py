@@ -37,7 +37,9 @@ class TestCmdCheckpoint(unittest.IsolatedAsyncioTestCase):
         message.channel.id = 1
         message.reply = AsyncMock()
 
-        with patch("cmd_sessions.get_history", return_value=[{"role": "user", "content": "hi"}]):
+        with patch("cmd_sessions.get_history", return_value=[{"role": "user", "content": "hi"}]), patch(
+            "cmd_sessions.reload_history", return_value=[{"role": "user", "content": "hi"}]
+        ):
             await cs.cmd_checkpoint(message)
 
         message.reply.assert_awaited_once()
@@ -50,7 +52,7 @@ class TestCmdCheckpoint(unittest.IsolatedAsyncioTestCase):
         result = CheckpointResult(session_note="2026-06-20.md")
 
         with patch("cmd_sessions.discord.Embed", _FakeEmbed), patch(
-            "cmd_sessions.get_history", return_value=[{"role": "user", "content": "a"}] * 4
+            "cmd_sessions.reload_history", return_value=[{"role": "user", "content": "a"}] * 4
         ), patch("sessions.checkpoint_session", new_callable=AsyncMock, return_value=result):
             await cs.cmd_checkpoint(message)
 
@@ -70,14 +72,36 @@ class TestCmdRelease(unittest.IsolatedAsyncioTestCase):
         message.reply = AsyncMock()
 
         with patch("cmd_sessions.discord.Embed", _FakeEmbed), patch(
-            "cmd_sessions.get_history", return_value=dialogue_histories[channel_id] * 2
+            "cmd_sessions.reload_history", return_value=dialogue_histories[channel_id] * 2
         ), patch("sessions.checkpoint_session", new_callable=AsyncMock, return_value=CheckpointResult()), patch(
+            "cmd_sessions.clear_history"
+        ) as clear_mock, patch(
             "cmd_sessions.read_safe", return_value=""
         ), patch("cmd_sessions.get_mage_name", return_value="Kermit"):
             await cs.cmd_release(message)
 
-        self.assertNotIn(channel_id, dialogue_histories)
+        clear_mock.assert_called_once_with(channel_id)
         self.assertNotIn(channel_id, active_sessions)
+
+    async def test_release_embed_honest_when_nothing_captured(self) -> None:
+        message = MagicMock()
+        message.channel.id = 5
+        message.reply = AsyncMock()
+
+        with patch("cmd_sessions.discord.Embed", _FakeEmbed), patch(
+            "cmd_sessions.reload_history",
+            return_value=[{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}],
+        ), patch(
+            "sessions.checkpoint_session",
+            new_callable=AsyncMock,
+            return_value=CheckpointResult(),
+        ), patch("cmd_sessions.clear_history"), patch("cmd_sessions.read_safe", return_value=""), patch(
+            "cmd_sessions.get_mage_name", return_value="Kermit"
+        ):
+            await cs.cmd_release(message)
+
+        embed = message.reply.await_args_list[-1].kwargs["embed"]
+        self.assertIn("No new resonance captured", embed.description)
 
 
 class TestCmdDissolve(unittest.IsolatedAsyncioTestCase):

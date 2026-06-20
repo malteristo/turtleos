@@ -69,10 +69,41 @@ async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
 
 # ─── History Management ─────────────────────────────────────────
 
-def get_history(channel_id: int) -> list[dict]:
+def get_history(channel_id: int, *, fresh: bool = False) -> list[dict]:
+    from dialogue_store import read_shared, shared_dialogue_enabled
+
+    if shared_dialogue_enabled() and fresh:
+        disk = read_shared(channel_id)
+        if disk is not None:
+            dialogue_histories[channel_id] = disk
     if channel_id not in dialogue_histories:
-        dialogue_histories[channel_id] = []
+        if shared_dialogue_enabled():
+            dialogue_histories[channel_id] = read_shared(channel_id) or []
+        else:
+            dialogue_histories[channel_id] = []
     return dialogue_histories[channel_id]
+
+
+def sync_history(channel_id: int) -> None:
+    from dialogue_store import shared_dialogue_enabled, write_shared
+
+    if not shared_dialogue_enabled():
+        return
+    history = dialogue_histories.get(channel_id)
+    if history is not None:
+        write_shared(channel_id, history)
+
+
+def reload_history(channel_id: int) -> list[dict]:
+    return get_history(channel_id, fresh=True)
+
+
+def clear_history(channel_id: int) -> None:
+    from dialogue_store import clear_shared, shared_dialogue_enabled
+
+    dialogue_histories.pop(channel_id, None)
+    if shared_dialogue_enabled():
+        clear_shared(channel_id)
 
 
 async def load_thread_history(thread: discord.Thread, max_messages: int = 50) -> list[dict]:

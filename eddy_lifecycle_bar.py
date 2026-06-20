@@ -95,7 +95,9 @@ def get_lifecycle_bar_client(thread: discord.Thread):
     if river_bot_enabled():
         from river_state import river_client
 
-        return river_client
+        if getattr(river_client, "is_ready", lambda: False)():
+            return river_client
+        return None
     if thread.guild:
         return thread.guild._state._get_client()
     return None
