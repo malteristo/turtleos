@@ -29,4 +29,4 @@ Align split-bot identity with platform law: **River executes acts** (bars, embed
 
 ## Status
 
-**Closed** — dogfood seneschal + lifecycle + River-owned `!` on native eddies.
+**Paused (2026-06-20)** — dogfood incomplete. See [2026-06-20-river-turtle-split-handoff.md](2026-06-20-river-turtle-split-handoff.md) for rethink options. Do not add more Turtle-side seneschal patches without architectural decision.
