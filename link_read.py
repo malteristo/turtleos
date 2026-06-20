@@ -117,6 +117,26 @@ def should_auto_fetch_urls(text: str, urls: list[str]) -> bool:
     return False
 
 
+def plan_dialogue_urls(
+    visible_content: str,
+    external: list[str],
+    *,
+    native_eddy: bool,
+) -> tuple[bool, list[str], list[str]]:
+    """Return (auto_fetch, urls_for_context, pending_incidental_urls).
+
+    Native eddies: never auto-fetch — Turtle discusses the link; seneschal may offer `!fetch`.
+    Legacy: auto-fetch when URL-primary; otherwise Read/Skip offer via pending_incidental.
+    """
+    if not external:
+        return False, [], []
+    if native_eddy:
+        return False, external, []
+    if should_auto_fetch_urls(visible_content, external):
+        return True, external, []
+    return False, external, external
+
+
 def _guess_title(content: str, url: str) -> str | None:
     for line in content.splitlines():
         stripped = line.strip()

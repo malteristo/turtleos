@@ -767,16 +767,18 @@ async def handle_dialogue(message):
     else:
         urls = await _extract_urls(visible_content)
         external = external_urls(urls)
-        if external and should_auto_fetch_urls(visible_content, external):
-            fetch_results, url_content = await fetch_urls_with_status(message.channel, external)
+        from link_read import plan_dialogue_urls
+
+        auto_fetch, urls, pending_incidental_urls = plan_dialogue_urls(
+            visible_content, external, native_eddy=native_eddy
+        )
+        if auto_fetch:
+            fetch_results, url_content = await fetch_urls_with_status(message.channel, urls)
             if url_content:
-                url_source_count = len(external)
+                url_source_count = len(urls)
                 attachment_note += f" [fetched {url_source_count} URL(s)]"
                 if isinstance(message.channel, discord.Thread):
                     await maybe_refine_thread_name_from_fetch(message.channel, fetch_results)
-        elif external:
-            urls = external
-            pending_incidental_urls = external
 
     dereferenced_context = ""
     dereferenced_count = 0
@@ -1177,6 +1179,8 @@ async def _continue_dialogue_turn(
         contextual_actions = _extract_contextual_actions(reply)
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
+    if native_eddy:
+        print(f"Native Turtle reply sent [{message.channel.name}]: {len(reply)} chars")
     if contextual_actions:
         label = "Suggested action" if len(contextual_actions) == 1 else "Suggested actions"
         try:

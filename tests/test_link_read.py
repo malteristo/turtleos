@@ -14,6 +14,7 @@ from link_read import (
     format_result_for_dialogue,
     should_auto_fetch_urls,
     should_rename_thread_from_fetch,
+    plan_dialogue_urls,
     spill_fetch_artifact,
     url_display_host,
     _partial_read_status_lines,
@@ -48,6 +49,22 @@ class LinkReadHeuristicTests(unittest.TestCase):
             f"read this when you have a moment: {url}"
         )
         self.assertTrue(should_auto_fetch_urls(text, [url]))
+
+    def test_native_eddy_never_auto_fetches(self) -> None:
+        url = "https://example.com/article"
+        text = f"I just read this article {url}"
+        auto, urls, pending = plan_dialogue_urls(text, [url], native_eddy=True)
+        self.assertFalse(auto)
+        self.assertEqual(urls, [url])
+        self.assertEqual(pending, [])
+
+    def test_legacy_short_message_auto_fetches(self) -> None:
+        url = "https://example.com/article"
+        text = f"I just read this article {url}"
+        auto, urls, pending = plan_dialogue_urls(text, [url], native_eddy=False)
+        self.assertTrue(auto)
+        self.assertEqual(urls, [url])
+        self.assertEqual(pending, [])
 
     def test_external_urls_filters_discord(self) -> None:
         urls = [

@@ -37,11 +37,18 @@ def save_registry(registry: dict):
     path = _registry_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     registry["last_updated"] = datetime.now(timezone.utc).isoformat()
+    tmp = path.with_suffix(".yaml.tmp")
     try:
-        with open(path, "w") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             yaml.dump(registry, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        tmp.replace(path)
     except Exception as e:
         print(f"Registry save failed: {e}")
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
 
 
 def register_thread(thread_id: int, name: str, parent_channel: str = "",
