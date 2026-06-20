@@ -82,7 +82,7 @@ Turtle prose mentions !fetch → River parses backticks → duplicate buttons   
 
 ### Slice 2 — River save-offer (platform) ✅ *2026-06-20*
 
-- **New:** post-Turtle scan for external URLs in practitioner input; if not in `link-resonance/`, one **Save to library** act row (River-owned).
+- **New:** post-Turtle scan for external URLs in practitioner input; if not in `link-resonance/`, one **Save to library** act row (River-owned). **Must run in `river_bot.py`** — Turtle process cannot post via disconnected `river_client`.
 - **`!fetch` semantics** documented in `turtle-talk.md`: persistence act, not dialogue prerequisite.
 - **Acceptance:** after informed reply, optional Save button; tap → cached; second Save suppressed; typed `!fetch` still works.
 

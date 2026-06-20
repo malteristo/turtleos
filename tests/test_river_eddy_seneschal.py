@@ -52,41 +52,48 @@ class TestPickSaveOfferUrl(unittest.TestCase):
         self.assertEqual(len(deduped), 1)
 
 
-class TestMaybeOfferEddySave(unittest.IsolatedAsyncioTestCase):
+class TestMaybeOfferEddySaveOnTurtleReply(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         res.clear_save_offer_state()
 
-    async def test_posts_save_row_when_eligible(self) -> None:
+    async def test_posts_save_row_when_turtle_replies(self) -> None:
         channel = MagicMock()
         channel.id = 99
-        url = "https://example.com/new"
+        channel.name = "test-eddy"
+        channel.parent_id = 12345
+        practitioner = MagicMock()
+        practitioner.author = MagicMock(bot=False)
+        practitioner.content = "what do you think https://example.com/article"
+        turtle_message = MagicMock()
+        turtle_message.channel = channel
+        turtle_message.reference = MagicMock(message_id=555, resolved=practitioner)
+        turtle_message.created_at = MagicMock()
+
         with patch("mage.river_bot_enabled", return_value=True), patch(
-            "commands._get_cached_resonance", return_value=None
-        ), patch(
-            "commands.send_with_actions", new_callable=AsyncMock
-        ) as send_mock:
-            await res.maybe_offer_eddy_save_after_turn(
-                channel,
-                practitioner_text=f"what do you think {url}",
-                history=[],
-            )
-        send_mock.assert_awaited_once()
-        args = send_mock.await_args
-        self.assertEqual(args[0][1], "-# Save to library")
-        self.assertEqual(args[0][2][0][0], "Save to library")
+            "prompts.uses_native_turtle_prompt", return_value=True
+        ), patch("eddy_spawn.is_awaiting_flow_intake", return_value=False), patch(
+            "eddy_spawn.is_awaiting_title", return_value=False
+        ), patch("commands._get_cached_resonance", return_value=None), patch(
+            "eddy_lifecycle_bar.post_act_suggestion_row", new_callable=AsyncMock
+        ) as post_mock, patch(
+            "bar_anchor.ensure_channel_bars", new_callable=AsyncMock
+        ):
+            post_mock.return_value = MagicMock()
+            await res.maybe_offer_eddy_save_on_turtle_reply(turtle_message)
+
+        post_mock.assert_awaited_once()
+        args = post_mock.await_args[0]
+        self.assertEqual(args[1], "-# Save to library")
+        self.assertEqual(args[2][0][0], "Save to library")
 
     async def test_no_op_when_river_disabled(self) -> None:
-        channel = MagicMock()
-        channel.id = 1
+        turtle_message = MagicMock()
+        turtle_message.channel = MagicMock(id=1, parent_id=2)
         with patch("mage.river_bot_enabled", return_value=False), patch(
-            "commands.send_with_actions", new_callable=AsyncMock
-        ) as send_mock:
-            await res.maybe_offer_eddy_save_after_turn(
-                channel,
-                practitioner_text="https://example.com/x",
-                history=[],
-            )
-        send_mock.assert_not_awaited()
+            "eddy_lifecycle_bar.post_act_suggestion_row", new_callable=AsyncMock
+        ) as post_mock:
+            await res.maybe_offer_eddy_save_on_turtle_reply(turtle_message)
+        post_mock.assert_not_awaited()
 
 
 if __name__ == "__main__":

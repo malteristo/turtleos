@@ -1203,17 +1203,6 @@ async def _continue_dialogue_turn(
         await message.reply(chunk, mention_author=False)
     if native_eddy:
         print(f"Native Turtle reply sent [{message.channel.name}]: {len(reply)} chars")
-        visible_content, _ = _visible_message_content(message)
-        try:
-            from river_eddy_seneschal import maybe_offer_eddy_save_after_turn
-
-            await maybe_offer_eddy_save_after_turn(
-                message.channel,
-                practitioner_text=visible_content,
-                history=history,
-            )
-        except Exception as e:
-            print(f"Save offer seneschal failed: {e}")
     if contextual_actions:
         from river_eddy_seneschal import dedupe_fetch_actions
 

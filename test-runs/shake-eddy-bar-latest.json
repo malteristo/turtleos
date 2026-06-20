@@ -1,0 +1,8 @@
+{
+  "capability": "river/eddy_bar_flow_menu",
+  "status": "pass",
+  "live": false,
+  "checks": {
+    "offline": "ok"
+  }
+}

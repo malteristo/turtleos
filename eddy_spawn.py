@@ -887,7 +887,8 @@ def cache_turtle_bot_user_id(user_id: int) -> None:
     _turtle_bot_id_cache_path().write_text(str(user_id), encoding="utf-8")
 
 
-def _resolve_turtle_bot_user_id(guild) -> int | None:
+def resolve_turtle_bot_user_id(guild=None) -> int | None:
+    """Turtle Discord user id for split-bot routing (env, cache, or guild lookup)."""
     import os
 
     raw = os.environ.get("TURTLE_BOT_USER_ID", "").strip()
@@ -910,6 +911,15 @@ def _resolve_turtle_bot_user_id(guild) -> int | None:
                 return member.id
 
     return None
+
+
+def _resolve_turtle_bot_user_id(guild) -> int | None:
+    return resolve_turtle_bot_user_id(guild)
+
+
+def is_turtle_bot_message(message) -> bool:
+    turtle_id = resolve_turtle_bot_user_id(getattr(message, "guild", None))
+    return bool(turtle_id and getattr(message.author, "id", None) == turtle_id)
 
 
 async def wait_for_native_eddy_handoff(thread) -> None:
