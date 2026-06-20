@@ -67,6 +67,16 @@ def _ensure_single_instance() -> None:
         sys.exit(1)
 
 
+def _maybe_schedule_save_offer(message: discord.Message) -> None:
+    from river_eddy_seneschal import (
+        practitioner_external_urls,
+        schedule_save_offer_after_practitioner_url,
+    )
+
+    if practitioner_external_urls(message.content or ""):
+        schedule_save_offer_after_practitioner_url(message)
+
+
 def _accept_message_author(message: discord.Message) -> bool:
     if message.author == river_client.user:
         return False
@@ -89,6 +99,26 @@ async def on_ready():
         except Exception as exc:
             print(f"River startup setup failed: {exc}")
     print("River bot ready — acts + turtle-talk in practice channels")
+    if get_attunement_profile() == "native":
+        try:
+            await _rejoin_practice_threads(river_client)
+        except Exception as exc:
+            print(f"River thread rejoin failed: {exc}")
+
+
+async def _rejoin_practice_threads(client) -> None:
+    """Join active eddy threads so River receives practitioner messages after restart."""
+    from mage import get_channel
+
+    dialogue = get_channel("dialogue")
+    if not dialogue:
+        return
+    for thread in dialogue.threads:
+        try:
+            await thread.join()
+            print(f"River rejoined thread: {thread.name} ({thread.id})")
+        except discord.HTTPException as exc:
+            print(f"River rejoin skipped {thread.name}: {exc}")
 
 
 @river_client.event
@@ -136,16 +166,11 @@ async def on_message(message: discord.Message):
             from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
 
             await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+            _maybe_schedule_save_offer(message)
             return
 
         # Ongoing eddy dialogue: Turtle harness (link-read, prose). River handles `!` only.
-        from river_eddy_seneschal import (
-            practitioner_external_urls,
-            schedule_save_offer_after_practitioner_url,
-        )
-
-        if practitioner_external_urls(message.content or ""):
-            schedule_save_offer_after_practitioner_url(message)
+        _maybe_schedule_save_offer(message)
         return
 
     if _get_channel_type(message.channel.id) == "unclaimed-river":

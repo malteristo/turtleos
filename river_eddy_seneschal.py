@@ -165,7 +165,6 @@ async def _wait_for_turtle_reply_after(
 
     deadline = asyncio.get_event_loop().time() + timeout_s
     while asyncio.get_event_loop().time() < deadline:
-        await asyncio.sleep(poll_s)
         try:
             async for msg in channel.history(limit=20, after=practitioner_message.created_at):
                 if getattr(msg.author, "id", None) != turtle_id:
@@ -176,6 +175,7 @@ async def _wait_for_turtle_reply_after(
         except discord.HTTPException as exc:
             print(f"Save offer poll failed for {channel.id}: {exc}")
             return False
+        await asyncio.sleep(poll_s)
     print(f"Save offer poll timed out in #{getattr(channel, 'name', channel.id)}")
     return False
 
@@ -201,6 +201,10 @@ async def _run_save_offer_poll(practitioner_message: discord.Message) -> None:
         channel.id,
         is_cached=lambda u: bool(_get_cached_resonance(u)),
     ):
+        print(
+            f"Save offer skip (cached/deduped) in "
+            f"#{getattr(channel, 'name', channel.id)}"
+        )
         return
 
     ch_name = getattr(channel, "name", channel.id)
@@ -220,6 +224,8 @@ def schedule_save_offer_after_practitioner_url(practitioner_message: discord.Mes
 
     channel_id = channel.id
     _cancel_save_poll(channel_id)
+    ch_name = getattr(channel, "name", channel_id)
+    print(f"Save offer scheduled in #{ch_name} ({channel_id})")
 
     async def _wrapped() -> None:
         try:
