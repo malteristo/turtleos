@@ -17,14 +17,16 @@ Align split-bot identity with platform law: **River executes acts** (bars, embed
 | `inject_act_digest` | `[Act: !cmd]` lines in Turtle dialogue history (not assistant prose) |
 | `cmd_status` | Fixed missing `reply()` (broken since sovereignty handler removal) |
 | `helpers.log_activity` | Ops embeds post as River in split-bot |
-| Spec/docs | §5.8, turtle-talk, principles |
+| `eddy_lifecycle_bar.py` | `RiverActSuggestionView` — seneschal rows share lifecycle execution path |
+| Native seneschal | `SENESCHAL_ACTION_COMMANDS` excludes lifecycle trio; enabled on native eddies |
+| Spec/docs | §5.8, turtle-talk, principles, eddy-lifecycle-bar |
 
-## Verified (Mini)
+## Verified
 
-- Spirit `!help` at 10:01 → **river** embed + bar repost (not turtle)
-- 127 tests pass locally
+- Spirit `!help` → **river** embed + bar repost (not turtle)
+- 134 tests pass locally
+- Mini deploy: `d3d4516` (pull + restart + offline shake)
 
-## Remaining
+## Status
 
-- Seneschal act suggestion rows unified with lifecycle bar (River-owned, public timeline, act digest)
-- Commit + push when ready
+**Closed** — dogfood seneschal + lifecycle + River-owned `!` on native eddies.

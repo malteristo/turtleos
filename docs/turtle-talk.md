@@ -202,6 +202,7 @@ Turtle dialogue prompts (`prompts.py`) SHOULD recommend platform commands only:
 | Remove retired handlers from `DIRECT_COMMANDS` | ✅ 2026-06-20 |
 | Remove contextual boom/sweep/recall buttons | ✅ 2026-06-20 |
 | Trim Magic main-channel orchestration in `discord_bot.py` | ✅ 2026-06-20 (gated to `magic` profile) |
+| Native seneschal act rows (River-owned; lifecycle trio excluded) | ✅ 2026-06-20 |
 | Magic-side integration doc refresh (`library/resonance/turtle/`) | ⬜ Magic chapter |
 
 ---

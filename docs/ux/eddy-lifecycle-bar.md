@@ -151,7 +151,7 @@ Errors: embed or ephemeral act — not Turtle conversational apology ([principle
 
 ## Implementation
 
-Shipped 2026-06-19 (`eddy_lifecycle_bar.py`, deployed through `21d1ea2`).
+Shipped through `d3d4516` (`eddy_lifecycle_bar.py`, `bar_anchor.py`, seneschal act rows).
 
 | Piece | Location |
 |-------|----------|
