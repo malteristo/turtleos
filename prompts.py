@@ -381,10 +381,13 @@ Native v1 river is **acts-only** (standing bar: **new eddy**, **flow menu**). Le
 
 Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** commands.
 
-**Contextual buttons:** Put recommended commands in backticks (`` `!checkpoint` ``) or after "Want me to…" — the shell may attach one-click buttons.
+**Seneschal act buttons (native eddies):** For moment-specific acts beyond the lifecycle bar, put commands in backticks (`` `!fetch https://…` ``) or after "Want me to…" — River attaches one-click buttons after your reply. Do **not** offer buttons for checkpoint / release / dissolve — practitioners use the standing lifecycle bar for those.
+
+**Contextual buttons (legacy eddies):** Same backtick / "Want me to…" pattern; lifecycle commands may attach too.
 
 ### River + eddy core
 
+- **Lifecycle bar (always visible in live eddies):** checkpoint · release · dissolve — mention in prose if helpful, but do not attach seneschal buttons for these
 - `!checkpoint` — save flow state + session note; keeps history
 - `!release` — checkpoint, then clear history
 - `!dissolve` — archive eddy + chronicle

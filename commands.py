@@ -1740,6 +1740,11 @@ CONTEXTUAL_ACTION_COMMANDS = {
     "thread", "new", "threads", "eddy-check", "fetch",
     "absorb", "absorbed", "forget", "readiness", "flows",
 }
+# Native eddies: lifecycle bar owns checkpoint / release / dissolve; seneschal extends beyond that.
+LIFECYCLE_BAR_COMMANDS = frozenset({"checkpoint", "release", "dissolve"})
+SENESCHAL_ACTION_COMMANDS = frozenset(
+    cmd for cmd in CONTEXTUAL_ACTION_COMMANDS if cmd not in LIFECYCLE_BAR_COMMANDS
+)
 
 
 async def send_with_actions(channel, message: str, actions: list[tuple[str, str]]):

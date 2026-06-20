@@ -216,10 +216,17 @@ def _trim_contextual_command(command: str) -> str:
     return "!" + parts[0].lower()
 
 
-def _append_contextual_action(actions: list, seen: set, command: str) -> None:
+def _append_contextual_action(
+    actions: list,
+    seen: set,
+    command: str,
+    *,
+    allowed_commands: set[str] | frozenset[str] | None = None,
+) -> None:
     command = _trim_contextual_command(command)
     cmd = command.lstrip("!").split(None, 1)[0].lower()
-    if cmd not in _CONTEXTUAL_ACTION_COMMANDS:
+    allow = allowed_commands if allowed_commands is not None else _CONTEXTUAL_ACTION_COMMANDS
+    if cmd not in allow:
         return
     key = command.lower()
     if key in seen:
@@ -228,18 +235,26 @@ def _append_contextual_action(actions: list, seen: set, command: str) -> None:
     actions.append((_contextual_action_label(command), command))
 
 
-def _extract_contextual_actions(reply: str) -> list[tuple[str, str]]:
-    # Find direct commands Turtle recommended so the shell can attach buttons.
+def _extract_contextual_actions(
+    reply: str,
+    *,
+    allowed_commands: set[str] | frozenset[str] | None = None,
+) -> list[tuple[str, str]]:
+    # Find direct commands Turtle recommended so the shell may attach River act buttons.
     actions = []
     seen = set()
     for match in _CONTEXTUAL_COMMAND_RE.finditer(reply):
-        _append_contextual_action(actions, seen, match.group(1).strip())
+        _append_contextual_action(
+            actions, seen, match.group(1).strip(), allowed_commands=allowed_commands
+        )
 
     # Phase 2: natural-language recommendations often cite !commands without backticks.
     tail = _recommendation_tail(reply)
     if _RECOMMENDATION_CUE_RE.search(tail):
         for match in _PLAIN_COMMAND_RE.finditer(tail):
-            _append_contextual_action(actions, seen, match.group(0).strip())
+            _append_contextual_action(
+                actions, seen, match.group(0).strip(), allowed_commands=allowed_commands
+            )
 
     # More than three command mentions is usually help text, not a local recommendation.
     if len(actions) > 3:
@@ -1152,15 +1167,22 @@ async def _continue_dialogue_turn(
     if source_trace and not native_eddy:
         reply = f"{reply}\n\n-# {source_trace}"
     history.append({"role": "assistant", "content": reply})
-    contextual_actions = _extract_contextual_actions(reply) if not native_eddy else []
+    if native_eddy:
+        from commands import SENESCHAL_ACTION_COMMANDS
+
+        contextual_actions = _extract_contextual_actions(
+            reply, allowed_commands=SENESCHAL_ACTION_COMMANDS
+        )
+    else:
+        contextual_actions = _extract_contextual_actions(reply)
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
     if contextual_actions:
-        label = "Recommended action" if len(contextual_actions) == 1 else "Recommended actions"
+        label = "Suggested action" if len(contextual_actions) == 1 else "Suggested actions"
         try:
             await send_with_actions(message.channel, f"-# {label}", contextual_actions)
         except Exception as e:
-            print(f"Contextual action send failed: {e}")
+            print(f"Seneschal act row failed: {e}")
 
     # Super-ego: think aloud after sustained conversation
     asyncio.ensure_future(maybe_reflect(message.channel, history))
@@ -1170,6 +1192,7 @@ async def _continue_dialogue_turn(
         if native_eddy:
             from bar_anchor import ensure_channel_bars
 
+            # One re-anchor after full response unit (prose + optional seneschal row).
             await ensure_channel_bars(message.channel)
         # Phase 1 Eyes: update thread registry on every exchange
         if isinstance(message.channel, discord.Thread):

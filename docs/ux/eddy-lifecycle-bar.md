@@ -27,7 +27,7 @@ Power users keep turtle-talk (`!checkpoint`, `!release`, `!dissolve`). Buttons c
 3. **No chrome on empty eddies** — bar appears only after the eddy is in use (see **When it appears**).
 4. **Small curated set** — lifecycle verbs only; not a command catalog.
 5. **Dissolve is destructive** — confirm sub-row with explicit Cancel (see **Dissolve confirm**).
-6. **Seneschal act rows use the same River path** — Turtle suggests commands in prose; River posts moment-specific act buttons that share the lifecycle bar execution path (public timeline, act digest, bar re-anchor).
+6. **Seneschal act rows use the same River path** — Turtle suggests moment-specific acts in prose; River posts a temporary button row after the reply (native: excludes checkpoint / release / dissolve — lifecycle bar owns those). Lifecycle bar content stays constant; one re-anchor per turn keeps it last.
 
 ---
 
@@ -116,7 +116,7 @@ First click on **Dissolve** does **not** archive. It **replaces** the button row
 |------------|-------|--------------|
 | **River bar** | Parent channel only | Opens eddies; no lifecycle buttons |
 | **Lifecycle bar** | In-thread | Session end; no `flow menu` / `new eddy` |
-| **River act suggestion row** | After Turtle dialogue | Moment-specific seneschal offers; same handlers as lifecycle bar |
+| **River seneschal act row** | After Turtle dialogue (native + legacy) | Moment-specific extensions; same handlers as lifecycle bar; native excludes lifecycle trio |
 | **`!` commands** | Eddy (River harness when split-bot) | Power-user instant path; same handlers |
 | **Magic `ThreadConfigView` / `!panel`** | Magic-attuned | Model/eddy-type chrome — **not** on vanilla lifecycle bar |
 
