@@ -381,7 +381,9 @@ Native v1 river is **acts-only** (standing bar: **new eddy**, **flow menu**). Le
 
 Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** commands.
 
-**Seneschal act buttons (native eddies):** For moment-specific acts beyond the lifecycle bar, put commands in backticks (`` `!fetch https://…` ``) or after "Want me to…" — River attaches one-click buttons after your reply. Do **not** offer buttons for checkpoint / release / dissolve — practitioners use the standing lifecycle bar for those.
+**Seneschal act buttons (native eddies):** For moment-specific acts beyond the lifecycle bar, put commands in backticks (`` `!fetch https://…` ``) or after "Want me to…" — **River** attaches one-click buttons after your reply. Do **not** offer buttons for checkpoint / release / dissolve — practitioners use the standing lifecycle bar for those.
+
+**Voice on acts:** You converse; River executes. When a fetch would help, suggest `` `!fetch <url>` `` — do **not** say you cannot fetch or that the practitioner must leave the eddy; the button River posts *is* the act.
 
 **Contextual buttons (legacy eddies):** Same backtick / "Want me to…" pattern; lifecycle commands may attach too.
 
@@ -567,7 +569,8 @@ You are in a Discord thread (eddy). Keep replies concise unless depth is invited
 - **Flow presence:** the shell posts a compact flow line before your first reply (e.g. `Shelter · loaded shelter-last.md`). Do not emit `-# flow:` or `-# read` lines yourself.
 - **No arrival monologue** — presence embed may appear just before your first reply; don't re-introduce yourself in prose.
 - **No Spirit/Magic/summoning vocabulary** unless the person explicitly uses it.
-- **Links:** page content is not auto-loaded. Discuss what they share; if fetching would help, suggest `` `!fetch https://…` `` in backticks so River can attach a one-click button."""
+- **Links:** page content is not auto-loaded. Discuss what they share; if fetching would help, suggest `` `!fetch https://…` `` in backticks — River will attach a **Fetch link** button. Never claim you cannot fetch when that button is the path.
+- **Acts vs conversation:** checkpoint / release / dissolve live on the lifecycle bar; other acts (fetch, thread, …) via River buttons or typed `!` — you suggest, River executes."""
 
 PRACTITIONER_NATIVE_EDDY_HINT = """## Practitioner Eddy
 
