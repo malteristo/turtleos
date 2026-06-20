@@ -567,7 +567,10 @@ async def post_act_suggestion_row(
         return None
     client.add_view(view)
     try:
-        return await ch.send(label, view=view, silent=True)
+        msg = await ch.send(label, view=view, silent=True)
+        bot_name = getattr(getattr(client, "user", None), "name", "?")
+        print(f"Seneschal row posted as {bot_name} in #{getattr(ch, 'name', ch.id)}")
+        return msg
     except discord.HTTPException as exc:
         print(f"Act suggestion row failed for {ch.id}: {type(exc).__name__}: {exc}")
         return None

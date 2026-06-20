@@ -262,6 +262,31 @@ def _extract_contextual_actions(
     return actions
 
 
+def _filter_seneschal_actions(
+    actions: list[tuple[str, str]],
+    history: list[dict],
+) -> list[tuple[str, str]]:
+    """Drop act buttons for commands River already ran recently in this eddy."""
+    if not actions or not history:
+        return actions
+    recent = "\n".join(m.get("content", "") for m in history[-12:])
+    completed: set[str] = set()
+    for line in recent.splitlines():
+        if line.startswith("[Act: !"):
+            cmd = line.split("]", 1)[0].replace("[Act: !", "").strip().lower()
+            if cmd:
+                completed.add(cmd.split()[0])
+    if not completed:
+        return actions
+    filtered = []
+    for label, command in actions:
+        cmd = command.lstrip("!").split(None, 1)[0].lower()
+        if cmd in completed:
+            continue
+        filtered.append((label, command))
+    return filtered
+
+
 # ─── handle_dialogue ─────────────────────────────────────────────
 
 def _build_runtime_env(message, cfg):
@@ -1177,6 +1202,7 @@ async def _continue_dialogue_turn(
         )
     else:
         contextual_actions = _extract_contextual_actions(reply)
+    contextual_actions = _filter_seneschal_actions(contextual_actions, history)
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
     if native_eddy:

@@ -770,6 +770,24 @@ def _paste_endpoint_for(url: str) -> str:
     return f"{INTAKE_PUBLIC_URL}?{urlencode({'url': url})}"
 
 
+FETCH_ACT_EXCERPT_MAX = 2000
+
+
+def fetch_act_digest(url: str, resonance: str) -> str:
+    """Rich act digest so Turtle can discuss fetched content on the next turn."""
+    lines = [ln for ln in (resonance or "").splitlines() if ln.strip()]
+    title = lines[0].lstrip("# ").strip() if lines else url
+    body = resonance.strip()
+    if len(lines) > 5:
+        body = "\n".join(lines[5:]).strip() or body
+    excerpt = truncate(body, FETCH_ACT_EXCERPT_MAX)
+    return (
+        f'Fetched and cached "{title}" ({url}). '
+        f"The article is available in this eddy for discussion.\n\n"
+        f"[Content excerpt]\n{excerpt}"
+    )
+
+
 async def cmd_fetch(message, args):
     if not args:
         await message.reply(
@@ -808,7 +826,7 @@ async def cmd_fetch(message, args):
         embed.set_footer(text="Cached resonance • add --fresh to refetch • drop URL in chat for dialogue read")
         await message.reply(embed=embed, mention_author=False)
         if "--fresh" not in " ".join(args):
-            return
+            return fetch_act_digest(url, cached)
 
     async with message.channel.typing():
         raw_content, source_type = None, None
@@ -847,6 +865,7 @@ async def cmd_fetch(message, args):
     )
     embed.set_footer(text=f"Distilled via {source_type or 'direct'} • cached in link-resonance/ • drop URL in chat for dialogue read")
     await message.reply(embed=embed, mention_author=False)
+    return fetch_act_digest(url, resonance)
 
 
 async def cmd_threads(message, args):

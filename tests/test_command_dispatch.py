@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 sys.modules.setdefault("discord.ui", MagicMock())
+sys.modules.setdefault("discord.ext", MagicMock())
+sys.modules.setdefault("discord.ext.tasks", MagicMock())
 
 import commands
 
@@ -29,6 +31,22 @@ class TestActDigest(unittest.TestCase):
         commands.inject_act_digest(channel_id, "help", "")
         history = commands.get_history(channel_id)
         self.assertIn("inventory", history[0]["content"].lower())
+
+    def test_fetch_act_digest_includes_excerpt(self) -> None:
+        resonance = "# Time Emerges\n\n**Source:** x\n\n**Summary:**\n\n- Point one\n- Point two"
+        digest = commands.fetch_act_digest("https://example.com/a", resonance)
+        self.assertIn("Point one", digest)
+        self.assertIn("example.com", digest)
+
+
+class TestSeneschalFilter(unittest.TestCase):
+    def test_drops_fetch_after_act(self) -> None:
+        import discord_bot as bot
+
+        history = [{"role": "user", "content": "[Act: !fetch] Fetched article excerpt here"}]
+        actions = [("Fetch link", "!fetch https://example.com")]
+        filtered = bot._filter_seneschal_actions(actions, history)
+        self.assertEqual(filtered, [])
 
 
 class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
