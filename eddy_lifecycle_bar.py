@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 from urllib.parse import quote, unquote
@@ -11,6 +12,7 @@ import discord
 
 _ACT_CUSTOM_ID_PREFIX = "river:act:"
 _ACT_CUSTOM_ID_MAX = 100
+_PENDING_ACT_COMMANDS: dict[str, str] = {}
 
 DISSOLVE_CONFIRM_TIMEOUT = 15
 _revert_tasks: dict[int, asyncio.Task] = {}
@@ -142,9 +144,15 @@ def _encode_act_custom_id(channel_id: int, command: str) -> str | None:
     cmd_text = command.lstrip("!")
     encoded = quote(cmd_text, safe="")
     custom_id = f"{_ACT_CUSTOM_ID_PREFIX}{channel_id}:{encoded}"
-    if len(custom_id) > _ACT_CUSTOM_ID_MAX:
+    if len(custom_id) <= _ACT_CUSTOM_ID_MAX:
+        return custom_id
+    digest = hashlib.sha256(cmd_text.encode()).hexdigest()[:16]
+    key = f"{channel_id}:{digest}"
+    _PENDING_ACT_COMMANDS[key] = cmd_text
+    hashed = f"{_ACT_CUSTOM_ID_PREFIX}{channel_id}:h:{digest}"
+    if len(hashed) > _ACT_CUSTOM_ID_MAX:
         return None
-    return custom_id
+    return hashed
 
 
 def _decode_act_custom_id(custom_id: str) -> tuple[int, str]:
@@ -152,7 +160,15 @@ def _decode_act_custom_id(custom_id: str) -> tuple[int, str]:
         raise ValueError(f"Not an act button: {custom_id!r}")
     rest = custom_id[len(_ACT_CUSTOM_ID_PREFIX) :]
     channel_id_str, _, encoded = rest.partition(":")
-    if not channel_id_str or not encoded:
+    if not channel_id_str:
+        raise ValueError(f"Malformed act button id: {custom_id!r}")
+    if encoded.startswith("h:"):
+        digest = encoded[2:]
+        cmd = _PENDING_ACT_COMMANDS.get(f"{channel_id_str}:{digest}")
+        if not cmd:
+            raise ValueError(f"Expired act button: {custom_id!r}")
+        return int(channel_id_str), cmd
+    if not encoded:
         raise ValueError(f"Malformed act button id: {custom_id!r}")
     return int(channel_id_str), unquote(encoded)
 

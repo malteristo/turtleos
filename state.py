@@ -34,6 +34,14 @@ SPIRIT_BOT_ID = 1487405701440733294
 _channel_locks: dict[int, asyncio.Lock] = {}
 
 
+def unmark_processed_message(message_id: int) -> None:
+    """Allow re-processing after a substantive Discord message edit."""
+    try:
+        _processed_messages.remove(message_id)
+    except ValueError:
+        pass
+
+
 def get_channel_lock(channel_id: int) -> asyncio.Lock:
     if channel_id not in _channel_locks:
         _channel_locks[channel_id] = asyncio.Lock()

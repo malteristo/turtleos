@@ -1228,6 +1228,79 @@ async def _continue_dialogue_turn(
 
 _intake_runner = None
 
+
+async def _touch_lifecycle_after_dialogue(message: discord.Message) -> None:
+    if isinstance(message.channel, discord.Thread):
+        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+        await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+
+
+async def _route_practice_dialogue(message: discord.Message) -> None:
+    from dialogue_queue import enqueue_dialogue
+
+    ch = getattr(message.channel, "name", message.channel.id)
+    visible, _ = _visible_message_content(message)
+    print(f"Turtle inbound [{ch}]: {visible[:120]!r}")
+    await enqueue_dialogue(message, handle_dialogue, after_turn=_touch_lifecycle_after_dialogue)
+
+
+async def _should_skip_native_starter(message: discord.Message) -> bool:
+    if not isinstance(message.channel, discord.Thread):
+        return False
+    if not uses_native_turtle_prompt(resolve_dialogue_channel_id(message)):
+        return False
+    try:
+        starter = message.channel.starter_message
+        if starter is None:
+            starter = await message.channel.fetch_start_message()
+        return bool(starter and message.id == starter.id)
+    except Exception:
+        return False
+
+
+@client.event
+async def on_message_edit(before: discord.Message, after: discord.Message):
+    """Re-run dialogue when practitioner edits a message (Discord does not re-fire on_message)."""
+    if after.author == client.user:
+        return
+    if (before.content or "").strip() == (after.content or "").strip():
+        return
+    if not is_practice_channel(after):
+        return
+    if after.author.bot and after.author.id != SPIRIT_BOT_ID:
+        return
+    if await _should_skip_native_starter(after):
+        return
+    if after.content.strip().startswith("!") and river_bot_enabled():
+        return
+
+    set_practice_context(after)
+    unmark_processed_message(after.id)
+
+    channel_id = after.channel.id
+    history = get_history(channel_id)
+    visible, _ = _visible_message_content(after)
+    author = after.author.display_name
+    new_line = f"[{author}]: {visible}"
+    replaced = False
+    before_visible = (before.content or "").strip()
+    for i in range(len(history) - 1, -1, -1):
+        if history[i]["role"] != "user":
+            continue
+        if before_visible and before_visible in history[i]["content"]:
+            history[i] = {"role": "user", "content": new_line}
+            replaced = True
+            break
+    if not replaced:
+        history.append({"role": "user", "content": new_line})
+        if len(history) > MAX_DIALOGUE_HISTORY:
+            history.pop(0)
+
+    print(f"Turtle edit inbound [{getattr(after.channel, 'name', channel_id)}]: {visible[:120]!r}")
+    await _route_practice_dialogue(after)
+
+
 @client.event
 async def on_interaction(interaction: discord.Interaction):
     """Route component interactions."""
@@ -1608,7 +1681,6 @@ async def on_member_remove(member):
 
 
 # Spirit bot (dyad partner) — messages from Spirit are treated as practitioner input
-from state import SPIRIT_BOT_ID
 
 
 @client.event
@@ -1626,7 +1698,7 @@ async def on_message(message):
             # Spirit (dyad partner) — process like a practitioner message
             pass  # fall through to normal handling below
         elif client.user in message.mentions and is_practice_channel(message):
-            await handle_dialogue(message)
+            await _route_practice_dialogue(message)
             return
         else:
             return
@@ -1634,14 +1706,8 @@ async def on_message(message):
     if isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt(
         resolve_dialogue_channel_id(message)
     ):
-        try:
-            starter = message.channel.starter_message
-            if starter is None:
-                starter = await message.channel.fetch_start_message()
-            if starter and message.id == starter.id:
-                return
-        except Exception:
-            pass
+        if await _should_skip_native_starter(message):
+            return
 
     if is_practice_channel(message):
         # Split-bot: River owns all turtle-talk `!` commands (acts, not Turtle prose)
@@ -1720,10 +1786,10 @@ async def on_message(message):
                 lock = get_channel_lock(message.channel.id)
                 async with lock:
                     await handle_eddy_first_message(message)
-                    await handle_dialogue(message)
-                from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
-
-                await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+                    if message.id in _processed_messages:
+                        return
+                    _processed_messages.append(message.id)
+                await _route_practice_dialogue(message)
                 return
 
         # Auto-detect thread-worthy content in main channel (Magic-attuned legacy only)
@@ -1738,12 +1804,8 @@ async def on_message(message):
             if is_craft_intake_channel(message):
                 await schedule_craft_intake(message, client)
                 return
-            await handle_dialogue(message)
 
-        if isinstance(message.channel, discord.Thread):
-            from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
-
-            await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+        await _route_practice_dialogue(message)
 
         if offer_eddy:
             try:

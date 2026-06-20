@@ -72,9 +72,13 @@ class TestRiverActCustomIds(unittest.TestCase):
         _, decoded = bar._decode_act_custom_id(cid)
         self.assertEqual(decoded, cmd.lstrip("!"))
 
-    def test_rejects_overlong_command(self) -> None:
-        long_cmd = "!" + "x" * 120
-        self.assertIsNone(bar._encode_act_custom_id(1, long_cmd))
+    def test_long_fetch_uses_hash_fallback(self) -> None:
+        cmd = "!fetch https://example.com/" + ("a" * 120)
+        cid = bar._encode_act_custom_id(42, cmd)
+        self.assertIsNotNone(cid)
+        self.assertIn(":h:", cid)
+        _, decoded = bar._decode_act_custom_id(cid)
+        self.assertEqual(decoded, cmd.lstrip("!"))
 
 
 if __name__ == "__main__":
