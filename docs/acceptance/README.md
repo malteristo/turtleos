@@ -19,7 +19,8 @@ python scripts/shake_eddy_bar.py
 
 **Spec:** §9.5 link reading; §5.8 River/Turtle identity  
 **Chapter:** `docs/chapters/2026-06-20-harness-split-read-vs-cache.md`  
-**Status:** Slice 1 ✅ · Slice 2 partial · Slice 3 pending
+**Acceptance:** `docs/chapters/2026-06-20-acceptance.md`  
+**Status:** Slice 1 ✅ · Slice 2 ✅ · Slice 3 ✅ · **Mini dogfood H1–H5 ✅ (2026-06-20)**
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
@@ -46,7 +47,8 @@ python scripts/shake_eddy_bar.py
 | R4 | Lifecycle bar | Checkpoint · Release · Dissolve work; checkpoint keeps history |
 | R5 | `!checkpoint` / `!release` | Same semantics as bar buttons |
 
-**Verification:** `test_bar_anchor`, `test_eddy_lifecycle_bar`, `test_sessions`, `shake_eddy_bar.py`
+**Verification:** `test_bar_anchor`, `test_eddy_lifecycle_bar`, `test_sessions`, `shake_eddy_bar.py`  
+**Dogfood (2026-06-20):** R1–R3 ✅ · R4–R5 ❌ split-bot history — see acceptance chapter
 
 ---
 

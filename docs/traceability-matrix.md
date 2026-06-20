@@ -30,7 +30,7 @@
 | §5.3 | Standing eddy bar last in channel | `river_handler.post_river_eddy_bar`, `bar_anchor.py` | same | **Aligned** | `test_bar_anchor`, `shake_eddy_bar.py` | `docs/ux/eddy-lifecycle-bar.md` | **Keep** |
 | §5.4 | Blank/flow eddy materialize | `eddy_spawn.py`, `river_handler.py` | same | **Partial** | `test_eddy_rename`, `shake_spawn_eddy.py` | chapter `2026-06-18-eddy-bar.md` | **Integrate** — first-message + split-bot edge cases |
 | §5.5 | River owns `!` on parent channel | `commands.py`, `river_bot.py` | same | **Aligned** (native) | `test_command_dispatch`, `test_eddy_lifecycle_bar` | `turtle-talk.md` | **Keep** |
-| §5.8 | River vs Turtle Discord identity | `river_bot.py`, `discord_bot.py` | same | **Partial** | `test_eddy_rename` (split-bot) | chapter `2026-06-16-river-bot-split.md` | **Integrate** — UI attribution still confuses in dogfood |
+| §5.8 | River vs Turtle Discord identity | `river_bot.py`, `discord_bot.py` | same | **Partial** | `test_eddy_rename` (split-bot); dogfood acceptance ch. | chapter `2026-06-16-river-bot-split.md` | **Integrate** — duplicate lifecycle bars; Turtle posts bar via unlogged `river_client` |
 | §6.2–6.3 | Chronicle surface + deep.jsonl | `chronicle` modules | partial in `thread_registry`, handlers | **Partial** | sparse | `TURTLE_SPEC` §6 | **Integrate** — jump URLs incomplete |
 | §6.4 | Sediment cross-eddy memory | deferred | — | **Gap** (deferred) | — | §6.4 | **Defer** — backlog, not v1 |
 | §7.1–7.2 | Turtle dialogue eddy-only | `discord_bot.handle_dialogue` | same + legacy river path | **Partial** | `test_native_prompts` | `native-harness.md` | **Strangle** magic main-channel dialogue |
@@ -38,8 +38,8 @@
 | §7.7 | Presence indicators | `eddy_lifecycle`, spawn | mixed legacy + native | **Partial** | `test_flow_runner` presence | `docs/ux/` | **Integrate** |
 | §8.1 | Two-stack local models (River 4–9B, Turtle ~30B) | `models.py` | same + `triage.py`, `proprioceptor.py` | **Partial** | `models` via integration | §8.1 | **Strangle** triage/proprio on native; **Retire** as vanilla default |
 | §8.1 | Proprioception pipeline | — (retired vanilla) | `proprioceptor.py`, `pulse.py`, `discord_bot.py` | **Retire-pending** | none dedicated | §8.1 | **Strangle** behind `attunement: magic` |
-| §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same | **Aligned** | `test_sessions`, `shake_flow.py` | `docs/ux/eddy-lifecycle-bar.md` | **Keep** |
-| §8.4 | Release (checkpoint + clear) | `sessions.py`, `commands.py` | same | **Aligned** | `test_sessions` | same | **Keep** |
+| §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same | **Partial** | `test_sessions`, `shake_flow.py`; dogfood R4 **fail** split-bot | `docs/ux/eddy-lifecycle-bar.md`, acceptance ch. | **Integrate** — River capture must use Turtle dialogue history |
+| §8.4 | Release (checkpoint + clear) | `sessions.py`, `cmd_sessions.py` | same | **Partial** | `test_sessions`; dogfood R5 **fail** — embed over-claims note | same | **Integrate** — honest `CheckpointResult` in release embed |
 | §9.2 | No auto-dissolve eddies | `sessions.py`, lifecycle | same | **Aligned** | `test_eddy_lifecycle_bar` | §9.2 | **Keep** |
 | §9.4 | Attachment preprocessing | `content_fetch.py`, pipeline | same | **Aligned** | `test_attachment_pipeline` | — | **Keep** |
 | §9.5 / §5.8 | **Turtle silent link-read** (conversation) | `link_read.py` | same | **Aligned** (Slice 1) | `test_link_read`, `shake_link_read.py` | chapter harness-split | **Keep** |
@@ -94,7 +94,9 @@
 
 | Item | Next chapter |
 |------|----------------|
-| Harness Save offer (Slice 2) | Done — Mini dogfood pass |
+| Harness Save offer (Slice 2) | Done — Mini dogfood pass (H2/H3) |
+| Acceptance harness (H1–H5) | Done — `2026-06-20-acceptance.md` |
+| Split-bot lifecycle (R4–R5) | Next — shared capture history + bar identity |
 | TURTLE_SPEC cross-refs (Slice 3) | Done |
 | `commands.py` decomposition | Complete (Slice 5) — seneschal retire optional |
 | Attunement profile cleanup | After harness green |
@@ -136,4 +138,4 @@ At each chapter close:
 
 ---
 
-*Harness + Decomposition chapters complete 2026-06-20 (incl. seneschal retire). Next: `@release` or Sunday.*
+*Harness + Decomposition + Acceptance dogfood complete 2026-06-20. Next: split-bot lifecycle capture chapter; doc sovereignty.*
