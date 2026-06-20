@@ -135,10 +135,7 @@ async def on_message(message: discord.Message):
             await touch_eddy_lifecycle_bar(message, from_practitioner=True)
             return
 
-        # Ongoing eddy: River-side fetch offer from practitioner URLs (not Turtle prose).
-        from river_eddy_seneschal import maybe_offer_eddy_fetch
-
-        await maybe_offer_eddy_fetch(message, river_client)
+        # Ongoing eddy dialogue: Turtle harness (link-read, prose). River handles `!` only.
         return
 
     if _get_channel_type(message.channel.id) == "unclaimed-river":

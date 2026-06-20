@@ -121,17 +121,18 @@ def plan_dialogue_urls(
     visible_content: str,
     external: list[str],
     *,
-    native_eddy: bool,
+    native_eddy: bool = False,
 ) -> tuple[bool, list[str], list[str]]:
     """Return (auto_fetch, urls_for_context, pending_incidental_urls).
 
-    Native eddies: never auto-fetch — Turtle discusses the link; seneschal may offer `!fetch`.
-    Legacy: auto-fetch when URL-primary; otherwise Read/Skip offer via pending_incidental.
+    Native and legacy eddies share heuristics: silent link-read when URL-primary,
+    short commentary, or read cue; otherwise Read/Skip for long incidental text.
+    ``native_eddy`` is reserved for future divergence; behavior is unified (harness
+    split: Turtle read for conversation; River ``!fetch`` = library save only).
     """
+    del native_eddy  # unified policy — see docs/chapters/2026-06-20-harness-split-read-vs-cache.md
     if not external:
         return False, [], []
-    if native_eddy:
-        return False, external, []
     if should_auto_fetch_urls(visible_content, external):
         return True, external, []
     return False, external, external

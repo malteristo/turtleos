@@ -50,13 +50,26 @@ class LinkReadHeuristicTests(unittest.TestCase):
         )
         self.assertTrue(should_auto_fetch_urls(text, [url]))
 
-    def test_native_eddy_never_auto_fetches(self) -> None:
+    def test_native_eddy_auto_fetches_when_heuristics_match(self) -> None:
         url = "https://example.com/article"
         text = f"I just read this article {url}"
         auto, urls, pending = plan_dialogue_urls(text, [url], native_eddy=True)
-        self.assertFalse(auto)
+        self.assertTrue(auto)
         self.assertEqual(urls, [url])
         self.assertEqual(pending, [])
+
+    def test_native_eddy_incidental_offers_read_skip(self) -> None:
+        url = "https://example.com/article"
+        text = (
+            "This is a long message about many things that are not primarily about the link. "
+            "I wanted to mention my week, the workshop, intentions, and a few other threads "
+            "before noting this article in passing without any particular ask attached. "
+            + url
+        )
+        auto, urls, pending = plan_dialogue_urls(text, [url], native_eddy=True)
+        self.assertFalse(auto)
+        self.assertEqual(urls, [url])
+        self.assertEqual(pending, [url])
 
     def test_legacy_short_message_auto_fetches(self) -> None:
         url = "https://example.com/article"

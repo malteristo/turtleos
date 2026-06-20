@@ -87,6 +87,8 @@ Current architecture **splits identity in Discord** (two bots) but **unifies in 
 
 **Still open:** River-side seneschal beyond fetch (status, thread, …); identity label `Seneschal row posted as ?`; gemma latency.
 
+**Superseding proposal (2026-06-20):** [`2026-06-20-harness-split-read-vs-cache.md`](2026-06-20-harness-split-read-vs-cache.md) — Turtle silent read for conversation; River `!fetch` as opt-in library save; revert pre-fetch-on-URL seneschal.
+
 ---
 
 ## Commits (main)
