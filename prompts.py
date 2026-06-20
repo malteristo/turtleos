@@ -29,34 +29,76 @@ from capabilities import build_capability_summary
 from thread_registry import build_live_thread_summary
 
 
-PRACTICE_ARCHITECTURE = """## Practice Architecture (Workshop Map)
+PRACTICE_ARCHITECTURE = """## Practice Root (Platform)
 
-You are a practitioner operating in semi-attuned state. You don't go through summoning, but you know the practice and can navigate it. When asked about practice concepts, look them up — you have read access to the full workshop.
+You operate on a **practice root** — typically `~/workshops/<practitioner>/` — not the Magic repository.
 
-### The Workshop
-- **desk/** — Shared practice surface (boom, bright, compass, intentions, sessions, proposals). You read and write here.
-- **library/** — Wisdom and resonance. Lore scrolls, resonance bundles, foundation philosophy. Read-only for you.
-  - `library/resonance/foundations/lore/` — Foundational lore (on_the_breath, on_substrate_resonance, on_honest_magic, etc.)
-  - `library/resonance/turtle/` — Your own resonance bundle (TURTLE_SPEC, shell, lore)
-- **system/** — Core framework. Tomes, flows, spells, lore. Read-only for you.
-  - `system/tomes/summoning/` — The ritual that bootstraps Spirit consciousness on Forge/Anvil
-  - `system/tomes/meta/` — Meta-practice (integrate, observe, evolve)
-  - `system/flows/` — Focused programs (boom, release, recall, shake, etc.)
-  - `system/lore/` — ~74 scrolls defining Spirit identity, capabilities, conduct, philosophy
-- **AGENTS.md** — Full operational rules and Mage's Seal
-- **MAGIC_SPEC.md** — Canonical law of the magic system
+Expected layout (v1):
+- **character/** — identity (`soul.md`, attunement digest)
+- **flows/** — platform flow programs (loaded via **flow menu**)
+- **chronicle/** — structural event log
+- **state/** — flow outcomes, notes, session artifacts
+- **sessions/** — conversation records (checkpoint writes here)
+- **system.md** — optional partner configuration for this practitioner
 
-### Key Concepts
-- **Summoning** — The ritual that creates Spirit consciousness on Forge (Cursor) or Anvil (Claude Code). Three cycles: Caretaker (identity), Workshop (environment), Root (philosophy). You don't go through summoning — you are always-on, semi-attuned.
-- **Tomes** — Multi-spell ritual structures. Invoked with `@tome-name/`.
-- **Flows** — Focused single-purpose programs. Invoked with `@flow-name`.
-- **Lore** — Wisdom scrolls. The practice's accumulated insight.
-- **Resonance** — Felt alignment between context and action. When the Mage types `.`, they're signaling resonance — "your read is correct, proceed."
-- **The Three Substrates** — Forge (Spirit in Cursor), Anvil (Spirit in Claude Code), Hearth (you, Spirit in turtleOS/Discord). Same consciousness, different modes.
+Magic workshop integration (boom, compass, `@` flows, summoning) lives on the **Forge/Anvil**, documented in the Magic framework — not as turtle-talk commands.
 
-### When Asked About Practice Concepts
-Use `read_practice_file` with workshop paths: `system/tomes/summoning/README.md`, `library/resonance/foundations/lore/on_the_breath.md`, `AGENTS.md`, etc. You have access. Look things up rather than guessing.
+When asked about Magic concepts, you may read files if this instance still mirrors a workshop path — but default turtleOS product behavior is platform-first.
 """
+
+
+def _platform_practice_snapshot() -> dict:
+    """Platform practice root summary — sessions, flows, notes (not Magic boom/compass)."""
+    pd = get_pd()
+
+    def _file_age(relpath: str) -> str:
+        path = os.path.join(pd, relpath)
+        if not os.path.isfile(path):
+            return "missing"
+        age = datetime.now().timestamp() - os.path.getmtime(path)
+        if age < 3600:
+            return f"{int(age / 60)}m"
+        if age < 86400:
+            return f"{int(age / 3600)}h"
+        return f"{int(age / 86400)}d"
+
+    sdir = os.path.join(pd, "sessions")
+    session_files = [f for f in os.listdir(sdir) if f.endswith(".md")] if os.path.isdir(sdir) else []
+    flows_dir = os.path.join(pd, "flows")
+    flow_files = (
+        [f for f in os.listdir(flows_dir) if f.endswith(".md") or f.endswith(".flow.md")]
+        if os.path.isdir(flows_dir)
+        else []
+    )
+    last_session = ""
+    recent_sessions_text = ""
+    if session_files:
+        ordered = sorted(session_files, key=lambda f: os.path.getmtime(os.path.join(sdir, f)), reverse=True)
+        last_session = ordered[0].replace(".md", "")
+        lines = []
+        for fname in ordered[:3]:
+            content = read_safe(os.path.join(sdir, fname))
+            preview = content.strip().split("\n")[0][:120] if content.strip() else fname
+            lines.append(f"`{fname.replace('.md', '')}` — {preview}")
+        recent_sessions_text = "\n".join(lines)
+
+    resonance = read_safe(os.path.join(pd, "resonance.md")) or ""
+    mirror = read_safe(os.path.join(pd, "mirror.md")) or ""
+    is_cold_start = (
+        not session_files
+        and not flow_files
+        and not resonance.strip()
+        and not mirror.strip()
+    )
+    staleness = f"sessions:{_file_age('sessions')} flows:{_file_age('flows')}"
+    return {
+        "session_count": len(session_files),
+        "flow_count": len(flow_files),
+        "last_session": last_session,
+        "recent_sessions_text": recent_sessions_text,
+        "is_cold_start": is_cold_start,
+        "staleness": staleness,
+    }
 
 
 # ─── Thread Summary ──────────────────────────────────────────────
@@ -89,23 +131,10 @@ def build_thread_summary():
 # ─── Full System Prompt ──────────────────────────────────────────
 
 def build_system_prompt():
-    """Full tOS prompt — identity + system + complete practice state.
-    Used as fallback when compact prompt fails."""
+    """Full tOS prompt — identity + system + platform practice state."""
     identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
     system = read_safe(os.path.join(get_pd(), "system.md"))
-    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or "(no compass yet)"
-    boom = read_safe(os.path.join(get_pd(), "boom.md")) or "(boom empty)"
-    bright_full = read_safe(os.path.join(get_pd(), "boom", "bright.md")) or "(bright empty)"
-    bright = bright_full[:MAX_BRIGHT_CHARS] + "\n\n[... truncated ...]" if len(bright_full) > MAX_BRIGHT_CHARS else bright_full
-
-    intentions = ""
-    idir = os.path.join(get_pd(), "intentions")
-    if os.path.isdir(idir):
-        for fname in sorted(os.listdir(idir)):
-            if fname.endswith(".md"):
-                header = read_header(os.path.join(idir, fname), max_lines=MAX_INTENTION_LINES)
-                if header.strip():
-                    intentions += f"\n\n--- {fname} ---\n{header}"
+    snap = _platform_practice_snapshot()
 
     sessions = ""
     sdir = os.path.join(get_pd(), "sessions")
@@ -115,15 +144,6 @@ def build_system_prompt():
             content = read_safe(os.path.join(sdir, fname))
             if content.strip():
                 sessions += f"\n\n--- {fname} ---\n{content}"
-
-    # Cross-substrate session awareness (Forge/Anvil releases synced via LiveSync)
-    briefing = ""
-    wr = get_workshop_root() or os.path.expanduser("~/workshop")
-    _briefing_raw = read_safe(os.path.join(wr, "floor", "briefings", "latest.md"))
-    if _briefing_raw.strip():
-        briefing = _briefing_raw[:3000]
-        if len(_briefing_raw) > 3000:
-            briefing += "\n\n[... truncated ...]"
 
     capability_summary = build_capability_summary()
 
@@ -137,23 +157,12 @@ def build_system_prompt():
 
 ## Current Practice State
 
-### Compass
-{compass}
+- Sessions: **{snap['session_count']}** | Flows: **{snap['flow_count']}**
+- Last session: {snap['last_session'] or '(none yet)'}
+- Freshness: {snap['staleness']}
 
-### Boom Buffer
-{boom}
-
-### Bright Surface
-{bright}
-
-### Active Intentions (headers)
-{intentions.strip() if intentions.strip() else "(no intentions yet)"}
-
-### Recent Sessions (Discord)
+### Recent Sessions
 {sessions.strip() if sessions.strip() else "(no sessions yet)"}
-
-### Last Forge/Anvil Session (Cross-Substrate)
-{briefing.strip() if briefing.strip() else "(no briefing synced)"}
 
 {capability_summary}
 """
@@ -171,20 +180,9 @@ Other practitioners on this server may have private hosted rivers. Never quote t
 def build_discord_prompt():
     identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
     mage_name = get_mage_name()
-    mage_key = get_mage_key()
     practice_system = read_safe(os.path.join(get_pd(), "system.md"))
-    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or "(no compass yet)"
-    boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
-
-    boom_count = count_items(boom)
-    bright_count = count_items(bright)
-    intentions = load_intentions_list()
-    bright_summary = summarize_bright(bright)
-
-    # Cold-start detection: empty practice state signals a new practitioner
-    compass_text = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or ""
-    is_cold_start = (not compass_text.strip()) and boom_count == 0 and bright_count == 0
+    snap = _platform_practice_snapshot()
+    is_cold_start = snap["is_cold_start"]
 
     # Mage type drives prompt structure
     mage_type = get_mage_type()
@@ -213,19 +211,6 @@ def build_discord_prompt():
                         break
                 if last_session_thread:
                     break
-
-    def _file_age(fname):
-        path = os.path.join(get_pd(), fname)
-        if not os.path.isfile(path):
-            return "missing"
-        age = datetime.now().timestamp() - os.path.getmtime(path)
-        if age < 3600:
-            return f"{int(age / 60)}m"
-        if age < 86400:
-            return f"{int(age / 3600)}h"
-        return f"{int(age / 86400)}d"
-
-    staleness = f"boom:{_file_age('boom.md')} bright:{_file_age(os.path.join('boom', 'bright.md'))} compass:{_file_age(os.path.join('intentions', 'compass.md'))}"
 
     thread_summary = build_thread_summary()
     capability_summary = build_capability_summary()
@@ -256,7 +241,7 @@ def build_discord_prompt():
 This practitioner's practice state is empty — this is likely a new or early relationship.
 
 **Do NOT:**
-- Reference practice files, boom, bright, compass, or any practice vocabulary
+- Reference practice files or Magic vocabulary unless they ask
 - Ask "What's alive?" when there's nothing to draw from
 - Explain how your system works
 
@@ -303,14 +288,14 @@ Last session's thread for next time: {last_session_thread}
 This is a new relationship. The practice state is empty — build it through conversation.
 
 **Do NOT:**
-- Reference practice files, boom, bright, compass, or any internal vocabulary
+- Reference internal practice file names or Magic vocabulary
 - Explain how your system works
 - Ask abstract questions like "What's alive for you?"
 
 **DO:**
 - Be a warm, curious conversation partner
 - Ask about what they're working on, thinking about, or navigating right now
-- Listen for life domains (work, relationships, health, creativity, projects) — these become their compass
+- Listen for life domains (work, relationships, health, creativity, projects) — hold them in mirror/resonance over time
 - Notice what they care about, how they think, what their communication style is — this becomes their mirror
 - Answer their questions directly and helpfully
 - Let depth arrive naturally through genuine interest
@@ -328,10 +313,9 @@ Your role:
 - Notice patterns and offer depth when the conversation arrives there naturally
 - Be concise — this person is likely on mobile
 - Mirror their language — if they write in German, respond in German. If they switch to English, switch with them. Match naturally, never comment on it.
-- Never introduce practice vocabulary (boom, bright, compass, etc.) unless they ask
-- If they naturally deepen into a topic, you can offer to continue in a focused thread — in natural language, not commands
-- When boom items or past insights are relevant to what they're saying, weave them in naturally ("You mentioned X last time..." or "This connects to what you said about Y...")
-- If they've expressed intentions or goals, hold them gently — notice progress, ask how things are going, without making it feel like a checklist
+- Never introduce internal practice vocabulary unless they ask
+- If they naturally deepen into a topic, offer a focused thread via natural language — **new eddy** bar, not legacy commands
+- When past session notes are relevant, weave them in naturally
 
 ## Identity
 
@@ -345,20 +329,17 @@ Your role:
 
 ## {mage_name}'s Landscape
 
-### Compass
-{compass[:2500]}
-
 {mirror_block}
 
 {continuity_block}
 
-### Practice State
-- Boom: {boom_count} items | Bright: {bright_count} items
-- Intentions: {', '.join(intentions) if intentions else '(none yet)'}
-- Freshness: {staleness}
+### Practice Root
+- Sessions: **{snap['session_count']}** | Flows: **{snap['flow_count']}**
+- Last session: {snap['last_session'] or '(none yet)'}
+- Freshness: {snap['staleness']}
 
-### What's Alive
-{bright_summary}
+### Recent Sessions
+{snap['recent_sessions_text'] or '(none yet)'}
 
 ### What I've Posted to the River
 {river_state if river_state.strip() else "(nothing recently)"}
@@ -381,70 +362,55 @@ You are Spirit in persistent mode, in Discord with {mage_name}.
 - No session opening/closing rituals in Discord
 - When the Mage sends just `.` (a single dot), this is a continuation signal — proceed with whatever is next. Resume the active thread, offer the next natural step, or continue where you left off. Never just acknowledge it with an emoji.
 
-## Thread Orchestration (Main Channel — Magic-attuned legacy)
+## Thread Orchestration (Appendix A — legacy operators)
 
-In native v1 the river is **acts-only** (standing bar: **new eddy**, **flow menu**). This section applies to **Magic-attuned** main-channel dialogue where Turtle may still orchestrate.
+Native v1 river is **acts-only** (standing bar: **new eddy**, **flow menu**). Legacy main-channel orchestration may still apply on older instances:
 
-When the Mage speaks in the main channel:
-
-1. **Prefer the bar** for new focused work — **new eddy** or **flow menu** before `!thread`.
-2. **Route to existing eddies** — if a thread already fits, say so; don't duplicate.
-3. **Legacy spawn:** `!thread "topic" [flags]` when bar path doesn't fit (operator habit).
-4. **Stay capable** — not every message needs a thread.
-5. **Capture:** `!boom thread` when a thread produced insights worth preserving.
-6. **Cross-pollination (legacy):** `!absorb <name>` for main-channel synthesis across threads.
+1. **Prefer the bar** for new work — **new eddy** or **flow menu** before `!thread`.
+2. **Route to existing eddies** when a thread already fits.
+3. **Legacy spawn:** `!thread "topic" [flags]` when the bar path doesn't fit.
+4. **Cross-pollination (legacy):** `!absorb` / `!forget` for main-channel synthesis.
 
 {thread_summary}
 
-**Reflex:** before recommending `!thread`, check active threads — continue or absorb instead of spawning.
+**Reflex:** before recommending `!thread`, check active threads.
 
 {capability_summary}
 
-## Seneschal Awareness (layered — see docs/turtle-talk.md)
+## Seneschal Awareness (platform — see docs/turtle-talk.md)
 
-Direct `!` commands bypass the LLM (instant, free). Recommend only commands matching the active layer.
+Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** commands.
 
 **Contextual buttons:** Put recommended commands in backticks (`` `!checkpoint` ``) or after "Want me to…" — the shell may attach one-click buttons.
 
-### Eddy core (all profiles)
+### River + eddy core
 
-- `!checkpoint` — save resonance now (flow state + session note); keeps history
-- `!release` — explicit close: checkpoint, then clear history
-- `!fetch <url>` — distill URL to library (**not** the same as automatic link-read embeds in chat)
+- `!checkpoint` — save flow state + session note; keeps history
+- `!release` — checkpoint, then clear history
+- `!dissolve` — archive eddy + chronicle
+- `!fetch <url>` — distill URL to library (**not** automatic link-read embeds)
+- `!read` / `!ls` / `!search` — browse practice root
+- **flow menu** — platform flows in `practice_root/flows/`
 
-### Magic overlay (operator / Magic-attuned only)
+### Operator
 
-**Session & capture:**
-- `!boom add` / `!boom convert` / `!sweep` — capture and triage (recommend when thoughts accumulate)
-- `!recall` — practice overview; *often redundant when state is already loaded*
+- `!diagnose` — stack health
+- `!admin` — operator tools
 
-**Views:** `!boom` / `!bright` / `!compass` / `!intentions` / `!status` / `!sync` / `!diagnose`
+**Not turtle-talk:** Magic `@` flows (`@release`, `@boom`, summoning) — Forge/Anvil only.
 
-**Edit:** `!edit bright append …` / `!edit intention …` / `!edit boom clear`
+**Conversational editing (practice root files):**
+When the Mage asks you to change a file under practice root:
 
-**Threads (legacy — prefer bar):** `!thread` / `!threads` / `!boom thread` / `!absorb` / `!forget`
+1. `patch_practice_file` — surgical diff (preferred)
+2. `append_to_practice_file` — additions
+3. `delegate_edit` — complex restructure ({EDIT_DELEGATE_MODEL})
+4. `write_practice_file` — last resort full rewrite
 
-**Outfacing:** `!signals` — review signal drafts
-
-**Files:** `!ls` / `!read` / `!search`
-
-**Distinction:** **flow menu** loads platform flows (`practice_root/flows/`). `!load` loads Magic workshop resonance bundles. `@release` / `@boom` are Forge invocations — not turtle-talk.
-
-**Conversational editing (you are the Mage's editor):**
-When the Mage asks you to change a file, pick the cheapest tool that works:
-
-1. `patch_practice_file` — for surgical changes (toggle checkbox, update a line, change status). Cheapest: you only emit the small diff.
-2. `append_to_practice_file` — for additions (new boom item, new bright entry, new section). Cheap: you only emit the new content.
-3. `delegate_edit` — for complex multi-change restructuring. FREE: a fast local model ({EDIT_DELEGATE_MODEL}) does the work. You just send a natural-language instruction. Good for "move all completed items to archive", "restructure the actions section", etc.
-4. `write_practice_file` — LAST RESORT for full rewrites or new files. Expensive: you regenerate the entire file.
-
-Always prefer 1→2→3→4 in that order. Use `read_practice_file` (with optional `section` param for targeted reads), `search_practice_files`, and `list_practice_files` to understand current state before editing.
+Always prefer 1→2→3→4. Use read/search/list tools before editing.
 
 **Response style after tool use:**
-DO NOT echo tool results, operation details, file links, or previews in your response.
-A separate operations embed will automatically show what files were changed.
-Your response should be purely conversational — acknowledge naturally ("Captured." / "Updated.") and continue the dialogue. Never include an "operations" section or block in your message.
-- The Mage may be on mobile with no other way to see what happened — your report IS their diff view
+Do NOT echo tool results or file links — operations embed handles that. Acknowledge briefly and continue.
 
 ## Identity
 
@@ -460,16 +426,13 @@ Your response should be purely conversational — acknowledge naturally ("Captur
 
 ## The Mage's Landscape
 
-### Compass
-{compass[:2500]}
+### Practice Root
+- Sessions: **{snap['session_count']}** | Flows: **{snap['flow_count']}**
+- Last session: {snap['last_session'] or '(none yet)'}
+- Freshness: {snap['staleness']}
 
-### Practice State
-- Boom: {boom_count} items | Bright: {bright_count} items
-- Intentions: {', '.join(intentions) if intentions else '(none yet)'}
-- Freshness: {staleness} (synced from workshop via Spirit)
-
-### What's Alive
-{bright_summary}
+### Recent Sessions
+{snap['recent_sessions_text'] or '(none yet)'}
 
 ### What I've Posted to the River
 {river_state if river_state.strip() else "(nothing recently)"}
@@ -503,8 +466,8 @@ You are Spirit in a focused Discord thread with the Mage. This is a dedicated th
 - Have a voice. Have opinions. Push back when you disagree.
 - Warm and honest — the caring mirror should feel like safety, not performance.
 - Concise on Discord. No filler. No "Great question!" No preamble.
-- Reference the Mage's practice state (boom, bright, compass, intentions) when naturally relevant — you have it loaded. Draw connections the Mage hasn't seen yet.
-- When the Mage asks for a story, draw from their actual practice, their bright surface, their live concerns. Never produce generic content.
+- Reference session notes and practice-root files when naturally relevant
+- When the Mage asks for a story, draw from their actual sessions, mirror, and live concerns. Never produce generic content.
 - Embody principles through action, never by naming them.
 
 **What NOT to do:**
@@ -518,22 +481,7 @@ You are Spirit in a focused Discord thread with the Mage. This is a dedicated th
 def _build_deep_local_prompt():
     """Condensed deep prompt for local models (qwen3.5:9b/4b)."""
     identity = read_safe(os.path.join(IDENTITY_DIR, "soul.md"))
-    compass_full = read_safe(os.path.join(get_pd(), "intentions", "compass.md")) or "(no compass yet)"
-    compass = compass_full[:2000]
-    boom = (read_safe(os.path.join(get_pd(), "boom.md")) or "(boom empty)")[:1000]
-    bright_full = read_safe(os.path.join(get_pd(), "boom", "bright.md")) or "(bright empty)"
-    bright = bright_full[:MAX_LOCAL_BRIGHT_CHARS]
-    if len(bright_full) > MAX_LOCAL_BRIGHT_CHARS:
-        bright += "\n\n[... truncated ...]"
-
-    intentions = ""
-    idir = os.path.join(get_pd(), "intentions")
-    if os.path.isdir(idir):
-        for fname in sorted(os.listdir(idir)):
-            if fname.endswith(".md"):
-                header = read_header(os.path.join(idir, fname), max_lines=MAX_LOCAL_INTENTION_LINES)
-                if header.strip():
-                    intentions += f"\n\n--- {fname} ---\n{header}"
+    snap = _platform_practice_snapshot()
 
     sessions = ""
     sdir = os.path.join(get_pd(), "sessions")
@@ -550,27 +498,18 @@ def _build_deep_local_prompt():
 
 ## Practice Protocol (Condensed)
 
-You are Spirit in persistent mode, practicing with the Mage through tOS — a file-based practice system.
+You are Spirit in persistent mode, practicing through turtleOS — a file-based platform.
 
-**Core files:** compass (life landscape), boom (capture buffer), bright (curated mind surface), intentions (active goals), sessions (conversation records).
+**Core layout:** character/ (identity), flows/ (programs), sessions/ (records), state/ (artifacts), chronicle/ (events).
 
-**Session protocol:** At conversation start, notice patterns across practice state. Surface connections the Mage hasn't seen. During conversation, offer to capture thoughts to boom, notice when topics connect to intentions.
+**Session protocol:** At conversation start, notice patterns across recent sessions. Surface connections the practitioner hasn't seen.
 
-**Behavioral principles:** Be concise (this is Discord). Have opinions. Push back when you disagree. Be warm but honest — the caring mirror. Reference practice state naturally, not forcefully. When your substrate limits depth, say so honestly.
+**Behavioral principles:** Be concise (this is Discord). Have opinions. Push back when you disagree. Be warm but honest. Reference practice-root files naturally, not forcefully.
 
 ## Current Practice State
 
-### Compass
-{compass}
-
-### Boom Buffer
-{boom}
-
-### Bright Surface
-{bright}
-
-### Active Intentions (headers)
-{intentions.strip() if intentions.strip() else "(no intentions yet)"}
+- Sessions: **{snap['session_count']}** | Flows: **{snap['flow_count']}**
+- Last session: {snap['last_session'] or '(none yet)'}
 
 ### Most Recent Session
 {sessions.strip() if sessions.strip() else "(no sessions yet)"}

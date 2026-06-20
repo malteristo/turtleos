@@ -29,9 +29,9 @@
 2. Choosing a flow runs the same spawn path with `flow_id` set
 3. Bar reposts at bottom after spawn
 
-**After every practitioner river message:** the harness re-checks that the bar is still the last message; if not, it removes the stale bar and posts a new one at the bottom.
+**After any river timeline activity** (practitioner message, Turtle command output, ops embeds, Spirit ops): the harness re-checks that the bar is still the last message; if not, it removes the stale bar and posts a new one at the bottom.
 
-**Implementation:** `river_handler.py` — `RiverEddyBarView`, `RiverFlowPickerView`, `ensure_river_eddy_bar`, `ensure_bar_at_bottom`, `_spawn_eddy_from_anchor`.
+**Implementation:** `river_handler.py` — `RiverEddyBarView`, `RiverFlowPickerView`, `ensure_river_eddy_bar`, `ensure_bar_at_bottom`, `_spawn_eddy_from_anchor`. Unified hook: `bar_anchor.ensure_channel_bars`.
 
 **State:** `thread-state/river/eddy_bar.json` maps channel id → bar message id.
 

@@ -507,27 +507,33 @@ async def _remove_legacy_eddy_door(channel) -> None:
 
 async def post_river_eddy_bar(channel, client) -> discord.Message | None:
     """Post the standing new-eddy bar as the channel's last message."""
-    view = RiverEddyBarView(channel.id)
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(channel, client)
+    view = RiverEddyBarView(ch.id)
     try:
-        msg = await channel.send("\u200b", view=view, silent=True)
+        msg = await ch.send("\u200b", view=view, silent=True)
     except discord.HTTPException as exc:
-        print(f"Eddy bar post failed for {channel.id}: {exc}")
+        print(f"Eddy bar post failed for {ch.id}: {exc}")
         return None
-    _save_eddy_bar_message(channel.id, msg.id)
+    _save_eddy_bar_message(ch.id, msg.id)
     client.add_view(view)
     return msg
 
 
 async def ensure_bar_at_bottom(channel, client) -> None:
     """Keep the eddy bar as the last message in the river channel."""
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(channel, client)
     state = _load_eddy_bar_state()
-    bar_id = state.get(str(channel.id))
+    bar_id = state.get(str(ch.id))
     if bar_id:
         try:
-            bar_msg = await channel.fetch_message(bar_id)
-            async for last in channel.history(limit=1):
+            bar_msg = await ch.fetch_message(bar_id)
+            async for last in ch.history(limit=1):
                 if last.id == bar_id:
-                    view = RiverEddyBarView(channel.id)
+                    view = RiverEddyBarView(ch.id)
                     client.add_view(view)
                     try:
                         await bar_msg.edit(view=view)
@@ -540,7 +546,7 @@ async def ensure_bar_at_bottom(channel, client) -> None:
                 pass
         except discord.HTTPException:
             pass
-    await post_river_eddy_bar(channel, client)
+    await post_river_eddy_bar(ch, client)
 
 
 async def ensure_river_eddy_bar(client) -> None:

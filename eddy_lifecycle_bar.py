@@ -5,20 +5,29 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from urllib.parse import quote, unquote
 
 import discord
 
+_ACT_CUSTOM_ID_PREFIX = "river:act:"
+_ACT_CUSTOM_ID_MAX = 100
+
 DISSOLVE_CONFIRM_TIMEOUT = 15
-SPIRIT_BOT_ID = 1487405701440733294
 _revert_tasks: dict[int, asyncio.Task] = {}
 _dissolve_in_progress: set[int] = set()
 
 
-def _is_practitioner_author(message: discord.Message) -> bool:
+def is_practitioner_input(message: discord.Message) -> bool:
     """Practitioner activity — includes Spirit bot (dyad partner), excludes other bots."""
+    from state import SPIRIT_BOT_ID
+
     if not message.author.bot:
         return True
     return message.author.id == SPIRIT_BOT_ID
+
+
+def _is_practitioner_author(message: discord.Message) -> bool:
+    return is_practitioner_input(message)
 
 
 def _state_path() -> str:
@@ -128,28 +137,94 @@ class _LifecycleInteractionMessage:
         pass
 
 
-async def _run_lifecycle_command(
+def _encode_act_custom_id(channel_id: int, command: str) -> str | None:
+    """Encode a turtle-talk command in a persistent River button custom_id."""
+    cmd_text = command.lstrip("!")
+    encoded = quote(cmd_text, safe="")
+    custom_id = f"{_ACT_CUSTOM_ID_PREFIX}{channel_id}:{encoded}"
+    if len(custom_id) > _ACT_CUSTOM_ID_MAX:
+        return None
+    return custom_id
+
+
+def _decode_act_custom_id(custom_id: str) -> tuple[int, str]:
+    if not custom_id.startswith(_ACT_CUSTOM_ID_PREFIX):
+        raise ValueError(f"Not an act button: {custom_id!r}")
+    rest = custom_id[len(_ACT_CUSTOM_ID_PREFIX) :]
+    channel_id_str, _, encoded = rest.partition(":")
+    if not channel_id_str or not encoded:
+        raise ValueError(f"Malformed act button id: {custom_id!r}")
+    return int(channel_id_str), unquote(encoded)
+
+
+def _parse_act_command(command: str) -> tuple[str, list[str]]:
+    text = command.strip()
+    if text.startswith("!"):
+        text = text[1:]
+    parts = text.split(None, 1)
+    cmd = parts[0].lower() if parts else ""
+    args = parts[1].split() if len(parts) > 1 else []
+    return cmd, args
+
+
+async def _run_river_act_command(
     interaction: discord.Interaction,
     cmd: str,
     args: list[str] | None = None,
+    *,
+    from_lifecycle_bar: bool = False,
 ) -> None:
-    from commands import DIRECT_COMMANDS
+    """Execute a turtle-talk command from a River-owned button (public timeline replies)."""
+    from commands import COMMAND_ACT_FALLBACK, DIRECT_COMMANDS, inject_act_digest
+    from helpers import log_activity
     from mage import set_practice_context_for_channel
 
     parent_id = interaction.channel.parent_id if isinstance(interaction.channel, discord.Thread) else None
     if parent_id:
         set_practice_context_for_channel(parent_id)
+    elif interaction.channel:
+        set_practice_context_for_channel(interaction.channel.id)
 
     handler = DIRECT_COMMANDS.get(cmd)
     if not handler:
         await interaction.followup.send(f"Unknown command `{cmd}`.", ephemeral=True)
         return
+
     msg = _LifecycleInteractionMessage(
         interaction,
         f"!{cmd}",
+        from_lifecycle_bar=from_lifecycle_bar,
+    )
+    digest = None
+    try:
+        result = await handler(msg, args or [])
+        if isinstance(result, str) and result.strip():
+            digest = result.strip()
+    except Exception as exc:
+        await interaction.followup.send(f"Command error: {exc}", mention_author=False)
+        await log_activity(f"Act `!{cmd}` failed: {exc}", "\u274c", channel=interaction.channel)
+        inject_act_digest(interaction.channel.id, cmd, f"Failed: {exc}")
+        return
+
+    inject_act_digest(interaction.channel.id, cmd, digest or COMMAND_ACT_FALLBACK.get(cmd, ""))
+    await log_activity(f"Act `!{cmd}` via button", "\U0001f518", channel=interaction.channel)
+
+    from bar_anchor import ensure_channel_bars
+
+    await ensure_channel_bars(interaction.channel, interaction.client)
+
+
+async def _run_lifecycle_command(
+    interaction: discord.Interaction,
+    cmd: str,
+    args: list[str] | None = None,
+) -> None:
+    await _run_river_act_command(
+        interaction,
+        cmd,
+        args,
         from_lifecycle_bar=True,
     )
-    await handler(msg, args or [])
 
 
 def _cancel_confirm_revert(thread_id: int) -> None:
@@ -314,13 +389,16 @@ async def post_eddy_lifecycle_bar(
     thread: discord.Thread,
     client,
 ) -> discord.Message | None:
-    view = EddyLifecycleBarView(thread.id)
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(thread, client)
+    view = EddyLifecycleBarView(ch.id)
     try:
-        msg = await thread.send("\u200b", view=view, silent=True)
+        msg = await ch.send("\u200b", view=view, silent=True)
     except discord.HTTPException as exc:
-        print(f"Lifecycle bar post failed for {thread.id}: {type(exc).__name__}: {exc}")
+        print(f"Lifecycle bar post failed for {ch.id}: {type(exc).__name__}: {exc}")
         return None
-    _mark_bar_message(thread.id, msg.id)
+    _mark_bar_message(ch.id, msg.id)
     client.add_view(view)
     return msg
 
@@ -341,18 +419,20 @@ async def ensure_eddy_lifecycle_bar_at_bottom(
     if not client:
         return
 
+    from bar_anchor import channel_for_client
     from state import get_channel_lock
 
-    lock = get_channel_lock(thread.id)
+    ch = await channel_for_client(thread, client)
+    lock = get_channel_lock(ch.id)
     async with lock:
         state = _load_state()
-        bar_id = state.get(str(thread.id))
+        bar_id = state.get(str(ch.id))
         if bar_id:
             try:
-                bar_msg = await thread.fetch_message(bar_id)
-                async for last in thread.history(limit=1):
+                bar_msg = await ch.fetch_message(bar_id)
+                async for last in ch.history(limit=1):
                     if last.id == bar_id:
-                        view = EddyLifecycleBarView(thread.id)
+                        view = EddyLifecycleBarView(ch.id)
                         client.add_view(view)
                         try:
                             await bar_msg.edit(view=view)
@@ -366,9 +446,9 @@ async def ensure_eddy_lifecycle_bar_at_bottom(
             except discord.HTTPException:
                 pass
 
-        msg = await post_eddy_lifecycle_bar(thread, client)
+        msg = await post_eddy_lifecycle_bar(ch, client)
         if msg:
-            print(f"Lifecycle bar reposted in #{thread.name} ({thread.id})")
+            print(f"Lifecycle bar reposted in #{getattr(ch, 'name', ch.id)} ({ch.id})")
 
 
 async def touch_eddy_lifecycle_bar(
@@ -406,3 +486,72 @@ async def touch_eddy_lifecycle_bar(
 async def handle_lifecycle_bar_interaction(interaction: discord.Interaction) -> bool:
     """Fallback router — prefer view callbacks registered via add_view."""
     return False
+
+
+class RiverActSuggestionView(discord.ui.View):
+    """River-owned seneschal act row — same execution path as the lifecycle bar."""
+
+    def __init__(self, channel_id: int, actions: list[tuple[str, str]]):
+        super().__init__(timeout=None)
+        self._channel_id = channel_id
+        from commands import CONTEXTUAL_ACTION_COMMANDS
+
+        for label, command in actions[:3]:
+            cmd, _ = _parse_act_command(command)
+            if cmd not in CONTEXTUAL_ACTION_COMMANDS:
+                continue
+            custom_id = _encode_act_custom_id(channel_id, command)
+            if not custom_id:
+                print(f"Act button skipped — command too long for custom_id: {command[:60]}...")
+                continue
+            button = discord.ui.Button(
+                label=label[:80],
+                custom_id=custom_id,
+                style=discord.ButtonStyle.secondary,
+            )
+            button.callback = self._make_callback(custom_id)
+            self.add_item(button)
+
+    def _make_callback(self, custom_id: str):
+        async def callback(interaction: discord.Interaction):
+            if interaction.channel.id != self._channel_id:
+                await interaction.response.send_message("Wrong channel.", ephemeral=True)
+                return
+            try:
+                _, command = _decode_act_custom_id(custom_id)
+            except ValueError:
+                await interaction.response.send_message("This action expired.", ephemeral=True)
+                return
+            cmd, args = _parse_act_command(command)
+            await interaction.response.defer()
+            await _run_river_act_command(interaction, cmd, args)
+            for child in self.children:
+                child.disabled = True
+            try:
+                if interaction.message:
+                    await interaction.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+        return callback
+
+
+async def post_act_suggestion_row(
+    channel,
+    label: str,
+    actions: list[tuple[str, str]],
+    client,
+) -> discord.Message | None:
+    """Post Turtle's recommended acts as a River-owned button row."""
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(channel, client)
+    view = RiverActSuggestionView(ch.id, actions)
+    if not view.children:
+        return None
+    client.add_view(view)
+    try:
+        return await ch.send(label, view=view, silent=True)
+    except discord.HTTPException as exc:
+        print(f"Act suggestion row failed for {ch.id}: {type(exc).__name__}: {exc}")
+        return None

@@ -61,8 +61,8 @@ When `RIVER_BOT_TOKEN` is configured:
 
 | Bot | River channel | Eddies |
 |-----|---------------|--------|
-| **River** | Acts only | Creates thread anchor; no Turtle prose |
-| **Turtle** | Silent | Dialogue, presence, tools |
+| **River** | Acts only — bar, chronicle, **`!` commands** | All platform **`!` commands** (acts); lifecycle bar; thread materialize |
+| **Turtle** | Silent | Dialogue only — reads `[Act: !cmd]` digests; may suggest commands |
 
 Practitioners distinguish **who is acting** by app name and avatar. Single-bot mode is a migration fallback, not the target native UX.
 

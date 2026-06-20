@@ -25,6 +25,9 @@ CHANNELS = {
 
 OPS_EMBED_COLOR = 0x2F3136
 
+# Spirit dyad partner — practitioner input on practice channels (not filtered as bot noise)
+SPIRIT_BOT_ID = 1487405701440733294
+
 
 # ─── Channel Locks ───────────────────────────────────────────────
 

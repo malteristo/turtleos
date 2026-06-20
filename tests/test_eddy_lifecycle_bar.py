@@ -49,12 +49,32 @@ class TestPractitionerAuthor(unittest.TestCase):
     def test_spirit_counts_as_practitioner(self) -> None:
         class Author:
             bot = True
-            id = bar.SPIRIT_BOT_ID
+            id = 1487405701440733294  # SPIRIT_BOT_ID
 
         class Msg:
             author = Author()
 
         self.assertTrue(bar._is_practitioner_author(Msg()))
+
+
+class TestRiverActCustomIds(unittest.TestCase):
+    def test_roundtrip_simple_command(self) -> None:
+        cid = bar._encode_act_custom_id(1234567890, "!checkpoint")
+        self.assertIsNotNone(cid)
+        channel_id, command = bar._decode_act_custom_id(cid)
+        self.assertEqual(channel_id, 1234567890)
+        self.assertEqual(command, "checkpoint")
+
+    def test_roundtrip_thread_command(self) -> None:
+        cmd = '!thread "my topic" --model local'
+        cid = bar._encode_act_custom_id(99, cmd)
+        self.assertIsNotNone(cid)
+        _, decoded = bar._decode_act_custom_id(cid)
+        self.assertEqual(decoded, cmd.lstrip("!"))
+
+    def test_rejects_overlong_command(self) -> None:
+        long_cmd = "!" + "x" * 120
+        self.assertIsNone(bar._encode_act_custom_id(1, long_cmd))
 
 
 if __name__ == "__main__":

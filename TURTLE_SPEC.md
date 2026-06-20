@@ -195,7 +195,7 @@ Two paths, layered:
 | **Natural language → acts** | Default | River model interprets intent → act buttons (consent before execution) |
 | **Turtle-talk commands** | Power users | `!dissolve`, `!flows`, `!pin`, etc. — direct execution, no interpret step |
 
-The turtle-talk palette SHOULD expose a river-relevant subset for v1 (dissolve, flow menu, pin). Full command inventory lives in implementation docs.
+The turtle-talk palette SHOULD expose a river-relevant subset for v1 (dissolve, flow menu, pin). Full command inventory: [docs/turtle-talk.md](docs/turtle-talk.md) — platform surfaces (river acts, eddy core, operator tools); Magic workshop commands retired from turtleOS (integrate via Magic on Forge).
 
 The River executes; it does not discuss.
 
@@ -224,8 +224,8 @@ Vanilla native installs SHOULD use **two Discord applications**:
 
 | Bot | Role in river channel | Role in eddies |
 |-----|----------------------|----------------|
-| **River bot** | Acts only — bar, buttons, embeds, chronicle | Creates thread; adds practitioner at materialize; adds Turtle before first reply; renames thread |
-| **Turtle bot** | Silent (no user-message replies) | Dialogue, tools, flow-loaded prompts |
+| **River bot** | Acts only — bar, buttons, embeds, chronicle, **turtle-talk `!` commands** | Creates thread; adds practitioner at materialize; adds Turtle before first reply; renames thread; **executes all platform `!` in eddies** |
+| **Turtle bot** | Silent (no user-message replies) | Dialogue, tools, flow-loaded prompts; reads `[Act: !cmd]` digests; may suggest commands in prose |
 
 Practitioners MUST be able to distinguish River acts from Turtle dialogue by bot name and avatar. Single-bot mode MAY remain as a migration fallback when `RIVER_BOT_TOKEN` is unset.
 
@@ -413,6 +413,8 @@ Successful checkpoints append a **chronicle** line (`💾 checkpoint …`) — R
 **Regular eddies (no flow):** session notes only at checkpoint thresholds today. **Sediment** (cross-eddy curated memory) remains deferred (§16).
 
 **Magic-attuned:** `sessions/`, `proposals/`, and extended practice files remain expected; checkpoint law applies equally.
+
+**In-thread lifecycle bar (v1):** Checkpoint, Release, and Dissolve SHOULD be accessible via a persistent River-owned button bar at the bottom of native eddies — same handlers as `!checkpoint`, `!release`, `!dissolve`. Dissolve uses in-place confirm (Cancel + 15s timeout revert). See [docs/ux/eddy-lifecycle-bar.md](docs/ux/eddy-lifecycle-bar.md).
 
 ---
 
@@ -843,6 +845,9 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-18 | Eddy link reading (§9.5) — visible embed trace, read vs `!fetch`, spill, Read/Skip for incidental URLs; Law of Visible Link Read |
 | 2026-06-18 | UX doc split — `docs/ux/` topic collection replaces monolithic `docs/ux-principles.md` |
 | 2026-06-19 | §15 — hosted-river, unclaimed-river, practitioner onboarding, river keys (invite-to-claim), sovereignty boundaries |
+| 2026-06-20 | §5.5 — turtle-talk inventory cross-ref; §8.4 — in-thread lifecycle bar law (Checkpoint · Release · Dissolve) |
+| 2026-06-20 | §5.5 — turtle-talk inventory: platform sovereignty; Magic workshop overlay retired from product inventory; signals/drip retired |
+| 2026-06-20 | §5.8 — River bot owns all turtle-talk `!` execution (split-bot); Turtle reads `[Act: !cmd]` digests; bar posts use River client identity |
 
 ---
 

@@ -119,6 +119,7 @@ from craft_intake import is_craft_intake_channel, schedule_craft_intake
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
     ThreadConfigView, send_with_actions,
+    dispatch_direct_command,
 )
 
 from content_fetch import (
@@ -140,9 +141,9 @@ _boom_fetched_content = {}
 
 
 _CONTEXTUAL_ACTION_COMMANDS = {
-    "status", "diagnose", "sync", "sweep", "recall", "release",
-    "boom", "propose", "thread", "new", "threads", "eddy-check", "fetch",
-    "absorb", "absorbed", "forget", "readiness", "signals", "load",
+    "status", "diagnose", "checkpoint", "release", "dissolve",
+    "thread", "new", "threads", "eddy-check", "fetch",
+    "absorb", "absorbed", "forget", "readiness", "flows",
 }
 _CONTEXTUAL_COMMAND_RE = re.compile(r"`(![A-Za-z][\w-]*(?:\s+[^`]+)?)`")
 _RECOMMENDATION_CUE_RE = re.compile(
@@ -150,7 +151,7 @@ _RECOMMENDATION_CUE_RE = re.compile(
     re.IGNORECASE,
 )
 _PLAIN_COMMAND_RE = re.compile(
-    r"!(?:boom convert|boom thread|boom add|eddy-check|readiness|diagnose|threads|recall|release|signals|absorb|absorbed|forget|sweep|propose|status|bright|compass|intentions|fetch|thread|sync|load|boom|new)"
+    r"!(?:eddy-check|readiness|diagnose|threads|checkpoint|release|dissolve|absorb|absorbed|forget|status|fetch|thread|flows|new)"
     r"(?:\s+[^.\n`»]+)?",
     re.IGNORECASE,
 )
@@ -168,23 +169,12 @@ def _contextual_action_label(command: str) -> str:
         return f"Create thread: {topic[:42]}" if topic else "Create thread"
     if cmd == "new":
         return "Open eddy"
-    if cmd == "boom":
-        rest_lower = rest.lower()
-        if rest_lower.startswith("convert"):
-            return "Run boom convert"
-        if rest_lower.startswith("thread"):
-            return "Boom thread"
-        if rest_lower.startswith("add"):
-            return "Add to boom"
     labels = {
         "status": "Show status",
         "diagnose": "Run diagnose",
-        "sync": "Check sync",
-        "sweep": "Sweep boom",
-        "recall": "Recall",
+        "checkpoint": "Checkpoint",
         "release": "Release session",
-        "boom": "Show boom",
-        "propose": "Capture proposal",
+        "dissolve": "Dissolve eddy",
         "threads": "Show threads",
         "eddy-check": "Check eddies",
         "fetch": "Fetch link",
@@ -192,8 +182,7 @@ def _contextual_action_label(command: str) -> str:
         "absorbed": "Show absorbed",
         "forget": "Forget context",
         "readiness": "Assess readiness",
-        "signals": "Review signals",
-        "load": "Load context",
+        "flows": "Flow menu",
     }
     return labels.get(cmd, f"Run !{cmd}")
 
@@ -220,15 +209,9 @@ def _trim_contextual_command(command: str) -> str:
         return "!"
     parts = text.split()
     cmd = parts[0].lower()
-    if cmd == "boom" and len(parts) >= 2:
-        sub = parts[1].lower()
-        if sub in ("convert", "thread", "add"):
-            if sub in ("convert",):
-                return "!boom convert"
-            return "!" + " ".join(parts)
     if cmd == "thread":
         return "!" + " ".join(parts)
-    if cmd in ("absorb", "fetch", "load", "forget", "propose", "new") and len(parts) > 1:
+    if cmd in ("absorb", "fetch", "forget", "new") and len(parts) > 1:
         return "!" + " ".join(parts)
     return "!" + parts[0].lower()
 
@@ -736,7 +719,7 @@ async def handle_dialogue(message):
     else:
         triage_task = asyncio.create_task(triage_message(visible_content))
         proprioceptor_task = None
-        if not isinstance(message.channel, discord.Thread):
+        if not isinstance(message.channel, discord.Thread) and get_attunement_profile() == "magic":
             proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
         triage = await triage_task
         triage_cat = triage.get("category", "practice")
@@ -915,25 +898,18 @@ async def _continue_dialogue_turn(
     active_sessions[channel_id]["closed"] = False
 
     if is_new_session and not isinstance(message.channel, discord.Thread):
-        from mage import get_mage_type
-        ctx_parts = []
         pd = get_pd()
-        boom_count = count_items(read_safe(os.path.join(pd, "boom.md")))
-        bright_count = count_items(read_safe(os.path.join(pd, "boom", "bright.md")))
-        compass_age = format_age(file_age_hours(os.path.join(pd, "intentions", "compass.md")))
-        intentions = load_intentions_list()
         sdir = os.path.join(pd, "sessions")
-        last_session = ""
-        if os.path.isdir(sdir):
-            recent = sorted([f for f in os.listdir(sdir) if f.endswith(".md")], reverse=True)
-            if recent:
-                last_session = recent[0].replace(".md", "")
-        ctx_parts.append(f"compass ({compass_age})")
-        ctx_parts.append(f"boom ({boom_count})")
-        ctx_parts.append(f"bright ({bright_count})")
-        if intentions:
-            ctx_parts.append(f"{len(intentions)} intentions")
-        if last_session:
+        session_files = [f for f in os.listdir(sdir) if f.endswith(".md")] if os.path.isdir(sdir) else []
+        flows_dir = os.path.join(pd, "flows")
+        flow_files = (
+            [f for f in os.listdir(flows_dir) if f.endswith(".md") or f.endswith(".flow.md")]
+            if os.path.isdir(flows_dir)
+            else []
+        )
+        ctx_parts = [f"{len(session_files)} sessions", f"{len(flow_files)} flows"]
+        if session_files:
+            last_session = max(session_files, key=lambda f: os.path.getmtime(os.path.join(sdir, f))).replace(".md", "")
             ctx_parts.append(f"last session: {last_session}")
 
         # INT-023: Context loads silently. Healthy state needs no announcement.
@@ -1039,8 +1015,8 @@ async def _continue_dialogue_turn(
                 _tissue_brief = " ".join(l.strip() for l in _rest).replace("BRIEF:", "", 1).strip()
                 break
 
-    # Inject proprioceptor brief into dialogue model system prompt (magic-attuned path only)
-    if not native_eddy:
+    # Inject proprioceptor brief (Magic-attuned legacy path only)
+    if not native_eddy and get_attunement_profile() == "magic":
         if _tissue_brief and context_brief:
             source_flags.append("practice-state context brief")
             proprioceptor_block = (
@@ -1192,10 +1168,9 @@ async def _continue_dialogue_turn(
     if isinstance(message.channel, discord.Thread):
         await _update_thread_state(message.channel, cfg, history)
         if native_eddy:
-            from eddy_lifecycle_bar import ensure_eddy_lifecycle_bar_at_bottom, is_lifecycle_bar_active
+            from bar_anchor import ensure_channel_bars
 
-            if is_lifecycle_bar_active(message.channel.id):
-                await ensure_eddy_lifecycle_bar_at_bottom(message.channel)
+            await ensure_channel_bars(message.channel)
         # Phase 1 Eyes: update thread registry on every exchange
         if isinstance(message.channel, discord.Thread):
             try:
@@ -1464,8 +1439,8 @@ async def on_ready():
                     title="\U0001f3ae Spirit Control Panel",
                     description=(
                         "**Threads** \u2014 pick model + attunement, then tap New Thread.\n"
-                        "**Practice** \u2014 quick access to status, diagnostics, boom, sweep.\n"
-                        "**Session** \u2014 recall to orient, release to close."
+                        "**Practice** \u2014 status and diagnostics.\n"
+                        "**Session** \u2014 checkpoint to save, release to close."
                     ),
                     color=0x5865F2,
                 )
@@ -1606,7 +1581,7 @@ async def on_member_remove(member):
 
 
 # Spirit bot (dyad partner) — messages from Spirit are treated as practitioner input
-SPIRIT_BOT_ID = 1487405701440733294
+from state import SPIRIT_BOT_ID
 
 
 @client.event
@@ -1642,11 +1617,11 @@ async def on_message(message):
             pass
 
     if is_practice_channel(message):
-        if await try_direct_command(message):
-            if isinstance(message.channel, discord.Thread):
-                from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+        # Split-bot: River owns all turtle-talk `!` commands (acts, not Turtle prose)
+        if message.content.strip().startswith("!") and river_bot_enabled():
+            return
 
-                await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+        if await dispatch_direct_command(message):
             return
         # Message-level dedup: skip if already seen (prevents duplicate responses)
         if message.id in _processed_messages:
@@ -1676,8 +1651,9 @@ async def on_message(message):
                 await handle_intake_message(message)
             return
 
-        # Boom thread: URLs/attachments capture-only; plain text captures AND converses
-        if (isinstance(message.channel, discord.Thread)
+        # Boom thread (Magic-attuned legacy): capture URLs/attachments; plain text also converses
+        if (get_attunement_profile() == "magic"
+                and isinstance(message.channel, discord.Thread)
                 and message.channel.name.lower() == "boom"
                 and not message.content.strip().startswith("!")):
             has_urls = "http://" in message.content or "https://" in message.content
@@ -1723,9 +1699,10 @@ async def on_message(message):
                 await touch_eddy_lifecycle_bar(message, from_practitioner=True)
                 return
 
-        # Auto-detect thread-worthy content in main channel (legacy magic attunement)
+        # Auto-detect thread-worthy content in main channel (Magic-attuned legacy only)
         offer_eddy = (
-            not isinstance(message.channel, discord.Thread)
+            get_attunement_profile() == "magic"
+            and not isinstance(message.channel, discord.Thread)
             and should_offer_eddy(message)
         )
 

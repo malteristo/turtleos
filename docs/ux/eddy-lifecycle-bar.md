@@ -27,7 +27,7 @@ Power users keep turtle-talk (`!checkpoint`, `!release`, `!dissolve`). Buttons c
 3. **No chrome on empty eddies** — bar appears only after the eddy is in use (see **When it appears**).
 4. **Small curated set** — lifecycle verbs only; not a command catalog.
 5. **Dissolve is destructive** — confirm sub-row with explicit Cancel (see **Dissolve confirm**).
-6. **Turtle contextual buttons stay** — moment-specific seneschal offers complement the bar; they do not replace it.
+6. **Seneschal act rows use the same River path** — Turtle suggests commands in prose; River posts moment-specific act buttons that share the lifecycle bar execution path (public timeline, act digest, bar re-anchor).
 
 ---
 
@@ -72,14 +72,14 @@ Button labels are practitioner language, not command names. Help text may still 
 
 ## Bottom anchor (keep bar last)
 
-After **practitioner or Turtle** activity in the thread:
+After **any timeline activity** in the thread (practitioner, Spirit, Turtle command output, ops embeds, dialogue replies):
 
 1. If lifecycle bar message is already last → refresh view if needed (re-register persistent custom_ids).
 2. Else → delete stale bar message (if tracked) → post fresh bar at bottom.
 
-Same mental model as `ensure_bar_at_bottom` for the river bar ([river.md](river.md)).
+Same mental model as `ensure_bar_at_bottom` for the river bar ([river.md](river.md)). Unified entry point: `bar_anchor.ensure_channel_bars(channel)`.
 
-**State file (planned):** `thread-state/eddy/lifecycle_bar.json` — maps `thread_id → bar_message_id`.
+**State file:** `thread-state/eddy/lifecycle_bar.json` — maps `thread_id → bar_message_id`.
 
 **Who triggers ensure:** Turtle/discord harness after in-thread messages in native eddies; River bot posts/edits the bar (split-bot). Single-bot fallback: same pattern, one client.
 
@@ -116,8 +116,8 @@ First click on **Dissolve** does **not** archive. It **replaces** the button row
 |------------|-------|--------------|
 | **River bar** | Parent channel only | Opens eddies; no lifecycle buttons |
 | **Lifecycle bar** | In-thread | Session end; no `flow menu` / `new eddy` |
-| **Turtle `ContextualActionView`** | On specific Turtle messages | Moment-specific; e.g. “Checkpoint?” mid-conversation |
-| **`!` commands** | Eddy (direct harness) | Power-user instant path; same handlers |
+| **River act suggestion row** | After Turtle dialogue | Moment-specific seneschal offers; same handlers as lifecycle bar |
+| **`!` commands** | Eddy (River harness when split-bot) | Power-user instant path; same handlers |
 | **Magic `ThreadConfigView` / `!panel`** | Magic-attuned | Model/eddy-type chrome — **not** on vanilla lifecycle bar |
 
 ---
@@ -128,7 +128,8 @@ First click on **Dissolve** does **not** archive. It **replaces** the button row
 |-------|-----|
 | Lifecycle bar post/edit/delete | **River** |
 | Bar button interactions | **River** (delegates to shared command handlers) |
-| Turtle dialogue + contextual buttons | **Turtle** |
+| Seneschal act suggestion rows | **River** (posted after Turtle prose; not Turtle-owned buttons) |
+| Turtle dialogue | **Turtle** (prose + backtick suggestions only) |
 
 Practitioners should read lifecycle controls as **River structure**, Turtle as **conversation**.
 
@@ -148,18 +149,22 @@ Errors: embed or ephemeral act — not Turtle conversational apology ([principle
 
 ---
 
-## Implementation plan (when sanctioned)
+## Implementation
 
-| Piece | Location (planned) |
-|-------|-------------------|
-| Views | `river_handler.py` or `eddy_lifecycle_bar.py` — `EddyLifecycleBarView`, `EddyDissolveConfirmView` |
+Shipped 2026-06-19 (`eddy_lifecycle_bar.py`, deployed through `21d1ea2`).
+
+| Piece | Location |
+|-------|----------|
+| Views | `eddy_lifecycle_bar.py` — `EddyLifecycleBarView`, `EddyDissolveConfirmView` |
 | Ensure/repost | `ensure_eddy_lifecycle_bar_at_bottom(thread, client)` |
-| Appear hook | After first qualifying practitioner message — `discord_bot.py` / `river_bot.py` / `eddy_spawn.py` |
-| Handlers | Reuse `cmd_checkpoint`, `cmd_release`, `cmd_dissolve` via interaction adapter (like `ContextualActionView`) |
-| Module | `eddy_lifecycle_bar.py` — `EddyLifecycleBarView`, `EddyDissolveConfirmView`, `touch_eddy_lifecycle_bar`, `ensure_eddy_lifecycle_bar_at_bottom` |
-| Shakedown | Extend `scripts/shake_eddy_bar.py` or new `scripts/shake_eddy_lifecycle_bar.py` |
+| Unified hook | `bar_anchor.ensure_channel_bars(channel)` — river + lifecycle |
+| Appear hook | `touch_eddy_lifecycle_bar` after qualifying practitioner activity — wired from `discord_bot.py` / `river_bot.py` |
+| Handlers | Reuse `cmd_checkpoint`, `cmd_release`, `cmd_dissolve` via interaction adapter (`from_lifecycle_bar`, `discord_client` on adapter message) |
+| State | `thread-state/eddy/lifecycle_bar.json` |
+| Tests | `tests/test_eddy_lifecycle_bar.py` |
+| Shakedown | `scripts/shake_eddy_bar.py` (lifecycle covered in dogfood); dedicated `shake_eddy_lifecycle_bar.py` deferred |
 
-**Spec amendment (when implementing):** TURTLE_SPEC §8.4 / §9.2 — accessible lifecycle path alongside turtle-talk.
+**Spec:** TURTLE_SPEC §8.4 — accessible lifecycle path alongside turtle-talk.
 
 ---
 
@@ -183,3 +188,4 @@ See [review-checklist.md](review-checklist.md).
 | Date | Change |
 |------|--------|
 | 2026-06-19 | Pattern specified — appear on first practitioner activity; dissolve confirm Option A |
+| 2026-06-20 | Shipped — `eddy_lifecycle_bar.py`; dogfood fixes through `21d1ea2` (persistent confirm view, single dissolve handler) |

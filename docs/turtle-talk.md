@@ -2,25 +2,37 @@
 
 **Status:** Operator doc (implementation inventory)  
 **Spec anchor:** `TURTLE_SPEC.md` §5.5 — full palette lives here, not in the spec body  
-**Last aligned:** 2026-06-19 (v1 platform-law refurbish)
+**Last aligned:** 2026-06-20 (platform sovereignty — Magic overlay retired from inventory)
 
 ---
 
-## Three surfaces (read this first)
+## Platform sovereignty (read this first)
 
-Turtle-talk is not one flat list. The v1 spec organizes invocation by **where** you are and **which attunement layer** applies:
+**turtleOS is a sovereign product.** Practice roots live under `~/workshops/<practitioner>/` (character, flows, chronicle, state) — not inside the Magic repository and not shaped around Magic's desk/floor/box topology.
+
+Magic **may integrate** turtleOS (hosted river, consciousness-extension attunement, unified workshop sync). That integration is documented in the **Magic** framework (`library/resonance/turtle/`), not as a first-class command surface in turtleOS.
+
+Turtle-talk describes **platform commands only**: river acts, eddy lifecycle, practice-root file utilities, and operator infrastructure.
+
+---
+
+## Two surfaces (+ deferred appendix)
 
 | Surface | Where | Who executes | Spec |
 |---------|-------|--------------|------|
-| **River acts** | Parent channel (river) | River bot — buttons + minimal `!` | §5.4–5.5, §17 |
-| **Eddy core** | Discord threads (eddies) | Harness — direct `!`, no LLM | §8.4, §9.2 |
-| **Magic-attuned overlay** | Operator / Magic workshop | Same harness; not vanilla v1 | §11, Appendix A, §16 |
+| **River acts** | Parent channel (river) | **River bot** — bar, buttons, `!` commands | §5.4–5.5, §17 |
+| **Eddy core** | Discord threads (eddies) | **River bot** — all platform `!` (acts, not prose) | §5.8, §8.4, §9 |
+| **Operator tools** | Any practice channel | **River bot** — operator profile | §15, canary |
+
+**Split-bot law:** typed `!` commands (Mage, Spirit, practitioner) are **River acts** everywhere — river and eddies. Turtle reads outcomes via `[Act: !cmd]` digests in dialogue context; Turtle may suggest commands but does not execute them when `RIVER_BOT_TOKEN` is set.
+
+**Deferred (not default install):** legacy thread/orchestration patterns — see [Appendix A — deferred patterns](#appendix-a--deferred-patterns-not-v1) and `TURTLE_SPEC.md` Appendix A.
 
 **Natural language → act buttons** is the default river path (§5.5). Turtle-talk `!` commands are the **power-user** path: instant, free, no interpret step.
 
 **Accessible eddy lifecycle:** in-thread **lifecycle bar** (River-owned) — Checkpoint · Release · Dissolve — same handlers as eddy core `!` commands. See [docs/ux/eddy-lifecycle-bar.md](ux/eddy-lifecycle-bar.md).
 
-Vanilla practitioners (`mage_type: practitioner`) receive a **minimal allowlist** in code (`commands.py` → `_PRACTITIONER_COMMANDS`). Everything else falls through to Turtle dialogue.
+Hosted practitioners (`mage_type: practitioner`) receive a **minimal allowlist** in code (`commands.py` → `_PRACTITIONER_COMMANDS`). Everything else falls through to Turtle dialogue.
 
 ---
 
@@ -51,7 +63,7 @@ Implementation: `river_handler.py` (`StandingEddyBarView`).
 
 ---
 
-## Eddy core (vanilla v1)
+## Eddy core (v1)
 
 Commands every practitioner SHOULD know. Mapped to platform law.
 
@@ -62,73 +74,81 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 | `!dissolve` | `cmd_dissolve` | §9.2 | Archives thread — does not clear history first |
 | `!help` | `cmd_help` | — | Profile-aware inventory (this doc) |
 | `!status` | `cmd_status` | Ops | No |
-| `!readiness` | `cmd_readiness` | Ops (practitioner substrate check when hosted) | No |
+| `!readiness` | `cmd_readiness` | Ops (hosted substrate check) | No |
 
 **Idle checkpoint:** 15 min quiet → automatic checkpoint; does **not** release (§8.4, Law of Checkpoint Before Sweep).
+
+**Flow session state:** Flows with YAML front matter participate in persistent practice state — declared `writes` paths updated on checkpoint (§10). This is platform continuity, not a Magic workshop mirror.
 
 ### Link reading vs library distill (do not conflate)
 
 | Mode | Trigger | Spec | Handler |
 |------|---------|------|---------|
 | Read for dialogue | URL in eddy chat (auto / opt-in) | §9.5 | `link_read.py` / `handle_dialogue` |
-| Distill for library | `!fetch <url>` | §9.5 | `cmd_fetch` → `link-resonance/` |
+| Distill for library | `!fetch <url>` | §9.5 | `cmd_fetch` → `link-resonance/` under practice root |
 
-### Eddy-scoped utilities (vanilla-safe)
+### Eddy-scoped utilities
 
 | Command | Handler | Purpose |
 |---------|---------|---------|
-| `!read <path>` | `cmd_read` | View practice file |
+| `!read <path>` | `cmd_read` | View file under **practice root** |
 | `!ls [dir]` | `cmd_ls` | Browse practice tree |
 | `!search <query>` | `cmd_search` | Search practice files |
 | `!fetch <url>` | `cmd_fetch` | Distill URL to library cache |
 | `!rename <title>` | `cmd_rename` | Exact eddy title (in thread) |
 
+Paths resolve to `practice_root` from `mage_registry.yaml` — typically `~/workshops/<name>/`, not Magic `desk/`.
+
 ---
 
-## Magic-attuned overlay
+## Operator tools
 
-Required for Magic workshop operators; **not** part of vanilla v1 install (§11.1). Appendix A / §16 marks several patterns as legacy or deferred.
+For instance operators (`mage_type: mage`). Not shown to hosted practitioners.
 
-### Session & practice state
+| Command | Handler | Purpose |
+|---------|---------|---------|
+| `!diagnose` | `cmd_diagnose` | Full stack health (canary view) |
+| `!admin …` | `cmd_admin` | Operator tools incl. `river-key` (§15.4) |
 
-| Command | Handler | Spec layer | Notes |
-|---------|---------|------------|-------|
-| `!recall` | `cmd_recall` | Magic overlay | **Deprecated habit** — hybrid runtime often pre-loads state; see `desk/notes/on_turtle_talk.md` |
-| `!boom` | `cmd_boom` | Magic `desk/` | Show buffer |
-| `!boom add <text>` | `cmd_boom` | Magic | Capture thought |
-| `!boom convert` | `cmd_boom_convert` | Magic | Distill conversation → boom |
-| `!boom thread` | `cmd_boom_thread` | Magic | Thread essence → boom |
-| `!bright` | `cmd_bright` | Magic | Curated mind surface |
-| `!compass` | `cmd_compass` | Magic | Life landscape |
-| `!intentions` | `cmd_intentions` | Magic | Active intentions list |
-| `!sweep` | `cmd_sweep` | Magic `@boom` analog | Triage boom → bright |
-| `!sync` | `cmd_sync` | Magic | Workshop freshness |
-| `!edit …` | `cmd_edit` | Magic | Direct writes (boom, bright, compass, intention) |
-| `!load <context>` | `cmd_load` | Magic resonance | Workshop bundles — not the same as **flow menu** flows |
-| `!attune` | `cmd_attune` | Magic | Self-attunement ritual (scroll digest) |
-| `!propose` | `cmd_propose` | Magic | Capture proposal artifact |
+**Retired from product inventory:** `!signals`, `!drip` — Magic-era outfacing; future public extension will be designed natively for turtleOS, not ported from Magic signal drip.
 
-### Thread / eddy legacy (Appendix A — deferred for vanilla)
+---
 
-| Command | Handler | Status vs v1 |
-|---------|---------|--------------|
-| `!thread "topic" [flags]` | `cmd_thread` | **Legacy spawn** — bar is default (§5.4); still used by Magic-attuned orchestration |
-| `!new [topic]` | `cmd_new` | AI-named thread spawn — legacy |
+## Appendix A — deferred patterns (not v1)
+
+Legacy orchestration retained in codebase for possible re-integration; **not** part of default turtle-talk fluency. Spec: `TURTLE_SPEC.md` Appendix A.
+
+| Command | Handler | Notes |
+|---------|---------|-------|
+| `!thread "topic" [flags]` | `cmd_thread` | Legacy spawn — **new eddy** bar is default (§5.4) |
+| `!new [topic]` | `cmd_new` | AI-named thread spawn |
 | `!threads` | `cmd_threads` | List threads + eddy metadata |
-| `!thread-type <type>` | `cmd_thread_type` | Standing/slow/fast types — §9.3 deferred |
-| `!eddy-check` | `cmd_eddy_check` | Magic-attuned only — metabolic sweep (§16 deferred; gated when `attunement: native`) |
-| `!absorb` / `!absorbed` / `!forget` | absorb cmds | Cross-thread context in main channel — Magic-era pattern |
+| `!thread-type <type>` | `cmd_thread_type` | Standing/slow/fast — §9.3 deferred |
+| `!eddy-check` | `cmd_eddy_check` | Metabolic sweep — §16 deferred |
+| `!absorb` / `!absorbed` / `!forget` | absorb cmds | Cross-thread context in main channel |
 | `!panel` | `cmd_panel` | Control panel UI |
 
-### Operator / infrastructure
+---
 
-| Command | Handler | Audience |
-|---------|---------|----------|
-| `!diagnose` | `cmd_diagnose` | Operator — canary view |
-| `!admin …` | `cmd_admin` | Operator — incl. `river-key` (§15.4) |
-| `!signals …` | `cmd_signals` | Magic outfacing — §16 optional |
-| `!drip …` | `cmd_drip` | Magic outfacing |
-| `!new` | `cmd_new` | Legacy thread spawn |
+## Retired — Magic workshop overlay (not turtleOS)
+
+These commands duplicated Magic practice surfaces (`desk/boom`, compass, intentions, Forge `@` flows). **Retired from turtleOS inventory**; use Magic on the Forge/Anvil instead. Handlers may still run on legacy instances until removed.
+
+| Command | Was | Use instead |
+|---------|-----|-------------|
+| `!recall` | Practice overview | Arrival / hybrid pre-load on Magic side |
+| `!boom` / `!boom add` / convert / thread | Boom buffer | `@boom` flow, `desk/boom.md` on Forge |
+| `!bright` | Curated mind | `desk/boom/bright.md` |
+| `!compass` / `!intentions` | Life landscape | `desk/intentions/` on Forge |
+| `!sweep` | Boom triage | `@boom` sweep on Forge |
+| `!sync` | Workshop git pull | Forge `git pull` / unified workshop protocol |
+| `!edit …` | Direct desk writes | Forge or desk edits |
+| `!load <context>` | Resonance bundles | Magic `@` bundle invocation |
+| `!attune` | Scroll digest ritual | `@summon/attune` on Forge |
+| `!propose` | Proposal capture | `desk/proposals/` via Forge or Turtle autonomous notes (platform) |
+| `!signals` / `!drip` | Twitter outfacing | Retired; novel turtleOS extension TBD |
+
+Magic integration guidance lives in the Magic repo: `library/resonance/turtle/` (consciousness extension, Turtle care, workshop coupling — **Magic integrates turtleOS**, not the reverse).
 
 ---
 
@@ -137,46 +157,52 @@ Required for Magic workshop operators; **not** part of vanilla v1 install (§11.
 | Operation | Command / act | History in eddy | Thread archive | Chronicle |
 |-----------|---------------|-----------------|----------------|-----------|
 | **Checkpoint** | idle / `!checkpoint` | Retained | Open | `💾 checkpoint …` |
-| **Release** | `!release` | Cleared after checkpoint | May dissolve manual threads | checkpoint + release |
-| **Dissolve** | `!dissolve` / eddy-check UI (Magic) | Cleared by handler | Archived in Discord (still readable) | `🍃 dissolved …` (§6.2) |
+| **Release** | `!release` | Cleared after checkpoint | Open (unless user dissolves) | checkpoint + release |
+| **Dissolve** | `!dissolve` / lifecycle bar | Handler-dependent | Archived in Discord (still readable) | `🍃 dissolved …` (§6.2) |
 
 Do not conflate **release** (session resonance capture + clear dialogue) with **dissolve** (structural eddy lifecycle).
 
-**What “archived” means:** Discord `thread.edit(archived=True)` — the eddy moves to archived threads, stays readable, and is **not deleted**. A file copy lands in `thread-archive/`; optional essence in boom; parent river gets a `🍃 dissolved` act.
+**What “archived” means:** Discord `thread.edit(archived=True)` — the eddy moves to archived threads, stays readable, and is **not deleted**. A file copy may land in `thread-archive/` under practice root; parent river gets a `🍃 dissolved` act.
 
 ---
 
-## Profile matrix (`!help` behavior)
+## Profile matrix (`!help` — target)
 
-| Profile | `get_mage_type()` | Help sections shown |
-|---------|-------------------|---------------------|
-| Hosted practitioner | `practitioner` | River bar + Eddy core |
-| Native operator | `mage` + `attunement: native` | River + Eddy core + files/fetch |
-| Magic-attuned operator | `mage` + `attunement: magic` | All layers (labeled) |
+| Profile | Registry | Help sections (target) |
+|---------|----------|------------------------|
+| Hosted practitioner | `mage_type: practitioner` | River bar + Eddy core |
+| Operator | `mage_type: mage` | River + Eddy core + file utilities + operator tools |
 
-Code: `commands.cmd_help`, `commands._PRACTITIONER_COMMANDS`, `mage.get_attunement_profile()`.
+`attunement: magic` in registry (Appendix A) affects **identity/lore and legacy behavior**, not a third command tier in this inventory.
 
----
-
-## Seneschal / prompt guidance
-
-Turtle dialogue prompts (`prompts.py`) SHOULD recommend commands matching the active layer:
-
-- **Practitioner:** natural language only; no boom/compass vocabulary unless they use it first  
-- **Native eddy:** `!checkpoint`, `!release`; link read visible in embeds — not `!fetch` unless distill wanted  
-- **Magic-attuned:** full overlay; prefer **flow menu** / eddy bar for new work; `!thread` is legacy fallback
-
-Magic `@` flows (`@release`, `@boom`, …) are **Forge/Anvil invocations** — not turtle-talk. Flows in `practice_root/flows/` are **platform programs** loaded via flow menu or flow spawn tag.
+Code today: `commands.cmd_help`, `commands._PRACTITIONER_COMMANDS`, `mage.get_attunement_profile()` — aligned to this matrix as of 2026-06-20 code chapter.
 
 ---
 
-## Planned alignment (documentation-first chapter)
+## Seneschal / prompt guidance (target)
 
-1. ✅ This inventory (`docs/turtle-talk.md`)  
-2. ✅ Profile-split `!help` + seneschal prompt layers  
-3. ✅ Implement `!dissolve`, `!flows`, `!pin` river aliases  
-4. ✅ Gate `!eddy-check` metabolic sweep behind Magic attunement  
-5. ⬜ Trim Magic-attuned main-channel orchestration when `attunement: native`
+Turtle dialogue prompts (`prompts.py`) SHOULD recommend platform commands only:
+
+- **Practitioner:** natural language; eddy lifecycle via bar or `!checkpoint` / `!release` when relevant  
+- **Operator eddy:** same + `!fetch` when distill is intended (not auto link-read)  
+- **Do not** surface boom/compass/sweep/recall vocabulary — Magic practice stays on Forge
+
+**Platform flows** — markdown programs in `practice_root/flows/`, loaded via **flow menu** or flow eddy spawn.
+
+**Magic `@` flows** — Forge/Anvil only; not turtle-talk.
+
+---
+
+## Alignment roadmap
+
+| Step | Status |
+|------|--------|
+| Platform sovereignty inventory (this doc) | ✅ 2026-06-20 |
+| Profile-split `!help` + seneschal (platform target) | ✅ 2026-06-20 |
+| Remove retired handlers from `DIRECT_COMMANDS` | ✅ 2026-06-20 |
+| Remove contextual boom/sweep/recall buttons | ✅ 2026-06-20 |
+| Trim Magic main-channel orchestration in `discord_bot.py` | ✅ 2026-06-20 (gated to `magic` profile) |
+| Magic-side integration doc refresh (`library/resonance/turtle/`) | ⬜ Magic chapter |
 
 ---
 
@@ -186,7 +212,7 @@ Magic `@` flows (`@release`, `@boom`, …) are **Forge/Anvil invocations** — n
 |----------|----------|
 | Handler registry | `commands.py` → `DIRECT_COMMANDS` |
 | Practitioner gate | `commands.py` → `_PRACTITIONER_COMMANDS` |
-| Contextual action buttons | `commands.py` → `CONTEXTUAL_ACTION_COMMANDS` |
+| Contextual act allowlist + River act rows | `commands.py` → `CONTEXTUAL_ACTION_COMMANDS`; `eddy_lifecycle_bar.py` → `RiverActSuggestionView` |
 | Platform law | `TURTLE_SPEC.md` |
 | Deployed topology | `docs/architecture.md` |
 

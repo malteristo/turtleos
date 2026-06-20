@@ -103,11 +103,8 @@ def uses_native_eddy(channel_id) -> bool:
     return get_effective_attunement(channel_id) == "native"
 
 
-def is_river_message(message) -> bool:
-    """True when message is in the main river channel (not an eddy/thread)."""
-    if isinstance(message.channel, discord.Thread):
-        return False
-    ch_id = message.channel.id
+def _channel_is_river(ch_id: int) -> bool:
+    """True when channel id is a parent river or hosted-river surface."""
     if str(ch_id) not in _MAGE_REGISTRY.get("channels", {}):
         dialogue = get_channel("dialogue")
         if not dialogue or ch_id != dialogue.id:
@@ -118,6 +115,20 @@ def is_river_message(message) -> bool:
     if ch_type is None and get_attunement_profile() == "native":
         return True
     return False
+
+
+def is_river_channel(channel) -> bool:
+    """True for parent river / hosted-river channels (not eddy threads)."""
+    if isinstance(channel, discord.Thread):
+        return False
+    return _channel_is_river(channel.id)
+
+
+def is_river_message(message) -> bool:
+    """True when message is in the main river channel (not an eddy/thread)."""
+    if isinstance(message.channel, discord.Thread):
+        return False
+    return _channel_is_river(message.channel.id)
 
 
 def uses_native_river(message) -> bool:

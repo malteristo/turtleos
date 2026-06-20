@@ -52,7 +52,17 @@ async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
         color=OPS_EMBED_COLOR,
     )
     try:
-        await target.send(embed=embed, silent=True)
+        from mage import river_bot_enabled
+        from bar_anchor import channel_for_client, ensure_channel_bars
+        from river_handler import _river_client_for_channel
+
+        send_channel = target
+        if river_bot_enabled():
+            act_client = _river_client_for_channel(target)
+            if act_client:
+                send_channel = await channel_for_client(target, act_client)
+        await send_channel.send(embed=embed, silent=True)
+        await ensure_channel_bars(target)
     except Exception:
         pass
 

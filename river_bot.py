@@ -2,7 +2,8 @@
 """River bot — acts-only identity for native river channels (TURTLE_SPEC §5).
 
 Separate Discord application from Turtle. Handles structured acts in the main
-river channel; Turtle speaks only inside eddies.
+river channel and turtle-talk `!` commands everywhere in practice channels;
+Turtle speaks only inside eddies (prose, not acts).
 
 Requires RIVER_BOT_TOKEN and attunement: native in mage_registry.yaml.
 When RIVER_BOT_TOKEN is unset, discord_bot.py handles the River harness alone.
@@ -51,7 +52,7 @@ from river_handler import ensure_river_eddy_bar, handle_eddy_first_message, hand
 from hosted_river_onboarding import ensure_hosted_river_onboarding
 from river_keys import try_river_key_claim
 from river_state import river_bot_token, river_client
-from state import get_channel_lock
+from state import SPIRIT_BOT_ID, get_channel_lock
 
 
 def _ensure_single_instance() -> None:
@@ -64,6 +65,14 @@ def _ensure_single_instance() -> None:
     except OSError:
         print("Another river_bot.py is already running. Exiting.", file=sys.stderr)
         sys.exit(1)
+
+
+def _accept_message_author(message: discord.Message) -> bool:
+    if message.author == river_client.user:
+        return False
+    if message.author.bot and message.author.id != SPIRIT_BOT_ID:
+        return False
+    return True
 
 
 @river_client.event
@@ -79,14 +88,12 @@ async def on_ready():
             await ensure_hosted_river_onboarding(river_client)
         except Exception as exc:
             print(f"River startup setup failed: {exc}")
-    print("River bot ready — acts only in parent river channels")
+    print("River bot ready — acts + turtle-talk in practice channels")
 
 
 @river_client.event
 async def on_message(message: discord.Message):
-    if message.author == river_client.user:
-        return
-    if message.author.bot:
+    if not _accept_message_author(message):
         return
     if message.type not in (discord.MessageType.default, discord.MessageType.reply):
         return
@@ -94,7 +101,20 @@ async def on_message(message: discord.Message):
         return
     if get_attunement_profile() != "native":
         return
+
+    # Universal turtle-talk handler (river + eddies; Mage, Spirit, practitioners)
     if message.content.strip().startswith("!"):
+        set_practice_context(message)
+        if isinstance(message.channel, discord.Thread) and message.channel.parent_id:
+            set_practice_context_for_channel(message.channel.parent_id)
+        else:
+            set_practice_context_for_channel(message.channel.id)
+        from commands import dispatch_direct_command
+
+        lock = get_channel_lock(message.channel.id)
+        async with lock:
+            if await dispatch_direct_command(message, bar_client=river_client):
+                print(f"River act [!{message.content.split()[0][1:]}] in #{getattr(message.channel, 'name', message.channel.id)}")
         return
 
     if isinstance(message.channel, discord.Thread):

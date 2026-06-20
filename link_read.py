@@ -447,6 +447,9 @@ async def post_link_offer(
     bot_client.add_view(view)
     try:
         await channel.send(embed=embed, view=view, silent=True)
+        from bar_anchor import ensure_channel_bars
+
+        await ensure_channel_bars(channel)
     except discord.HTTPException as exc:
         print(f"Link offer post failed: {exc}")
 
