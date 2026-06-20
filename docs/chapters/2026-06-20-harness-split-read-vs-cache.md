@@ -1,7 +1,7 @@
 # Chapter proposal — Harness split: read (Turtle) vs cache (River)
 
 **Date:** 2026-06-20  
-**Status:** Architecture locked — implementation next  
+**Status:** Complete — dogfood verified on Mini (2026-06-20)  
 **Deciders:** Kermit + Spirit (Forge)  
 **Builds on:** `2026-06-20-river-turtle-split-handoff.md`, `09bcbc0` (River pre-fetch seneschal — to be superseded)
 
@@ -84,13 +84,14 @@ Turtle prose mentions !fetch → River parses backticks → duplicate buttons   
 
 - **New:** post-Turtle scan for practitioner URL on River's eddy message path; poll thread history for Turtle reply, then post **Save to library** (River process). Turtle bot `on_message` events are not reliable cross-bot.
 - **`!fetch` semantics** documented in `turtle-talk.md`: persistence act, not dialogue prerequisite.
-- **Acceptance:** after informed reply, optional Save button; tap → cached; second Save suppressed; typed `!fetch` still works.
+- **`save_offer_skip_reason`:** distinct operator logs (`cached_in_link_resonance`, `already_offered`, `recent_fetch_act`, …); fixed false `no_eligible_url` skip on uncached URLs.
+- **Acceptance:** after informed reply, optional Save button; tap → cached; second Save suppressed; typed `!fetch` still works. **Dogfood:** ✅ Mini 2026-06-20 — `Save offer scheduled` → `polling` → `Save offer posted` in `#save-offer-shake-161455` (`river.log`). First-message shake path hit unrelated `thread.remove` crash in `eddy_spawn.py` (decomposition backlog).
 
-### Slice 3 — Spec + inventory alignment
+### Slice 3 — Spec + inventory alignment ✅ *2026-06-20*
 
 - **`docs/turtle-talk.md`:** eddy core `!fetch` = cache/distill; link-read = Turtle path (not a `!` command).
-- **`TURTLE_SPEC` §5.8 / §8.4 cross-ref** when spec edit window opens.
-- **`prompts.py`:** remove stale “River attaches Fetch when you post URL” native hints.
+- **`TURTLE_SPEC` §5.8 / §9.5** — harness split cross-refs (read vs save).
+- **`prompts.py`:** native hints already aligned (no River pre-fetch prerequisite).
 
 ---
 

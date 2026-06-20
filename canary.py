@@ -175,7 +175,11 @@ def check_behavior_smoke():
 
     try:
         bot = _load_module_from_path("canary_discord_bot_smoke", base / "discord_bot.py")
-        actions = bot._extract_contextual_actions('Try `!thread "canary smoke" --model local --attunement semi`.')
+        import legacy_seneschal as ls
+
+        actions = ls.extract_contextual_actions(
+            'Try `!thread "canary smoke" --model local --attunement semi`.'
+        )
         if not actions or actions[0][1] != '!thread "canary smoke" --model local --attunement semi':
             return "red", "contextual action extraction failed"
 

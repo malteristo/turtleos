@@ -41,11 +41,11 @@ class TestActDigest(unittest.TestCase):
 
 class TestSeneschalFilter(unittest.TestCase):
     def test_drops_fetch_after_act(self) -> None:
-        import discord_bot as bot
+        import legacy_seneschal as ls
 
         history = [{"role": "user", "content": "[Act: !fetch] Fetched article excerpt here"}]
         actions = [("Fetch link", "!fetch https://example.com")]
-        filtered = bot._filter_seneschal_actions(actions, history)
+        filtered = ls.filter_seneschal_actions(actions, history)
         self.assertEqual(filtered, [])
 
 
@@ -56,7 +56,7 @@ class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
         message.channel.id = 1
         message.channel.parent_id = None
 
-        with patch.object(commands, "try_direct_command", new_callable=AsyncMock, return_value=True):
+        with patch("cmd_dispatch.try_direct_command", new_callable=AsyncMock, return_value=True):
             with patch("eddy_lifecycle_bar.touch_eddy_lifecycle_bar", new_callable=AsyncMock):
                 with patch("bar_anchor.ensure_channel_bars", new_callable=AsyncMock) as ensure:
                     handled = await commands.dispatch_direct_command(message, bar_client=MagicMock())

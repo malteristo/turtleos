@@ -856,7 +856,7 @@ async def river_add_turtle_to_eddy(thread) -> bool:
     try:
         await thread.fetch_member(turtle_id)
         try:
-            await thread.remove(discord.Object(id=turtle_id))
+            await thread.remove_user(discord.Object(id=turtle_id))
             await asyncio.sleep(0.25)
         except discord.HTTPException as exc:
             print(f"River remove turtle before add: {type(exc).__name__}: {exc}")

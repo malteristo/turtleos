@@ -50,6 +50,49 @@ def _recent_fetch_urls(history: list[dict], *, window: int = 12) -> set[str]:
     return urls
 
 
+def _dialogue_history_snapshot(channel_id: int) -> list[dict]:
+    """Best-effort thread history for save-offer eligibility (Turtle process may own this)."""
+    try:
+        from state import dialogue_histories
+
+        return list(dialogue_histories.get(channel_id, []))
+    except Exception:
+        return []
+
+
+def save_offer_skip_reason(
+    practitioner_text: str,
+    history: list[dict],
+    channel_id: int,
+    *,
+    is_cached,
+) -> str | None:
+    """Human-readable skip reason when no Save offer should post."""
+    urls = practitioner_external_urls(practitioner_text)
+    if not urls:
+        return "no_external_url"
+    recent_fetched = _recent_fetch_urls(history)
+    offered = _save_offer_seen.get(channel_id, set())
+    for url in urls:
+        key = _normalize_url(url).lower()
+        if key in offered:
+            continue
+        if key in recent_fetched:
+            continue
+        if is_cached(url):
+            continue
+        return None
+    for url in urls:
+        key = _normalize_url(url).lower()
+        if key in offered:
+            return f"already_offered:{url[:120]}"
+        if key in recent_fetched:
+            return f"recent_fetch_act:{url[:120]}"
+        if is_cached(url):
+            return f"cached_in_link_resonance:{url[:120]}"
+    return "no_eligible_url"
+
+
 def pick_save_offer_url(
     practitioner_text: str,
     history: list[dict],
@@ -58,16 +101,25 @@ def pick_save_offer_url(
     is_cached,
 ) -> str | None:
     """First uncached practitioner URL eligible for a post-Turtle save offer."""
-    recent_fetched = _recent_fetch_urls(history)
-    offered = _save_offer_seen.get(channel_id, set())
+    if save_offer_skip_reason(
+        practitioner_text, history, channel_id, is_cached=is_cached
+    ):
+        return None
     for url in practitioner_external_urls(practitioner_text):
         key = _normalize_url(url).lower()
-        if key in recent_fetched or key in offered:
+        if key in _recent_fetch_urls(history):
+            continue
+        if key in _save_offer_seen.get(channel_id, set()):
             continue
         if is_cached(url):
             continue
         return url
     return None
+
+
+def _log_save_offer_skip(channel, reason: str) -> None:
+    ch_name = getattr(channel, "name", getattr(channel, "id", "?"))
+    print(f"Save offer skip ({reason}) in #{ch_name}")
 
 
 def mark_save_offer_posted(channel_id: int, url: str) -> None:
@@ -101,7 +153,7 @@ async def maybe_offer_eddy_save_after_turn(
     practitioner_text: str,
 ) -> None:
     """River harness: post Save act row once Turtle has replied."""
-    from commands import _get_cached_resonance
+    from cmd_link_resonance import get_cached_resonance
     from eddy_lifecycle_bar import post_act_suggestion_row
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
     from mage import river_bot_enabled
@@ -118,13 +170,23 @@ async def maybe_offer_eddy_save_after_turn(
     if not practitioner_external_urls(practitioner_text):
         return
 
+    history = _dialogue_history_snapshot(channel.id)
+    is_cached = lambda u: bool(get_cached_resonance(u))
+    skip = save_offer_skip_reason(
+        practitioner_text, history, channel.id, is_cached=is_cached
+    )
+    if skip:
+        _log_save_offer_skip(channel, skip)
+        return
+
     url = pick_save_offer_url(
         practitioner_text,
-        [],
+        history,
         channel.id,
-        is_cached=lambda u: bool(_get_cached_resonance(u)),
+        is_cached=is_cached,
     )
     if not url:
+        _log_save_offer_skip(channel, "no_eligible_url")
         return
 
     try:
@@ -163,14 +225,21 @@ async def _wait_for_turtle_reply_after(
         print("Save offer poll: turtle bot id unknown")
         return False
 
+    practitioner_id = practitioner_message.id
     deadline = asyncio.get_event_loop().time() + timeout_s
     while asyncio.get_event_loop().time() < deadline:
         try:
-            async for msg in channel.history(limit=20, after=practitioner_message.created_at):
+            async for msg in channel.history(limit=30, after=practitioner_message):
+                if msg.id <= practitioner_id:
+                    continue
                 if getattr(msg.author, "id", None) != turtle_id:
                     continue
                 if not (msg.content or "").strip():
                     continue
+                print(
+                    f"Save offer poll: Turtle reply seen in "
+                    f"#{getattr(channel, 'name', channel.id)} (msg {msg.id})"
+                )
                 return True
         except discord.HTTPException as exc:
             print(f"Save offer poll failed for {channel.id}: {exc}")
@@ -188,23 +257,20 @@ async def _run_save_offer_poll(practitioner_message: discord.Message) -> None:
     if not practitioner_external_urls(practitioner_text):
         return
 
-    from commands import _get_cached_resonance
+    from cmd_link_resonance import get_cached_resonance
     from mage import set_practice_context, set_practice_context_for_channel
 
     set_practice_context(practitioner_message)
     if channel.parent_id:
         set_practice_context_for_channel(channel.parent_id)
 
-    if not pick_save_offer_url(
-        practitioner_text,
-        [],
-        channel.id,
-        is_cached=lambda u: bool(_get_cached_resonance(u)),
-    ):
-        print(
-            f"Save offer skip (cached/deduped) in "
-            f"#{getattr(channel, 'name', channel.id)}"
-        )
+    is_cached = lambda u: bool(get_cached_resonance(u))
+    pre_history = _dialogue_history_snapshot(channel.id)
+    pre_skip = save_offer_skip_reason(
+        practitioner_text, pre_history, channel.id, is_cached=is_cached
+    )
+    if pre_skip:
+        _log_save_offer_skip(channel, pre_skip)
         return
 
     ch_name = getattr(channel, "name", channel.id)

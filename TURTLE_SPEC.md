@@ -229,6 +229,8 @@ Vanilla native installs SHOULD use **two Discord applications**:
 
 Practitioners MUST be able to distinguish River acts from Turtle dialogue by bot name and avatar. Single-bot mode MAY remain as a migration fallback when `RIVER_BOT_TOKEN` is unset.
 
+**Harness split (split-bot eddies):** Turtle harness owns **read-for-dialogue** (silent link-read, excerpt inject — no `link-resonance/` write). River harness owns **distill-for-library** (`!fetch`, post-Turtle **Save to library** act row when URL is not yet cached). River MUST NOT require `!fetch` before Turtle can discuss a URL. See §9.5.
+
 ---
 
 ## 6. Chronicle
@@ -472,6 +474,8 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 **Failure ladder:** retry, `/paste` endpoint, screenshot, paste in chat, `!fetch` for distill-only.
 
 **Implementation:** `link_read.py`, `content_fetch.py`, `discord_bot.handle_dialogue`.
+
+**Split-bot harness (§5.8):** Auto-read and incidental Read/Skip run in the **Turtle process** before the informed reply. **Save to library** (`!fetch` button or typed command) runs in the **River process** after Turtle replies — optional persistence, not a dialogue prerequisite. River polls thread history for Turtle prose when scheduling save offers; skip reasons (cached in `link-resonance/`, already offered, recent `!fetch` act) MUST be logged distinctly for operator debug.
 
 ---
 
@@ -848,6 +852,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-20 | §5.5 — turtle-talk inventory cross-ref; §8.4 — in-thread lifecycle bar law (Checkpoint · Release · Dissolve) |
 | 2026-06-20 | §5.5 — turtle-talk inventory: platform sovereignty; Magic workshop overlay retired from product inventory; signals/drip retired |
 | 2026-06-20 | §5.8 — River bot owns all turtle-talk `!` execution (split-bot); Turtle reads `[Act: !cmd]` digests; bar posts use River client identity |
+| 2026-06-20 | §5.8 / §9.5 — harness split: Turtle silent link-read vs River post-Turtle Save to library (`!fetch`); distinct skip logging |
 
 ---
 

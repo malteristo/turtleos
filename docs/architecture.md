@@ -1,10 +1,11 @@
 # turtleOS Architecture — Current State
 
 > **Product architecture (target + migration):** see [`ARCHITECTURE.md`](../ARCHITECTURE.md) and [`TURTLE_SPEC.md`](../TURTLE_SPEC.md) (2026-06 platform rewrite).  
-> **This document:** operator infrastructure snapshot on the Mac Mini — may lag product law.
+> **Spec → code map:** [`traceability-matrix.md`](traceability-matrix.md) (living; preferred over this file for gap analysis).  
+> **This document:** operator infrastructure snapshot on the Mac Mini — **stale**; scheduled for refresh in a Sunday/maintenance chapter.
 
-**Updated:** 2026-03-21 (infra); product law 2026-06-14  
-**Source of truth for:** what runs on deployed instances, how services connect, what is deprecated
+**Updated:** 2026-03-21 (infra) — **superseded for traceability by** `traceability-matrix.md` (2026-06-20)  
+**Source of truth for:** deployed instance topology only until refreshed; use `ARCHITECTURE.md` + matrix for product alignment
 
 ---
 

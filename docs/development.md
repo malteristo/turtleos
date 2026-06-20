@@ -122,9 +122,19 @@ Consequence tiers:
 
 Do not add automated `git pull`, dependency install, service restart, or rollback behavior until read-only update awareness has proven reliable in real live updates.
 
+## Traceability Matrix (living)
+
+**Primary map:** [`docs/traceability-matrix.md`](traceability-matrix.md) — spec § → module → status → action. Update at every chapter close.
+
+**Acceptance scenarios:** [`docs/acceptance/README.md`](acceptance/README.md) — dogfood + shake index.
+
+**Consolidation chapter (2026-06-20):** [`docs/chapters/2026-06-20-consolidation-traceability.md`](chapters/2026-06-20-consolidation-traceability.md)
+
+---
+
 ## Traceability Backlog
 
-When implementation grows ahead of the spec, add the gap here or in `ARCHITECTURE.md`. Current known areas needing tighter traceability:
+When implementation grows ahead of the spec, add the gap here **and** a row in `docs/traceability-matrix.md`. Current known areas needing tighter traceability:
 
 - native runtime beyond the first vertical slice: long-running tasks, general tools, live dialogue routing, and Discord notification outputs
 - `cli.py` command reference generation and operator docs

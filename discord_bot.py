@@ -118,7 +118,7 @@ from craft_intake import is_craft_intake_channel, schedule_craft_intake
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
-    ThreadConfigView, send_with_actions,
+    ThreadConfigView,
     dispatch_direct_command,
 )
 
@@ -140,151 +140,7 @@ from link_read import (
 _boom_fetched_content = {}
 
 
-_CONTEXTUAL_ACTION_COMMANDS = {
-    "status", "diagnose", "checkpoint", "release", "dissolve",
-    "thread", "new", "threads", "eddy-check", "fetch",
-    "absorb", "absorbed", "forget", "readiness", "flows",
-}
-_CONTEXTUAL_COMMAND_RE = re.compile(r"`(![A-Za-z][\w-]*(?:\s+[^`]+)?)`")
-_RECOMMENDATION_CUE_RE = re.compile(
-    r"\b(?:want me to|should i|would you like (?:me to )?|i(?:'d| would) recommend(?: running)?|try(?: running)?|you could run)\b",
-    re.IGNORECASE,
-)
-_PLAIN_COMMAND_RE = re.compile(
-    r"!(?:eddy-check|readiness|diagnose|threads|checkpoint|release|dissolve|absorb|absorbed|forget|status|fetch|thread|flows|new)"
-    r"(?:\s+[^.\n`»]+)?",
-    re.IGNORECASE,
-)
 _DISCORD_MESSAGE_LINK_RE = re.compile(r"https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)")
-
-
-def _contextual_action_label(command: str) -> str:
-    body = command.strip().lstrip("!")
-    cmd = body.split(None, 1)[0].lower() if body else ""
-    rest = body.split(None, 1)[1] if " " in body else ""
-
-    if cmd == "thread":
-        match = re.search(r'"([^"]+)"', rest)
-        topic = match.group(1) if match else rest.split("--", 1)[0].strip()
-        return f"Create thread: {topic[:42]}" if topic else "Create thread"
-    if cmd == "new":
-        return "Open eddy"
-    labels = {
-        "status": "Show status",
-        "diagnose": "Run diagnose",
-        "checkpoint": "Checkpoint",
-        "release": "Release session",
-        "dissolve": "Dissolve eddy",
-        "threads": "Show threads",
-        "eddy-check": "Check eddies",
-        "fetch": "Fetch link",
-        "absorb": "Absorb thread",
-        "absorbed": "Show absorbed",
-        "forget": "Forget context",
-        "readiness": "Assess readiness",
-        "flows": "Flow menu",
-    }
-    return labels.get(cmd, f"Run !{cmd}")
-
-
-def _recommendation_tail(reply: str) -> str:
-    """Paragraph most likely to hold a local recommendation (skip trace/footer lines)."""
-    paragraphs = []
-    for block in reply.split("\n\n"):
-        block = block.strip()
-        if not block or block.startswith("-#"):
-            continue
-        paragraphs.append(block)
-    if paragraphs:
-        return paragraphs[-1]
-    lines = [ln for ln in reply.splitlines() if ln.strip() and not ln.strip().startswith("-#")]
-    return "\n".join(lines[-6:])
-
-
-def _trim_contextual_command(command: str) -> str:
-    """Keep only the invocable prefix — drop trailing prose after the command."""
-    text = command.strip().rstrip("?.!,;:")
-    text = text.lstrip("!")
-    if not text:
-        return "!"
-    parts = text.split()
-    cmd = parts[0].lower()
-    if cmd == "thread":
-        return "!" + " ".join(parts)
-    if cmd in ("absorb", "fetch", "forget", "new") and len(parts) > 1:
-        return "!" + " ".join(parts)
-    return "!" + parts[0].lower()
-
-
-def _append_contextual_action(
-    actions: list,
-    seen: set,
-    command: str,
-    *,
-    allowed_commands: set[str] | frozenset[str] | None = None,
-) -> None:
-    command = _trim_contextual_command(command)
-    cmd = command.lstrip("!").split(None, 1)[0].lower()
-    allow = allowed_commands if allowed_commands is not None else _CONTEXTUAL_ACTION_COMMANDS
-    if cmd not in allow:
-        return
-    key = command.lower()
-    if key in seen:
-        return
-    seen.add(key)
-    actions.append((_contextual_action_label(command), command))
-
-
-def _extract_contextual_actions(
-    reply: str,
-    *,
-    allowed_commands: set[str] | frozenset[str] | None = None,
-) -> list[tuple[str, str]]:
-    # Find direct commands Turtle recommended so the shell may attach River act buttons.
-    actions = []
-    seen = set()
-    for match in _CONTEXTUAL_COMMAND_RE.finditer(reply):
-        _append_contextual_action(
-            actions, seen, match.group(1).strip(), allowed_commands=allowed_commands
-        )
-
-    # Phase 2: natural-language recommendations often cite !commands without backticks.
-    tail = _recommendation_tail(reply)
-    if _RECOMMENDATION_CUE_RE.search(tail):
-        for match in _PLAIN_COMMAND_RE.finditer(tail):
-            _append_contextual_action(
-                actions, seen, match.group(0).strip(), allowed_commands=allowed_commands
-            )
-
-    # More than three command mentions is usually help text, not a local recommendation.
-    if len(actions) > 3:
-        return []
-    return actions
-
-
-def _filter_seneschal_actions(
-    actions: list[tuple[str, str]],
-    history: list[dict],
-) -> list[tuple[str, str]]:
-    """Drop act buttons for commands River already ran recently in this eddy."""
-    if not actions or not history:
-        return actions
-    recent = "\n".join(m.get("content", "") for m in history[-12:])
-    completed: set[str] = set()
-    for line in recent.splitlines():
-        if line.startswith("[Act: !"):
-            cmd = line.split("]", 1)[0].replace("[Act: !", "").strip().lower()
-            if cmd:
-                completed.add(cmd.split()[0])
-    if not completed:
-        return actions
-    filtered = []
-    for label, command in actions:
-        cmd = command.lstrip("!").split(None, 1)[0].lower()
-        if cmd in completed:
-            continue
-        filtered.append((label, command))
-    return filtered
 
 
 # ─── handle_dialogue ─────────────────────────────────────────────
@@ -1194,24 +1050,10 @@ async def _continue_dialogue_turn(
     if source_trace and not native_eddy:
         reply = f"{reply}\n\n-# {source_trace}"
     history.append({"role": "assistant", "content": reply})
-    # Native eddies: River-side seneschal (river_eddy_seneschal) — not Turtle prose parsing.
-    contextual_actions: list[tuple[str, str]] = []
-    if not native_eddy:
-        contextual_actions = _extract_contextual_actions(reply)
-        contextual_actions = _filter_seneschal_actions(contextual_actions, history)
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
     if native_eddy:
         print(f"Native Turtle reply sent [{message.channel.name}]: {len(reply)} chars")
-    if contextual_actions:
-        from river_eddy_seneschal import dedupe_fetch_actions
-
-        contextual_actions = dedupe_fetch_actions(contextual_actions)
-        label = "Suggested action" if len(contextual_actions) == 1 else "Suggested actions"
-        try:
-            await send_with_actions(message.channel, f"-# {label}", contextual_actions)
-        except Exception as e:
-            print(f"Seneschal act row failed: {e}")
 
     # Super-ego: think aloud after sustained conversation
     asyncio.ensure_future(maybe_reflect(message.channel, history))
@@ -1221,7 +1063,7 @@ async def _continue_dialogue_turn(
         if native_eddy:
             from bar_anchor import ensure_channel_bars
 
-            # One re-anchor after full response unit (prose + optional seneschal row).
+            # One re-anchor after Turtle reply (River Save offer is separate harness).
             await ensure_channel_bars(message.channel)
         # Phase 1 Eyes: update thread registry on every exchange
         if isinstance(message.channel, discord.Thread):

@@ -2,7 +2,9 @@
 
 > Reference shell implementation guide. **Canonical law:** [TURTLE_SPEC.md](TURTLE_SPEC.md) (2026-06 platform rewrite).
 
-Public codebase: ~34 Python modules, ~14k lines. Rebuilt 2026-03-29 from monolith; evolving toward platform law (River/Turtle split).
+Public codebase: ~34 Python modules, ~23k lines (2026-06 snapshot). Rebuilt 2026-03-29 from monolith; evolving toward platform law (River/Turtle split).
+
+**Traceability:** [`docs/traceability-matrix.md`](docs/traceability-matrix.md) — spec § → module → verification. Update at chapter close.
 
 ---
 

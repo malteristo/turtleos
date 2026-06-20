@@ -13,6 +13,47 @@ sys.modules.setdefault("discord.ui", MagicMock())
 import river_eddy_seneschal as res
 
 
+class TestSaveOfferSkipReason(unittest.TestCase):
+    def setUp(self) -> None:
+        res.clear_save_offer_state()
+
+    def test_none_when_uncached_url(self) -> None:
+        url = "https://example.com/article"
+        reason = res.save_offer_skip_reason(
+            f"see {url}", [], channel_id=1, is_cached=lambda _: False
+        )
+        self.assertIsNone(reason)
+
+    def test_cached_in_link_resonance(self) -> None:
+        url = "https://example.com/cached"
+        reason = res.save_offer_skip_reason(
+            f"see {url}", [], channel_id=1, is_cached=lambda u: u == url
+        )
+        self.assertTrue(reason and reason.startswith("cached_in_link_resonance:"))
+
+    def test_already_offered(self) -> None:
+        url = "https://example.com/offered"
+        res.mark_save_offer_posted(5, url)
+        reason = res.save_offer_skip_reason(
+            f"see {url}", [], channel_id=5, is_cached=lambda _: False
+        )
+        self.assertTrue(reason and reason.startswith("already_offered:"))
+
+    def test_recent_fetch_act(self) -> None:
+        url = "https://example.com/fetched"
+        history = [{"role": "user", "content": f"[Act: !fetch] Cached {url}"}]
+        reason = res.save_offer_skip_reason(
+            f"again {url}", history, channel_id=1, is_cached=lambda _: False
+        )
+        self.assertTrue(reason and reason.startswith("recent_fetch_act:"))
+
+    def test_no_external_url(self) -> None:
+        reason = res.save_offer_skip_reason(
+            "just text", [], channel_id=1, is_cached=lambda _: False
+        )
+        self.assertEqual(reason, "no_external_url")
+
+
 class TestPickSaveOfferUrl(unittest.TestCase):
     def setUp(self) -> None:
         res.clear_save_offer_state()
@@ -69,7 +110,7 @@ class TestMaybeOfferEddySaveAfterTurn(unittest.IsolatedAsyncioTestCase):
             "prompts.uses_native_turtle_prompt", return_value=True
         ), patch("eddy_spawn.is_awaiting_flow_intake", return_value=False), patch(
             "eddy_spawn.is_awaiting_title", return_value=False
-        ), patch("commands._get_cached_resonance", return_value=None), patch(
+        ), patch("cmd_link_resonance.get_cached_resonance", return_value=None), patch(
             "eddy_lifecycle_bar.post_act_suggestion_row", new_callable=AsyncMock
         ) as post_mock, patch(
             "bar_anchor.ensure_channel_bars", new_callable=AsyncMock
