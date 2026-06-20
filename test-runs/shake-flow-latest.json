@@ -1,8 +1,0 @@
-{
-  "capability": "flow_runner/shelter",
-  "status": "pass",
-  "live": false,
-  "checks": {
-    "offline": "ok"
-  }
-}
