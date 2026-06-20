@@ -29,6 +29,7 @@ When implementation and these docs disagree, **implementation wins until someone
 | Cross-cutting intent (River/Turtle, consent, visibility) | [principles.md](principles.md) |
 | River bar, acts, chronicle | [river.md](river.md) |
 | Blank eddy, deferred presence, system lines | [eddy-entry.md](eddy-entry.md) |
+| Eddy lifecycle bar (checkpoint / release / dissolve) | [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md) |
 | Turtle voice inside eddies | [turtle-dialogue.md](turtle-dialogue.md) |
 | Flow menu, Shelter vs Navigator intake | [flows-and-intake.md](flows-and-intake.md) |
 | URL → context (read vs distill) | [link-reading.md](link-reading.md) |
@@ -48,7 +49,7 @@ When implementation and these docs disagree, **implementation wins until someone
 | Eddy affordance | §5.3–5.4, §17 — standing bar | [river.md](river.md), [journeys.md](journeys.md) |
 | Flow entry | §5.4, §7.2 — orientation; intake | [flows-and-intake.md](flows-and-intake.md) |
 | Link reading | §9.5, Law of Visible Link Read | [link-reading.md](link-reading.md) |
-| Checkpoint / release | §8.4, §17 | [sessions.md](sessions.md) |
+| Checkpoint / release | §8.4, §17 | [sessions.md](sessions.md), [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md) |
 | Native system lines | §7.7 | [eddy-entry.md](eddy-entry.md) |
 | Rejected UX | §7.7 (partial) | [rejected.md](rejected.md) |
 
@@ -67,6 +68,7 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | River model prompt | `template/character/river_prompt.md` |
 | Turtle character | `template/character/soul.md`, `conduct.md` |
 | Session capture | `sessions.py`, `commands.py` |
+| Eddy lifecycle bar | `eddy_lifecycle_bar.py`, `river_bot.py`, `discord_bot.py` |
 | Platform law | `TURTLE_SPEC.md` §5, §7, §9.5, §17 |
 | Shakedown | `scripts/shake_river.py`, `scripts/shake_flow.py`, `scripts/shake_link_read.py`, `scripts/shake_hosted_river.py` |
 | Chapters (history) | `docs/chapters/2026-06-16-*.md`, `docs/chapters/2026-06-18-*.md` |
@@ -89,6 +91,8 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | 2026-06-18 | **Intake rename on Begin** — thread retitled from intention/territory before Turtle joins |
 | 2026-06-18 | **SSRF hardening** — `url_validate.py` shared across link read, content_fetch, `!fetch` |
 | 2026-06-18 | **UX doc split** — `docs/ux/` topic files; link-reading principles; stub `ux-principles.md` |
+| 2026-06-19 | **Eddy lifecycle bar** specified — River-owned in-thread bar; appear on first activity; dissolve confirm Option A ([eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)) |
+| 2026-06-19 | **Eddy lifecycle bar shipped** — `eddy_lifecycle_bar.py`; checkpoint/release/dissolve buttons in live eddies |
 | 2026-06-18 | **Flow trace + deploy** — shell-inject flow presence; Shelter meta/question guards; Mini at `28feb48` |
 
 ---

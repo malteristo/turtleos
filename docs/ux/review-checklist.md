@@ -8,7 +8,7 @@ Before merging a change that touches practitioner-facing behavior:
 4. **Surface:** Is the affordance visible in the main timeline without pins or hidden panels?
 5. **Discord-native:** Are we rebuilding something Discord already renders?
 6. **Entry chrome:** Does this add UI before the practitioner speaks in a new eddy?
-7. **Bottom bar:** After river activity, does the eddy bar remain the last message?
+7. **Bottom bar:** After river activity, does the river eddy bar remain the last message? In threads, does the lifecycle bar (when present) stay last?
 8. **Failure:** On error, do we show an embed/act — not chat?
 9. **Character:** Does Turtle behavior still match `conduct.md` / `soul.md`?
 10. **Fetch trace:** If this reads a URL, is progress/outcome on the timeline (embed) before the reply — not fetch prose in Turtle voice?

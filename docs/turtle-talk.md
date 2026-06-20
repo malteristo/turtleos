@@ -18,6 +18,8 @@ Turtle-talk is not one flat list. The v1 spec organizes invocation by **where** 
 
 **Natural language → act buttons** is the default river path (§5.5). Turtle-talk `!` commands are the **power-user** path: instant, free, no interpret step.
 
+**Accessible eddy lifecycle:** in-thread **lifecycle bar** (River-owned) — Checkpoint · Release · Dissolve — same handlers as eddy core `!` commands. See [docs/ux/eddy-lifecycle-bar.md](ux/eddy-lifecycle-bar.md).
+
 Vanilla practitioners (`mage_type: practitioner`) receive a **minimal allowlist** in code (`commands.py` → `_PRACTITIONER_COMMANDS`). Everything else falls through to Turtle dialogue.
 
 ---

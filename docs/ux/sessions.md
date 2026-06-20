@@ -13,7 +13,9 @@ River records successful checkpoints in **chronicle** (`💾 checkpoint (idle|ma
 
 Regular eddies: session notes today; **sediment** (cross-eddy resonance) deferred. Flow eddies: mechanical writes to flow `writes` paths.
 
-**Implementation:** `sessions.py` (`checkpoint_session`, `CheckpointResult`); `commands.py` (`cmd_checkpoint`, `cmd_release`); chronicle via `_append_resonance_chronicle`.
+**Implementation:** `sessions.py` (`checkpoint_session`, `CheckpointResult`); `commands.py` (`cmd_checkpoint`, `cmd_release`, `cmd_dissolve`); chronicle via `_append_resonance_chronicle`.
+
+**Accessible path (planned):** in-thread lifecycle bar — [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md). Same handlers as `!checkpoint` / `!release` / `!dissolve`.
 
 **Spec:** TURTLE_SPEC §8.4
 

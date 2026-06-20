@@ -19,6 +19,8 @@ How practitioners enter eddies and what they see before Turtle speaks.
 
 **Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`.
 
+**Lifecycle bar (planned):** After first practitioner message, River posts checkpoint/release/dissolve bar at thread bottom — not on empty materialize. See [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md).
+
 ---
 
 ## Seeded eddy (contextual / legacy)

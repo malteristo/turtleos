@@ -111,6 +111,9 @@ async def on_message(message: discord.Message):
         lock = get_channel_lock(message.channel.id)
         async with lock:
             await handle_eddy_first_message(message)
+        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+        await touch_eddy_lifecycle_bar(message, from_practitioner=True)
         return
 
     if _get_channel_type(message.channel.id) == "unclaimed-river":
@@ -131,6 +134,16 @@ async def on_message(message: discord.Message):
     lock = get_channel_lock(message.channel.id)
     async with lock:
         await handle_river_message(message)
+
+
+@river_client.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.type == discord.InteractionType.component:
+        custom_id = (interaction.data or {}).get("custom_id", "")
+        if custom_id.startswith("eddy:lifecycle:"):
+            from eddy_lifecycle_bar import handle_lifecycle_bar_interaction
+
+            await handle_lifecycle_bar_interaction(interaction)
 
 
 def main() -> None:

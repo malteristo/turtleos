@@ -14,9 +14,10 @@ River timeline: … → click [new eddy]
   → fresh bar below
   → enter thread → first message
   → thread renames → river added turtle → reply
+  → lifecycle bar appears at thread bottom (Checkpoint · Release · Dissolve)
 ```
 
-→ [eddy-entry.md](eddy-entry.md)
+→ [eddy-entry.md](eddy-entry.md) · [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)
 
 ---
 
@@ -27,10 +28,11 @@ Click [flow menu] → select Shelter
   → thread card titled "Shelter" (not "new eddy")
   → enter thread → River orientation embed (what flow is, checkpoint status)
   → first message → river added turtle → Turtle reply in flow voice
+  → lifecycle bar at thread bottom after first message
   → 15 min idle → flow checkpoint + session note (if thresholds met)
 ```
 
-→ [flows-and-intake.md](flows-and-intake.md) · [sessions.md](sessions.md)
+→ [flows-and-intake.md](flows-and-intake.md) · [sessions.md](sessions.md) · [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)
 
 ---
 
@@ -42,16 +44,13 @@ Click [flow menu] → select Navigator
   → orientation embed: entry contract + [Prepare] [Skip — I'll talk]
   → Prepare → modal (intention, territory) → summary embed + [Edit] [Begin with Turtle]
   → Begin → thread renames from intake → river added turtle → Turtle opening
-  → dialogue continues → checkpoint on idle / !checkpoint / !release
+  → dialogue continues → lifecycle bar after first post-intake message
+  → checkpoint on idle / bar / !checkpoint / !release
 ```
 
 Skip path: orientation → practitioner’s first message → `river added turtle` → normal first-reply flow (no auto-opening).
 
-→ [flows-and-intake.md](flows-and-intake.md)
-
----
-
-## Claim hosted river (invite-to-claim)
+→ [flows-and-intake.md](flows-and-intake.md) · [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)
 
 Operator provisions with `!admin river-key <name> <emoji> [de|en]` and sends the channel invite privately.
 

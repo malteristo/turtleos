@@ -1191,6 +1191,11 @@ async def _continue_dialogue_turn(
 
     if isinstance(message.channel, discord.Thread):
         await _update_thread_state(message.channel, cfg, history)
+        if native_eddy:
+            from eddy_lifecycle_bar import ensure_eddy_lifecycle_bar_at_bottom, is_lifecycle_bar_active
+
+            if is_lifecycle_bar_active(message.channel.id):
+                await ensure_eddy_lifecycle_bar_at_bottom(message.channel)
         # Phase 1 Eyes: update thread registry on every exchange
         if isinstance(message.channel, discord.Thread):
             try:
@@ -1223,12 +1228,17 @@ _intake_runner = None
 
 @client.event
 async def on_interaction(interaction: discord.Interaction):
-    """Route eddy:spawn button clicks to the handler."""
+    """Route component interactions."""
     if interaction.type == discord.InteractionType.component:
         custom_id = interaction.data.get("custom_id", "")
         if custom_id.startswith("eddy:spawn:"):
             await handle_eddy_spawn_interaction(interaction)
             return
+        if custom_id.startswith("eddy:lifecycle:"):
+            from eddy_lifecycle_bar import handle_lifecycle_bar_interaction
+
+            if await handle_lifecycle_bar_interaction(interaction):
+                return
 
 
 @client.event
@@ -1638,6 +1648,10 @@ async def on_message(message):
 
     if is_practice_channel(message):
         if await try_direct_command(message):
+            if isinstance(message.channel, discord.Thread):
+                from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+                await touch_eddy_lifecycle_bar(message, from_practitioner=True)
             return
         # Message-level dedup: skip if already seen (prevents duplicate responses)
         if message.id in _processed_messages:
@@ -1709,6 +1723,9 @@ async def on_message(message):
                 async with lock:
                     await handle_eddy_first_message(message)
                     await handle_dialogue(message)
+                from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+                await touch_eddy_lifecycle_bar(message, from_practitioner=True)
                 return
 
         # Auto-detect thread-worthy content in main channel (legacy magic attunement)
@@ -1723,6 +1740,11 @@ async def on_message(message):
                 await schedule_craft_intake(message, client)
                 return
             await handle_dialogue(message)
+
+        if isinstance(message.channel, discord.Thread):
+            from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+            await touch_eddy_lifecycle_bar(message, from_practitioner=True)
 
         if offer_eddy:
             try:

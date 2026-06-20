@@ -1,0 +1,49 @@
+"""Tests for in-thread lifecycle bar eligibility and state."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import eddy_lifecycle_bar as bar
+
+
+class TestLifecycleBarEligibility(unittest.TestCase):
+    def test_blocks_awaiting_title(self) -> None:
+        with patch.object(bar, "lifecycle_bar_eligible", wraps=bar.lifecycle_bar_eligible):
+            with patch("eddy_spawn.is_awaiting_title", return_value=True):
+                with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
+                    with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                        self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
+
+    def test_blocks_awaiting_intake(self) -> None:
+        with patch("eddy_spawn.is_awaiting_title", return_value=False):
+            with patch("eddy_spawn.is_awaiting_flow_intake", return_value=True):
+                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                    self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
+
+    def test_allows_live_eddy(self) -> None:
+        with patch("eddy_spawn.is_awaiting_title", return_value=False):
+            with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
+                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                    self.assertTrue(bar.lifecycle_bar_eligible(11, 22))
+
+
+class TestLifecycleBarState(unittest.TestCase):
+    def test_mark_and_clear(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lifecycle_bar.json"
+            with patch.object(bar, "_state_path", return_value=str(path)):
+                self.assertFalse(bar.is_lifecycle_bar_active(99))
+                bar._mark_bar_message(99, 12345)
+                self.assertTrue(bar.is_lifecycle_bar_active(99))
+                self.assertEqual(bar._load_state()["99"], 12345)
+                bar.clear_lifecycle_bar_state(99)
+                self.assertFalse(bar.is_lifecycle_bar_active(99))
+
+
+if __name__ == "__main__":
+    unittest.main()
