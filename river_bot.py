@@ -96,25 +96,6 @@ async def on_message(message: discord.Message):
     if message.author == river_client.user:
         return
 
-    # Post-Turtle save offer — River process owns platform seneschal (split-bot).
-    if (
-        get_attunement_profile() == "native"
-        and is_practice_channel(message)
-        and isinstance(message.channel, discord.Thread)
-        and message.type in (discord.MessageType.default, discord.MessageType.reply)
-    ):
-        from eddy_spawn import is_turtle_bot_message
-        from river_eddy_seneschal import maybe_offer_eddy_save_on_turtle_reply
-
-        if is_turtle_bot_message(message):
-            set_practice_context(message)
-            if message.channel.parent_id:
-                set_practice_context_for_channel(message.channel.parent_id)
-            lock = get_channel_lock(message.channel.id)
-            async with lock:
-                await maybe_offer_eddy_save_on_turtle_reply(message)
-            return
-
     if not _accept_message_author(message):
         return
     if message.type not in (discord.MessageType.default, discord.MessageType.reply):
@@ -158,6 +139,13 @@ async def on_message(message: discord.Message):
             return
 
         # Ongoing eddy dialogue: Turtle harness (link-read, prose). River handles `!` only.
+        from river_eddy_seneschal import (
+            practitioner_external_urls,
+            schedule_save_offer_after_practitioner_url,
+        )
+
+        if practitioner_external_urls(message.content or ""):
+            schedule_save_offer_after_practitioner_url(message)
         return
 
     if _get_channel_type(message.channel.id) == "unclaimed-river":

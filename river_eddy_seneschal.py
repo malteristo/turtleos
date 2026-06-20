@@ -2,11 +2,13 @@
 
 Post-Turtle ``Save to library`` offers (harness split Slice 2): after Turtle replies,
 River may offer ``!fetch`` when a practitioner URL is not yet in ``link-resonance/``.
-Must run in the **River bot process** — Turtle's discord_bot cannot post via ``river_client``.
+Runs in the **River bot process** only. River receives practitioner messages, not Turtle
+bot events reliably — poll thread history after practitioner URL posts.
 """
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections import defaultdict
 
@@ -16,6 +18,7 @@ from content_fetch import _URL_PATTERN
 from link_read import external_urls
 
 _save_offer_seen: dict[int, set[str]] = defaultdict(set)
+_save_poll_tasks: dict[int, asyncio.Task] = {}
 
 
 def _normalize_url(url: str) -> str:
@@ -75,36 +78,29 @@ def clear_save_offer_state(channel_id: int | None = None) -> None:
     """Test helper — reset in-memory offer dedupe."""
     if channel_id is None:
         _save_offer_seen.clear()
+        for task in _save_poll_tasks.values():
+            if not task.done():
+                task.cancel()
+        _save_poll_tasks.clear()
     else:
         _save_offer_seen.pop(channel_id, None)
+        task = _save_poll_tasks.pop(channel_id, None)
+        if task and not task.done():
+            task.cancel()
 
 
-async def practitioner_text_from_turtle_reply(turtle_message: discord.Message) -> str:
-    """Practitioner-visible text that triggered this Turtle reply."""
-    ref = turtle_message.reference
-    if ref and ref.message_id:
-        try:
-            src = ref.resolved
-            if src is None:
-                src = await turtle_message.channel.fetch_message(ref.message_id)
-            if src and not getattr(src.author, "bot", False):
-                return src.content or ""
-        except discord.HTTPException as exc:
-            print(f"Save offer: could not resolve reply reference: {exc}")
-    try:
-        async for msg in turtle_message.channel.history(
-            limit=20,
-            before=turtle_message.created_at,
-        ):
-            if not getattr(msg.author, "bot", False) and (msg.content or "").strip():
-                return msg.content or ""
-    except discord.HTTPException as exc:
-        print(f"Save offer: history scan failed: {exc}")
-    return ""
+def _cancel_save_poll(channel_id: int) -> None:
+    task = _save_poll_tasks.pop(channel_id, None)
+    if task and not task.done():
+        task.cancel()
 
 
-async def maybe_offer_eddy_save_on_turtle_reply(turtle_message: discord.Message) -> None:
-    """River harness: post Save act row after Turtle prose in a native eddy."""
+async def maybe_offer_eddy_save_after_turn(
+    channel,
+    *,
+    practitioner_text: str,
+) -> None:
+    """River harness: post Save act row once Turtle has replied."""
     from commands import _get_cached_resonance
     from eddy_lifecycle_bar import post_act_suggestion_row
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
@@ -114,14 +110,11 @@ async def maybe_offer_eddy_save_on_turtle_reply(turtle_message: discord.Message)
 
     if not river_bot_enabled():
         return
-    channel = turtle_message.channel
     parent_id = getattr(channel, "parent_id", None)
     if not parent_id or not uses_native_turtle_prompt(parent_id):
         return
     if is_awaiting_flow_intake(channel.id, parent_id) or is_awaiting_title(channel.id, parent_id):
         return
-
-    practitioner_text = await practitioner_text_from_turtle_reply(turtle_message)
     if not practitioner_external_urls(practitioner_text):
         return
 
@@ -149,9 +142,94 @@ async def maybe_offer_eddy_save_on_turtle_reply(turtle_message: discord.Message)
         return
 
     mark_save_offer_posted(channel.id, url)
+    print(f"Save offer posted in #{getattr(channel, 'name', channel.id)} ({channel.id})")
     from bar_anchor import ensure_channel_bars
 
     await ensure_channel_bars(channel, river_client)
+
+
+async def _wait_for_turtle_reply_after(
+    channel: discord.Thread,
+    practitioner_message: discord.Message,
+    *,
+    timeout_s: float = 240,
+    poll_s: float = 2.0,
+) -> bool:
+    """Return True when a Turtle prose message appears after the practitioner turn."""
+    from eddy_spawn import resolve_turtle_bot_user_id
+
+    turtle_id = resolve_turtle_bot_user_id(getattr(channel, "guild", None))
+    if not turtle_id:
+        print("Save offer poll: turtle bot id unknown")
+        return False
+
+    deadline = asyncio.get_event_loop().time() + timeout_s
+    while asyncio.get_event_loop().time() < deadline:
+        await asyncio.sleep(poll_s)
+        try:
+            async for msg in channel.history(limit=20, after=practitioner_message.created_at):
+                if getattr(msg.author, "id", None) != turtle_id:
+                    continue
+                if not (msg.content or "").strip():
+                    continue
+                return True
+        except discord.HTTPException as exc:
+            print(f"Save offer poll failed for {channel.id}: {exc}")
+            return False
+    print(f"Save offer poll timed out in #{getattr(channel, 'name', channel.id)}")
+    return False
+
+
+async def _run_save_offer_poll(practitioner_message: discord.Message) -> None:
+    channel = practitioner_message.channel
+    if not getattr(channel, "parent_id", None):
+        return
+    practitioner_text = practitioner_message.content or ""
+    if not practitioner_external_urls(practitioner_text):
+        return
+
+    from commands import _get_cached_resonance
+    from mage import set_practice_context, set_practice_context_for_channel
+
+    set_practice_context(practitioner_message)
+    if channel.parent_id:
+        set_practice_context_for_channel(channel.parent_id)
+
+    if not pick_save_offer_url(
+        practitioner_text,
+        [],
+        channel.id,
+        is_cached=lambda u: bool(_get_cached_resonance(u)),
+    ):
+        return
+
+    ch_name = getattr(channel, "name", channel.id)
+    print(f"Save offer polling in #{ch_name} ({channel.id})")
+    if not await _wait_for_turtle_reply_after(channel, practitioner_message):
+        return
+    await maybe_offer_eddy_save_after_turn(channel, practitioner_text=practitioner_text)
+
+
+def schedule_save_offer_after_practitioner_url(practitioner_message: discord.Message) -> None:
+    """Schedule Save offer after practitioner URL post (River receives this message)."""
+    channel = practitioner_message.channel
+    if not getattr(channel, "parent_id", None):
+        return
+    if not practitioner_external_urls(practitioner_message.content or ""):
+        return
+
+    channel_id = channel.id
+    _cancel_save_poll(channel_id)
+
+    async def _wrapped() -> None:
+        try:
+            await _run_save_offer_poll(practitioner_message)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"Save offer schedule error #{channel_id}: {type(exc).__name__}: {exc}")
+
+    _save_poll_tasks[channel_id] = asyncio.create_task(_wrapped())
 
 
 def dedupe_fetch_actions(actions: list[tuple[str, str]]) -> list[tuple[str, str]]:
