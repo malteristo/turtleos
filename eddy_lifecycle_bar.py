@@ -11,6 +11,7 @@ import discord
 DISSOLVE_CONFIRM_TIMEOUT = 15
 SPIRIT_BOT_ID = 1487405701440733294
 _revert_tasks: dict[int, asyncio.Task] = {}
+_dissolve_in_progress: set[int] = set()
 
 
 def _is_practitioner_author(message: discord.Message) -> bool:
@@ -92,7 +93,13 @@ def get_lifecycle_bar_client(thread: discord.Thread):
 class _LifecycleInteractionMessage:
     """Adapter so lifecycle buttons run the same handlers as turtle-talk (public replies)."""
 
-    def __init__(self, interaction: discord.Interaction, command: str):
+    def __init__(
+        self,
+        interaction: discord.Interaction,
+        command: str,
+        *,
+        from_lifecycle_bar: bool = False,
+    ):
         self._interaction = interaction
         self.channel = interaction.channel
         self.author = interaction.user
@@ -100,6 +107,8 @@ class _LifecycleInteractionMessage:
         self.id = interaction.message.id if interaction.message else interaction.id
         self.guild = interaction.guild
         self._sent = False
+        self.discord_client = interaction.client
+        self.from_lifecycle_bar = from_lifecycle_bar
 
     async def reply(self, content=None, *, embed=None, mention_author=False, **kwargs):
         send_kwargs = {}
@@ -135,7 +144,11 @@ async def _run_lifecycle_command(
     if not handler:
         await interaction.followup.send(f"Unknown command `{cmd}`.", ephemeral=True)
         return
-    msg = _LifecycleInteractionMessage(interaction, f"!{cmd}")
+    msg = _LifecycleInteractionMessage(
+        interaction,
+        f"!{cmd}",
+        from_lifecycle_bar=True,
+    )
     await handler(msg, args or [])
 
 
@@ -279,15 +292,22 @@ class EddyDissolveConfirmView(discord.ui.View):
         if interaction.channel.id != self._thread_id:
             await interaction.response.send_message("Wrong thread.", ephemeral=True)
             return
+        if self._thread_id in _dissolve_in_progress:
+            await interaction.response.send_message("Already archiving…", ephemeral=True)
+            return
+        _dissolve_in_progress.add(self._thread_id)
         _cancel_confirm_revert(self._thread_id)
-        await interaction.response.defer()
-        await _run_lifecycle_command(interaction, "dissolve")
-        clear_lifecycle_bar_state(self._thread_id)
         try:
-            if interaction.message:
-                await interaction.message.delete()
-        except discord.HTTPException:
-            pass
+            await interaction.response.defer()
+            await _run_lifecycle_command(interaction, "dissolve")
+            clear_lifecycle_bar_state(self._thread_id)
+            try:
+                if interaction.message:
+                    await interaction.message.delete()
+            except discord.HTTPException:
+                pass
+        finally:
+            _dissolve_in_progress.discard(self._thread_id)
 
 
 async def post_eddy_lifecycle_bar(
@@ -384,51 +404,5 @@ async def touch_eddy_lifecycle_bar(
 
 
 async def handle_lifecycle_bar_interaction(interaction: discord.Interaction) -> bool:
-    """Route lifecycle bar button presses. Returns True if handled."""
-    if interaction.type != discord.InteractionType.component:
-        return False
-    custom_id = (interaction.data or {}).get("custom_id", "")
-    if not custom_id.startswith("eddy:lifecycle:"):
-        return False
-
-    parts = custom_id.split(":")
-    if len(parts) < 4:
-        return False
-    action = parts[2]
-    try:
-        thread_id = int(parts[3])
-    except ValueError:
-        return False
-
-    if not isinstance(interaction.channel, discord.Thread) or interaction.channel.id != thread_id:
-        await interaction.response.send_message("This control belongs to another eddy.", ephemeral=True)
-        return True
-
-    bar_view = EddyLifecycleBarView(thread_id)
-    confirm_view = EddyDissolveConfirmView(thread_id)
-    interaction.client.add_view(bar_view)
-    interaction.client.add_view(confirm_view)
-
-    try:
-        if action == "checkpoint":
-            await bar_view._on_checkpoint(interaction)
-        elif action == "release":
-            await bar_view._on_release(interaction)
-        elif action == "dissolve":
-            await bar_view._on_dissolve(interaction)
-        elif action == "confirm":
-            await confirm_view._on_confirm(interaction)
-        elif action == "cancel":
-            await confirm_view._on_cancel(interaction)
-        else:
-            await interaction.response.send_message("Unknown lifecycle action.", ephemeral=True)
-    except discord.InteractionResponded:
-        pass
-    except Exception as exc:
-        print(f"Lifecycle bar interaction failed ({action}): {type(exc).__name__}: {exc}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "Lifecycle action failed — try again or use `!` commands.",
-                ephemeral=True,
-            )
-    return True
+    """Fallback router — prefer view callbacks registered via add_view."""
+    return False

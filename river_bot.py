@@ -136,20 +136,6 @@ async def on_message(message: discord.Message):
         await handle_river_message(message)
 
 
-@river_client.event
-async def on_interaction(interaction: discord.Interaction):
-    if interaction.type != discord.InteractionType.component:
-        return
-    custom_id = (interaction.data or {}).get("custom_id", "")
-    if not custom_id.startswith("eddy:lifecycle:"):
-        return
-    if interaction.response.is_done():
-        return
-    from eddy_lifecycle_bar import handle_lifecycle_bar_interaction
-
-    await handle_lifecycle_bar_interaction(interaction)
-
-
 def main() -> None:
     token = river_bot_token()
     if not token:

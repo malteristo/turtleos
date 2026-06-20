@@ -1554,11 +1554,15 @@ async def cmd_dissolve(message, args):
 
     channel_id = message.channel.id
     history = get_history(channel_id)
-    await message.reply("Dissolving eddy…", mention_author=False)
+    from_lifecycle_bar = getattr(message, "from_lifecycle_bar", False)
+    discord_client = getattr(message, "discord_client", None)
+
+    if not from_lifecycle_bar:
+        await message.reply("Dissolving eddy…", mention_author=False)
 
     from sessions import dissolve_eddy
 
-    result = await dissolve_eddy(channel_id, history)
+    result = await dissolve_eddy(channel_id, history, discord_client=discord_client)
     if not result:
         await message.reply("Could not dissolve — thread not found.", mention_author=False)
         return
@@ -1567,12 +1571,14 @@ async def cmd_dissolve(message, args):
     active_sessions.pop(channel_id, None)
 
     lines = [f"**{result.thread_name}** archived."]
-    if result.entry_count:
+    if result.already_archived:
+        lines = [f"**{result.thread_name}** is archived — still readable in Discord's thread list."]
+    elif result.entry_count:
         lines.append(f"{result.entry_count} entries captured to boom.")
-    if result.jump_url:
+    if result.jump_url and not result.already_archived:
         lines.append(f"Chronicle: {result.jump_url}")
     embed = discord.Embed(
-        title="Eddy dissolved",
+        title="Eddy archived" if result.already_archived else "Eddy dissolved",
         description="\n".join(lines),
         color=0x2ECC71,
     )

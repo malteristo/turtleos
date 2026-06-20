@@ -138,9 +138,11 @@ Required for Magic workshop operators; **not** part of vanilla v1 install (§11.
 |-----------|---------------|-----------------|----------------|-----------|
 | **Checkpoint** | idle / `!checkpoint` | Retained | Open | `💾 checkpoint …` |
 | **Release** | `!release` | Cleared after checkpoint | May dissolve manual threads | checkpoint + release |
-| **Dissolve** | `!dissolve` / eddy-check UI (Magic) | Cleared by handler | Archived | `🍃 dissolved …` (§6.2) |
+| **Dissolve** | `!dissolve` / eddy-check UI (Magic) | Cleared by handler | Archived in Discord (still readable) | `🍃 dissolved …` (§6.2) |
 
 Do not conflate **release** (session resonance capture + clear dialogue) with **dissolve** (structural eddy lifecycle).
+
+**What “archived” means:** Discord `thread.edit(archived=True)` — the eddy moves to archived threads, stays readable, and is **not deleted**. A file copy lands in `thread-archive/`; optional essence in boom; parent river gets a `🍃 dissolved` act.
 
 ---
 

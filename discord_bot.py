@@ -1234,11 +1234,6 @@ async def on_interaction(interaction: discord.Interaction):
         if custom_id.startswith("eddy:spawn:"):
             await handle_eddy_spawn_interaction(interaction)
             return
-        if custom_id.startswith("eddy:lifecycle:"):
-            from eddy_lifecycle_bar import handle_lifecycle_bar_interaction
-
-            if await handle_lifecycle_bar_interaction(interaction):
-                return
 
 
 @client.event

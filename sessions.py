@@ -58,6 +58,7 @@ class DissolveResult:
     entry_count: int = 0
     archive_path: str | None = None
     jump_url: str | None = None
+    already_archived: bool = False
 
 
 def _trigger_phrase(trigger: str) -> str:
@@ -427,15 +428,33 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
 
 
-async def dissolve_eddy(channel_id: int, history: list[dict] | None = None) -> DissolveResult | None:
+async def dissolve_eddy(
+    channel_id: int,
+    history: list[dict] | None = None,
+    *,
+    discord_client=None,
+) -> DissolveResult | None:
     """Archive an eddy — essence capture, file archive, chronicle, parent act."""
     import discord
     from thread_registry import mark_dissolved
     from state import threads_flagged_for_release
 
-    thread = client.get_channel(channel_id)
+    dc = discord_client or client
+    thread = dc.get_channel(channel_id)
     if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            return None
+    if not isinstance(thread, discord.Thread):
         return None
+
+    if thread.archived:
+        return DissolveResult(
+            thread_name=thread.name,
+            jump_url=thread.jump_url,
+            already_archived=True,
+        )
 
     thread_name = thread.name
     jump_url = thread.jump_url
