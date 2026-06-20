@@ -425,9 +425,18 @@ async def ensure_eddy_lifecycle_bar_at_bottom(
     thread: discord.Thread,
     client=None,
 ) -> None:
-    if not isinstance(thread, discord.Thread):
-        return
-    parent_id = thread.parent_id
+    from state import get_channel_lock
+
+    lock = get_channel_lock(thread.id)
+    async with lock:
+        await _ensure_eddy_lifecycle_bar_at_bottom_unlocked(thread, client)
+
+
+async def _ensure_eddy_lifecycle_bar_at_bottom_unlocked(
+    thread: discord.Thread,
+    client=None,
+) -> None:
+    parent_id = getattr(thread, "parent_id", None)
     if not parent_id or not is_lifecycle_bar_active(thread.id):
         return
     if not lifecycle_bar_eligible(thread.id, parent_id):
@@ -438,35 +447,32 @@ async def ensure_eddy_lifecycle_bar_at_bottom(
         return
 
     from bar_anchor import channel_for_client
-    from state import get_channel_lock
 
     ch = await channel_for_client(thread, client)
-    lock = get_channel_lock(ch.id)
-    async with lock:
-        state = _load_state()
-        bar_id = state.get(str(ch.id))
-        if bar_id:
+    state = _load_state()
+    bar_id = state.get(str(ch.id))
+    if bar_id:
+        try:
+            bar_msg = await ch.fetch_message(bar_id)
+            async for last in ch.history(limit=1):
+                if last.id == bar_id:
+                    view = EddyLifecycleBarView(ch.id)
+                    client.add_view(view)
+                    try:
+                        await bar_msg.edit(view=view)
+                    except discord.HTTPException:
+                        pass
+                    return
             try:
-                bar_msg = await ch.fetch_message(bar_id)
-                async for last in ch.history(limit=1):
-                    if last.id == bar_id:
-                        view = EddyLifecycleBarView(ch.id)
-                        client.add_view(view)
-                        try:
-                            await bar_msg.edit(view=view)
-                        except discord.HTTPException:
-                            pass
-                        return
-                try:
-                    await bar_msg.delete()
-                except discord.HTTPException:
-                    pass
+                await bar_msg.delete()
             except discord.HTTPException:
                 pass
+        except discord.HTTPException:
+            pass
 
-        msg = await post_eddy_lifecycle_bar(ch, client)
-        if msg:
-            print(f"Lifecycle bar reposted in #{getattr(ch, 'name', ch.id)} ({ch.id})")
+    msg = await post_eddy_lifecycle_bar(ch, client)
+    if msg:
+        print(f"Lifecycle bar reposted in #{getattr(ch, 'name', ch.id)} ({ch.id})")
 
 
 async def touch_eddy_lifecycle_bar(
@@ -490,15 +496,34 @@ async def touch_eddy_lifecycle_bar(
 
     lock = get_channel_lock(thread.id)
     async with lock:
-        if from_practitioner and _is_practitioner_author(message):
-            if not is_lifecycle_bar_active(thread.id):
-                msg = await post_eddy_lifecycle_bar(thread, client)
-                if msg:
-                    print(f"Lifecycle bar activated in #{thread.name} ({thread.id})")
-                return
+        await _touch_eddy_lifecycle_bar_unlocked(message, from_practitioner=from_practitioner)
 
-        if is_lifecycle_bar_active(thread.id):
-            await ensure_eddy_lifecycle_bar_at_bottom(thread, client)
+
+async def _touch_eddy_lifecycle_bar_unlocked(
+    message: discord.Message,
+    *,
+    from_practitioner: bool = False,
+) -> None:
+    if not isinstance(message.channel, discord.Thread):
+        return
+    thread = message.channel
+    parent_id = thread.parent_id
+    if not parent_id or not lifecycle_bar_eligible(thread.id, parent_id):
+        return
+
+    client = get_lifecycle_bar_client(thread)
+    if not client:
+        return
+
+    if from_practitioner and _is_practitioner_author(message):
+        if not is_lifecycle_bar_active(thread.id):
+            msg = await post_eddy_lifecycle_bar(thread, client)
+            if msg:
+                print(f"Lifecycle bar activated in #{thread.name} ({thread.id})")
+            return
+
+    if is_lifecycle_bar_active(thread.id):
+        await _ensure_eddy_lifecycle_bar_at_bottom_unlocked(thread, client)
 
 
 async def handle_lifecycle_bar_interaction(interaction: discord.Interaction) -> bool:

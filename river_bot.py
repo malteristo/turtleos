@@ -144,10 +144,8 @@ async def on_message(message: discord.Message):
             set_practice_context_for_channel(message.channel.id)
         from commands import dispatch_direct_command
 
-        lock = get_channel_lock(message.channel.id)
-        async with lock:
-            if await dispatch_direct_command(message, bar_client=river_client):
-                print(f"River act [!{message.content.split()[0][1:]}] in #{getattr(message.channel, 'name', message.channel.id)}")
+        if await dispatch_direct_command(message, bar_client=river_client):
+            print(f"River act [!{message.content.split()[0][1:]}] in #{getattr(message.channel, 'name', message.channel.id)}")
         return
 
     if isinstance(message.channel, discord.Thread):

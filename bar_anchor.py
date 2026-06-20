@@ -22,6 +22,15 @@ async def channel_for_client(channel, client):
 
 
 async def ensure_channel_bars(channel, client=None) -> None:
+    """Repost standing bars after timeline activity (acquires channel lock)."""
+    from state import get_channel_lock
+
+    lock = get_channel_lock(channel.id)
+    async with lock:
+        await _ensure_channel_bars_unlocked(channel, client)
+
+
+async def _ensure_channel_bars_unlocked(channel, client=None) -> None:
     """Repost standing bars after any message that extends the channel timeline.
 
     River parent channels: standing eddy bar (new eddy · flow menu).
@@ -32,7 +41,7 @@ async def ensure_channel_bars(channel, client=None) -> None:
     """
     if _is_eddy_thread(channel):
         from eddy_lifecycle_bar import (
-            ensure_eddy_lifecycle_bar_at_bottom,
+            _ensure_eddy_lifecycle_bar_at_bottom_unlocked,
             get_lifecycle_bar_client,
             is_lifecycle_bar_active,
         )
@@ -45,11 +54,11 @@ async def ensure_channel_bars(channel, client=None) -> None:
             bar_client = get_lifecycle_bar_client(channel)
             if not bar_client:
                 return
-            await ensure_eddy_lifecycle_bar_at_bottom(channel, bar_client)
+            await _ensure_eddy_lifecycle_bar_at_bottom_unlocked(channel, bar_client)
             return
         bar_client = client or get_lifecycle_bar_client(channel)
         if bar_client:
-            await ensure_eddy_lifecycle_bar_at_bottom(channel, bar_client)
+            await _ensure_eddy_lifecycle_bar_at_bottom_unlocked(channel, bar_client)
         return
 
     from mage import is_river_channel

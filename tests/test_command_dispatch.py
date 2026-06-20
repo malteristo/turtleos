@@ -57,11 +57,10 @@ class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
         message.channel.parent_id = None
 
         with patch("cmd_dispatch.try_direct_command", new_callable=AsyncMock, return_value=True):
-            with patch("eddy_lifecycle_bar.touch_eddy_lifecycle_bar", new_callable=AsyncMock):
-                with patch("bar_anchor.ensure_channel_bars", new_callable=AsyncMock) as ensure:
-                    handled = await commands.dispatch_direct_command(message, bar_client=MagicMock())
-                    self.assertTrue(handled)
-                    ensure.assert_awaited_once()
+            with patch("bar_anchor._ensure_channel_bars_unlocked", new_callable=AsyncMock) as ensure:
+                handled = await commands.dispatch_direct_command(message, bar_client=MagicMock())
+                self.assertTrue(handled)
+                ensure.assert_awaited_once()
 
 
 if __name__ == "__main__":

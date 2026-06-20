@@ -9,6 +9,7 @@ python -m unittest discover -s tests -q
 python scripts/shake_flow.py shelter
 python scripts/shake_link_read.py
 python scripts/shake_eddy_bar.py
+python scripts/shake_lifecycle.py
 ```
 
 **Live dogfood** (Mac Mini): `SHAKE_LIVE=1` variants per `docs/development.md`.
@@ -47,8 +48,8 @@ python scripts/shake_eddy_bar.py
 | R4 | Lifecycle bar | Checkpoint · Release · Dissolve work; checkpoint keeps history |
 | R5 | `!checkpoint` / `!release` | Same semantics as bar buttons |
 
-**Verification:** `test_bar_anchor`, `test_eddy_lifecycle_bar`, `test_sessions`, `shake_eddy_bar.py`  
-**Dogfood (2026-06-20):** R1–R3 ✅ · R4–R5 ❌ split-bot history — see acceptance chapter
+**Verification:** `test_bar_anchor`, `test_eddy_lifecycle_bar`, `test_sessions`, `test_dialogue_store`, `shake_eddy_bar.py`, `shake_lifecycle.py`  
+**Spirit shake (2026-06-20):** R4–R5 ✅ after shared dialogue capture + channel-lock deadlock fix · Mini dogfood UX pending Mage
 
 ---
 

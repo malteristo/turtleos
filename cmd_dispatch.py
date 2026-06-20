@@ -128,13 +128,22 @@ async def try_direct_command(message) -> bool:
 
 async def dispatch_direct_command(message, *, bar_client=None) -> bool:
     """Execute turtle-talk ``!`` command, inject act digest, re-anchor bars."""
-    if not await try_direct_command(message):
-        return False
-    from bar_anchor import _is_eddy_thread, ensure_channel_bars
+    from state import get_channel_lock
 
-    if _is_eddy_thread(message.channel):
-        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar, is_practitioner_input
+    lock = get_channel_lock(message.channel.id)
+    async with lock:
+        if not await try_direct_command(message):
+            return False
+        from bar_anchor import _ensure_channel_bars_unlocked, _is_eddy_thread
 
-        await touch_eddy_lifecycle_bar(message, from_practitioner=is_practitioner_input(message))
-    await ensure_channel_bars(message.channel, bar_client)
+        if _is_eddy_thread(message.channel):
+            from eddy_lifecycle_bar import (
+                _touch_eddy_lifecycle_bar_unlocked,
+                is_practitioner_input,
+            )
+
+            await _touch_eddy_lifecycle_bar_unlocked(
+                message, from_practitioner=is_practitioner_input(message)
+            )
+        await _ensure_channel_bars_unlocked(message.channel, bar_client)
     return True

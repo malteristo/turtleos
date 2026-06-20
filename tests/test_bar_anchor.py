@@ -23,7 +23,7 @@ class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
             with patch("mage.river_bot_enabled", return_value=False):
                 with patch("eddy_lifecycle_bar.get_lifecycle_bar_client", return_value=client):
                     with patch(
-                        "eddy_lifecycle_bar.ensure_eddy_lifecycle_bar_at_bottom",
+                        "eddy_lifecycle_bar._ensure_eddy_lifecycle_bar_at_bottom_unlocked",
                         new_callable=AsyncMock,
                     ) as ensure_lifecycle:
                         await bar_anchor.ensure_channel_bars(thread)
@@ -36,7 +36,7 @@ class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
 
         with patch("eddy_lifecycle_bar.is_lifecycle_bar_active", return_value=False):
             with patch(
-                "eddy_lifecycle_bar.ensure_eddy_lifecycle_bar_at_bottom",
+                "eddy_lifecycle_bar._ensure_eddy_lifecycle_bar_at_bottom_unlocked",
                 new_callable=AsyncMock,
             ) as ensure_lifecycle:
                 await bar_anchor.ensure_channel_bars(thread)
