@@ -125,15 +125,20 @@ async def on_message(message: discord.Message):
 
         if is_awaiting_flow_intake(message.channel.id, parent_id):
             return
-        if not is_awaiting_title(message.channel.id, parent_id):
-            return
-        set_practice_context(message)
-        lock = get_channel_lock(message.channel.id)
-        async with lock:
-            await handle_eddy_first_message(message)
-        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+        if is_awaiting_title(message.channel.id, parent_id):
+            set_practice_context(message)
+            lock = get_channel_lock(message.channel.id)
+            async with lock:
+                await handle_eddy_first_message(message)
+            from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
 
-        await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+            await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+            return
+
+        # Ongoing eddy: River-side fetch offer from practitioner URLs (not Turtle prose).
+        from river_eddy_seneschal import maybe_offer_eddy_fetch
+
+        await maybe_offer_eddy_fetch(message, river_client)
         return
 
     if _get_channel_type(message.channel.id) == "unclaimed-river":

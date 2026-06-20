@@ -1194,20 +1194,19 @@ async def _continue_dialogue_turn(
     if source_trace and not native_eddy:
         reply = f"{reply}\n\n-# {source_trace}"
     history.append({"role": "assistant", "content": reply})
-    if native_eddy:
-        from commands import SENESCHAL_ACTION_COMMANDS
-
-        contextual_actions = _extract_contextual_actions(
-            reply, allowed_commands=SENESCHAL_ACTION_COMMANDS
-        )
-    else:
+    # Native eddies: River-side seneschal (river_eddy_seneschal) — not Turtle prose parsing.
+    contextual_actions: list[tuple[str, str]] = []
+    if not native_eddy:
         contextual_actions = _extract_contextual_actions(reply)
-    contextual_actions = _filter_seneschal_actions(contextual_actions, history)
+        contextual_actions = _filter_seneschal_actions(contextual_actions, history)
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
     if native_eddy:
         print(f"Native Turtle reply sent [{message.channel.name}]: {len(reply)} chars")
     if contextual_actions:
+        from river_eddy_seneschal import dedupe_fetch_actions
+
+        contextual_actions = dedupe_fetch_actions(contextual_actions)
         label = "Suggested action" if len(contextual_actions) == 1 else "Suggested actions"
         try:
             await send_with_actions(message.channel, f"-# {label}", contextual_actions)

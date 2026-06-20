@@ -67,6 +67,28 @@ Current architecture **splits identity in Discord** (two bots) but **unifies in 
 
 ---
 
+## 2026-06-20 (Forge) — Option 1 slice landed
+
+**Architecture lock:** River-only seneschal (Option 1); Option 5 inject hardening.
+
+**Shipped:**
+- Removed native-eddy seneschal from Turtle dialogue path (`discord_bot.py`) — no prose parsing → buttons
+- Added `river_eddy_seneschal.py`: practitioner URL in eddy → River posts single Fetch button
+- `river_bot.py` handles ongoing eddy messages for fetch offers (not Turtle orchestration)
+- Fetch failure no longer injects false-positive "fetched" digest (`commands.cmd_fetch` returns `None`)
+- Prompts aligned: Turtle does not spawn buttons; discusses after `[Act: !fetch]`
+- Thread memory summary labels: practitioner / turtle (not mage / spirit)
+
+**Acceptance test (manual on Mini):**
+1. New eddy, post external URL
+2. River posts one Fetch button (not Turtle after reply)
+3. Click Fetch → embed + `[Act: !fetch]` excerpt in Turtle history
+4. Ask follow-up → Turtle cites excerpt, no second Fetch button, no disclaimers
+
+**Still open:** River-side seneschal beyond fetch (status, thread, …); identity label `Seneschal row posted as ?`; gemma latency.
+
+---
+
 ## Commits (main)
 
 `9ee9648` sovereignty + bar anchor  

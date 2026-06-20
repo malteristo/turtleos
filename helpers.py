@@ -106,7 +106,7 @@ def summarize_thread_context(history: list[dict], thread_name: str) -> str:
     assistant_msgs = [m for m in history if m["role"] == "assistant"]
     first_user = user_msgs[0]["content"][:120] if user_msgs else ""
     last_user = user_msgs[-1]["content"][:120] if len(user_msgs) > 1 else ""
-    parts = [f"*{len(user_msgs)} mage / {len(assistant_msgs)} spirit messages*"]
+    parts = [f"*{len(user_msgs)} practitioner / {len(assistant_msgs)} turtle messages*"]
     if first_user:
         parts.append(f"Started with: {first_user}…" if len(first_user) >= 118 else f"Started with: {first_user}")
     if last_user and last_user != first_user:

@@ -845,7 +845,7 @@ async def cmd_fetch(message, args):
                 f"Paste the text here so Turtle can process it with source context: {paste_url}",
                 mention_author=False,
             )
-            return
+            return None
 
         litl_hits = _litl_check(raw_content)
         if litl_hits:
