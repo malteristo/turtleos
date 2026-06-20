@@ -48,7 +48,7 @@ load_env()
 
 from state import (
     client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS, _processed_messages,
-    get_channel_lock, get_channel,
+    get_channel_lock, get_channel, SPIRIT_BOT_ID, unmark_processed_message,
     IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API, TURTLE_MODEL,
     RIVER_MODEL,
     HAS_GEMINI, GOOGLE_API_KEY,
