@@ -80,9 +80,9 @@ Turtle prose mentions !fetch → River parses backticks → duplicate buttons   
 - **Prompts:** Turtle assumes content available when link-read ran; no River prerequisite for discussion.
 - **Acceptance:** URL in eddy → Turtle first reply cites/substantively engages content → no Fetch button required.
 
-### Slice 2 — River save-offer (platform)
+### Slice 2 — River save-offer (platform) ✅ *2026-06-20*
 
-- **New:** post-Turtle scan for external URLs in practitioner input + Turtle reply; if not in `link-resonance/`, one **Save to library** act row (River-owned).
+- **New:** post-Turtle scan for external URLs in practitioner input; if not in `link-resonance/`, one **Save to library** act row (River-owned).
 - **`!fetch` semantics** documented in `turtle-talk.md`: persistence act, not dialogue prerequisite.
 - **Acceptance:** after informed reply, optional Save button; tap → cached; second Save suppressed; typed `!fetch` still works.
 

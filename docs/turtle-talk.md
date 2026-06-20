@@ -84,8 +84,10 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 
 | Mode | Trigger | Spec | Handler |
 |------|---------|------|---------|
-| Read for dialogue | URL in eddy chat (auto / opt-in) | §9.5 | `link_read.py` / `handle_dialogue` |
-| Distill for library | `!fetch <url>` | §9.5 | `cmd_fetch` → `link-resonance/` under practice root |
+| Read for dialogue | URL in eddy chat (auto / **Read article**) | §9.5 | `link_read.py` — silent extract for the turn; **no** `link-resonance/` write |
+| Distill for library | `!fetch <url>` or **Save to library** button (River, post-Turtle) | §9.5 | `cmd_fetch` → `link-resonance/` under practice root |
+
+**Harness split:** dropping a URL in chat does **not** require `!fetch` before Turtle can discuss — link-read grounds the reply. River may offer **Save to library** once per URL when the link is not yet cached; typed `!fetch` remains the power-user path.
 
 ### Eddy-scoped utilities
 
