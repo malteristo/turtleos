@@ -138,12 +138,16 @@ async def on_message(message: discord.Message):
 
 @river_client.event
 async def on_interaction(interaction: discord.Interaction):
-    if interaction.type == discord.InteractionType.component:
-        custom_id = (interaction.data or {}).get("custom_id", "")
-        if custom_id.startswith("eddy:lifecycle:"):
-            from eddy_lifecycle_bar import handle_lifecycle_bar_interaction
+    if interaction.type != discord.InteractionType.component:
+        return
+    custom_id = (interaction.data or {}).get("custom_id", "")
+    if not custom_id.startswith("eddy:lifecycle:"):
+        return
+    if interaction.response.is_done():
+        return
+    from eddy_lifecycle_bar import handle_lifecycle_bar_interaction
 
-            await handle_lifecycle_bar_interaction(interaction)
+    await handle_lifecycle_bar_interaction(interaction)
 
 
 def main() -> None:

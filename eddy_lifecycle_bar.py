@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 
@@ -9,6 +10,7 @@ import discord
 
 DISSOLVE_CONFIRM_TIMEOUT = 15
 SPIRIT_BOT_ID = 1487405701440733294
+_revert_tasks: dict[int, asyncio.Task] = {}
 
 
 def _is_practitioner_author(message: discord.Message) -> bool:
@@ -123,6 +125,11 @@ async def _run_lifecycle_command(
     args: list[str] | None = None,
 ) -> None:
     from commands import DIRECT_COMMANDS
+    from mage import set_practice_context_for_channel
+
+    parent_id = interaction.channel.parent_id if isinstance(interaction.channel, discord.Thread) else None
+    if parent_id:
+        set_practice_context_for_channel(parent_id)
 
     handler = DIRECT_COMMANDS.get(cmd)
     if not handler:
@@ -130,6 +137,53 @@ async def _run_lifecycle_command(
         return
     msg = _LifecycleInteractionMessage(interaction, f"!{cmd}")
     await handler(msg, args or [])
+
+
+def _cancel_confirm_revert(thread_id: int) -> None:
+    task = _revert_tasks.pop(thread_id, None)
+    if task and not task.done():
+        task.cancel()
+
+
+async def _revert_confirm_after(
+    thread_id: int,
+    message_id: int,
+    client,
+    *,
+    delay: int = DISSOLVE_CONFIRM_TIMEOUT,
+) -> None:
+    try:
+        await asyncio.sleep(delay)
+        thread = await client.fetch_channel(thread_id)
+        if not isinstance(thread, discord.Thread):
+            return
+        bar_msg = await thread.fetch_message(message_id)
+        custom_ids = {
+            getattr(c, "custom_id", None)
+            for row in (bar_msg.components or [])
+            for c in getattr(row, "children", [])
+        }
+        if not any(cid and cid.startswith("eddy:lifecycle:confirm:") for cid in custom_ids):
+            return
+        view = EddyLifecycleBarView(thread_id)
+        client.add_view(view)
+        await bar_msg.edit(content="\u200b", view=view)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        print(f"Dissolve confirm timeout revert failed: {type(exc).__name__}: {exc}")
+    finally:
+        _revert_tasks.pop(thread_id, None)
+
+
+def _schedule_confirm_revert(interaction: discord.Interaction, thread_id: int) -> None:
+    if not interaction.message:
+        return
+    _cancel_confirm_revert(thread_id)
+    task = asyncio.create_task(
+        _revert_confirm_after(thread_id, interaction.message.id, interaction.client)
+    )
+    _revert_tasks[thread_id] = task
 
 
 class EddyLifecycleBarView(discord.ui.View):
@@ -188,14 +242,15 @@ class EddyLifecycleBarView(discord.ui.View):
             return
         confirm = EddyDissolveConfirmView(self._thread_id)
         interaction.client.add_view(confirm)
-        await interaction.response.edit_message(view=confirm)
+        await interaction.response.edit_message(content="\u200b", view=confirm)
+        _schedule_confirm_revert(interaction, self._thread_id)
 
 
 class EddyDissolveConfirmView(discord.ui.View):
-    """Two-step dissolve — archive + explicit cancel + timeout revert."""
+    """Two-step dissolve — archive + explicit cancel + timed revert."""
 
     def __init__(self, thread_id: int):
-        super().__init__(timeout=DISSOLVE_CONFIRM_TIMEOUT)
+        super().__init__(timeout=None)
         self._thread_id = thread_id
 
         archive_btn = discord.ui.Button(
@@ -214,36 +269,17 @@ class EddyDissolveConfirmView(discord.ui.View):
         cancel_btn.callback = self._on_cancel
         self.add_item(cancel_btn)
 
-    async def on_timeout(self):
-        state = _load_state()
-        bar_id = state.get(str(self._thread_id))
-        if not bar_id:
-            return
-        try:
-            from mage import river_bot_enabled
-            from river_state import river_client
-            from state import client as turtle_client
-
-            bot = river_client if river_bot_enabled() else turtle_client
-            thread = await bot.fetch_channel(self._thread_id)
-            if not isinstance(thread, discord.Thread):
-                return
-            bar_msg = await thread.fetch_message(bar_id)
-            view = EddyLifecycleBarView(self._thread_id)
-            bot.add_view(view)
-            await bar_msg.edit(view=view)
-        except Exception as exc:
-            print(f"Dissolve confirm timeout revert failed: {type(exc).__name__}: {exc}")
-
     async def _on_cancel(self, interaction: discord.Interaction):
+        _cancel_confirm_revert(self._thread_id)
         view = EddyLifecycleBarView(self._thread_id)
         interaction.client.add_view(view)
-        await interaction.response.edit_message(view=view)
+        await interaction.response.edit_message(content="\u200b", view=view)
 
     async def _on_confirm(self, interaction: discord.Interaction):
         if interaction.channel.id != self._thread_id:
             await interaction.response.send_message("Wrong thread.", ephemeral=True)
             return
+        _cancel_confirm_revert(self._thread_id)
         await interaction.response.defer()
         await _run_lifecycle_command(interaction, "dissolve")
         clear_lifecycle_bar_state(self._thread_id)
@@ -373,16 +409,26 @@ async def handle_lifecycle_bar_interaction(interaction: discord.Interaction) -> 
     interaction.client.add_view(bar_view)
     interaction.client.add_view(confirm_view)
 
-    if action == "checkpoint":
-        await bar_view._on_checkpoint(interaction)
-    elif action == "release":
-        await bar_view._on_release(interaction)
-    elif action == "dissolve":
-        await bar_view._on_dissolve(interaction)
-    elif action == "confirm":
-        await confirm_view._on_confirm(interaction)
-    elif action == "cancel":
-        await confirm_view._on_cancel(interaction)
-    else:
-        await interaction.response.send_message("Unknown lifecycle action.", ephemeral=True)
+    try:
+        if action == "checkpoint":
+            await bar_view._on_checkpoint(interaction)
+        elif action == "release":
+            await bar_view._on_release(interaction)
+        elif action == "dissolve":
+            await bar_view._on_dissolve(interaction)
+        elif action == "confirm":
+            await confirm_view._on_confirm(interaction)
+        elif action == "cancel":
+            await confirm_view._on_cancel(interaction)
+        else:
+            await interaction.response.send_message("Unknown lifecycle action.", ephemeral=True)
+    except discord.InteractionResponded:
+        pass
+    except Exception as exc:
+        print(f"Lifecycle bar interaction failed ({action}): {type(exc).__name__}: {exc}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Lifecycle action failed — try again or use `!` commands.",
+                ephemeral=True,
+            )
     return True
