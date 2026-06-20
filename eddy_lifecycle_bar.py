@@ -8,6 +8,14 @@ import os
 import discord
 
 DISSOLVE_CONFIRM_TIMEOUT = 15
+SPIRIT_BOT_ID = 1487405701440733294
+
+
+def _is_practitioner_author(message: discord.Message) -> bool:
+    """Practitioner activity — includes Spirit bot (dyad partner), excludes other bots."""
+    if not message.author.bot:
+        return True
+    return message.author.id == SPIRIT_BOT_ID
 
 
 def _state_path() -> str:
@@ -328,7 +336,7 @@ async def touch_eddy_lifecycle_bar(
 
     lock = get_channel_lock(thread.id)
     async with lock:
-        if from_practitioner and not message.author.bot:
+        if from_practitioner and _is_practitioner_author(message):
             if not is_lifecycle_bar_active(thread.id):
                 msg = await post_eddy_lifecycle_bar(thread, client)
                 if msg:
