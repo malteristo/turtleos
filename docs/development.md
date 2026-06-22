@@ -20,7 +20,7 @@ Treat coherent turtleOS work as development chapters: bounded arcs that begin fr
 
 Chapter pattern:
 
-1. **Name the tension** — What friction, gap, or future capability is being served?
+1. **Name the tension** — What friction, gap, or future capability is being served? Tag tier + acceptance row in [docs/priority-stack.md](priority-stack.md).
 2. **Check the spec** — If `TURTLE_SPEC.md` already governs the behavior, trace to it. If not, draft the smallest amendment and get sanction before treating it as canonical.
 3. **Implement the slice** — Prefer the lowest-risk useful slice. Keep authority narrower than the eventual vision until it has earned trust.
 4. **Document operation** — Update `ARCHITECTURE.md`, operator docs, prompts, skills, or procedures so the implementation can be used and rebuilt.

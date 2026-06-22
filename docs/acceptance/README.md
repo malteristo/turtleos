@@ -2,6 +2,10 @@
 
 **Purpose:** Consolidated dogfood + shake acceptance scenarios. Each scenario traces to TURTLE_SPEC behavior and a chapter doc.
 
+**Priority filter (Mage):** Before adding scenarios or chapters, tag work against [priority-stack.md](../priority-stack.md) — tier + which H/R/D/F/O row it serves.
+
+**North-star shift (2026-06-20):** Mage dogfood priority moves from standing lifecycle bar (R4/R5 as primary feel) toward **resume eddy (D1)**, **Discord permalink self-feed (D2)**, **contextual River offers (D3)**, and **link-read (H1)**. R4/R5 remain plumbing/shake rows until eddy-bar redesign lands.
+
 **Run offline shakes from repo root:**
 
 ```bash
@@ -79,6 +83,28 @@ python scripts/shake_lifecycle.py
 | O2 | Claim flow | Practitioner practice root wired |
 
 **Verification:** `test_hosted_river_onboarding`, `shake_hosted_river.py`
+
+---
+
+## Discord mastery — resume, cross-ref, contextual offers
+
+**Spec:** §8 (session continuity); §9.5 (link-read pattern); §5.8 (Turtle harness vs River)  
+**Priority:** [priority-stack.md](../priority-stack.md) Tier 0 (D1–D3)  
+**Chapter (D2):** `docs/chapters/2026-06-20-discord-permalink-self-feed.md`  
+**Status:** Not started — north-star dogfood targets (2026-06-20)
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| D1 | **Resume eddy** — open an eddy idle ≥24h (or simulate gap), send a new message | Turtle reply shows continuity with prior thread topic **without** practitioner re-pasting context; no “I don’t have earlier messages” disclaimer |
+| D2 | **Discord permalink** — paste a **message** link from another eddy + short ask (e.g. “what did we decide here?”) | Visible read trace (embed or equivalent) · Turtle first reply references **specific content** from linked message · inject block visible in timeline or history label · practitioner can ask Turtle to expand if summary thin |
+| D2b | **Discord thread link** — paste thread permalink (or first message link) referencing a **multi-message** eddy | Turtle receives enough thread context (history fetch or summary) to answer; trace shows scope (e.g. message count / chars in context) · no River-side digest required before Turtle speaks |
+| D3 | **Contextual River offer** — after Turtle↔Mage exchange where an act would help (e.g. uncached external URL discussed, explicit checkpoint intent) | River posts **one** situational act row within ~60s of Turtle reply · offer matches situation (not generic spam) · no duplicate lifecycle trio if contextual palette excludes them · Mage rates useful vs noise in dogfood notes |
+
+**D1 verification:** Manual dogfood + `test_dialogue_store` / history reload paths; confirm `MAX_DIALOGUE_HISTORY` sufficient for stated gap  
+**D2 verification:** `test_discord_permalink_read` (to add) · extend `shake_link_read.py` or new `shake_discord_ref.py` · grep for `[Dereferenced Discord context]` / new inject label  
+**D3 verification:** `river.log` contextual offer lines · manual dogfood journal; palette/hit-rate iterated in chapter slices
+
+**Not in scope for D2:** River fetches Discord URL before Turtle speaks (X2 class) · auto-checkpoint on idle · standing eddy lifecycle bar as north star
 
 ---
 
