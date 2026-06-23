@@ -2,7 +2,9 @@
 
 **Local open-weight AI, made accessible.**
 
-turtleOS turns capable local hardware into a personal AI practice space on Discord: a **river** that receives what you drop and responds through actions (never conversation), and **eddies** where **Turtle** thinks aloud and talks with you. Prompt programs — **Turtle Practice** flows — run on the platform; you can author and share your own.
+turtleOS turns your machine into **personal AI on Discord**: open an eddy and talk — sovereign, local-first, ChatGPT-style daily use. Optionally, load **flows** inside an eddy when you want guided, structured conversations (expert process without prompt engineering).
+
+A **river** receives what you drop (acts only, never chat). **Eddies** are threads where **Turtle** thinks aloud and talks with you. Flows are optional programs in your practice root — not required for regular use.
 
 turtleOS is a **practice core plus a reference shell**. The practice core is portable: character, flows, chronicle, and state files. The shell is the Python runtime that connects Discord, local models, and your practice root.
 
@@ -90,10 +92,15 @@ python discord_bot.py
 
 ### First success
 
-1. Message appears in your **river** channel
-2. River responds with acts (ack + **Materialize eddy** button)
-3. Press button → eddy opens → Turtle responds in the thread
-4. Chronicle line in river includes a link back to the eddy
+Layer 1 — personal AI (required):
+
+1. Bot online in your **river** channel  
+2. Standing bar at bottom: **`new eddy`**  
+3. Click → eddy opens → send a message  
+4. Turtle joins and replies in the thread  
+5. Thread stays in your sidebar — return anytime  
+
+Layer 2 — flows (optional): inside an eddy, open the flow library and try **Navigator** when you want to explore guided conversations. See [docs/ux/onboarding.md](docs/ux/onboarding.md).
 
 See [TURTLE_SPEC.md](TURTLE_SPEC.md) §13 for the full install law.
 
@@ -104,7 +111,7 @@ See [TURTLE_SPEC.md](TURTLE_SPEC.md) §13 for the full install law.
 | Path | Purpose |
 |------|---------|
 | `character/` | Turtle identity — soul, conduct (authored after spec) |
-| `flows/` | Turtle Practice programs (Shelter, Navigator, …) |
+| `flows/` | Optional guided conversations (Navigator, Thread, …) |
 | `chronicle/` | Deep event log (`deep.jsonl`) |
 | `state/notes/` | Flow outcomes and practice artifacts |
 

@@ -6,10 +6,12 @@ This is **your river** — your private practice surface on the operator's serve
 
 **In the river**, Turtle does not chat in full sentences — you see short acknowledgements and sometimes buttons. Write what is on your mind; the river takes it in.
 
-**At the bottom of the channel** you will see a bar — use it to open an **eddy** (a thread). **There** you can talk with Turtle: warm, practical, in whatever language you use.
+**At the bottom of the channel** you will see **`new eddy`** — click it to open a thread. Send a message. Turtle joins and replies. That is your daily loop: open a chat, talk, come back anytime from the sidebar.
 
-No framework, no homework. Just a thinking partner when you want one.
+Paste links in the eddy when you want to discuss a page or article. No framework, no homework.
+
+**Optional — flows:** Inside an eddy you can open the **flow library** and load a guided conversation when you want more structure. Regular use does not require flows. If you are curious, try **Navigator** once to see how a flow works.
 
 ---
 
-*You can open an eddy anytime and simply start writing.*
+*Open an eddy anytime and start writing.*

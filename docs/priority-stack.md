@@ -2,7 +2,7 @@
 
 **Status:** Active — development filter for Kermit-as-primary-user  
 **Date:** 2026-06-20 (rev. 2 — Mage dogfood notes integrated)  
-**Heuristic:** Build turtleOS for the practice I actually run. Improvements that serve Tier 0–1 will generalize to other Pop 2 operators; Tier 3 work is valid product surface but not my daily loop.
+**Heuristic:** Build turtleOS for the practice I actually run. **Layer 1** (open eddy, talk — ChatGPT-style daily use) must feel great for everyone; **Layer 2** (flows, intentions depth) serves structured use when pulled. Improvements that nail Tier 0–1 generalize to other Pop 2 operators.
 
 **Use this before starting a chapter:** Which tier? Which acceptance scenario? If neither answers — pause.
 
@@ -23,7 +23,17 @@ The first draft conflated **navigation** with **continuity**. These are separate
 
 ---
 
-## Persistence model (Magic vs Discord)
+## Product layers (install story)
+
+| Layer | What | Tier |
+|-------|------|------|
+| **Personal AI (default)** | Install anywhere · Discord river · `new eddy` · talk · paste links · resume threads — sovereign ChatGPT-style daily use | **0** |
+| **Flows (optional)** | In-eddy flow library · guided conversations · Navigator as **sample** for exploring structure | **2** (when chosen) |
+| **Intentions depth** | Clarity on what you want · attune on demand · no proactive nag | **0** talk / **2** when structured |
+
+Generic onboarding: [ux/onboarding.md](ux/onboarding.md). Do not lead with flows at install.
+
+---
 
 **Magic `@release`** fits **serial** practice: one Forge chapter, complex warm-routing, then exhale — context dies unless artifacts carry it.
 
@@ -66,12 +76,13 @@ Optimizing `!fetch` when the pain is "paste link and talk" is a **tier mismatch*
 
 | Capability | What "good" feels like | Acceptance |
 |------------|------------------------|------------|
-| **Eddy dialogue** | New eddy → speak → Turtle joins; conversation holds context | R3 |
-| **Resume eddy** | Re-open thread after days/weeks; seamless continuation from Discord history | *(new: D1 — add to acceptance)* |
+| **Blank eddy dialogue** | `new eddy` → speak → Turtle joins; ChatGPT-style daily loop; no flow required | R3, **J1** |
+| **Resume eddy** | Re-open thread after days/weeks; seamless continuation from Discord history | D1 |
 | **Article / link conversation** | Drop URL + comment → visible read trace → grounded reply; no fetch disclaimers | H1, H4 |
-| **Discord permalink cross-ref** | Paste thread/message link → Turtle self-feeds prior context (transparent inject) | *(new: D2)* |
-| **River standing bar** | new eddy · flow menu reachable after I post | R1, R2 |
-| **Contextual River offers** | River listens to Turtle↔Mage dialogue; posts **situationally useful** act row (hit rate improves over time) | *(new: D3)* |
+| **Discord permalink cross-ref** | Paste thread/message link → Turtle self-feeds prior context (transparent inject) | D2 |
+| **River standing bar** | `new eddy` only (target); bar last message after post | R1, R2 |
+| **Contextual River offers** | River listens to Turtle↔Mage dialogue; posts **situationally useful** act row (hit rate improves over time) | D3 |
+| **In-eddy flow library** | Load flow inside thread; Turtle bootstrap; conversational intake | **J2–J4** (Tier 2 when used) |
 
 ### Link-read — Tier 0 and hard
 
@@ -108,7 +119,7 @@ Legacy acceptance rows R4/R5 and the standing lifecycle bar remain in the codeba
 | **Save to library** | URL became load-bearing artifact | H2, H3 |
 | **`!fetch` (typed)** | Power-user library save | H5 |
 | **Practice file browse** | `!read` / `!ls` / `!search` under practice root | — |
-| **Flow eddy (chosen flows)** | Named container when deliberate | R2 + flow-specific |
+| **Flow eddy (chosen flows)** | Deliberate structure; Navigator as flow demo | J2–J4 |
 | **API model opt-in** | Local stack insufficient | — |
 
 ---
@@ -117,7 +128,7 @@ Legacy acceptance rows R4/R5 and the standing lifecycle bar remain in the codeba
 
 | Capability | Primary user | My stance |
 |------------|--------------|-----------|
-| **Shelter flow** | Pop 1 / onboarding demo | Plumbing OK; not my dogfood (F1–F3) |
+| **Shelter flow** | Retiring — blank eddy is Layer 1 | Remove from ship set |
 | **Hosted river / claim** | Pop 2 without Magic | O1–O2 when OPN pulls |
 | **Practitioner minimal `!` palette** | Hosted practitioners | Don't design around my channel |
 | **Magic overlay** | Magic-attuned legacy profile | Gated; not native v1 north star |
@@ -146,8 +157,11 @@ Do not reinvent Discord search; **do** make permalinks legible to Turtle the way
 | **Family channel design** | Shared practice without treating it as default Pop 2 | 2 |
 | **Idle & reflection** | Silent default; rare reflection; drop checkpoint noise | 1 |
 | **Link-read hardening** | OSS harness patterns; bot-blocked content | 0 (H1) |
+| **In-eddy flow library** | Bar = `new eddy` only; load flow in thread; Turtle bootstrap; conversational intake; retire Shelter | 0 + 2 · [chapter](chapters/2026-06-20-in-eddy-flow-library.md) · [journeys](ux/flow-library-journeys.md) |
 
-Acceptance rows **D1–D3** live in [acceptance/README.md](acceptance/README.md). **D2 implementation chapter:** [2026-06-20-discord-permalink-self-feed.md](chapters/2026-06-20-discord-permalink-self-feed.md).
+**Onboarding (target):** generic personal AI — [ux/onboarding.md](ux/onboarding.md). Flows optional; Navigator as sample when exploring structure.
+
+Acceptance **J1–J4** in [acceptance/README.md](acceptance/README.md). **D1–D3** same file.
 
 ---
 
@@ -170,7 +184,7 @@ If tier ≥ 2 and Tier 1 blockers remain (idle wedge, registry save) — **defau
 | **Command inventory drift** | Polish `!fetch` while paste-URL UX is the loop | Tier 0 link-read (H1) |
 | **Magic release transplant** | Standing release/dissolve bar; idle checkpoint spam | Discord thread = save; D1/D2/D3 |
 | **River does Turtle's fetch** | Discord summary on River | Turtle self-feed (parity with web) |
-| **Pop 1 proxy** | Shelter as "the product" | Tier 3 |
+| **Pop 1 proxy** | Flow-first install or Shelter as demo | Layer 1 blank eddy + generic onboarding |
 | **Spirit-green ≠ Mage-green** | Shake passes; feel untested | D1 + H1 dogfood |
 | **Hot-day slice** | No tier tag | Re-read this stack |
 
@@ -182,6 +196,8 @@ If tier ≥ 2 and Tier 1 blockers remain (idle wedge, registry save) — **defau
 |------|--------|
 | 2026-06-20 | v1 — initial stack (link-read Tier 0, `!fetch` Tier 2) |
 | 2026-06-20 | v2 — Mage notes: navigation vs reliability; no standing eddy bar → contextual River; Turtle Discord self-feed; idle silent/rare reflection/explicit checkpoint; family → Tier 2; Discord mastery; D1–D3 targets |
+| 2026-06-20 | v2.1 — Flow library target journeys; in-eddy flows; Shelter retire; guided emergence framing |
+| 2026-06-20 | v2.2 — Two-layer product (ChatGPT-style default + optional flows); generic onboarding doc; Navigator as sample flow |
 
 ---
 

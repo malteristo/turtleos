@@ -57,10 +57,11 @@ python scripts/shake_lifecycle.py
 
 ---
 
-## Flow runner (Shelter)
+## Flow runner (Shelter) — legacy shell
 
+**Status:** Superseded by in-eddy flow library target — see **J1–J4** below.  
 **Spec:** §10.3, §11.1  
-**Chapter:** platform-law handoff + flow trace
+**Chapter:** [2026-06-20-in-eddy-flow-library.md](../chapters/2026-06-20-in-eddy-flow-library.md)
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
@@ -68,7 +69,25 @@ python scripts/shake_lifecycle.py
 | F2 | Shelter dialogue | Flow guard on first reply; state writes |
 | F3 | Checkpoint in flow eddy | Session note / state captured |
 
-**Verification:** `test_flow_runner`, `shake_flow.py shelter`
+**Verification:** `test_flow_runner`, `shake_flow.py shelter` — until chapter ships, then repoint to Navigator + J2/J3.
+
+---
+
+## Flow library — in-eddy (target)
+
+**Spec:** §5.4, §10 · **Priority:** Tier 0 J1 + Tier 2 J2–J4 · [priority-stack.md](../priority-stack.md)  
+**UX:** [flow-library-journeys.md](../ux/flow-library-journeys.md) · **Onboarding:** [onboarding.md](../ux/onboarding.md)  
+**Chapter:** [2026-06-20-in-eddy-flow-library.md](../chapters/2026-06-20-in-eddy-flow-library.md)  
+**Status:** Not started (2026-06-20)
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| **J1** | **Daily use** — `new eddy` → first message → Turtle reply | No flow required; ChatGPT-style loop; bar = `new eddy` only (target) |
+| **J2** | **Navigator sample** — in-eddy load → bootstrap | Turtle explains flow; interview or skip; dialogue in flow voice; optional checkpoint |
+| **J3** | **Navigator return** | Prior `navigator-last.md` read; no duplicate intake questions |
+| **J4** | **Lens load** mid-conversation | Bootstrap from thread history; no auto-rename; optional rename button |
+
+**Verification (target):** `shake_flow.py navigator` · `shake_eddy_bar.py` · dogfood J1 daily, J2 once to learn flows
 
 ---
 

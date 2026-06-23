@@ -31,10 +31,12 @@ When implementation and these docs disagree, **implementation wins until someone
 | Blank eddy, deferred presence, system lines | [eddy-entry.md](eddy-entry.md) |
 | Eddy lifecycle bar (checkpoint / release / dissolve) | [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md) |
 | Turtle voice inside eddies | [turtle-dialogue.md](turtle-dialogue.md) |
-| Flow menu, Shelter vs Navigator intake | [flows-and-intake.md](flows-and-intake.md) |
+| Flow library (target), legacy bar menu + intake | [flow-library-journeys.md](flow-library-journeys.md) · [flows-and-intake.md](flows-and-intake.md) |
 | URL → context (read vs distill) | [link-reading.md](link-reading.md) |
 | Checkpoint, release, idle capture | [sessions.md](sessions.md) |
 | Practitioner walkthroughs | [journeys.md](journeys.md) |
+| First install & onboarding copy | [onboarding.md](onboarding.md) |
+| Flow library journeys (target) | [flow-library-journeys.md](flow-library-journeys.md) |
 | Do-not-reintroduce inventory | [rejected.md](rejected.md) |
 | Pre-merge checklist | [review-checklist.md](review-checklist.md) |
 
@@ -94,6 +96,8 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | 2026-06-19 | **Eddy lifecycle bar** specified — River-owned in-thread bar; appear on first activity; dissolve confirm Option A ([eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)) |
 | 2026-06-19 | **Eddy lifecycle bar shipped** — `eddy_lifecycle_bar.py`; checkpoint/release/dissolve buttons in live eddies |
 | 2026-06-18 | **Flow trace + deploy** — shell-inject flow presence; Shelter meta/question guards; Mini at `28feb48` |
+| 2026-06-20 | **Onboarding (target)** — generic Layer 1 personal AI; flows optional; [onboarding.md](onboarding.md) |
+| 2026-06-20 | **Flow library journeys (target)** — in-eddy picker, Turtle bootstrap; [flow-library-journeys.md](flow-library-journeys.md) |
 
 ---
 

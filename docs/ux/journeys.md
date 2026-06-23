@@ -6,7 +6,44 @@ End-to-end walkthroughs. Detail lives in topic docs — these are the composed p
 
 ---
 
-## Open blank eddy from bar
+## Target UX (2026-06-20) — not yet shipped
+
+**Onboarding (generic):** personal AI on Discord — install, open an eddy, talk. Flows optional for structured use; Navigator as a **sample flow** when exploring. Full copy:
+
+→ **[onboarding.md](onboarding.md)**
+
+**Journeys (flows + bootstrap):**
+
+→ **[flow-library-journeys.md](flow-library-journeys.md)**
+
+**Quick paths (target):**
+
+```
+Layer 1 — daily use (default)
+  [new eddy] → enter → first message → river added turtle → dialogue
+  (flow picker visible; ignoring it is fine)
+
+Layer 2 — try a flow (optional)
+  [new eddy] → flow library → Navigator (or other)
+  → river added turtle → Turtle bootstrap → guided dialogue → checkpoint
+
+Return — Navigator with prior checkpoint
+  [new eddy] → Navigator → bootstrap reads last commit → continue
+
+Lens — load flow mid-conversation (future)
+  … talking … → flow library → load flow
+  → bootstrap from thread history → no auto-rename → optional [Rename thread]
+```
+
+River bar target: **`[ 🌀 new eddy ]` only** (no `flow menu`). Shelter retired; blank eddy is Layer 1.
+
+---
+
+## Legacy journeys (current shell)
+
+The running bot still uses river-bar flow menu and River modal intake for Navigator. Use these for dogfood and shakedown until the in-eddy flow library chapter ships.
+
+### Open blank eddy from bar
 
 ```
 River timeline: … → click [new eddy]
@@ -19,9 +56,7 @@ River timeline: … → click [new eddy]
 
 → [eddy-entry.md](eddy-entry.md) · [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)
 
----
-
-## Open intake-free flow eddy from bar (Shelter)
+### Open intake-free flow eddy from bar (Shelter) — retiring
 
 ```
 Click [flow menu] → select Shelter
@@ -32,11 +67,11 @@ Click [flow menu] → select Shelter
   → 15 min idle → flow checkpoint + session note (if thresholds met)
 ```
 
-→ [flows-and-intake.md](flows-and-intake.md) · [sessions.md](sessions.md) · [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)
+**Target:** remove Shelter from ship set; use Journey 1 (blank eddy) instead.
 
----
+→ [flows-and-intake.md](flows-and-intake.md)
 
-## Open intake flow eddy from bar (Navigator)
+### Open intake flow eddy from bar (Navigator) — superseded by target
 
 ```
 Click [flow menu] → select Navigator
@@ -48,9 +83,13 @@ Click [flow menu] → select Navigator
   → checkpoint on idle / bar / !checkpoint / !release
 ```
 
-Skip path: orientation → practitioner’s first message → `river added turtle` → normal first-reply flow (no auto-opening).
+**Target:** in-eddy flow library + Turtle bootstrap — see [flow-library-journeys.md](flow-library-journeys.md).
 
-→ [flows-and-intake.md](flows-and-intake.md) · [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md)
+→ [flows-and-intake.md](flows-and-intake.md)
+
+---
+
+## Hosted river claim
 
 Operator provisions with `!admin river-key <name> <emoji> [de|en]` and sends the channel invite privately.
 
@@ -67,6 +106,8 @@ Operator river stays separate; hosted content must not appear in operator propos
 
 → `docs/operations/hosted-river-boundaries.md` · `docs/chapters/design-hosted-river.md`
 
+**Target onboarding copy for guests:** generic Layer 1 — see [onboarding.md](onboarding.md); optional Navigator mention at end.
+
 ---
 
 ## Drop text in river (no eddy yet)
@@ -77,6 +118,8 @@ Practitioner posts in river
   → bar moves to bottom
   → practitioner uses bar or contextual button when ready
 ```
+
+**Target:** no standing flow offers on river messages; use bar → eddy → flow library.
 
 → [river.md](river.md)
 
