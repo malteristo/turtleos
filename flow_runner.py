@@ -332,7 +332,7 @@ def build_flow_prompt_sections(
     if intake_content:
         rel = spec.intake.path if spec.intake else "intake"
         sections.append(
-            "## Flow Intake (River captured — do not re-ask these)\n\n"
+            "## Flow Intake (captured — do not re-ask these)\n\n"
             f"### {rel}\n\n{intake_content[:4000]}"
         )
     if spec.flow_id == "shelter":

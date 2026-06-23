@@ -28,6 +28,12 @@ class EddyFlowLibraryTests(unittest.TestCase):
         self.assertIn("post_eddy_flow_library", src)
         self.assertIn("if not flow_id:", src)
 
+    def test_prepare_flow_uses_bootstrap(self) -> None:
+        src = (REPO / "eddy_spawn.py").read_text(encoding="utf-8")
+        block = src.split("async def prepare_flow_eddy_entry")[1].split("async def spawn_river_eddy")[0]
+        self.assertIn("start_flow_bootstrap", block)
+        self.assertNotIn("post_flow_intake_orientation", block)
+
 
 if __name__ == "__main__":
     unittest.main()

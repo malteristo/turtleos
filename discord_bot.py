@@ -1262,12 +1262,12 @@ async def on_ready():
     asyncio.get_event_loop().create_task(prewarm_triage())
 
     try:
-        from flow_intake_opening import start_intake_handoff_watcher
+        from flow_bootstrap import start_flow_bootstrap_watcher
         from mage import get_attunement_profile
 
         if get_attunement_profile() == "native":
-            start_intake_handoff_watcher(client)
-            print("Intake handoff watcher started")
+            start_flow_bootstrap_watcher(client)
+            print("Flow bootstrap watcher started")
     except Exception as exc:
         print(f"Intake handoff watcher failed to start: {exc}")
 

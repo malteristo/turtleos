@@ -42,17 +42,6 @@ async def load_flow_in_eddy(
             {"context_type": flow_id, "blank_eddy": False},
         )
 
-    if spec.intake:
-        patch_awaiting_title(
-            thread.id,
-            parent_id,
-            flow_id=flow_id,
-            awaiting_intake=True,
-            intake_ready=False,
-        )
-    else:
-        patch_awaiting_title(thread.id, parent_id, flow_id=flow_id)
-
     await prepare_flow_eddy_entry(thread, flow_id, bot_client)
     return True
 

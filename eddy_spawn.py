@@ -1037,10 +1037,9 @@ async def ensure_native_presence(thread: discord.Thread) -> bool:
 
 
 async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
-    """River orientation at flow eddy materialize — rename + intake or plain embed."""
-    from flow_runner import flow_entry_blurb, load_flow_spec
-    from flow_intake_handler import post_flow_intake_orientation
-    from mage import get_pd
+    """Provisional rename + Turtle bootstrap when a flow loads in-eddy."""
+    from flow_bootstrap import start_flow_bootstrap
+    from flow_runner import load_flow_spec
     from thread_registry import update_thread_name
 
     spec = load_flow_spec(flow_id)
@@ -1055,29 +1054,10 @@ async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
         print(f"Flow eddy rename failed: {exc}")
 
     parent_id = thread.parent_id
-    if spec.intake and parent_id:
-        write_awaiting_title(
-            thread.id,
-            parent_id,
-            {
-                "flow_id": flow_id,
-                "awaiting_intake": True,
-                "intake_ready": False,
-            },
-        )
-        await post_flow_intake_orientation(thread, flow_id, bot_client)
+    if not parent_id:
         return
 
-    try:
-        embed = discord.Embed(
-            title=f"{spec.title} eddy",
-            description=flow_entry_blurb(spec, get_pd()),
-            color=0x5865F2,
-        )
-        embed.set_footer(text="Speak when ready — Turtle joins on your first message.")
-        await thread.send(embed=embed, silent=True)
-    except Exception as exc:
-        print(f"Flow eddy orientation failed: {type(exc).__name__}: {exc}")
+    await start_flow_bootstrap(thread, flow_id, parent_id, bot_client)
 
 
 async def spawn_river_eddy(
