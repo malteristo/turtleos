@@ -27,7 +27,7 @@ class SessionsFlowCheckpointTests(unittest.TestCase):
         self.assertLessEqual(MIN_EXCHANGES_FOR_CHECKPOINT, 4)
 
     def test_checkpoint_writes_with_two_exchanges(self) -> None:
-        spec = load_flow_spec("shelter")
+        spec = load_flow_spec("navigator")
         self.assertIsNotNone(spec)
         import tempfile
 
@@ -37,13 +37,13 @@ class SessionsFlowCheckpointTests(unittest.TestCase):
                 {"role": "assistant", "content": "b"},
             ]
             written = write_flow_checkpoint(spec, history, "Spirit", tmp)
-            self.assertEqual(written, ["state/notes/shelter-last.md"])
+            self.assertEqual(written, ["state/notes/navigator-last.md"])
 
 
 class ShakeFlowOfflineTests(unittest.TestCase):
-    def test_offline_shelter_passes(self) -> None:
+    def test_offline_navigator_passes(self) -> None:
         shake_flow = _load_shake_flow()
-        errors = shake_flow.check_offline("shelter")
+        errors = shake_flow.check_offline("navigator")
         self.assertEqual(errors, [], errors)
 
 

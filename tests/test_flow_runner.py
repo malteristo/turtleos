@@ -1,7 +1,9 @@
 import os
+import shutil
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock
 
 sys.modules.setdefault("discord", MagicMock())
@@ -24,6 +26,15 @@ from flow_runner import (
     apply_flow_reply_guard,
 )
 
+REPO = Path(__file__).resolve().parents[1]
+SHELTER_ARCHIVE = REPO / "template" / "flows" / "_archive" / "shelter.md"
+
+
+def _install_shelter_fixture(practice_dir: str) -> None:
+    flows = os.path.join(practice_dir, "flows")
+    os.makedirs(flows, exist_ok=True)
+    shutil.copy(SHELTER_ARCHIVE, os.path.join(flows, "shelter.md"))
+
 
 class FlowRunnerTests(unittest.TestCase):
     def test_split_front_matter(self) -> None:
@@ -32,48 +43,50 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertEqual(meta["title"], "Shelter")
         self.assertEqual(body, "Body here.")
 
-    def test_load_shelter_template(self) -> None:
-        spec = load_flow_spec("shelter")
-        self.assertIsNotNone(spec)
-        assert spec is not None
-        self.assertEqual(spec.title, "Shelter")
-        self.assertIn("state/notes/shelter-last.md", spec.writes)
-        self.assertIn("Hold space", spec.body)
+    def test_load_shelter_from_practice_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            _install_shelter_fixture(tmp)
+            spec = load_flow_spec("shelter", tmp)
+            self.assertIsNotNone(spec)
+            assert spec is not None
+            self.assertEqual(spec.title, "Shelter")
+            self.assertIn("state/notes/shelter-last.md", spec.writes)
+            self.assertIn("Hold space", spec.body)
 
     def test_read_state_bundle_missing_file(self) -> None:
-        spec = load_flow_spec("shelter")
+        spec = load_flow_spec("navigator")
         assert spec is not None
         with tempfile.TemporaryDirectory() as tmp:
             bundle = read_state_bundle(spec, tmp)
-            self.assertEqual(bundle["state/notes/shelter-last.md"], "")
+            self.assertEqual(bundle["state/notes/navigator-last.md"], "")
 
     def test_write_flow_checkpoint(self) -> None:
-        spec = load_flow_spec("shelter")
+        spec = load_flow_spec("navigator")
         assert spec is not None
         with tempfile.TemporaryDirectory() as tmp:
             history = [
-                {"role": "user", "content": "heavy day"},
-                {"role": "assistant", "content": "I'm here with you."},
+                {"role": "user", "content": "stuck on install"},
+                {"role": "assistant", "content": "Let's find one next step."},
             ]
             written = write_flow_checkpoint(spec, history, "Kermit", tmp)
-            self.assertEqual(written, ["state/notes/shelter-last.md"])
-            path = os.path.join(tmp, "state/notes/shelter-last.md")
+            self.assertEqual(written, ["state/notes/navigator-last.md"])
+            path = os.path.join(tmp, "state/notes/navigator-last.md")
             self.assertTrue(os.path.isfile(path))
             text = open(path).read()
-            self.assertIn("heavy day", text)
+            self.assertIn("stuck on install", text)
 
     def test_build_flow_prompt_sections(self) -> None:
-        sections, spec = build_flow_prompt_sections("shelter")
+        sections, spec = build_flow_prompt_sections("navigator")
         self.assertIsNotNone(spec)
         joined = "\n".join(sections)
-        self.assertIn("Shelter", joined)
+        self.assertIn("Navigator", joined)
         self.assertNotIn("-# flow:", joined)
         self.assertNotIn("emit on first reply", joined)
 
     def test_flow_presence_line(self) -> None:
-        spec = load_flow_spec("shelter")
+        spec = load_flow_spec("navigator")
         assert spec is not None
-        self.assertEqual(flow_presence_line(spec), "Shelter")
+        self.assertEqual(flow_presence_line(spec), "Navigator")
 
     def test_strip_model_operational_lines(self) -> None:
         raw = "I'm here.\n\n-# flow: Shelter\n\n-# read state/notes/shelter-last.md\n\nStill here."
@@ -116,7 +129,10 @@ class FlowRunnerTests(unittest.TestCase):
     def test_build_flow_prompt_sections_shelter_turn_override_last(self) -> None:
         from prompts import build_native_eddy_prompt
 
-        prompt = build_native_eddy_prompt("shelter")
+        with tempfile.TemporaryDirectory() as tmp:
+            _install_shelter_fixture(tmp)
+            with unittest.mock.patch("flow_runner.get_pd", return_value=tmp):
+                prompt = build_native_eddy_prompt("shelter")
         self.assertIn("Turn override (final", prompt)
         self.assertGreater(prompt.rfind("Turn override"), prompt.rfind("Discord Eddy"))
 
@@ -148,8 +164,9 @@ class FlowRunnerTests(unittest.TestCase):
 
     def test_list_resolvable_flow_ids_includes_shipped_flows(self) -> None:
         flows = list_resolvable_flow_ids()
-        for flow_id in ("shelter", "navigator", "thread", "companion"):
+        for flow_id in ("navigator", "thread", "companion"):
             self.assertIn(flow_id, flows)
+        self.assertNotIn("shelter", flows)
         self.assertEqual(len(flows), len(set(flows)))
 
     def test_load_shipped_flow_templates(self) -> None:
@@ -231,37 +248,43 @@ class FlowRunnerTests(unittest.TestCase):
             self.assertIn("review or update", text_return)
 
     def test_flow_entry_blurb(self) -> None:
-        spec = load_flow_spec("shelter")
+        spec = load_flow_spec("navigator")
         assert spec is not None
         blurb = flow_entry_blurb(spec)
         self.assertIn("Fresh start", blurb)
 
     def test_resolve_flow_for_close_by_context_type(self) -> None:
-        spec = load_flow_spec("shelter")
-        assert spec is not None
-        configs = {123: {"context_type": "shelter"}}
-        history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "here"}]
-        resolved = resolve_flow_for_close(123, history, configs)
-        self.assertIsNotNone(resolved)
-        assert resolved is not None
-        self.assertEqual(resolved.title, "Shelter")
+        with tempfile.TemporaryDirectory() as tmp:
+            _install_shelter_fixture(tmp)
+            spec = load_flow_spec("shelter", tmp)
+            assert spec is not None
+            configs = {123: {"context_type": "shelter"}}
+            history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "here"}]
+            resolved = resolve_flow_for_close(123, history, configs, practice_dir=tmp)
+            self.assertIsNotNone(resolved)
+            assert resolved is not None
+            self.assertEqual(resolved.title, "Shelter")
 
     def test_resolve_flow_for_close_by_thread_name(self) -> None:
         history = [{"role": "user", "content": "cats"}, {"role": "assistant", "content": "here"}]
         resolved = resolve_flow_for_close(
-            456, history, {}, channel_name="seeking_shelter_from_rain"
+            456, history, {}, channel_name="navigator_next_steps"
         )
         self.assertIsNotNone(resolved)
         assert resolved is not None
-        self.assertEqual(resolved.title, "Shelter")
+        self.assertEqual(resolved.title, "Navigator")
 
     def test_resolve_flow_for_close_by_shelter_phrase(self) -> None:
-        history = [
-            {"role": "user", "content": "heavy day, need shelter"},
-            {"role": "assistant", "content": "I'm here"},
-        ]
-        resolved = resolve_flow_for_close(789, history, {}, channel_name="new eddy")
-        self.assertIsNotNone(resolved)
+        with tempfile.TemporaryDirectory() as tmp:
+            _install_shelter_fixture(tmp)
+            history = [
+                {"role": "user", "content": "heavy day, need shelter"},
+                {"role": "assistant", "content": "I'm here"},
+            ]
+            resolved = resolve_flow_for_close(
+                789, history, {}, channel_name="new eddy", practice_dir=tmp
+            )
+            self.assertIsNotNone(resolved)
 
 
 class FlowPresenceTests(unittest.IsolatedAsyncioTestCase):
@@ -277,8 +300,8 @@ class FlowPresenceTests(unittest.IsolatedAsyncioTestCase):
 
         channel.send = _send
 
-        cfg = {"context_type": "shelter", "flow_presence_posted": False}
-        spec = load_flow_spec("shelter")
+        cfg = {"context_type": "navigator", "flow_presence_posted": False}
+        spec = load_flow_spec("navigator")
         assert spec is not None
         expected = f"-# {flow_presence_line(spec)}"
         with unittest.mock.patch("mage.get_attunement_profile", return_value="native"):
@@ -296,7 +319,7 @@ class FlowPresenceTests(unittest.IsolatedAsyncioTestCase):
         channel = MagicMock()
         channel.id = 999002
         channel.send = unittest.mock.AsyncMock()
-        cfg = {"context_type": "shelter", "flow_presence_posted": False}
+        cfg = {"context_type": "navigator", "flow_presence_posted": False}
         with unittest.mock.patch("mage.get_attunement_profile", return_value="magic"):
             self.assertFalse(await post_flow_presence_if_needed(channel, cfg))
         channel.send.assert_not_called()

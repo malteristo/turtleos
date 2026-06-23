@@ -28,8 +28,8 @@ class NativePromptTests(unittest.TestCase):
     @patch("prompts.get_pd")
     def test_build_native_prompt_with_flow(self, mock_pd) -> None:
         mock_pd.return_value = "/nonexistent/practice"
-        prompt = build_native_eddy_prompt("shelter")
-        self.assertIn("Shelter", prompt)
+        prompt = build_native_eddy_prompt("navigator")
+        self.assertIn("Navigator", prompt)
 
     @patch("prompts.read_safe")
     @patch("prompts.get_pd")

@@ -27,7 +27,7 @@ def _river_model() -> str:
     return model
 
 
-DEFAULT_FLOW_NAMES = ["Shelter", "Navigator", "Thread", "Companion"]
+DEFAULT_FLOW_NAMES = ["Navigator", "Thread", "Companion"]
 
 RIVER_PROMPT_FALLBACK = """You classify river messages into structured acts only.
 Output a single JSON object: {"acts": [...]} — no prose, no markdown fences.
@@ -344,7 +344,7 @@ async def render_acts(
             summary["views"] += 1
 
         elif kind == "offer_flow":
-            flow_id = (act.get("flow_id") or "shelter").strip()
+            flow_id = (act.get("flow_id") or "navigator").strip()
             label = f"Open {flow_id.title()}"
             view = RiverEddyView(message, label=label, flow_id=flow_id)
             await _reply_with_view(message, view)

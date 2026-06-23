@@ -60,7 +60,7 @@ class RiverHandlerTests(unittest.TestCase):
 
     def test_list_installed_flows_defaults(self) -> None:
         flows = list_installed_flows("/nonexistent/practice")
-        self.assertIn("Shelter", flows)
+        self.assertIn("Navigator", flows)
 
 
 class AwaitingTitleTests(unittest.TestCase):

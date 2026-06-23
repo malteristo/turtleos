@@ -97,7 +97,7 @@ async def main_async(args: argparse.Namespace) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Spawn a shake eddy with flow context")
-    parser.add_argument("--flow", default="shelter", help="Flow id (default: shelter)")
+    parser.add_argument("--flow", default="navigator", help="Flow id (default: navigator)")
     parser.add_argument("--topic", default=None, help="Thread name (default: shake-<flow>-<stamp>)")
     parser.add_argument("--eddy-type", default="standard", dest="eddy_type")
     args = parser.parse_args()

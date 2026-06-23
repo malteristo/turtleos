@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shakedown for Turtle Practice flows (flow_runner slice).
 
-Offline checks always run. With --live, exercises Shelter on Discord via
+Offline checks always run. With --live, exercises Navigator on Discord via
 shake_spawn_eddy + spirit_ops + discord_ops (run on Mac Mini).
 
 Exit 0 = pass, 1 = fail.
@@ -26,13 +26,16 @@ DISCORD_OPS = Path.home() / "turtleos" / "discord_ops.py"
 SHAKE_SPAWN = REPO / "scripts" / "shake_spawn_eddy.py"
 
 FLOW_SPECS: dict[str, dict] = {
-    "shelter": {
-        "flow_id": "shelter",
-        "checkpoint_rel": "state/notes/shelter-last.md",
-        "prompt_markers": ["Shelter", "Hold space"],
-        "presence_markers": ["Shelter"],
-        "shake_message": "shake: heavy day, need shelter — just hold space with me",
-        "followup_message": "thanks — that helped a little",
+    "navigator": {
+        "flow_id": "navigator",
+        "checkpoint_rel": "state/notes/navigator-last.md",
+        "prompt_markers": ["Navigator", "next right thing"],
+        "presence_markers": ["Navigator"],
+        "shake_message": (
+            "shake: I'm stuck on what to do next with turtleOS install — "
+            "help me find one next step"
+        ),
+        "followup_message": "that next step feels doable — what would make it smaller if not?",
     },
 }
 
@@ -199,7 +202,7 @@ def check_live(flow_id: str, wait_seconds: int) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Flow shakedown harness")
-    parser.add_argument("flow", nargs="?", default="shelter", help="Flow id (default: shelter)")
+    parser.add_argument("flow", nargs="?", default="navigator", help="Flow id (default: navigator)")
     parser.add_argument("--live", action="store_true", help="Run live Discord exercise on Mini")
     parser.add_argument("--wait", type=int, default=45, help="Seconds to wait for Turtle replies")
     args = parser.parse_args()

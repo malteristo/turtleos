@@ -10,7 +10,7 @@
 
 ```bash
 python -m unittest discover -s tests -q
-python scripts/shake_flow.py shelter
+python scripts/shake_flow.py navigator
 python scripts/shake_link_read.py
 python scripts/shake_eddy_bar.py
 python scripts/shake_lifecycle.py
@@ -57,19 +57,19 @@ python scripts/shake_lifecycle.py
 
 ---
 
-## Flow runner (Shelter) — legacy shell
+## Flow runner — legacy F-rows (retired)
 
-**Status:** Superseded by in-eddy flow library target — see **J1–J4** below.  
+**Status:** Retired 2026-06-20 — replaced by **J1–J4** below.  
 **Spec:** §10.3, §11.1  
 **Chapter:** [2026-06-20-in-eddy-flow-library.md](../chapters/2026-06-20-in-eddy-flow-library.md)
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
-| F1 | Flow menu → Shelter | Orientation embed; practitioner speaks first |
-| F2 | Shelter dialogue | Flow guard on first reply; state writes |
-| F3 | Checkpoint in flow eddy | Session note / state captured |
+| F1 | Flow menu → Shelter | *(retired — Shelter removed from ship set)* |
+| F2 | Shelter dialogue | *(retired)* |
+| F3 | Checkpoint in flow eddy | *(retired — see J2/J3)* |
 
-**Verification:** `test_flow_runner`, `shake_flow.py shelter` — until chapter ships, then repoint to Navigator + J2/J3.
+**Verification:** `shake_flow.py navigator` · `test_flow_runner`
 
 ---
 
@@ -78,7 +78,7 @@ python scripts/shake_lifecycle.py
 **Spec:** §5.4, §10 · **Priority:** Tier 0 J1 + Tier 2 J2–J4 · [priority-stack.md](../priority-stack.md)  
 **UX:** [flow-library-journeys.md](../ux/flow-library-journeys.md) · **Onboarding:** [onboarding.md](../ux/onboarding.md)  
 **Chapter:** [2026-06-20-in-eddy-flow-library.md](../chapters/2026-06-20-in-eddy-flow-library.md)  
-**Status:** Not started (2026-06-20)
+**Status:** Slices 1–4 shipped (2026-06-20) · Slice 5 merged into Slice 2
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
