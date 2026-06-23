@@ -1036,8 +1036,14 @@ async def ensure_native_presence(thread: discord.Thread) -> bool:
         return False
 
 
-async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
-    """Provisional rename + Turtle bootstrap when a flow loads in-eddy."""
+async def prepare_flow_eddy_entry(
+    thread,
+    flow_id: str,
+    bot_client,
+    *,
+    lens: bool = False,
+) -> None:
+    """Provisional rename (fresh load) or lens bootstrap when a flow loads in-eddy."""
     from flow_bootstrap import start_flow_bootstrap
     from flow_runner import load_flow_spec
     from thread_registry import update_thread_name
@@ -1046,18 +1052,19 @@ async def prepare_flow_eddy_entry(thread, flow_id: str, bot_client) -> None:
     if not spec:
         return
 
-    title = spec.title[:100]
-    try:
-        await thread.edit(name=title)
-        update_thread_name(thread.id, title)
-    except discord.HTTPException as exc:
-        print(f"Flow eddy rename failed: {exc}")
-
     parent_id = thread.parent_id
     if not parent_id:
         return
 
-    await start_flow_bootstrap(thread, flow_id, parent_id, bot_client)
+    if not lens:
+        title = spec.title[:100]
+        try:
+            await thread.edit(name=title)
+            update_thread_name(thread.id, title)
+        except discord.HTTPException as exc:
+            print(f"Flow eddy rename failed: {exc}")
+
+    await start_flow_bootstrap(thread, flow_id, parent_id, bot_client, lens=lens)
 
 
 async def spawn_river_eddy(

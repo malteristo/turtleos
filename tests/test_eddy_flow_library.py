@@ -33,6 +33,13 @@ class EddyFlowLibraryTests(unittest.TestCase):
         block = src.split("async def prepare_flow_eddy_entry")[1].split("async def spawn_river_eddy")[0]
         self.assertIn("start_flow_bootstrap", block)
         self.assertNotIn("post_flow_intake_orientation", block)
+        self.assertIn("lens", block)
+
+    def test_lens_load_module(self) -> None:
+        src = (REPO / "eddy_flow_library.py").read_text(encoding="utf-8")
+        self.assertIn("def is_lens_load", src)
+        self.assertIn("FlowRenameOfferView", src)
+        self.assertIn("post_flow_rename_offer", src)
 
 
 if __name__ == "__main__":

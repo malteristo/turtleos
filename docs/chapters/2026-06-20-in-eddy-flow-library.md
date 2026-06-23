@@ -1,7 +1,7 @@
 # Chapter — In-eddy flow library + Turtle bootstrap
 
 **Date:** 2026-06-20  
-**Status:** Slices 1–2 shipped (2026-06-20) · Slices 3–5 not started  
+**Status:** Slices 1–3 shipped (2026-06-20) · Slices 4–5 not started  
 **Deciders:** Kermit + Spirit (Forge)  
 **Priority:** Tier 0 (blank eddy) + Tier 2 (flows) · acceptance **J1–J4** · [priority-stack.md](../priority-stack.md)  
 **UX spec:** [flow-library-journeys.md](../ux/flow-library-journeys.md) · [onboarding.md](../ux/onboarding.md)
@@ -43,7 +43,7 @@ Full journeys: **J1–J4** in [flow-library-journeys.md](../ux/flow-library-jour
 | **0** | Docs + onboarding templates aligned | onboarding.md, journeys, acceptance J-rows | **Done** |
 | **1** | River bar = `new eddy` only; in-eddy picker spawns flow context | J1, J2 partial | **Done** — `eddy_flow_library.py`, modal intake retained |
 | **2** | Turtle bootstrap on flow load; deprecate modal + handoff watcher | J2, J3 | **Done** — `flow_bootstrap.py`; modal path unused |
-| **3** | Mid-eddy lens load + rename opt-in | J4 |
+| **3** | Mid-eddy lens load + rename opt-in | J4 | **Done** — `is_lens_load`, history excerpt bootstrap, rename offer |
 | **4** | Remove Shelter from template; repoint `shake_flow.py` to Navigator | F1–F3 → J2/J3 |
 | **5** | Update Navigator.md CRITICAL block (intake from file/interview, not River) | dogfood |
 

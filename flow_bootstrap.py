@@ -32,12 +32,19 @@ def _bootstrap_dir() -> Path:
     return path
 
 
-def write_flow_bootstrap_request(thread_id: int, parent_id: int, flow_id: str) -> None:
+def write_flow_bootstrap_request(
+    thread_id: int,
+    parent_id: int,
+    flow_id: str,
+    *,
+    lens: bool = False,
+) -> None:
     path = _bootstrap_dir() / f"{thread_id}.json"
     payload = {
         "thread_id": thread_id,
         "parent_id": parent_id,
         "flow_id": flow_id,
+        "lens": lens,
         "requested_at": datetime.now(timezone.utc).isoformat(),
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -85,13 +92,46 @@ def _next_intake_field(spec: FlowSpec, values: dict[str, str]):
     return None
 
 
-def build_bootstrap_user_seed(spec: FlowSpec, practice_dir: str | None = None) -> str:
+def format_history_excerpt(history: list[dict], max_chars: int = 4000) -> str:
+    """Compact transcript for lens-load bootstrap."""
+    lines: list[str] = []
+    for msg in history[-24:]:
+        role = msg.get("role") or "user"
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+        label = "Practitioner" if role == "user" else "Turtle"
+        lines.append(f"{label}: {content[:900]}")
+    text = "\n".join(lines)
+    return text[:max_chars]
+
+
+def build_bootstrap_user_seed(
+    spec: FlowSpec,
+    practice_dir: str | None = None,
+    *,
+    lens: bool = False,
+    history_excerpt: str = "",
+) -> str:
     """Instructions injected as the practitioner's implicit 'load flow' act."""
     pd = practice_dir or get_pd()
     lines = [
         "[Flow bootstrap — the practitioner loaded this guided flow in the eddy.]",
         f"Flow: {spec.title}",
     ]
+    if lens:
+        lines.extend([
+            "[Lens load — apply this flow to the conversation already underway. "
+            "Do NOT treat this as a fresh eddy.]",
+            "Summarize what the thread already holds (briefly), then explain how "
+            f"{spec.title} will work on *this* material.",
+        ])
+        if history_excerpt.strip():
+            lines.extend([
+                "",
+                "Thread context so far:",
+                history_excerpt.strip(),
+            ])
     summary = _flow_summary_line(spec)
     if summary:
         lines.append(f"What this is for: {summary}")
@@ -134,14 +174,22 @@ async def start_flow_bootstrap(
     flow_id: str,
     parent_id: int,
     bot_client,
+    *,
+    lens: bool = False,
 ) -> None:
-    """River-side: add Turtle and queue bootstrap delivery (split-bot safe)."""
+    """River-side: add Turtle if needed and queue bootstrap delivery."""
+    from commands import thread_configs
     from eddy_spawn import pop_awaiting_title, river_add_turtle_to_eddy
 
     set_practice_context_for_channel(parent_id)
-    pop_awaiting_title(thread.id, parent_id)
-    await river_add_turtle_to_eddy(thread)
-    write_flow_bootstrap_request(thread.id, parent_id, flow_id)
+    if not lens:
+        pop_awaiting_title(thread.id, parent_id)
+
+    cfg = thread_configs.get(thread.id) or {}
+    if not cfg.get("presence_posted"):
+        await river_add_turtle_to_eddy(thread)
+
+    write_flow_bootstrap_request(thread.id, parent_id, flow_id, lens=lens)
 
 
 async def deliver_flow_bootstrap(
@@ -149,10 +197,14 @@ async def deliver_flow_bootstrap(
     thread_id: int,
     parent_id: int,
     flow_id: str,
+    *,
+    lens: bool = False,
 ) -> bool:
     """Turtle speaks first after flow load — self-feed from checkpoint / intake state."""
     from commands import thread_configs
+    from eddy_flow_library import post_flow_rename_offer, suggest_rename_title
     from eddy_spawn import post_flow_presence_if_needed
+    from helpers import get_history
     from thread_registry import update_thread_activity
 
     set_practice_context_for_channel(parent_id)
@@ -187,7 +239,13 @@ async def deliver_flow_bootstrap(
     from discord_bot import _build_native_runtime_env
 
     system_prompt = _build_native_runtime_env(fake_message, cfg) + get_native_eddy_prompt(flow_id)
-    seed = build_bootstrap_user_seed(spec, get_pd())
+    history_excerpt = format_history_excerpt(get_history(thread_id)) if lens else ""
+    seed = build_bootstrap_user_seed(
+        spec,
+        get_pd(),
+        lens=lens,
+        history_excerpt=history_excerpt,
+    )
     messages = [{"role": "user", "content": seed}]
 
     lock = get_channel_lock(thread_id)
@@ -235,6 +293,10 @@ async def deliver_flow_bootstrap(
         except Exception:
             pass
 
+        if lens:
+            suggested = await suggest_rename_title(thread_id, history_excerpt)
+            await post_flow_rename_offer(channel, thread_id, parent_id, suggested, client)
+
     print(
         f"Flow bootstrap delivered: {flow_id} thread={thread_id} "
         f"practitioner={get_mage_name()} pd={get_pd()}"
@@ -246,10 +308,11 @@ async def process_flow_bootstrap(client, payload: dict) -> None:
     thread_id = int(payload["thread_id"])
     parent_id = int(payload["parent_id"])
     flow_id = str(payload["flow_id"])
+    lens = bool(payload.get("lens"))
     if pop_flow_bootstrap_request(thread_id) is None:
         return
     await asyncio.sleep(0.35)
-    await deliver_flow_bootstrap(client, thread_id, parent_id, flow_id)
+    await deliver_flow_bootstrap(client, thread_id, parent_id, flow_id, lens=lens)
 
 
 async def flow_bootstrap_watcher(client) -> None:

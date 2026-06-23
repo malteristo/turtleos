@@ -1,14 +1,187 @@
-"""In-eddy flow library — load guided flows inside a materialized eddy (Slice 1)."""
+"""In-eddy flow library — load guided flows inside a materialized eddy (Slice 1+)."""
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import discord
 
 from flow_runner import list_resolvable_flow_ids
 
+_BLANK_EDDY_NAMES = frozenset({"new eddy", "blank eddy", "thread"})
+
 
 def _flow_display_name(flow_id: str) -> str:
     return flow_id.replace("_", " ").title()
+
+
+def is_lens_load(thread: discord.Thread, flow_id: str) -> bool:
+    """True when applying a flow to an ongoing eddy (mid-conversation lens)."""
+    from commands import thread_configs
+    from helpers import get_history
+
+    cfg = thread_configs.get(thread.id) or {}
+    if cfg.get("bootstrap_complete") or cfg.get("presence_posted"):
+        return True
+
+    history = get_history(thread.id)
+    user_turns = [
+        m
+        for m in history
+        if m.get("role") == "user" and (m.get("content") or "").strip()
+    ]
+    if user_turns:
+        return True
+
+    current = (thread.name or "").strip().lower()
+    flow_slug = flow_id.replace("_", " ").lower()
+    if current not in _BLANK_EDDY_NAMES and current != flow_slug:
+        return True
+
+    prior_flow = (cfg.get("context_type") or "").strip().lower()
+    if prior_flow and prior_flow != flow_id.lower():
+        return True
+
+    return False
+
+
+def _rename_offer_path(thread_id: int) -> Path:
+    from mage import get_runtime_dir
+
+    offer_dir = Path(get_runtime_dir()) / "thread-state" / "flow-rename-offer"
+    offer_dir.mkdir(parents=True, exist_ok=True)
+    return offer_dir / f"{thread_id}.json"
+
+
+def write_rename_offer(thread_id: int, parent_id: int, suggested: str) -> None:
+    path = _rename_offer_path(thread_id)
+    path.write_text(
+        json.dumps({"parent_id": parent_id, "suggested": suggested[:100]}),
+        encoding="utf-8",
+    )
+
+
+def read_rename_offer(thread_id: int) -> dict | None:
+    path = _rename_offer_path(thread_id)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def clear_rename_offer(thread_id: int) -> None:
+    path = _rename_offer_path(thread_id)
+    if path.exists():
+        path.unlink()
+
+
+async def suggest_rename_title(thread_id: int, history_excerpt: str) -> str | None:
+    """Best-effort title from thread content — optional opt-in rename only."""
+    from eddy_spawn import generate_topic
+
+    seed = (history_excerpt or "").strip()
+    if len(seed) < 40:
+        return None
+    try:
+        title = (await generate_topic(seed[:2000])).strip()[:100]
+    except Exception as exc:
+        print(f"Flow rename suggestion failed: {type(exc).__name__}: {exc}")
+        return None
+    return title or None
+
+
+class FlowRenameOfferView(discord.ui.View):
+    """Opt-in thread rename after lens load — never automatic."""
+
+    def __init__(self, thread_id: int, parent_id: int):
+        super().__init__(timeout=None)
+        self._thread_id = thread_id
+        self._parent_id = parent_id
+        rename_btn = discord.ui.Button(
+            label="Rename thread",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"eddy:flow:rename:{thread_id}:{parent_id}",
+        )
+        rename_btn.callback = self._on_rename
+        self.add_item(rename_btn)
+        dismiss_btn = discord.ui.Button(
+            label="Keep title",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"eddy:flow:rename:dismiss:{thread_id}:{parent_id}",
+        )
+        dismiss_btn.callback = self._on_dismiss
+        self.add_item(dismiss_btn)
+
+    async def _on_rename(self, interaction: discord.Interaction):
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread) or thread.id != self._thread_id:
+            await interaction.response.send_message("Open this from the eddy thread.", ephemeral=True)
+            return
+
+        offer = read_rename_offer(self._thread_id)
+        suggested = (offer or {}).get("suggested") or ""
+        if not suggested.strip():
+            await interaction.response.send_message("Rename suggestion expired.", ephemeral=True)
+            return
+
+        from eddy_spawn import rename_eddy_thread
+
+        await interaction.response.defer(ephemeral=True)
+        new_name, err = await rename_eddy_thread(thread, suggested)
+        clear_rename_offer(self._thread_id)
+        try:
+            await interaction.message.delete()
+        except discord.HTTPException:
+            pass
+        if err:
+            await interaction.followup.send(err, ephemeral=True)
+            return
+        await interaction.followup.send(f"Renamed to **{new_name}**.", ephemeral=True)
+
+    async def _on_dismiss(self, interaction: discord.Interaction):
+        clear_rename_offer(self._thread_id)
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.message.delete()
+        except discord.HTTPException:
+            pass
+
+
+async def post_flow_rename_offer(
+    channel,
+    thread_id: int,
+    parent_id: int,
+    suggested: str | None,
+    bot_client,
+) -> None:
+    """Post optional rename affordance after lens bootstrap — explicit opt-in only."""
+    if not suggested or not str(suggested).strip():
+        return
+
+    try:
+        current = (getattr(channel, "name", "") or "").strip().lower()
+    except Exception:
+        current = ""
+    proposed = str(suggested).strip()[:100]
+    if proposed.lower() == current:
+        return
+
+    write_rename_offer(thread_id, parent_id, proposed)
+    view = FlowRenameOfferView(thread_id, parent_id)
+    bot_client.add_view(view)
+    embed = discord.Embed(
+        description=f"Suggested thread title: **{proposed}**",
+        color=0x5865F2,
+    )
+    embed.set_footer(text="Optional — only if a new name helps you find this eddy.")
+    try:
+        await channel.send(embed=embed, view=view, silent=True)
+    except discord.HTTPException as exc:
+        print(f"Flow rename offer post failed: {exc}")
 
 
 async def load_flow_in_eddy(
@@ -18,7 +191,7 @@ async def load_flow_in_eddy(
 ) -> bool:
     """Attach a flow to the current eddy (does not spawn a new thread)."""
     from commands import thread_configs
-    from eddy_spawn import patch_awaiting_title, prepare_flow_eddy_entry
+    from eddy_spawn import prepare_flow_eddy_entry
     from flow_runner import load_flow_spec
 
     parent_id = thread.parent_id
@@ -28,6 +201,8 @@ async def load_flow_in_eddy(
     spec = load_flow_spec(flow_id)
     if not spec:
         return False
+
+    lens = is_lens_load(thread, flow_id)
 
     cfg = thread_configs.get(thread.id)
     if cfg is not None:
@@ -42,7 +217,7 @@ async def load_flow_in_eddy(
             {"context_type": flow_id, "blank_eddy": False},
         )
 
-    await prepare_flow_eddy_entry(thread, flow_id, bot_client)
+    await prepare_flow_eddy_entry(thread, flow_id, bot_client, lens=lens)
     return True
 
 

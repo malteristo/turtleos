@@ -1,6 +1,6 @@
 # Flow library journeys (target UX)
 
-**Status:** Target spec — **Slices 1–2 shipped** in shell (2026-06-20); Slices 3–4 pending  
+**Status:** Target spec — **Slices 1–3 shipped** in shell (2026-06-20); Slices 4–5 pending  
 **Supersedes (when implemented):** river-bar `flow menu`, River modal intake (Navigator Prepare/Begin), Shelter as demo flow  
 **North star:** [priority-stack.md](../priority-stack.md) · **Current shell:** [journeys.md](journeys.md) legacy section · [flows-and-intake.md](flows-and-intake.md)
 

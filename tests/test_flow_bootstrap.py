@@ -36,6 +36,16 @@ class FlowBootstrapSeedTests(unittest.TestCase):
             self.assertIn("do NOT re-ask", seed)
             self.assertIn("Territory", seed)
 
+    def test_lens_seed_includes_history(self) -> None:
+        spec = load_flow_spec("navigator")
+        assert spec is not None
+        excerpt = "Practitioner: I've been circling the installer issue.\nTurtle: What's blocking?"
+        seed = build_bootstrap_user_seed(
+            spec, "/nonexistent/practice", lens=True, history_excerpt=excerpt
+        )
+        self.assertIn("Lens load", seed)
+        self.assertIn("circling the installer", seed)
+
     def test_intake_fields_complete(self) -> None:
         spec = load_flow_spec("navigator")
         assert spec is not None
