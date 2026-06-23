@@ -450,6 +450,14 @@ def resolve_flow_for_close(
     """Resolve which flow checkpoint to write on session close."""
     cfg = thread_configs.get(channel_id) or {}
     flow_id = cfg.get("context_type")
+    if not flow_id:
+        try:
+            from thread_registry import load_registry
+
+            entry = load_registry().get("threads", {}).get(str(channel_id), {})
+            flow_id = entry.get("context_type")
+        except Exception:
+            flow_id = None
     if flow_id:
         spec = load_flow_spec(flow_id, practice_dir)
         if spec and spec.writes:

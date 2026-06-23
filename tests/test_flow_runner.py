@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 sys.modules.setdefault("discord.ui", MagicMock())
@@ -273,6 +273,34 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertIsNotNone(resolved)
         assert resolved is not None
         self.assertEqual(resolved.title, "Navigator")
+
+    def test_resolve_flow_for_close_by_registry_context_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            _install_shelter_fixture(tmp)
+            import flow_runner as fr
+            from thread_registry import register_thread
+
+            old_dirs = fr._flow_search_dirs
+
+            def fake_dirs(pd=None):
+                return [os.path.join(tmp, "flows")]
+
+            fr._flow_search_dirs = fake_dirs
+            try:
+                with patch("mage.get_runtime_dir", return_value=tmp):
+                    register_thread(999, "my topic", context_type="shelter")
+                    history = [
+                        {"role": "user", "content": "hi"},
+                        {"role": "assistant", "content": "here"},
+                    ]
+                    resolved = resolve_flow_for_close(
+                        999, history, {}, channel_name="my topic", practice_dir=tmp
+                    )
+                    self.assertIsNotNone(resolved)
+                    assert resolved is not None
+                    self.assertEqual(resolved.title, "Shelter")
+            finally:
+                fr._flow_search_dirs = old_dirs
 
     def test_resolve_flow_for_close_by_shelter_phrase(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -102,6 +102,17 @@ def update_thread_name(thread_id: int, new_name: str):
         save_registry(registry)
 
 
+def update_thread_context_type(thread_id: int, context_type: str | None) -> None:
+    if not context_type:
+        return
+    registry = load_registry()
+    tid = str(thread_id)
+    if tid not in registry["threads"]:
+        return
+    registry["threads"][tid]["context_type"] = context_type
+    save_registry(registry)
+
+
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None

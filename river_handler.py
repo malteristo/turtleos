@@ -506,7 +506,7 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
         is_awaiting_flow_intake,
         pop_awaiting_title,
     )
-    from thread_registry import update_thread_name
+    from thread_registry import update_thread_context_type, update_thread_name
 
     thread = message.channel
     if not isinstance(thread, discord.Thread):
@@ -545,16 +545,18 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
         title = thread.name
 
     update_thread_name(thread.id, title)
+    if flow_id:
+        update_thread_context_type(thread.id, flow_id)
 
     try:
         from commands import thread_configs
 
-        if thread.id in thread_configs:
-            thread_configs[thread.id]["topic"] = title
-            thread_configs[thread.id]["awaiting_title"] = False
-            thread_configs[thread.id]["blank_eddy"] = False
-            if flow_id and not thread_configs[thread.id].get("context_type"):
-                thread_configs[thread.id]["context_type"] = flow_id
+        cfg = thread_configs.setdefault(thread.id, {})
+        cfg["topic"] = title
+        cfg["awaiting_title"] = False
+        cfg["blank_eddy"] = False
+        if flow_id and not cfg.get("context_type"):
+            cfg["context_type"] = flow_id
     except Exception:
         pass
 

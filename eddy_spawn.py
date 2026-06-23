@@ -1277,6 +1277,7 @@ async def spawn_blank_river_eddy(
         model="local",
         attunement=attunement,
         eddy_type=eddy_type,
+        context_type=flow_id,
     )
 
     try:
