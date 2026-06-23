@@ -33,7 +33,7 @@ async def ensure_channel_bars(channel, client=None) -> None:
 async def _ensure_channel_bars_unlocked(channel, client=None) -> None:
     """Repost standing bars after any message that extends the channel timeline.
 
-    River parent channels: standing eddy bar (new eddy · flow menu).
+    River parent channels: standing eddy bar (`new eddy` only).
     Live eddy threads: lifecycle bar (checkpoint · release · dissolve) when active.
 
     Idempotent when the bar is already last. Split-bot safe: uses River client for

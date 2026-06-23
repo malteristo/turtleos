@@ -212,7 +212,7 @@ async def _materialize_from_bar(
 
 
 class RiverEddyBarView(discord.ui.View):
-    """Standing bottom bar — new eddy + flow menu."""
+    """Standing bottom bar — new eddy only (flows load inside the eddy)."""
 
     def __init__(self, channel_id: int):
         super().__init__(timeout=None)
@@ -225,68 +225,10 @@ class RiverEddyBarView(discord.ui.View):
         )
         new_btn.callback = self._on_new_eddy
         self.add_item(new_btn)
-        flows_btn = discord.ui.Button(
-            label="flow menu",
-            custom_id=f"river:bar:menu:{channel_id}",
-            style=discord.ButtonStyle.secondary,
-        )
-        flows_btn.callback = self._on_flow_menu
-        self.add_item(flows_btn)
 
     async def _on_new_eddy(self, interaction: discord.Interaction):
         await interaction.response.defer()
         await _materialize_from_bar(interaction)
-
-    async def _on_flow_menu(self, interaction: discord.Interaction):
-        from flow_runner import list_resolvable_flow_ids
-
-        flows = list_resolvable_flow_ids()
-        if not flows:
-            await interaction.response.send_message("No flows installed.", ephemeral=True)
-            return
-        view = RiverFlowPickerView(self._channel_id, flows)
-        interaction.client.add_view(view)
-        await interaction.response.edit_message(view=view)
-
-
-class RiverFlowPickerView(discord.ui.View):
-    """Flow picker opened from the standing eddy bar."""
-
-    def __init__(self, channel_id: int, flow_ids: list[str]):
-        super().__init__(timeout=None)
-        self._channel_id = channel_id
-        options = [
-            discord.SelectOption(
-                label=_flow_display_name(fid)[:100],
-                value=fid,
-            )
-            for fid in flow_ids[:25]
-        ]
-        select = discord.ui.Select(
-            placeholder="Choose a practice flow…",
-            options=options,
-            custom_id=f"river:bar:pick:{channel_id}",
-        )
-        select.callback = self._on_pick
-        self.add_item(select)
-        back_btn = discord.ui.Button(
-            label="Back",
-            custom_id=f"river:bar:back:{channel_id}",
-            style=discord.ButtonStyle.secondary,
-        )
-        back_btn.callback = self._on_back
-        self.add_item(back_btn)
-
-    async def _on_pick(self, interaction: discord.Interaction):
-        values = interaction.data.get("values") or []
-        flow_id = values[0] if values else None
-        await interaction.response.defer()
-        await _materialize_from_bar(interaction, flow_id=flow_id)
-
-    async def _on_back(self, interaction: discord.Interaction):
-        view = RiverEddyBarView(self._channel_id)
-        interaction.client.add_view(view)
-        await interaction.response.edit_message(view=view)
 
 
 class RiverEddyView(discord.ui.View):
@@ -574,6 +516,13 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
         return False
     if is_awaiting_flow_intake(thread.id, parent_id):
         return False
+
+    try:
+        from eddy_flow_library import dismiss_eddy_flow_library
+
+        await dismiss_eddy_flow_library(thread, parent_id)
+    except Exception as exc:
+        print(f"Eddy flow library dismiss failed: {type(exc).__name__}: {exc}")
 
     awaiting = pop_awaiting_title(thread.id, parent_id)
     if not awaiting:

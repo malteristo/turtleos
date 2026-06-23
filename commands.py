@@ -279,8 +279,8 @@ def _help_embed_fields() -> list[tuple[str, str]]:
     fields: list[tuple[str, str]] = []
 
     river_cmds = [
-        ("**new eddy** · **flow menu**", "Standing bar — primary spawn (TURTLE_SPEC §5.4)"),
-        ("`!flows`", "List installed flows — same picker as **flow menu**"),
+        ("**new eddy**", "Standing bar — open a blank eddy (TURTLE_SPEC §5.4)"),
+        ("`!flows`", "In-eddy flow library — load a guided flow"),
         ("`!pin`", "Pin a message — reply with `!pin` or `!pin <message_id>`"),
         ("`!dissolve`", "Archive eddy + chronicle (river or in-thread)"),
     ]
@@ -348,41 +348,46 @@ async def cmd_help(message):
 
 
 async def cmd_flows(message, args):
-    """River channel — open flow picker (same as standing bar flow menu)."""
-    if isinstance(message.channel, discord.Thread):
-        await message.reply(
-            "Run `!flows` in the river channel, or use **flow menu** on the standing bar.",
-            mention_author=False,
-        )
-        return
-    if not is_practice_channel(message):
-        await message.reply("Use `!flows` in your practice river channel.", mention_author=False)
-        return
-
+    """List installed flows — in-eddy flow library is the primary picker."""
     from flow_runner import list_resolvable_flow_ids
-    from river_handler import RiverFlowPickerView
 
-    flows = list_resolvable_flow_ids()
-    if not flows:
-        await message.reply(
-            "No flows installed under your practice root (`flows/`).",
-            mention_author=False,
+    if isinstance(message.channel, discord.Thread):
+        flows = list_resolvable_flow_ids()
+        if not flows:
+            await message.reply(
+                "No flows installed under your practice root (`flows/`).",
+                mention_author=False,
+            )
+            return
+        parent_id = message.channel.parent_id
+        if not parent_id:
+            return
+        from eddy_flow_library import EddyFlowLibraryView
+
+        view = EddyFlowLibraryView(message.channel.id, parent_id, flows)
+        client.add_view(view)
+        names = ", ".join(f"`{fid.replace('_', ' ').title()}`" for fid in flows[:8])
+        extra = f" (+{len(flows) - 8} more)" if len(flows) > 8 else ""
+        embed = discord.Embed(
+            title="Flow library",
+            description=(
+                f"**{len(flows)}** installed flow(s): {names}{extra}\n\n"
+                "Pick one to load in this eddy — or keep talking without a flow."
+            ),
+            color=0x5865F2,
         )
+        await message.reply(embed=embed, view=view, mention_author=False)
         return
 
-    view = RiverFlowPickerView(message.channel.id, flows)
-    client.add_view(view)
-    names = ", ".join(f"`{fid.replace('_', ' ').title()}`" for fid in flows[:8])
-    extra = f" (+{len(flows) - 8} more)" if len(flows) > 8 else ""
-    embed = discord.Embed(
-        title="Practice flows",
-        description=(
-            f"**{len(flows)}** installed flow(s): {names}{extra}\n\n"
-            "Pick one to open an eddy (same as **flow menu** on the bar)."
-        ),
-        color=0x5865F2,
+    if not is_practice_channel(message):
+        await message.reply("Use `!flows` in your practice river or an eddy.", mention_author=False)
+        return
+
+    await message.reply(
+        "Open an eddy with **new eddy**, then use the **flow library** inside the thread "
+        "(or run `!flows` there).",
+        mention_author=False,
     )
-    await message.reply(embed=embed, view=view, mention_author=False)
 
 
 async def cmd_pin(message, args):

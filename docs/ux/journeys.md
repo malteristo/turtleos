@@ -6,11 +6,11 @@ End-to-end walkthroughs. Detail lives in topic docs — these are the composed p
 
 ---
 
-## Target UX (2026-06-20) — not yet shipped
+## Target UX (2026-06-20)
 
-**Onboarding (generic):** personal AI on Discord — install, open an eddy, talk. Flows optional for structured use; Navigator as a **sample flow** when exploring. Full copy:
+**Slice 1 shipped:** river bar = `new eddy` only; in-eddy flow library on blank materialize. Modal intake + bar flow menu removed from shell.
 
-→ **[onboarding.md](onboarding.md)**
+**Onboarding (generic):** personal AI on Discord — see [onboarding.md](onboarding.md).
 
 **Journeys (flows + bootstrap):**
 
@@ -39,9 +39,9 @@ River bar target: **`[ 🌀 new eddy ]` only** (no `flow menu`). Shelter retired
 
 ---
 
-## Legacy journeys (current shell)
+## Legacy journeys (pre–Slice 1 / partial)
 
-The running bot still uses river-bar flow menu and River modal intake for Navigator. Use these for dogfood and shakedown until the in-eddy flow library chapter ships.
+Older docs and shakes referenced river-bar `flow menu` and Shelter-first paths. **Slice 1** moved flow pickers in-eddy; Navigator modal intake remains until Slice 2.
 
 ### Open blank eddy from bar
 

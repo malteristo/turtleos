@@ -624,6 +624,25 @@ def write_pending_native_eddy(thread_id: int, parent_channel_id: int, payload: d
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def patch_pending_native_eddy(
+    thread_id: int,
+    parent_channel_id: int,
+    updates: dict,
+) -> None:
+    """Merge keys into pending native eddy config without deleting the file."""
+    path = _pending_native_eddy_path(thread_id, parent_channel_id)
+    data: dict = {}
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                data = raw
+        except json.JSONDecodeError:
+            data = {}
+    data.update(updates)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
 def pop_pending_native_eddy(thread_id: int, parent_channel_id: int) -> dict | None:
     path = _pending_native_eddy_path(thread_id, parent_channel_id)
     if not path.exists():
@@ -1181,6 +1200,15 @@ async def spawn_river_eddy(
         print(f"Chronicle write failed: {exc}")
 
     print(f"River eddy materialized: {thread_name} (id: {thread.id}) split_bot={split_bot}")
+
+    if not flow_id:
+        try:
+            from eddy_flow_library import post_eddy_flow_library
+
+            await post_eddy_flow_library(thread, bot_client)
+        except Exception as exc:
+            print(f"Eddy flow library post failed: {type(exc).__name__}: {exc}")
+
     return thread
 
 

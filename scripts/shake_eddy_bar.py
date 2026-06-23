@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Shakedown for standing eddy bar → flow menu materialize path.
+"""Shakedown for standing eddy bar → blank eddy + in-eddy flow library (Slice 1).
 
-Exercises the same spawn path as [flow menu] → Shelter on the river bar:
-`_spawn_eddy_from_anchor(channel, flow_id=...)` → `spawn_river_eddy` →
-`prepare_flow_eddy_entry`.
+Exercises `_spawn_eddy_from_anchor(channel)` → `spawn_river_eddy` → optional
+`post_eddy_flow_library` inside the thread.
 
 Offline checks always run. With --live, uses River bot token on Mac Mini.
 
@@ -26,8 +25,6 @@ VENV_PY = Path.home() / "turtleos" / "venv" / "bin" / "python3"
 SPIRIT_OPS = Path.home() / "turtleos" / "spirit_ops.py"
 DISCORD_OPS = Path.home() / "turtleos" / "discord_ops.py"
 ENV_PATH = Path.home() / "turtleos" / ".env"
-
-FLOW_ID = "shelter"
 
 
 def _load_env() -> dict[str, str]:
@@ -55,30 +52,27 @@ def check_offline() -> list[str]:
             sys.modules.setdefault("discord", MagicMock())
             sys.modules.setdefault("discord.ui", MagicMock())
 
-    from flow_runner import (
-        flow_entry_blurb,
-        list_resolvable_flow_ids,
-        load_flow_spec,
-    )
+    from flow_runner import list_resolvable_flow_ids
 
     flows = list_resolvable_flow_ids()
-    if FLOW_ID not in flows:
-        errors.append(f"{FLOW_ID} not in list_resolvable_flow_ids: {flows}")
-
-    spec = load_flow_spec(FLOW_ID)
-    if spec is None:
-        errors.append(f"load_flow_spec({FLOW_ID}) returned None")
-    elif spec.title != "Shelter":
-        errors.append(f"unexpected flow title: {spec.title!r}")
-    else:
-        blurb = flow_entry_blurb(spec)
-        if "checkpoint" not in blurb.lower() and "fresh start" not in blurb.lower():
-            errors.append("flow_entry_blurb missing checkpoint hint")
+    if not flows:
+        errors.append("no resolvable flows under practice root")
 
     try:
-        from river_handler import _spawn_eddy_from_anchor  # noqa: F401 — import path
+        from river_handler import RiverEddyBarView, _spawn_eddy_from_anchor  # noqa: F401
     except ImportError as exc:
-        errors.append(f"river_handler spawn import failed: {exc}")
+        errors.append(f"river_handler import failed: {exc}")
+        return errors
+
+    river_src = (REPO / "river_handler.py").read_text(encoding="utf-8")
+    bar_block = river_src.split("class RiverEddyBarView")[1].split("class RiverEddyView")[0]
+    if "flow menu" in bar_block or "_on_flow_menu" in bar_block:
+        errors.append("RiverEddyBarView still references flow menu")
+
+    try:
+        from eddy_flow_library import EddyFlowLibraryView, post_eddy_flow_library  # noqa: F401
+    except ImportError as exc:
+        errors.append(f"eddy_flow_library import failed: {exc}")
 
     return errors
 
@@ -98,7 +92,7 @@ def _spirit_send(channel_id: str, text: str) -> None:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "spirit_ops send failed")
 
 
-async def _spawn_bar_flow_eddy() -> dict:
+async def _spawn_blank_eddy() -> dict:
     import discord
     from river_handler import _spawn_eddy_from_anchor
 
@@ -127,7 +121,7 @@ async def _spawn_bar_flow_eddy() -> dict:
     await client.login(token)
     try:
         channel = await client.fetch_channel(int(channel_id))
-        thread = await _spawn_eddy_from_anchor(channel, flow_id=FLOW_ID)
+        thread = await _spawn_eddy_from_anchor(channel, flow_id=None)
         if thread is None:
             raise RuntimeError("_spawn_eddy_from_anchor returned None")
         return {
@@ -148,14 +142,14 @@ def check_live(wait_seconds: int) -> list[str]:
 
     env = _load_env()
     if not env.get("RIVER_BOT_TOKEN", "").strip():
-        return ["RIVER_BOT_TOKEN not set — bar flow menu path needs split-bot"]
+        return ["RIVER_BOT_TOKEN not set — blank eddy bar path needs split-bot"]
 
     import asyncio
 
     try:
-        spawn = asyncio.run(_spawn_bar_flow_eddy())
+        spawn = asyncio.run(_spawn_blank_eddy())
     except Exception as exc:
-        return [f"bar flow spawn failed: {type(exc).__name__}: {exc}"]
+        return [f"bar blank spawn failed: {type(exc).__name__}: {exc}"]
 
     thread_id = spawn.get("thread_id")
     thread_name = (spawn.get("thread_name") or "").strip()
@@ -163,16 +157,20 @@ def check_live(wait_seconds: int) -> list[str]:
         errors.append(f"spawn missing thread_id: {spawn}")
         return errors
 
-    if thread_name.lower() != "shelter":
-        errors.append(f"expected thread titled Shelter, got {thread_name!r}")
+    if thread_name.lower() != "new eddy":
+        errors.append(f"expected thread titled 'new eddy', got {thread_name!r}")
 
     time.sleep(2)
     transcript = _read_thread(thread_id)
-    if "shelter eddy" not in transcript.lower() and "speak when ready" not in transcript.lower():
-        errors.append("orientation embed not visible in thread (missing Shelter eddy / footer)")
+    lower = transcript.lower()
+    if "guided flow" not in lower and "start typing" not in lower and "flow library" not in lower:
+        errors.append(
+            "in-eddy flow library embed not visible "
+            "(expected guided flow / start typing / flow library)"
+        )
 
     try:
-        _spirit_send(thread_id, "shake: bar flow menu path — holding space")
+        _spirit_send(thread_id, "shake: blank eddy bar path — hello turtle")
     except Exception as exc:
         errors.append(f"spirit first message failed: {exc}")
         return errors
@@ -180,31 +178,13 @@ def check_live(wait_seconds: int) -> list[str]:
     time.sleep(wait_seconds)
     transcript = _read_thread(thread_id)
     if "turtle" not in transcript.lower():
-        errors.append("no Turtle reply after first message in bar-flow eddy")
-
-    try:
-        _spirit_send(thread_id, "!checkpoint")
-    except Exception as exc:
-        errors.append(f"spirit !checkpoint failed: {exc}")
-        return errors
-
-    time.sleep(15)
-    transcript = _read_thread(thread_id)
-    if "checkpoint saved" not in transcript.lower() and "flow:" not in transcript.lower():
-        errors.append("!checkpoint did not produce expected confirmation embed")
-
-    checkpoint = Path.home() / "workshop" / "desk" / "state" / "notes" / "shelter-last.md"
-    if not checkpoint.is_file():
-        errors.append(f"flow checkpoint file missing: {checkpoint}")
-    elif "bar flow menu" not in checkpoint.read_text(encoding="utf-8").lower():
-        if "holding space" not in checkpoint.read_text(encoding="utf-8").lower():
-            errors.append("shelter-last.md missing shake bar-path content")
+        errors.append("no Turtle reply after first message in blank eddy")
 
     return errors
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Eddy bar flow-menu shakedown")
+    parser = argparse.ArgumentParser(description="Eddy bar blank-eddy + flow library shakedown")
     parser.add_argument("--live", action="store_true", help="Live Discord on Mini (River token)")
     parser.add_argument("--wait", type=int, default=50, help="Seconds to wait for Turtle reply")
     args = parser.parse_args()
@@ -214,7 +194,7 @@ def main() -> int:
         all_errors["live"] = check_live(args.wait)
 
     report = {
-        "capability": "river/eddy_bar_flow_menu",
+        "capability": "river/eddy_bar_blank_eddy",
         "status": "pass" if not any(all_errors.values()) else "fail",
         "live": args.live,
         "checks": {k: "ok" if not v else v for k, v in all_errors.items()},
