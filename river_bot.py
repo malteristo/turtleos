@@ -67,14 +67,10 @@ def _ensure_single_instance() -> None:
         sys.exit(1)
 
 
-def _maybe_schedule_save_offer(message: discord.Message) -> None:
-    from river_eddy_seneschal import (
-        practitioner_external_urls,
-        schedule_save_offer_after_practitioner_url,
-    )
+def _maybe_schedule_contextual_offer(message: discord.Message) -> None:
+    from river_eddy_seneschal import schedule_contextual_offer_after_practitioner_turn
 
-    if practitioner_external_urls(message.content or ""):
-        schedule_save_offer_after_practitioner_url(message)
+    schedule_contextual_offer_after_practitioner_turn(message)
 
 
 def _accept_message_author(message: discord.Message) -> bool:
@@ -161,11 +157,11 @@ async def on_message(message: discord.Message):
             lock = get_channel_lock(message.channel.id)
             async with lock:
                 await handle_eddy_first_message(message)
-            _maybe_schedule_save_offer(message)
+            _maybe_schedule_contextual_offer(message)
             return
 
         # Ongoing eddy dialogue: Turtle harness (link-read, prose). River handles `!` only.
-        _maybe_schedule_save_offer(message)
+        _maybe_schedule_contextual_offer(message)
         return
 
     if _get_channel_type(message.channel.id) == "unclaimed-river":

@@ -1,9 +1,8 @@
-"""River-side eddy seneschal helpers.
+"""River-side eddy seneschal — post-Turtle contextual act rows (D3).
 
-Post-Turtle ``Save to library`` offers (harness split Slice 2): after Turtle replies,
-River may offer ``!fetch`` when a practitioner URL is not yet in ``link-resonance/``.
-Runs in the **River bot process** only. River receives practitioner messages, not Turtle
-bot events reliably — poll thread history after practitioner URL posts.
+After Turtle replies in a native eddy, River may post **one** situational act row:
+Save to library (uncached URL) or Checkpoint (explicit practitioner intent).
+Runs in the **River bot process** only — polls thread history for Turtle prose.
 """
 
 from __future__ import annotations
@@ -11,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 
 import discord
 
@@ -18,7 +18,26 @@ from content_fetch import _URL_PATTERN
 from link_read import external_urls
 
 _save_offer_seen: dict[int, set[str]] = defaultdict(set)
-_save_poll_tasks: dict[int, asyncio.Task] = {}
+_contextual_poll_tasks: dict[int, asyncio.Task] = {}
+
+_CHECKPOINT_INTENT_RE = re.compile(
+    r"\b(?:"
+    r"checkpoint|check\s*point|"
+    r"wrap\s*(?:this|up|it|here)|"
+    r"save\s+(?:this|our|the)\s+(?:session|progress|conversation|thread)|"
+    r"capture\s+(?:this|that|our|the)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+TURTLE_REPLY_TIMEOUT_S = 60.0
+
+
+@dataclass(frozen=True)
+class ContextualOffer:
+    kind: str
+    label: str
+    actions: list[tuple[str, str]]
 
 
 def _normalize_url(url: str) -> str:
@@ -50,11 +69,22 @@ def _recent_fetch_urls(history: list[dict], *, window: int = 12) -> set[str]:
     return urls
 
 
+def _recent_act(history: list[dict], cmd: str, *, window: int = 8) -> bool:
+    needle = f"[Act: !{cmd}]"
+    recent = "\n".join(m.get("content", "") for m in history[-window:])
+    return needle in recent
+
+
 def _dialogue_history_snapshot(channel_id: int) -> list[dict]:
-    """Best-effort thread history for save-offer eligibility (Turtle process may own this)."""
+    """Thread history for offer eligibility — shared store in split-bot mode."""
     try:
+        from dialogue_store import read_shared, shared_dialogue_enabled
         from state import dialogue_histories
 
+        if shared_dialogue_enabled():
+            disk = read_shared(channel_id)
+            if disk:
+                return list(disk)
         return list(dialogue_histories.get(channel_id, []))
     except Exception:
         return []
@@ -93,6 +123,22 @@ def save_offer_skip_reason(
     return "no_eligible_url"
 
 
+def checkpoint_offer_skip_reason(
+    practitioner_text: str,
+    history: list[dict],
+    *,
+    min_exchanges: int,
+) -> str | None:
+    """Skip reason when no Checkpoint offer should post."""
+    if not _CHECKPOINT_INTENT_RE.search(practitioner_text or ""):
+        return "no_checkpoint_intent"
+    if len(history) < min_exchanges:
+        return f"thin_history:{len(history)}"
+    if _recent_act(history, "checkpoint"):
+        return "recent_checkpoint_act"
+    return None
+
+
 def pick_save_offer_url(
     practitioner_text: str,
     history: list[dict],
@@ -117,9 +163,43 @@ def pick_save_offer_url(
     return None
 
 
-def _log_save_offer_skip(channel, reason: str) -> None:
+def pick_contextual_offer(
+    practitioner_text: str,
+    history: list[dict],
+    channel_id: int,
+    *,
+    is_cached,
+    min_exchanges: int,
+) -> ContextualOffer | None:
+    """Return at most one contextual offer for this practitioner turn."""
+    url = pick_save_offer_url(
+        practitioner_text, history, channel_id, is_cached=is_cached
+    )
+    if url:
+        return ContextualOffer(
+            kind="save",
+            label="-# Save to library",
+            actions=[("Save to library", f"!fetch {url}")],
+        )
+    if not checkpoint_offer_skip_reason(
+        practitioner_text, history, min_exchanges=min_exchanges
+    ):
+        return ContextualOffer(
+            kind="checkpoint",
+            label="-# Checkpoint this thread",
+            actions=[("Checkpoint", "!checkpoint")],
+        )
+    return None
+
+
+def _log_contextual_skip(channel, kind: str, reason: str) -> None:
     ch_name = getattr(channel, "name", getattr(channel, "id", "?"))
-    print(f"Save offer skip ({reason}) in #{ch_name}")
+    print(f"Contextual offer skip ({kind}:{reason}) in #{ch_name}")
+
+
+def _log_contextual_posted(channel, kind: str) -> None:
+    ch_name = getattr(channel, "name", getattr(channel, "id", "?"))
+    print(f"Contextual offer posted ({kind}) in #{getattr(channel, 'name', channel.id)} ({channel.id})")
 
 
 def mark_save_offer_posted(channel_id: int, url: str) -> None:
@@ -127,38 +207,39 @@ def mark_save_offer_posted(channel_id: int, url: str) -> None:
 
 
 def clear_save_offer_state(channel_id: int | None = None) -> None:
-    """Test helper — reset in-memory offer dedupe."""
+    """Test helper — reset in-memory offer dedupe and poll tasks."""
     if channel_id is None:
         _save_offer_seen.clear()
-        for task in _save_poll_tasks.values():
+        for task in _contextual_poll_tasks.values():
             if not task.done():
                 task.cancel()
-        _save_poll_tasks.clear()
+        _contextual_poll_tasks.clear()
     else:
         _save_offer_seen.pop(channel_id, None)
-        task = _save_poll_tasks.pop(channel_id, None)
+        task = _contextual_poll_tasks.pop(channel_id, None)
         if task and not task.done():
             task.cancel()
 
 
-def _cancel_save_poll(channel_id: int) -> None:
-    task = _save_poll_tasks.pop(channel_id, None)
+def _cancel_contextual_poll(channel_id: int) -> None:
+    task = _contextual_poll_tasks.pop(channel_id, None)
     if task and not task.done():
         task.cancel()
 
 
-async def maybe_offer_eddy_save_after_turn(
+async def maybe_offer_contextual_act_after_turn(
     channel,
     *,
     practitioner_text: str,
 ) -> None:
-    """River harness: post Save act row once Turtle has replied."""
+    """River harness: post one contextual act row once Turtle has replied."""
     from cmd_link_resonance import get_cached_resonance
     from eddy_lifecycle_bar import post_act_suggestion_row
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
     from mage import river_bot_enabled
     from prompts import uses_native_turtle_prompt
     from river_state import river_client
+    from state import MIN_EXCHANGES_FOR_CHECKPOINT
 
     if not river_bot_enabled():
         return
@@ -167,54 +248,71 @@ async def maybe_offer_eddy_save_after_turn(
         return
     if is_awaiting_flow_intake(channel.id, parent_id) or is_awaiting_title(channel.id, parent_id):
         return
-    if not practitioner_external_urls(practitioner_text):
-        return
 
     history = _dialogue_history_snapshot(channel.id)
     is_cached = lambda u: bool(get_cached_resonance(u))
-    skip = save_offer_skip_reason(
-        practitioner_text, history, channel.id, is_cached=is_cached
-    )
-    if skip:
-        _log_save_offer_skip(channel, skip)
-        return
-
-    url = pick_save_offer_url(
+    offer = pick_contextual_offer(
         practitioner_text,
         history,
         channel.id,
         is_cached=is_cached,
+        min_exchanges=MIN_EXCHANGES_FOR_CHECKPOINT,
     )
-    if not url:
-        _log_save_offer_skip(channel, "no_eligible_url")
+    if not offer:
+        save_skip = save_offer_skip_reason(
+            practitioner_text, history, channel.id, is_cached=is_cached
+        )
+        ckpt_skip = checkpoint_offer_skip_reason(
+            practitioner_text, history, min_exchanges=MIN_EXCHANGES_FOR_CHECKPOINT
+        )
+        _log_contextual_skip(
+            channel,
+            "any",
+            f"save={save_skip or 'eligible'};checkpoint={ckpt_skip or 'eligible'}",
+        )
         return
 
     try:
         msg = await post_act_suggestion_row(
             channel,
-            "-# Save to library",
-            [("Save to library", f"!fetch {url}")],
+            offer.label,
+            offer.actions,
             river_client,
         )
     except Exception as exc:
-        print(f"Save offer failed for {channel.id}: {type(exc).__name__}: {exc}")
+        print(f"Contextual offer failed for {channel.id}: {type(exc).__name__}: {exc}")
         return
     if not msg:
-        print(f"Save offer skipped for #{getattr(channel, 'name', channel.id)} — no act buttons")
+        print(f"Contextual offer skipped for #{getattr(channel, 'name', channel.id)} — no act buttons")
         return
 
-    mark_save_offer_posted(channel.id, url)
-    print(f"Save offer posted in #{getattr(channel, 'name', channel.id)} ({channel.id})")
+    if offer.kind == "save":
+        url = pick_save_offer_url(
+            practitioner_text, history, channel.id, is_cached=is_cached
+        )
+        if url:
+            mark_save_offer_posted(channel.id, url)
+
+    _log_contextual_posted(channel, offer.kind)
     from bar_anchor import ensure_channel_bars
 
     await ensure_channel_bars(channel, river_client)
+
+
+async def maybe_offer_eddy_save_after_turn(
+    channel,
+    *,
+    practitioner_text: str,
+) -> None:
+    """Backward-compatible alias — delegates to unified contextual offers."""
+    await maybe_offer_contextual_act_after_turn(channel, practitioner_text=practitioner_text)
 
 
 async def _wait_for_turtle_reply_after(
     channel: discord.Thread,
     practitioner_message: discord.Message,
     *,
-    timeout_s: float = 240,
+    timeout_s: float = TURTLE_REPLY_TIMEOUT_S,
     poll_s: float = 2.0,
 ) -> bool:
     """Return True when a Turtle prose message appears after the practitioner turn."""
@@ -222,7 +320,7 @@ async def _wait_for_turtle_reply_after(
 
     turtle_id = resolve_turtle_bot_user_id(getattr(channel, "guild", None))
     if not turtle_id:
-        print("Save offer poll: turtle bot id unknown")
+        print("Contextual offer poll: turtle bot id unknown")
         return False
 
     practitioner_id = practitioner_message.id
@@ -237,28 +335,27 @@ async def _wait_for_turtle_reply_after(
                 if not (msg.content or "").strip():
                     continue
                 print(
-                    f"Save offer poll: Turtle reply seen in "
+                    f"Contextual offer poll: Turtle reply seen in "
                     f"#{getattr(channel, 'name', channel.id)} (msg {msg.id})"
                 )
                 return True
         except discord.HTTPException as exc:
-            print(f"Save offer poll failed for {channel.id}: {exc}")
+            print(f"Contextual offer poll failed for {channel.id}: {exc}")
             return False
         await asyncio.sleep(poll_s)
-    print(f"Save offer poll timed out in #{getattr(channel, 'name', channel.id)}")
+    print(f"Contextual offer poll timed out in #{getattr(channel, 'name', channel.id)}")
     return False
 
 
-async def _run_save_offer_poll(practitioner_message: discord.Message) -> None:
+async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> None:
     channel = practitioner_message.channel
     if not getattr(channel, "parent_id", None):
         return
     practitioner_text = practitioner_message.content or ""
-    if not practitioner_external_urls(practitioner_text):
-        return
 
     from cmd_link_resonance import get_cached_resonance
     from mage import set_practice_context, set_practice_context_for_channel
+    from state import MIN_EXCHANGES_FOR_CHECKPOINT
 
     set_practice_context(practitioner_message)
     if channel.parent_id:
@@ -266,42 +363,61 @@ async def _run_save_offer_poll(practitioner_message: discord.Message) -> None:
 
     is_cached = lambda u: bool(get_cached_resonance(u))
     pre_history = _dialogue_history_snapshot(channel.id)
-    pre_skip = save_offer_skip_reason(
-        practitioner_text, pre_history, channel.id, is_cached=is_cached
+    pre_offer = pick_contextual_offer(
+        practitioner_text,
+        pre_history,
+        channel.id,
+        is_cached=is_cached,
+        min_exchanges=MIN_EXCHANGES_FOR_CHECKPOINT,
     )
-    if pre_skip:
-        _log_save_offer_skip(channel, pre_skip)
+    if not pre_offer:
+        save_skip = save_offer_skip_reason(
+            practitioner_text, pre_history, channel.id, is_cached=is_cached
+        )
+        ckpt_skip = checkpoint_offer_skip_reason(
+            practitioner_text, pre_history, min_exchanges=MIN_EXCHANGES_FOR_CHECKPOINT
+        )
+        _log_contextual_skip(
+            channel,
+            "pre_poll",
+            f"save={save_skip};checkpoint={ckpt_skip}",
+        )
         return
 
     ch_name = getattr(channel, "name", channel.id)
-    print(f"Save offer polling in #{ch_name} ({channel.id})")
+    print(f"Contextual offer polling ({pre_offer.kind}) in #{ch_name} ({channel.id})")
     if not await _wait_for_turtle_reply_after(channel, practitioner_message):
         return
-    await maybe_offer_eddy_save_after_turn(channel, practitioner_text=practitioner_text)
+    await maybe_offer_contextual_act_after_turn(channel, practitioner_text=practitioner_text)
 
 
-def schedule_save_offer_after_practitioner_url(practitioner_message: discord.Message) -> None:
-    """Schedule Save offer after practitioner URL post (River receives this message)."""
+def schedule_contextual_offer_after_practitioner_turn(
+    practitioner_message: discord.Message,
+) -> None:
+    """Schedule contextual offer after practitioner message (River process)."""
     channel = practitioner_message.channel
     if not getattr(channel, "parent_id", None):
         return
-    if not practitioner_external_urls(practitioner_message.content or ""):
-        return
 
     channel_id = channel.id
-    _cancel_save_poll(channel_id)
+    _cancel_contextual_poll(channel_id)
     ch_name = getattr(channel, "name", channel_id)
-    print(f"Save offer scheduled in #{ch_name} ({channel_id})")
+    print(f"Contextual offer scheduled in #{ch_name} ({channel_id})")
 
     async def _wrapped() -> None:
         try:
-            await _run_save_offer_poll(practitioner_message)
+            await _run_contextual_offer_poll(practitioner_message)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            print(f"Save offer schedule error #{channel_id}: {type(exc).__name__}: {exc}")
+            print(f"Contextual offer schedule error #{channel_id}: {type(exc).__name__}: {exc}")
 
-    _save_poll_tasks[channel_id] = asyncio.create_task(_wrapped())
+    _contextual_poll_tasks[channel_id] = asyncio.create_task(_wrapped())
+
+
+def schedule_save_offer_after_practitioner_url(practitioner_message: discord.Message) -> None:
+    """Backward-compatible alias."""
+    schedule_contextual_offer_after_practitioner_turn(practitioner_message)
 
 
 def dedupe_fetch_actions(actions: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -317,3 +433,9 @@ def dedupe_fetch_actions(actions: list[tuple[str, str]]) -> list[tuple[str, str]
             seen_fetch.add(key)
         out.append((label, command))
     return out
+
+
+# Legacy names for tests / imports
+_save_poll_tasks = _contextual_poll_tasks
+_cancel_save_poll = _cancel_contextual_poll
+_run_save_offer_poll = _run_contextual_offer_poll

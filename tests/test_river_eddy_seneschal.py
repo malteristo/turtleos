@@ -98,7 +98,7 @@ class TestMaybeOfferEddySaveAfterTurn(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         res.clear_save_offer_state()
 
-    async def test_posts_save_row(self) -> None:
+    async     def test_posts_save_row(self) -> None:
         channel = MagicMock()
         channel.id = 99
         channel.name = "test-eddy"
@@ -116,20 +116,80 @@ class TestMaybeOfferEddySaveAfterTurn(unittest.IsolatedAsyncioTestCase):
             "bar_anchor.ensure_channel_bars", new_callable=AsyncMock
         ):
             post_mock.return_value = MagicMock()
-            await res.maybe_offer_eddy_save_after_turn(channel, practitioner_text=text)
+            await res.maybe_offer_contextual_act_after_turn(channel, practitioner_text=text)
 
         post_mock.assert_awaited_once()
         args = post_mock.await_args[0]
         self.assertEqual(args[1], "-# Save to library")
 
 
-class TestScheduleSaveOffer(unittest.IsolatedAsyncioTestCase):
+class TestCheckpointOffer(unittest.TestCase):
+    def test_intent_detected(self) -> None:
+        history = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hey"},
+        ]
+        reason = res.checkpoint_offer_skip_reason(
+            "can you checkpoint this thread?", history, min_exchanges=2
+        )
+        self.assertIsNone(reason)
+
+    def test_thin_history_skips(self) -> None:
+        reason = res.checkpoint_offer_skip_reason(
+            "checkpoint please", [], min_exchanges=2
+        )
+        self.assertTrue(reason and reason.startswith("thin_history:"))
+
+    def test_pick_checkpoint_when_no_url(self) -> None:
+        history = [
+            {"role": "user", "content": "a"},
+            {"role": "assistant", "content": "b"},
+        ]
+        offer = res.pick_contextual_offer(
+            "wrap this up — checkpoint?",
+            history,
+            channel_id=1,
+            is_cached=lambda _: False,
+            min_exchanges=2,
+        )
+        self.assertIsNotNone(offer)
+        assert offer is not None
+        self.assertEqual(offer.kind, "checkpoint")
+        self.assertEqual(offer.actions[0][1], "!checkpoint")
+
+
+class TestDialogueSnapshot(unittest.TestCase):
+    def test_reads_shared_store_in_split_bot(self) -> None:
+        payload = [{"role": "user", "content": "from disk"}]
+        with patch("dialogue_store.shared_dialogue_enabled", return_value=True), patch(
+            "dialogue_store.read_shared", return_value=payload
+        ):
+            snap = res._dialogue_history_snapshot(42)
+        self.assertEqual(snap[0]["content"], "from disk")
+
+
+class TestScheduleContextualOffer(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         res.clear_save_offer_state()
 
-    async def test_schedules_poll_on_practitioner_url(self) -> None:
+    async def test_schedules_poll_on_practitioner_message(self) -> None:
         channel = MagicMock()
         channel.id = 77
+        channel.name = "eddy"
+        channel.parent_id = 1
+        message = MagicMock()
+        message.channel = channel
+        message.content = "let's wrap this up — checkpoint?"
+        message.created_at = MagicMock()
+
+        with patch.object(res, "_run_contextual_offer_poll", new_callable=AsyncMock) as run_mock:
+            res.schedule_contextual_offer_after_practitioner_turn(message)
+            await asyncio.sleep(0.05)
+        run_mock.assert_awaited_once_with(message)
+
+    async def test_schedules_poll_on_practitioner_url(self) -> None:
+        channel = MagicMock()
+        channel.id = 78
         channel.name = "eddy"
         channel.parent_id = 1
         message = MagicMock()
@@ -137,7 +197,7 @@ class TestScheduleSaveOffer(unittest.IsolatedAsyncioTestCase):
         message.content = "check https://example.com/new-article"
         message.created_at = MagicMock()
 
-        with patch.object(res, "_run_save_offer_poll", new_callable=AsyncMock) as run_mock:
+        with patch.object(res, "_run_contextual_offer_poll", new_callable=AsyncMock) as run_mock:
             res.schedule_save_offer_after_practitioner_url(message)
             await asyncio.sleep(0.05)
         run_mock.assert_awaited_once_with(message)
