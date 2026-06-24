@@ -157,7 +157,7 @@ Do not reinvent Discord search; **do** make permalinks legible to Turtle the way
 | **Family channel design** | Shared practice without treating it as default Pop 2 | 2 |
 | **Idle & reflection** | Silent default; rare reflection; drop checkpoint noise | 1 |
 | **Link-read hardening** | OSS harness patterns; bot-blocked content | 0 (H1) |
-| **In-eddy flow library** | Bar = `new eddy` only; load flow in thread; Turtle bootstrap; conversational intake; retire Shelter | 0 + 2 · [chapter](chapters/2026-06-20-in-eddy-flow-library.md) · [journeys](ux/flow-library-journeys.md) |
+| **In-eddy flow library** | ✅ Shipped 2026-06-23 — bar = `new eddy` only; Turtle bootstrap; Shelter archived · [chapter](chapters/2026-06-20-in-eddy-flow-library.md) · [journeys](ux/flow-library-journeys.md) |
 
 **Onboarding (target):** generic personal AI — [ux/onboarding.md](ux/onboarding.md). Flows optional; Navigator as sample when exploring structure.
 

@@ -1,7 +1,7 @@
 # Chapter — In-eddy flow library + Turtle bootstrap
 
 **Date:** 2026-06-20  
-**Status:** Slices 1–4 shipped (2026-06-20) · Slice 5 merged into Slice 2  
+**Status:** Slices 1–4 shipped (2026-06-23) · Spec drift pass 2026-06-23  
 **Deciders:** Kermit + Spirit (Forge)  
 **Priority:** Tier 0 (blank eddy) + Tier 2 (flows) · acceptance **J1–J4** · [priority-stack.md](../priority-stack.md)  
 **UX spec:** [flow-library-journeys.md](../ux/flow-library-journeys.md) · [onboarding.md](../ux/onboarding.md)
@@ -81,7 +81,7 @@ Full journeys: **J1–J4** in [flow-library-journeys.md](../ux/flow-library-jour
 - Proactive flow offers on river or in dialogue  
 - Flow ops website / external flow registry  
 - Full intentions product surface  
-- Replacing `Turtle Practice` term in TURTLE_SPEC (separate spec pass)
+- Replacing `Turtle Practice` in all historical chapter docs (spec + UX updated 2026-06-23)
 
 ---
 

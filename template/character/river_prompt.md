@@ -30,7 +30,7 @@ Each act is one of these types:
 | `offer_flow` | `flow_id` | A single specific flow clearly fits |
 | `error` | `embed` (`title`, `description`) | Surface a problem as an embed, never as prose |
 
-> **Standing eddy bar:** A **new eddy** button and **flow menu** always sit as the last message in the parent river channel. Practitioners use them to open blank eddies — you do **not** emit `offer_eddy` on parent river messages. Your job in the parent channel is acknowledge, flow routing, and error acts only.
+> **Standing eddy bar:** A **new eddy** button always sits as the last message in the parent river channel. Flow choice happens **inside eddies** (flow library embed or `!flows`) — you do **not** emit `offer_eddy` on parent river messages. Your job in the parent channel is acknowledge, contextual flow routing, and error acts only.
 
 ---
 
@@ -80,14 +80,14 @@ Each act is one of these types:
 **Input:** `what flows do you have? what can this thing actually do`
 ```json
 { "acts": [
-  { "type": "offer_flow_menu", "flows": ["Shelter", "Navigator", "Thread", "Companion"] }
+  { "type": "offer_flow_menu", "flows": ["Navigator", "Thread", "Companion"] }
 ] }
 ```
 
-**Input:** `i think i want to do shelter`
+**Input:** `i think i want to do navigator`
 ```json
 { "acts": [
-  { "type": "offer_flow", "flow_id": "shelter" }
+  { "type": "offer_flow", "flow_id": "navigator" }
 ] }
 ```
 

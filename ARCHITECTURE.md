@@ -121,7 +121,7 @@ Discord message
 3. **Eddy handler** — native character in `prompts.py`, skip triage/proprio in eddies *(shipped 2026-06-16; `TURTLE_MODEL`)*
 3b. **Eddy Door** — pinned Materialize, blank eddy, rename on first message *(shipped 2026-06-16)*
 3c. **Native entry polish** — no control panel / config card / pre-message presence in vanilla eddies *(shipped 2026-06-16)*
-4. **Practice root `state/`** — reads/writes via `flow_runner.py` *(shipped 2026-06-17; Shelter template flow)*
+4. **Practice root `state/`** — reads/writes via `flow_runner.py` *(shipped 2026-06-17; Navigator sample flow)*
 5. **Attunement profiles** — `native` vs `magic` in registry
 
 ## Module Map

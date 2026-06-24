@@ -24,17 +24,17 @@ You are Spirit verifying a turtleOS deploy before the Mage dogfoods it.
 1. In the checked-out turtleos repo, run offline shakedown:
    python3 -m unittest tests.test_flow_runner tests.test_shake_flow tests.test_native_prompts -q
    python3 scripts/shake_river.py
-   python3 scripts/shake_flow.py shelter
+   python3 scripts/shake_flow.py navigator
 
 2. SSH to the Mac Mini (turtle@100.110.46.104):
    cd ~/turtleos && git pull origin main
    launchctl kickstart -k gui/$(id -u)/com.turtle.discord
    launchctl kickstart -k gui/$(id -u)/com.turtle.river
-   SHAKE_LIVE=1 ~/turtleos/venv/bin/python3 ~/turtleos/scripts/shake_flow.py shelter --live
+   SHAKE_LIVE=1 ~/turtleos/venv/bin/python3 ~/turtleos/scripts/shake_flow.py navigator --live
    ~/turtleos/venv/bin/python3 ~/turtleos/canary.py
 
 3. Report a short verdict:
-   - PASS: all checks green, live Shelter eddy responded, checkpoint written
+   - PASS: all checks green, live Navigator eddy responded, checkpoint written
    - FAIL: what broke, which phase, suggested fix
 
 Do not modify turtleOS code unless a check fails and the fix is obvious and minimal.

@@ -8,7 +8,7 @@ End-to-end walkthroughs. Detail lives in topic docs — these are the composed p
 
 ## Target UX (2026-06-20)
 
-**Slice 1 shipped:** river bar = `new eddy` only; in-eddy flow library on blank materialize. Modal intake + bar flow menu removed from shell.
+**Slice 1–4 shipped (2026-06-23):** river bar = `new eddy` only; in-eddy flow library; Turtle bootstrap intake; Shelter archived.
 
 **Onboarding (generic):** personal AI on Discord — see [onboarding.md](onboarding.md).
 

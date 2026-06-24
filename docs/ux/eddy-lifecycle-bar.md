@@ -11,7 +11,7 @@ Make **eddy core lifecycle** accessible without teaching `!` syntax — the same
 
 | Bar | Channel | Owner | Job |
 |-----|---------|-------|-----|
-| **River bar** | Parent river | River bot | Materialize — `new eddy` · `flow menu` |
+| **River bar** | Parent river | River bot | Materialize — `new eddy` only |
 | **Lifecycle bar** | Inside eddy (thread) | River bot | Session — Checkpoint · Release · Dissolve |
 
 Power users keep turtle-talk (`!checkpoint`, `!release`, `!dissolve`). Buttons call the **same handlers** as commands.

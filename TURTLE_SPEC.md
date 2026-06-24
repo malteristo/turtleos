@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-06-18 (native eddy bar, checkpoint law)  
+**Version:** 2026-06-23 (in-eddy flow library, bar = new eddy only)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -47,7 +47,8 @@ This rewrite supersedes the prior **"Law of the Persistent Spirit"** framing as 
 | **Eddy** | A Discord thread — a focused conversation space, analogous to a new chat in ChatGPT or Claude. |
 | **Act** | A structured, non-verbal River output: reaction, button, embed, chronicle line, or moderation operation. |
 | **Flow** | A self-contained prompt program (markdown with optional front matter) executed by the platform. |
-| **Turtle Practice** | The shipped library of flows plus platform state conventions — the portable practice layer turtleOS runs. Individual programs (Shelter, Navigator, etc.) are **flows within Turtle Practice**, not "front doors." Legacy Magic term *front door* is retired in product law. |
+| **Flow library** | In-eddy affordance to load an installed flow mid-conversation — intentional, user-initiated (§5.6). User-facing term; internal code may say *flows*. |
+| **Turtle Practice** | Internal name for the shipped flow library plus platform state conventions. User-facing copy SHOULD say **flows** or **flow library**, not "Turtle Practice." Shipped programs: Navigator, Thread, Companion (Shelter archived — practitioners may install custom flows). |
 | **turtle practice** | Lowercase: the activity of practicing on turtleOS — using the river, eddies, and flows. |
 | **Practice root** | Local directory holding character files, flows, chronicle, state, and optional practice artifacts. |
 | **Attunement** | Identity and conduct layer on the platform: native (default), craft, or magic-attuned. |
@@ -141,18 +142,18 @@ Metaphor: the sea in *Moana*, the casita in *Encanto* — intelligence expressed
 **Standing eddy bar:** The river channel maintains a **persistent bottom affordance** — always the last message in the timeline:
 
 ```text
-[ 🌀 new eddy ] [ flow menu ]
+[ 🌀 new eddy ]
 ```
 
-This satisfies **always offer eddy** globally (§17). Practitioners materialize eddies by click — not from river prose.
+This satisfies **always offer eddy** globally (§17). Practitioners materialize blank eddies by click — not from river prose. **Flow choice is in-eddy** (§5.6), not on the standing bar.
 
 **Per-message act bundle** (parent channel only — not inside eddies):
 
 ```text
 optional (as warranted):
   acknowledge(emoji)          # low-key recognition; often suppressed when alone
-  offer_flow_menu()           # when user signals flows / Turtle Practice
-  offer_flow(flow_id)         # when one flow is clearly named
+  offer_flow_menu()           # when user signals flows on a specific river message
+  offer_flow(flow_id)         # when one flow is clearly named on that message
   error(...)                  # degraded / parse failure
 not emitted in parent channel:
   offer_eddy                  # superseded by standing bar
@@ -167,24 +168,27 @@ After each practitioner river message, the harness MUST ensure the eddy bar rema
 
 ### 5.4. Eddy Materialize (Bar Path)
 
-**Blank eddy (`new eddy`):**
+**Blank eddy (`new eddy`) — Layer 1 default:**
 
 1. Practitioner clicks **`new eddy`** on the standing bar.
 2. Bar message deletes; River creates a thread anchor; Discord renders the native **thread-list embed**.
 3. Thread opens as **`new eddy`** — no seed, no Turtle monologue.
 4. Fresh bar posts below the new thread card.
-5. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); Turtle replies.
+5. River posts a **compact flow library** embed in the thread (optional programs — user-initiated load).
+6. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); Turtle replies.
 
-**Flow eddy (`flow menu` → select flow):**
+**Load flow in eddy (Layer 2 — intentional):**
 
-1. Same bar mechanics; spawn includes `flow_id`.
-2. Thread title is the **flow name** (e.g. `Shelter`) — not generic `new eddy`.
-3. River posts **one orientation embed** in the thread (what the flow is, checkpoint status) — setup act, not dialogue.
-4. Practitioner speaks first; Turtle joins on first message (§7.7).
+1. Practitioner opens **`new eddy`** (or continues in an existing eddy) and chooses a flow from the in-eddy library or **`!flows`**.
+2. River provisional-renames the thread; River adds Turtle if not present.
+3. **Turtle bootstrap** — conversational opening (intake interview when declared; no River modal).
+4. Dialogue proceeds in flow voice; checkpoint on release/idle when front matter declares `writes`.
 
-**Contextual offers (optional):** When the River model detects flow-browse intent on a **specific message**, it MAY attach a contextual flow button to that message. Coexists with the standing bar.
+**Mid-eddy lens load:** Loading a flow after dialogue has started MUST bootstrap from thread history; MUST NOT auto-rename unless the practitioner accepts an explicit rename offer.
 
-**Legacy seeded path:** Materializing from a practitioner river message MAY still post a seed embed — not the default bar path.
+**Contextual offers (optional):** When the River model detects flow-browse intent on a **specific parent-channel message**, it MAY attach a contextual flow button to that message. This does not replace the in-eddy library.
+
+**Legacy (retired):** River-bar **`flow menu`**, flow-titled spawn from bar, River modal intake (Prepare/Begin). See [docs/ux/flow-library-journeys.md](docs/ux/flow-library-journeys.md).
 
 ### 5.5. River Commands
 
@@ -195,15 +199,17 @@ Two paths, layered:
 | **Natural language → acts** | Default | River model interprets intent → act buttons (consent before execution) |
 | **Turtle-talk commands** | Power users | `!dissolve`, `!flows`, `!pin`, etc. — direct execution, no interpret step |
 
-The turtle-talk palette SHOULD expose a river-relevant subset for v1 (dissolve, flow menu, pin). Full command inventory: [docs/turtle-talk.md](docs/turtle-talk.md) — platform surfaces (river acts, eddy core, operator tools); Magic workshop commands retired from turtleOS (integrate via Magic on Forge).
+The turtle-talk palette SHOULD expose a river-relevant subset for v1 (dissolve, pin). Full command inventory: [docs/turtle-talk.md](docs/turtle-talk.md) — platform surfaces (river acts, eddy core, operator tools); Magic workshop commands retired from turtleOS (integrate via Magic on Forge).
 
 The River executes; it does not discuss.
 
 ### 5.6. Flow Discovery
 
-**Primary:** The standing eddy bar **`flow menu`** button opens a select menu of **installed flows** — markdown files under `practice_root/flows/` and shipped template flows. Only resolvable flows appear; prompt browse hints do not imply installed programs.
+**Primary (in-eddy):** After **`new eddy`** materialize, the shell posts a compact **flow library** embed in the thread. Practitioners load a flow deliberately — **`!flows`** in an eddy opens the same picker. **`!flows`** in the parent river redirects practitioners to open an eddy first.
 
-**Secondary:** When a river message signals intent to browse programs, the River MAY emit **`offer_flow_menu`** or **`offer_flow`** on that message.
+**Secondary (parent channel):** When a river message signals intent to browse programs, the River MAY emit **`offer_flow_menu`** or **`offer_flow`** on **that message** — contextual, not proactive spam.
+
+**Not shipped:** standing-bar flow picker; proactive flow offers in dialogue (same policy as intentions — discoverable, user-initiated).
 
 No prose catalog in the river.
 
@@ -279,8 +285,8 @@ Cross-eddy memory, curated distillates, and what Turtle/River may read across ti
 
 When an eddy is materialized:
 
-1. **Blank eddy (bar — default):** no seed at materialize — the practitioner's **first message** is the opening. Thread title starts as **`new eddy`**; River retitles from first message content.
-2. **Flow eddy (bar flow menu):** thread titled from flow spec; River orientation embed in thread; practitioner speaks first (§5.4).
+1. **Blank eddy (bar — default):** no seed at materialize — the practitioner's **first message** is the opening. Thread title starts as **`new eddy`**; River retitles from first message content. Compact flow library embed MAY appear (§5.6).
+2. **Flow active (in-eddy load):** Turtle bootstrap opening; conversational intake when declared; flow prompt sections loaded; presence tag before first flow reply (§7.6).
 3. **Seeded eddy (contextual / legacy):** practitioner's river input MAY be posted as a seed embed.
 4. **Deferred Turtle join:** Turtle does not join at thread create. On first in-eddy practitioner message, River adds Turtle, then Turtle replies (§7.7).
 5. Turtle reads thread history (plus flow prompt sections when `flow_id` is set) and responds.
@@ -326,7 +332,7 @@ The agent harness (system prompt assembly, tool access, flow loading) is shaped 
 
 Transparency is **mostly conversational** — Turtle explains gaps, active flows, and uncertainty in dialogue.
 
-The shell harness MAY inject **compact presence tags** for active flows and loaded state files (e.g. `Shelter · loaded shelter-last.md`) — visible trust signals, not chat. In native attunement, operational `-#` lines MUST NOT be emitted by the model; the shell owns load visibility.
+The shell harness MAY inject **compact presence tags** for active flows and loaded state files (e.g. `Navigator · loaded navigator-last.md`) — visible trust signals, not chat. In native attunement, operational `-#` lines MUST NOT be emitted by the model; the shell owns load visibility.
 
 **Link reading:** URL fetch progress and outcomes MUST appear as **silent embeds** on the eddy timeline (Reading → Read, or failure/opt-in offers). Turtle MUST NOT narrate fetch mechanics in conversational voice; the practitioner sees trace in embeds only (§9.5).
 
@@ -402,7 +408,7 @@ Practitioners leave sessions without announcing closure. The platform MUST captu
 
 | Target | Threshold | Notes |
 |--------|-----------|-------|
-| Flow `writes` paths (e.g. `state/notes/shelter-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from spawn tag, thread name, or flow signals |
+| Flow `writes` paths (e.g. `state/notes/navigator-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from thread registry `context_type`, thread config, thread name, or flow signals |
 | Session notes (`sessions/YYYY-MM-DD.md`) | ≥4 exchanges | LLM reflection; cooldown applies |
 | Proposals / practice extraction | Per attunement | Magic-attuned and practitioner profiles as implemented |
 
@@ -485,15 +491,18 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 
 turtleOS is an **execution layer for prompt programs**. Flows are markdown files — optionally with YAML front matter — that the platform loads, runs, and surfaces.
 
-### 10.2. Turtle Practice (Shipped Flows)
+### 10.2. Shipped Flows (Flow Library)
 
-The repository ships **Turtle Practice** — a library of flows (Shelter, Navigator, Thread, Companion, etc.). They are optional programs, not identity defaults. Flows MUST be Turtle Practice–ready (front matter + state hooks) before ship.
+The repository ships a **flow library** — optional prompt programs (Navigator, Thread, Companion). They are not identity defaults and not required for Layer 1 (blank eddy + Turtle). Flows MUST ship with front matter + state hooks before release. **Shelter** is archived (`template/flows/_archive/`); blank eddy + Turtle identity holds presence without a dedicated flow.
 
 Users run a flow by:
 
-- **`flow menu`** on the standing eddy bar (primary),
-- Contextual **`offer_flow_menu`** / **`offer_flow`** on a river message, or
-- Explicit invocation (turtle-talk command where implemented)
+- **In-eddy flow library** embed after `new eddy` (primary discoverability),
+- **`!flows`** inside an eddy (same picker),
+- Contextual **`offer_flow_menu`** / **`offer_flow`** on a parent river message, or
+- Custom install under `practice_root/flows/`
+
+**Intake:** Flows with `intake` front matter use **Turtle conversational bootstrap** — not River modals. Captured values write to declared paths and load into Turtle's prompt; Turtle MUST NOT re-ask captured fields.
 
 ### 10.3. Front Matter Contract (Extensible)
 
@@ -501,13 +510,9 @@ Flows with front matter participate in **persistent practice state** across sess
 
 ```yaml
 ---
-title: Shelter
-reads: []              # practice state files to load on entry
-writes: []             # state paths this flow may update
-loads: []              # legacy alias for reads — prefer reads/writes
-sediment: false        # deferred — cross-eddy memory
-model: default         # override Turtle model for this eddy
-think_aloud: auto      # on | off | auto
+title: Navigator
+reads: [state/notes/navigator-last.md]
+writes: [state/notes/navigator-last.md]
 ---
 ```
 
@@ -598,8 +603,8 @@ Acts are structured outputs. The catalog is **extensible**; v1 implements the su
     { "type": "acknowledge", "emoji": "👋" },
     { "type": "offer_eddy", "title": "...", "button_label": "Materialize eddy" },
     { "type": "revise_offer", "title": "...", "replaces": "..." },
-    { "type": "offer_flow_menu", "flows": ["Shelter", "Navigator"] },
-    { "type": "offer_flow", "flow_id": "shelter" },
+    { "type": "offer_flow_menu", "flows": ["Navigator", "Thread", "Companion"] },
+    { "type": "offer_flow", "flow_id": "navigator" },
     { "type": "chronicle", "surface": "🌀 opened: …", "jump_url": "...", "deep": { } },
     { "type": "dissolve_eddy", "thread_id": "..." },
     { "type": "pin", "message_id": "..." },
@@ -613,7 +618,7 @@ Acts are structured outputs. The catalog is **extensible**; v1 implements the su
 | Act | Required v1 | Notes |
 |-----|-------------|-------|
 | `acknowledge` | Optional | Often paired with `offer_eddy` |
-| `offer_eddy` | **Always** | Every river message |
+| `offer_eddy` | **Retired in parent channel** | Superseded by standing **`new eddy`** bar (§5.3) |
 | `revise_offer` | Yes | After user correction |
 | `offer_flow_menu` | Yes | On flow-browse intent |
 | `offer_flow` | Yes | Single-flow shortcut |
@@ -853,6 +858,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-20 | §5.5 — turtle-talk inventory: platform sovereignty; Magic workshop overlay retired from product inventory; signals/drip retired |
 | 2026-06-20 | §5.8 — River bot owns all turtle-talk `!` execution (split-bot); Turtle reads `[Act: !cmd]` digests; bar posts use River client identity |
 | 2026-06-20 | §5.8 / §9.5 — harness split: Turtle silent link-read vs River post-Turtle Save to library (`!fetch`); distinct skip logging |
+| 2026-06-23 | In-eddy flow library — bar = `new eddy` only; Turtle bootstrap intake; Shelter archived; user-facing **flows** / **flow library** |
 
 ---
 

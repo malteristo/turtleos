@@ -98,6 +98,7 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | 2026-06-18 | **Flow trace + deploy** — shell-inject flow presence; Shelter meta/question guards; Mini at `28feb48` |
 | 2026-06-20 | **Onboarding (target)** — generic Layer 1 personal AI; flows optional; [onboarding.md](onboarding.md) |
 | 2026-06-20 | **Flow library journeys (target)** — in-eddy picker, Turtle bootstrap; [flow-library-journeys.md](flow-library-journeys.md) |
+| 2026-06-23 | **Flow library shipped** — bar = `new eddy` only; in-eddy library + bootstrap; Shelter archived; spec drift (TURTLE_SPEC §5–10) |
 
 ---
 
