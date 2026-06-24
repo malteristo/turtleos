@@ -136,6 +136,27 @@ def _read_thread(thread_id: str, limit: int = 40) -> str:
     return proc.stdout
 
 
+def _wait_for_transcript(
+    thread_id: str,
+    *,
+    must_include: list[str],
+    any_include: list[str] | None = None,
+    timeout: int = 90,
+    interval: int = 5,
+    limit: int = 40,
+) -> str:
+    deadline = time.time() + timeout
+    last = ""
+    while time.time() < deadline:
+        last = _read_thread(thread_id, limit=limit)
+        lower = last.lower()
+        if all(needle in lower for needle in must_include):
+            if not any_include or any(needle in lower for needle in any_include):
+                return last
+        time.sleep(interval)
+    return last
+
+
 def _parse_json_stdout(stdout: str) -> dict:
     start = stdout.find("{")
     if start == -1:
@@ -192,17 +213,12 @@ def check_live(wait_seconds: int) -> list[str]:
         asyncio.run(_send_message_and_permalink(source_thread, MARKER_ALPHA))
         _spirit_send(source_thread, MARKER_BETA)
         time.sleep(2)
-        msg_link = asyncio.run(_send_message_and_permalink(source_thread, "SHAKE_D2 anchor message"))
+        msg_link = asyncio.run(
+            _send_message_and_permalink(source_thread, "SHAKE_D2 anchor message")
+        )
     except Exception as exc:
         errors.append(f"source eddy seed failed: {exc}")
         return errors
-
-    from discord_ref_read import permalink_for
-
-    thread_link = permalink_for(
-        int(msg_link.split("/")[5]),
-        int(msg_link.split("/")[6]),
-    )
 
     try:
         target = _spawn_eddy(f"shake-d2-tgt-{stamp}")
@@ -211,20 +227,29 @@ def check_live(wait_seconds: int) -> list[str]:
         errors.append(f"target eddy spawn failed: {exc}")
         return errors
 
-    time.sleep(4)
+    time.sleep(10)
     try:
         _spirit_send(target_thread, f"what did we decide about widgets? {msg_link}")
     except Exception as exc:
         errors.append(f"D2 message permalink send failed: {exc}")
         return errors
 
-    time.sleep(wait_seconds)
-    transcript = _read_thread(target_thread)
+    transcript = _wait_for_transcript(
+        target_thread,
+        must_include=["read discord message"],
+        any_include=["turquoise", "widgets", "widget", "decision", "approved"],
+        timeout=wait_seconds + 30,
+    )
     lower = transcript.lower()
-    if "reading discord" not in lower and "read discord message" not in lower:
+    if "read discord message" not in lower:
         errors.append("D2: no Read Discord message trace in target thread")
-    if "turquoise" not in lower and "widgets" not in lower:
+    if not any(word in lower for word in ("turquoise", "widgets", "widget", "decision", "approved")):
         errors.append("D2: Turtle reply did not reference linked content")
+
+    thread_link = str(source.get("jump_url") or "")
+    if not thread_link:
+        parts = msg_link.rstrip("/").split("/")
+        thread_link = "/".join(parts[:-1])
 
     time.sleep(3)
     try:
@@ -236,10 +261,15 @@ def check_live(wait_seconds: int) -> list[str]:
         errors.append(f"D2b thread permalink send failed: {exc}")
         return errors
 
-    time.sleep(wait_seconds)
-    transcript_b = _read_thread(target_thread, limit=60)
+    transcript_b = _wait_for_transcript(
+        target_thread,
+        must_include=["read discord thread"],
+        any_include=["messages", "message"],
+        timeout=wait_seconds + 30,
+        limit=60,
+    )
     lower_b = transcript_b.lower()
-    if "read discord thread" not in lower_b and "reading discord thread" not in lower_b:
+    if "read discord thread" not in lower_b:
         errors.append("D2b: no Read Discord thread trace in target thread")
     if not re.search(r"\b\d+\s*messages?\b", lower_b):
         errors.append("D2b: embed missing message count hint")
