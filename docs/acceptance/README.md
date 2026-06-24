@@ -120,7 +120,7 @@ python scripts/shake_lifecycle.py
 | D3 | **Contextual River offer** — after Turtle↔Mage exchange where an act would help (e.g. uncached external URL discussed, explicit checkpoint intent) | River posts **one** situational act row within ~60s of Turtle reply · offer matches situation (not generic spam) · no duplicate lifecycle trio if contextual palette excludes them · Mage rates useful vs noise in dogfood notes |
 
 **D1 verification:** Manual dogfood + `test_dialogue_store` / history reload paths; confirm `MAX_DIALOGUE_HISTORY` sufficient for stated gap  
-**D2 verification:** `test_discord_permalink_read` (to add) · extend `shake_link_read.py` or new `shake_discord_ref.py` · grep for `[Dereferenced Discord context]` / new inject label  
+**D2 verification:** `test_discord_ref_read` · dogfood message permalink · grep for `[Read Discord message]` in history  
 **D3 verification:** `river.log` contextual offer lines · manual dogfood journal; palette/hit-rate iterated in chapter slices
 
 **Not in scope for D2:** River fetches Discord URL before Turtle speaks (X2 class) · auto-checkpoint on idle · standing eddy lifecycle bar as north star

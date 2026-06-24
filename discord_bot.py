@@ -140,7 +140,7 @@ from link_read import (
 _boom_fetched_content = {}
 
 
-_DISCORD_MESSAGE_LINK_RE = re.compile(r"https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)")
+# Discord permalink parsing — discord_ref_read.py
 
 
 # ─── handle_dialogue ─────────────────────────────────────────────
@@ -459,15 +459,9 @@ def _visible_message_content(message) -> tuple[str, str]:
 
 
 def _extract_discord_message_refs(text: str) -> list[tuple[int | None, int, int]]:
-    refs = []
-    seen = set()
-    for match in _DISCORD_MESSAGE_LINK_RE.finditer(text or ""):
-        guild_id, channel_id, message_id = (int(part) for part in match.groups())
-        key = (guild_id, channel_id, message_id)
-        if key not in seen:
-            seen.add(key)
-            refs.append(key)
-    return refs
+    from discord_ref_read import extract_discord_message_refs
+
+    return extract_discord_message_refs(text)
 
 
 def _forwarded_snapshot_is_partial(message) -> bool:
@@ -476,47 +470,20 @@ def _forwarded_snapshot_is_partial(message) -> bool:
 
 
 def _format_dereferenced_message(source_message, *, label: str) -> str:
-    content = (source_message.content or "").strip()
-    parts = [f"[{label}] channel_id={source_message.channel.id} message_id={source_message.id}"]
-    author = getattr(source_message.author, "display_name", None) or source_message.author.name
-    parts.append(f"author: {author}")
-    created = getattr(source_message, "created_at", None)
-    if created:
-        parts.append(f"created: {created.isoformat()}")
-    if content:
-        parts.append(f"content:\n{content}")
-    attachment_lines = []
-    for att in (getattr(source_message, "attachments", None) or [])[:5]:
-        name = getattr(att, "filename", "attachment")
-        content_type = getattr(att, "content_type", None) or "unknown"
-        url = getattr(att, "url", None)
-        line = f"{name} ({content_type})"
-        if url:
-            line += f" {url}"
-        attachment_lines.append(line)
-    if attachment_lines:
-        parts.append("attachments:\n" + "\n".join(f"- {line}" for line in attachment_lines))
+    from discord_ref_read import format_dereferenced_message
+
+    block = format_dereferenced_message(source_message, label=label)
     forwarded = _extract_forwarded_context(source_message)
     if forwarded:
-        parts.append(forwarded)
-    if len(parts) <= 3:
-        parts.append("no readable text content")
-    return "\n".join(parts)
+        block = f"{block}\n{forwarded}"
+    return block
 
 
 async def _fetch_discord_message_context(refs: list[tuple[int | None, int, int]], *, label: str, limit: int = 3) -> tuple[str, int]:
-    blocks = []
-    for _guild_id, channel_id, message_id in refs[:limit]:
-        try:
-            channel = await client.fetch_channel(channel_id)
-            source_message = await channel.fetch_message(message_id)
-            blocks.append(_format_dereferenced_message(source_message, label=label))
-        except Exception as e:
-            blocks.append(
-                f"[{label} unavailable] channel_id={channel_id} message_id={message_id} "
-                f"error={type(e).__name__}: {e}"
-            )
-    return "\n\n".join(blocks), len(blocks)
+    from discord_ref_read import fetch_discord_message_context
+
+    normalized = [(g or 0, c, m) for g, c, m in refs]
+    return await fetch_discord_message_context(client, normalized, label=label, limit=limit)
 
 
 def _attachment_display_names(raw_attachments) -> str:
@@ -664,20 +631,24 @@ async def handle_dialogue(message):
 
     dereferenced_context = ""
     dereferenced_count = 0
-    deref_refs = []
+    deref_refs: list[tuple[int, int, int]] = []
     if _forwarded_snapshot_is_partial(message):
         source_ref = _forward_source_ref(message)
         if source_ref:
-            deref_refs.append(source_ref)
+            g, c, m = source_ref
+            deref_refs.append((g or 0, c, m))
     for ref in _extract_discord_message_refs(message.content or ""):
         if ref not in deref_refs:
             deref_refs.append(ref)
     if deref_refs:
-        dereferenced_context, dereferenced_count = await _fetch_discord_message_context(
-            deref_refs, label="Dereferenced Discord message"
+        from discord_ref_read import fetch_discord_refs_with_status
+
+        _ref_results, dereferenced_context = await fetch_discord_refs_with_status(
+            message.channel, client, deref_refs
         )
+        dereferenced_count = sum(1 for r in _ref_results if r.ok)
         if dereferenced_context:
-            attachment_note += f" [dereferenced {dereferenced_count} Discord message(s)]"
+            attachment_note += f" [read {dereferenced_count} Discord message(s)]"
 
     if not attachments and _forwarded_snapshot_is_partial(message):
         source_ref = _forward_source_ref(message)
@@ -693,7 +664,7 @@ async def handle_dialogue(message):
     if url_content:
         user_entry += f"\n\n[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
     if dereferenced_context:
-        user_entry += f"\n\n[Dereferenced Discord context]:\n{dereferenced_context[:6000]}"
+        user_entry += f"\n\n{dereferenced_context[:6000]}"
     history.append({"role": "user", "content": user_entry})
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
@@ -883,7 +854,7 @@ async def _continue_dialogue_turn(
     if forwarded_context:
         source_flags.append("forwarded message snapshot")
     if dereferenced_context:
-        source_flags.append(f"dereferenced Discord message ({dereferenced_count})")
+        source_flags.append(f"read Discord message ({dereferenced_count})")
 
     # Proprioceptor — retired for native eddies (TURTLE_SPEC §8.1)
     context_brief = None

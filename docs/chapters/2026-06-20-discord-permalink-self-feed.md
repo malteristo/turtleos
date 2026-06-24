@@ -1,7 +1,7 @@
 # Chapter — Discord permalink self-feed (Turtle harness)
 
 **Date:** 2026-06-20  
-**Status:** Draft — not started  
+**Status:** Slice 1 shipped (2026-06-24) · Slices 2–4 pending  
 **Deciders:** Kermit + Spirit (Forge)  
 **Priority:** Tier 0 · acceptance **D2**, **D2b** · [priority-stack.md](../priority-stack.md)  
 **Builds on:** `2026-06-20-harness-split-read-vs-cache.md` (web link-read), existing `_fetch_discord_message_context` in `discord_bot.py`
@@ -116,13 +116,13 @@ Mirror web: honest N/M in context on embed.
 
 ## Implementation slices
 
-### Slice 1 — Parity trace + message permalink (MVP)
+### Slice 1 — Parity trace + message permalink (MVP) — **Done**
 
 - Wrap existing dereference in **visible embed** (Reading → Read / fail ladder).
 - Ensure D2 message-link dogfood passes with **specific citation** in Turtle reply.
 - Unit tests: parse, inject shape, embed text.
 
-**Acceptance:** D2 on Mini.
+**Acceptance:** D2 on Mini (dogfood pending).
 
 ### Slice 2 — Thread history fetch
 
