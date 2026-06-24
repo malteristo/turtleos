@@ -137,11 +137,11 @@ Mirror web: honest N/M in context on embed.
 - On summary failure, fall back to full transcript (same as Slice 2).
 - Tests mock `summarize_thread_lines` for long-thread path + fallback.
 
-### Slice 4 — Docs + shake
+### Slice 4 — Docs + shake — **Done**
 
 - `docs/ux/link-reading.md` — Discord permalink subsection.
-- `TURTLE_SPEC.md` §9.5 amendment (sanction) — Discord read-for-dialogue alongside external URLs.
-- `scripts/shake_discord_ref.py` or extend `shake_link_read.py`.
+- `TURTLE_SPEC.md` §9.5 amendment — Discord read-for-dialogue alongside external URLs.
+- `scripts/shake_discord_ref.py` — offline unit tests + doc needles; optional `--live` on Mini.
 
 ---
 

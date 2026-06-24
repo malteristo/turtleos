@@ -467,9 +467,11 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 | **Read for dialogue** | URL in eddy chat (auto or opt-in) | Extract injected into turn context | No `link-resonance/` write |
 | **Distill for library** | `!fetch <url>` | Distilled summary embed | Yes — `link-resonance/` |
 
-**Auto-read (URL-primary):** External URL only; ≤120 characters of non-URL commentary; or explicit read/summarize cues. Discord message links are excluded.
+**Auto-read (URL-primary):** External URL only; ≤120 characters of non-URL commentary; or explicit read/summarize cues.
 
-**Incidental links:** Long messages with buried URLs MUST NOT auto-fetch on the first turn. Shell posts a **Read article / Skip** opt-in; Read triggers a follow-up turn with fetch.
+**Discord permalinks (read-for-dialogue):** Message links (`…/channels/{guild}/{channel}/{message}`) and thread links (`…/channels/{guild}/{thread}`) in eddy chat MUST be read via the Discord bot API — visible embed trace, inject into turn context, **no** `link-resonance/` write, **no** River-side fetch before Turtle speaks. Message links inside multi-message threads MAY expand to thread history (40-message cap). Long transcripts MAY be summarized with `RIVER_MODEL` before inject (see external long-page excerpt policy). Failures use the same honest ladder (permission, paste hint).
+
+**Incidental links:** Long messages with buried **external** URLs MUST NOT auto-fetch on the first turn. Shell posts a **Read article / Skip** opt-in; Read triggers a follow-up turn with fetch.
 
 **Visible trace:** Silent embed lifecycle — **Reading…** → **Read** (host, char counts, **N/M in context**, spill path when applicable, LITL flag, paste/`!fetch` hints on failure). Fetch runs during typing indicator.
 
@@ -479,7 +481,7 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 
 **Failure ladder:** retry, `/paste` endpoint, screenshot, paste in chat, `!fetch` for distill-only.
 
-**Implementation:** `link_read.py`, `content_fetch.py`, `discord_bot.handle_dialogue`.
+**Implementation:** `link_read.py`, `content_fetch.py`, `discord_ref_read.py`, `discord_bot.handle_dialogue`.
 
 **Split-bot harness (§5.8):** Auto-read and incidental Read/Skip run in the **Turtle process** before the informed reply. **Save to library** (`!fetch` button or typed command) runs in the **River process** after Turtle replies — optional persistence, not a dialogue prerequisite. River polls thread history for Turtle prose when scheduling save offers; skip reasons (cached in `link-resonance/`, already offered, recent `!fetch` act) MUST be logged distinctly for operator debug.
 
@@ -799,7 +801,7 @@ Turtle admits uncertainty and context limits inside eddies. No fabricated recall
 
 ### The Law of Visible Link Read (Eddies)
 
-When Turtle reads a URL for dialogue, the practitioner MUST see progress and outcome on the timeline — via embeds, not fetch prose in Turtle's voice. Read-for-dialogue and distill-for-library (`!fetch`) remain distinct operations.
+When Turtle reads a URL or Discord permalink for dialogue, the practitioner MUST see progress and outcome on the timeline — via embeds, not fetch prose in Turtle's voice. Read-for-dialogue and distill-for-library (`!fetch`) remain distinct operations. Discord permalinks are never distilled to `link-resonance/`.
 
 ### The Law of Minimal Default
 
@@ -859,6 +861,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-20 | §5.8 — River bot owns all turtle-talk `!` execution (split-bot); Turtle reads `[Act: !cmd]` digests; bar posts use River client identity |
 | 2026-06-20 | §5.8 / §9.5 — harness split: Turtle silent link-read vs River post-Turtle Save to library (`!fetch`); distinct skip logging |
 | 2026-06-23 | In-eddy flow library — bar = `new eddy` only; Turtle bootstrap intake; Shelter archived; user-facing **flows** / **flow library** |
+| 2026-06-20 | §9.5 — Discord permalink read-for-dialogue (`discord_ref_read.py`): visible trace, thread history, long-thread summary; distinct from external URL read and `!fetch` |
 
 ---
 

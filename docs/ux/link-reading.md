@@ -3,8 +3,8 @@
 How practitioners share URLs in eddy dialogue and how the shell makes fetch legible.
 
 **Spec:** TURTLE_SPEC §9.5 · Law of Visible Link Read (§17)  
-**Implementation:** `link_read.py`, `content_fetch.py`, `discord_bot.handle_dialogue`  
-**Shakedown:** `scripts/shake_link_read.py`
+**Implementation:** `link_read.py`, `content_fetch.py`, `discord_ref_read.py`, `discord_bot.handle_dialogue`  
+**Shakedown:** `scripts/shake_link_read.py` (external URLs) · `scripts/shake_discord_ref.py` (Discord permalinks)
 
 ---
 
@@ -14,7 +14,7 @@ How practitioners share URLs in eddy dialogue and how the shell makes fetch legi
 
 | Mode | Trigger | Purpose | Cache |
 |------|---------|---------|-------|
-| **Read for dialogue** | URL in eddy chat (auto or Read button) | Ground the **current turn** | No `link-resonance/` write |
+| **Read for dialogue** | URL or Discord permalink in eddy chat (auto or Read button) | Ground the **current turn** | No `link-resonance/` write |
 | **Distill for library** | `!fetch <url>` | Save curated resonance for later | Yes — `link-resonance/` |
 
 Practitioners should never wonder whether dropping a link **saved** something to their library. Dialogue read is ephemeral context; `!fetch` is explicit archival.
@@ -45,7 +45,7 @@ In split-bot mode, **River owns eddy titles** (`generate_topic`, flow materializ
 
 ### Same failure ladder everywhere
 
-Every failure offers the same path: retry, `/paste` endpoint, screenshot, paste in chat, `!fetch` for distill-only. Copy stays consistent across status embed, dialogue inject, and `!fetch` help text.
+Every failure offers the same path: retry, `/paste` endpoint, screenshot, paste in chat, `!fetch` for distill-only (external URLs). Discord permalinks that fail permission checks suggest pasting the relevant text. Copy stays consistent across status embed, dialogue inject, and `!fetch` help text.
 
 ### SSRF guardrails
 
@@ -80,7 +80,44 @@ Full text saved to `box/intake/{timestamp}-{slug}.md`. Status embed shows ratio 
 ### Tips
 
 - Wrap URLs in `<>` to hide Discord’s cosmetic link preview (preview is not what Turtle read).
-- `!fetch` remains distill + cache — separate from dialogue read.
+- `!fetch` remains distill + cache — separate from dialogue read. **`!fetch` does not apply to Discord permalinks** (no `link-resonance/` entry for in-graph links).
+
+---
+
+## Discord permalinks (D2 / D2b)
+
+Practitioners live in Discord threads. Pasting a **message** or **thread** permalink from another eddy is read-for-dialogue — same visible trace and inject discipline as external URLs, but **no outbound HTTP fetch** and **no River digest before Turtle speaks**.
+
+| Link shape | Scope | Fetch |
+|------------|-------|-------|
+| `…/channels/{guild}/{channel}/{message}` | Single message, or anchor in a thread | One message; if anchor is in a thread with **>1** messages, full thread history (40 cap) |
+| `…/channels/{guild}/{thread}` | Thread-only permalink | Last **40** messages, oldest-first |
+
+### Timeline
+
+| Step | Timeline |
+|------|----------|
+| Detect | Discord permalink in practitioner message (alongside short ask) |
+| Status | Silent embed: **Reading Discord message…** or **Reading Discord thread…** |
+| Read | During `typing()` — bot API fetch via `discord_ref_read.py` |
+| Outcome | **Read Discord message** or **Read Discord thread** embed — author or message count · chars in context |
+| Reply | Turtle turn includes `[Read Discord message]` or `[Read Discord thread]` inject block |
+
+### Long threads
+
+When raw transcript exceeds ~8k chars (`PROMPT_INLINE_MAX`), River model summarizes before inject. Embed shows **summarized · N messages · X chars in context** and notes full thread size on Discord. Practitioner can ask Turtle to read more if the summary is thin. Summary failure falls back to full transcript (same as short threads).
+
+### Distinct from external link-read
+
+| | External URL | Discord permalink |
+|--|--------------|-------------------|
+| Fetch | HTTP via `content_fetch` | Discord bot API |
+| Auto-read rule | URL-primary / incidental opt-in | Permalink + short ask (always read when detected) |
+| Spill | `box/intake/` for long pages | Summary for long threads |
+| `!fetch` / Save to library | Optional post-Turtle | **Not applicable** — graph is already on Discord |
+| Preview | Discord cosmetic preview ≠ what Turtle read | Same — embed trace is authoritative |
+
+Wrap permalinks in `<>` to hide Discord’s cosmetic preview if desired.
 
 ---
 
@@ -118,6 +155,16 @@ Long message with URL at end
   → (Read) second turn with fetch + grounded reply
 ```
 
+Discord permalink variant:
+
+```
+Practitioner pastes message or thread link from another eddy + short ask
+  → Reading Discord message/thread… embed (silent)
+  → typing indicator during bot API read
+  → Read embed: author or N messages · chars in context (summarized if long)
+  → Turtle reply grounded in inject block
+```
+
 Full walkthrough index: [journeys.md](journeys.md#drop-url-in-eddy).
 
 ---
@@ -132,5 +179,6 @@ When touching fetch UX, ask:
 4. Does partial read show N/M (and path) in the embed?
 5. Does link-read respect River-owned thread names?
 6. Is read-for-dialogue still separate from `!fetch` distill?
+7. Do Discord permalinks show Read embed + inject label before Turtle cites linked content?
 
 Full checklist: [review-checklist.md](review-checklist.md).
