@@ -15,6 +15,7 @@ from discord_ref_read import (
     DISCORD_REF_INJECT_LABEL,
     DISCORD_THREAD_REF_LABEL,
     DiscordRefResult,
+    build_thread_result,
     extract_all_discord_refs,
     extract_discord_message_refs,
     extract_discord_thread_only_refs,
@@ -22,6 +23,7 @@ from discord_ref_read import (
     format_discord_ref_for_dialogue,
     format_discord_refs_for_dialogue,
     format_thread_context_block,
+    format_thread_summary_block,
     permalink_for,
 )
 
@@ -91,6 +93,18 @@ class DiscordRefFormatTests(unittest.TestCase):
         self.assertIn(DISCORD_THREAD_REF_LABEL, block)
         self.assertIn("messages (2)", block)
         self.assertIn("Turtle: second", block)
+
+    def test_format_thread_summary_block(self) -> None:
+        block = format_thread_summary_block(
+            thread_name="planning",
+            lines=["Kermit: first", "Turtle: second"],
+            permalink="https://discord.com/channels/1/2/3",
+            summary="They agreed on bootstrap.",
+            anchor_message_id=3,
+        )
+        self.assertIn("summary (2 messages on Discord)", block)
+        self.assertIn("They agreed on bootstrap.", block)
+        self.assertIn("ask to read more", block)
 
     def test_inject_label_constant(self) -> None:
         result = DiscordRefResult(
@@ -259,6 +273,54 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.message_count, 2)
         self.assertIn("alpha", result.content)
         self.assertIn("beta", result.content)
+
+    async def test_long_thread_is_summarized(self) -> None:
+        from unittest.mock import patch
+
+        from discord_ref_read import fetch_one_discord_thread
+
+        thread = MagicMock(spec=discord.Thread)
+        thread.name = "long-eddy"
+        thread.id = 55
+        long_line = "Kermit: " + ("x" * 200)
+        msgs = [_mock_message(long_line, msg_id=i) for i in range(1, 41)]
+        thread.history = lambda limit=40, oldest_first=True: _async_history(msgs)
+
+        client = MagicMock()
+        client.fetch_channel = AsyncMock(return_value=thread)
+
+        with patch("discord_ref_read.THREAD_INLINE_MAX", 500), patch(
+            "discord_ref_read.summarize_thread_lines",
+            new=AsyncMock(return_value="They debated bootstrap vs modal; bootstrap won."),
+        ):
+            result = await fetch_one_discord_thread(client, 1, 55)
+
+        self.assertTrue(result.ok)
+        self.assertTrue(result.summarized)
+        self.assertGreater(result.raw_char_count, 500)
+        self.assertIn("bootstrap won", result.content)
+        self.assertIn("summary (40 messages on Discord)", result.content)
+
+    async def test_summary_failure_falls_back_to_full_transcript(self) -> None:
+        from unittest.mock import patch
+
+        lines = ["Kermit: " + ("y" * 300)] * 5
+        with patch("discord_ref_read.THREAD_INLINE_MAX", 100), patch(
+            "discord_ref_read.summarize_thread_lines",
+            new=AsyncMock(side_effect=RuntimeError("ollama down")),
+        ):
+            result = await build_thread_result(
+                guild_id=1,
+                channel_id=2,
+                message_id=3,
+                thread_name="planning",
+                lines=lines,
+                permalink="https://discord.com/channels/1/2/3",
+            )
+
+        self.assertTrue(result.ok)
+        self.assertFalse(result.summarized)
+        self.assertIn("messages (5)", result.content)
 
 
 if __name__ == "__main__":

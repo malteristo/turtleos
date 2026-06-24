@@ -8,7 +8,7 @@ from typing import AsyncIterator
 
 import discord
 
-from link_read import _COLOR_FAIL, _COLOR_OK, _COLOR_READING
+from link_read import PROMPT_INLINE_MAX, _COLOR_FAIL, _COLOR_OK, _COLOR_READING
 
 DISCORD_MESSAGE_LINK_RE = re.compile(
     r"https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d+)/(\d+)/(\d+)"
@@ -23,6 +23,8 @@ MAX_REFS_PER_MESSAGE = 3
 DIALOGUE_INJECT_MAX = 6000
 THREAD_HISTORY_MAX_MESSAGES = 40
 THREAD_LINE_MAX = 600
+THREAD_INLINE_MAX = PROMPT_INLINE_MAX
+THREAD_SUMMARY_INPUT_MAX = 24000
 
 
 @dataclass
@@ -40,6 +42,8 @@ class DiscordRefResult:
     scope: str = "message"  # message | thread
     message_count: int = 1
     thread_name: str | None = None
+    summarized: bool = False
+    raw_char_count: int = 0
 
 
 def extract_discord_message_refs(text: str) -> list[tuple[int, int, int]]:
@@ -170,6 +174,108 @@ def format_thread_context_block(
     return f"{header}\nmessages ({len(lines)}):\n{body}"
 
 
+def format_thread_summary_block(
+    *,
+    thread_name: str | None,
+    lines: list[str],
+    permalink: str,
+    summary: str,
+    anchor_message_id: int | None = None,
+) -> str:
+    header = f"[{DISCORD_THREAD_REF_LABEL}] {permalink}"
+    if thread_name:
+        header += f"\nthread: {thread_name}"
+    if anchor_message_id:
+        header += f"\nanchor_message_id: {anchor_message_id}"
+    return (
+        f"{header}\n"
+        f"summary ({len(lines)} messages on Discord):\n"
+        f"{summary.strip()}\n\n"
+        f"[Full thread on Discord — ask to read more of the thread if this summary is too thin.]"
+    )
+
+
+async def summarize_thread_lines(lines: list[str], thread_name: str | None) -> str:
+    """Compress a long thread transcript with the River/fast model."""
+    from llm import chat_ollama
+    from state import RIVER_MODEL
+
+    transcript = "\n\n".join(lines)
+    if len(transcript) > THREAD_SUMMARY_INPUT_MAX:
+        transcript = (
+            transcript[:THREAD_SUMMARY_INPUT_MAX]
+            + f"\n\n[... {len(transcript) - THREAD_SUMMARY_INPUT_MAX:,} chars omitted before summary ...]"
+        )
+    title = thread_name or "Discord thread"
+    system_prompt = (
+        "You compress Discord eddy transcripts for another AI answering the practitioner's question. "
+        "Preserve decisions, open questions, named topics, and specific facts. No preamble."
+    )
+    user_prompt = f"Thread: {title}\n\nTranscript:\n{transcript}\n\nSummary:"
+    summary = await chat_ollama(
+        system_prompt,
+        [{"role": "user", "content": user_prompt}],
+        model=RIVER_MODEL,
+        num_ctx=16384,
+        think=False,
+    )
+    cleaned = (summary or "").strip()
+    if not cleaned or cleaned == "(no response generated)":
+        raise RuntimeError("empty summary from River model")
+    return cleaned
+
+
+async def build_thread_result(
+    *,
+    guild_id: int,
+    channel_id: int,
+    message_id: int,
+    thread_name: str | None,
+    lines: list[str],
+    permalink: str,
+    anchor_message_id: int | None = None,
+    author: str | None = None,
+) -> DiscordRefResult:
+    raw_block = format_thread_context_block(
+        thread_name=thread_name,
+        lines=lines,
+        permalink=permalink,
+        anchor_message_id=anchor_message_id,
+    )
+    raw_len = len(raw_block)
+    summarized = False
+    block = raw_block
+    if raw_len > THREAD_INLINE_MAX:
+        try:
+            summary = await summarize_thread_lines(lines, thread_name)
+            block = format_thread_summary_block(
+                thread_name=thread_name,
+                lines=lines,
+                permalink=permalink,
+                summary=summary,
+                anchor_message_id=anchor_message_id,
+            )
+            summarized = True
+        except Exception as exc:
+            print(f"Discord thread summary failed: {type(exc).__name__}: {exc}")
+            block = raw_block
+    return DiscordRefResult(
+        guild_id=guild_id,
+        channel_id=channel_id,
+        message_id=message_id,
+        ok=True,
+        content=block,
+        char_count=len(block),
+        author=author,
+        permalink=permalink,
+        scope="thread",
+        message_count=len(lines),
+        thread_name=thread_name,
+        summarized=summarized,
+        raw_char_count=raw_len,
+    )
+
+
 def _inject_label(result: DiscordRefResult) -> str:
     return DISCORD_THREAD_REF_LABEL if result.scope == "thread" else DISCORD_REF_INJECT_LABEL
 
@@ -189,23 +295,14 @@ async def fetch_one_discord_thread(
         lines = await _collect_thread_lines(channel)
         if not lines:
             raise ValueError("thread has no readable messages")
-        block = format_thread_context_block(
+        return await build_thread_result(
+            guild_id=guild_id,
+            channel_id=thread_id,
+            message_id=anchor_message_id or 0,
             thread_name=getattr(channel, "name", None),
             lines=lines,
             permalink=link,
             anchor_message_id=anchor_message_id,
-        )
-        return DiscordRefResult(
-            guild_id=guild_id,
-            channel_id=thread_id,
-            message_id=anchor_message_id or 0,
-            ok=True,
-            content=block,
-            char_count=len(block),
-            permalink=link,
-            scope="thread",
-            message_count=len(lines),
-            thread_name=getattr(channel, "name", None),
         )
     except Exception as exc:
         return DiscordRefResult(
@@ -239,24 +336,15 @@ async def fetch_one_discord_ref(
         if thread is not None:
             lines = await _collect_thread_lines(thread)
             if len(lines) > 1:
-                block = format_thread_context_block(
+                return await build_thread_result(
+                    guild_id=guild_id,
+                    channel_id=channel_id,
+                    message_id=message_id,
                     thread_name=getattr(thread, "name", None),
                     lines=lines,
                     permalink=link,
                     anchor_message_id=message_id,
-                )
-                return DiscordRefResult(
-                    guild_id=guild_id,
-                    channel_id=channel_id,
-                    message_id=message_id,
-                    ok=True,
-                    content=block,
-                    char_count=len(block),
                     author=_author_label(source_message),
-                    permalink=link,
-                    scope="thread",
-                    message_count=len(lines),
-                    thread_name=getattr(thread, "name", None),
                 )
 
         block = format_dereferenced_message(source_message, label=label)
@@ -358,10 +446,18 @@ async def post_discord_ref_status(
 def _status_embed_single(result: DiscordRefResult) -> discord.Embed:
     if result.ok:
         if result.scope == "thread":
-            lines = [
-                f"**{result.message_count} messages** · **{result.char_count:,} chars** in context",
-                "_This is what Turtle read — not Discord's link preview._",
-            ]
+            if result.summarized:
+                lines = [
+                    f"**{result.message_count} messages** · summarized · "
+                    f"**{result.char_count:,} chars** in context",
+                    f"_Full thread was {result.raw_char_count:,} chars on Discord._",
+                    "_Ask Turtle to read more if the summary is too thin._",
+                ]
+            else:
+                lines = [
+                    f"**{result.message_count} messages** · **{result.char_count:,} chars** in context",
+                    "_This is what Turtle read — not Discord's link preview._",
+                ]
             title = "💬 Read Discord thread"
         else:
             lines = [
@@ -390,9 +486,10 @@ def _status_embed_multi(results: list[DiscordRefResult]) -> discord.Embed:
     for result in results:
         if result.ok:
             if result.scope == "thread":
+                suffix = " · summarized" if result.summarized else ""
                 lines.append(
                     f"✓ **{result.thread_name or 'thread'}** · "
-                    f"{result.message_count} msgs · {result.char_count:,} chars"
+                    f"{result.message_count} msgs{suffix} · {result.char_count:,} chars"
                 )
             else:
                 lines.append(

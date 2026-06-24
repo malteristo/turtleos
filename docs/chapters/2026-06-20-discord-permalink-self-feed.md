@@ -130,10 +130,12 @@ Mirror web: honest N/M in context on embed.
 - Apply char cap + inject policy via existing DIALOGUE_INJECT_MAX truncation.
 - **Acceptance:** D2b dogfood pending on Mini.
 
-### Slice 3 — Optional qwen summary for long threads
+### Slice 3 — Optional qwen summary for long threads — **Done**
 
-- When history > cap, summarize with `RIVER_MODEL` / qwen before inject.
-- Practitioner-visible summary in embed; expand-on-request via follow-up message.
+- When raw thread block > `PROMPT_INLINE_MAX` (~8k), summarize with `RIVER_MODEL` via `chat_ollama()` before inject.
+- Status embed shows **summarized · N messages · X chars in context**; inject block notes full thread on Discord.
+- On summary failure, fall back to full transcript (same as Slice 2).
+- Tests mock `summarize_thread_lines` for long-thread path + fallback.
 
 ### Slice 4 — Docs + shake
 
