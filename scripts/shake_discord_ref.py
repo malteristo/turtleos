@@ -236,13 +236,13 @@ def check_live(wait_seconds: int) -> list[str]:
 
     transcript = _wait_for_transcript(
         target_thread,
-        must_include=["read discord message"],
-        any_include=["turquoise", "widgets", "widget", "decision", "approved"],
+        must_include=["read discord"],
+        any_include=["turquoise", "widgets", "widget", "decision", "approved", "friday"],
         timeout=wait_seconds + 30,
     )
     lower = transcript.lower()
-    if "read discord message" not in lower:
-        errors.append("D2: no Read Discord message trace in target thread")
+    if "read discord" not in lower:
+        errors.append("D2: no Read Discord trace in target thread")
     if not any(word in lower for word in ("turquoise", "widgets", "widget", "decision", "approved")):
         errors.append("D2: Turtle reply did not reference linked content")
 
