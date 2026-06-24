@@ -136,6 +136,13 @@ def _read_thread(thread_id: str, limit: int = 40) -> str:
     return proc.stdout
 
 
+def _parse_json_stdout(stdout: str) -> dict:
+    start = stdout.find("{")
+    if start == -1:
+        raise ValueError(f"no JSON in stdout: {stdout[:300]}")
+    return json.loads(stdout[start:])
+
+
 def _spawn_eddy(topic: str) -> dict:
     proc = _run(
         [str(VENV_PY), str(SHAKE_SPAWN), "--flow", "navigator", "--topic", topic],
@@ -143,7 +150,7 @@ def _spawn_eddy(topic: str) -> dict:
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "shake_spawn_eddy failed")
-    return json.loads(proc.stdout)
+    return _parse_json_stdout(proc.stdout)
 
 
 async def _send_message_and_permalink(thread_id: str, text: str) -> str:
