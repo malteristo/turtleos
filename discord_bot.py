@@ -631,24 +631,28 @@ async def handle_dialogue(message):
 
     dereferenced_context = ""
     dereferenced_count = 0
-    deref_refs: list[tuple[int, int, int]] = []
+    ref_text = message.content or ""
     if _forwarded_snapshot_is_partial(message):
         source_ref = _forward_source_ref(message)
         if source_ref:
             g, c, m = source_ref
-            deref_refs.append((g or 0, c, m))
-    for ref in _extract_discord_message_refs(message.content or ""):
-        if ref not in deref_refs:
-            deref_refs.append(ref)
-    if deref_refs:
-        from discord_ref_read import fetch_discord_refs_with_status
+            from discord_ref_read import permalink_for
 
-        _ref_results, dereferenced_context = await fetch_discord_refs_with_status(
-            message.channel, client, deref_refs
-        )
-        dereferenced_count = sum(1 for r in _ref_results if r.ok)
-        if dereferenced_context:
-            attachment_note += f" [read {dereferenced_count} Discord message(s)]"
+            ref_text = f"{permalink_for(g or 0, c, m)}\n{ref_text}"
+    if ref_text.strip():
+        from discord_ref_read import extract_all_discord_refs, fetch_all_discord_refs_with_status
+
+        if extract_all_discord_refs(ref_text):
+            _ref_results, dereferenced_context = await fetch_all_discord_refs_with_status(
+                message.channel, client, ref_text
+            )
+            dereferenced_count = sum(1 for r in _ref_results if r.ok)
+            if dereferenced_context:
+                thread_reads = sum(1 for r in _ref_results if r.ok and r.scope == "thread")
+                if thread_reads:
+                    attachment_note += f" [read {thread_reads} Discord thread(s)]"
+                else:
+                    attachment_note += f" [read {dereferenced_count} Discord message(s)]"
 
     if not attachments and _forwarded_snapshot_is_partial(message):
         source_ref = _forward_source_ref(message)
@@ -854,7 +858,7 @@ async def _continue_dialogue_turn(
     if forwarded_context:
         source_flags.append("forwarded message snapshot")
     if dereferenced_context:
-        source_flags.append(f"read Discord message ({dereferenced_count})")
+        source_flags.append(f"read Discord context ({dereferenced_count})")
 
     # Proprioceptor — retired for native eddies (TURTLE_SPEC §8.1)
     context_brief = None

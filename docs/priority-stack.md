@@ -63,7 +63,7 @@ Generic onboarding: [ux/onboarding.md](ux/onboarding.md). Do not lead with flows
 
 | Job | Mechanism | Tier | Status |
 |-----|-----------|------|--------|
-| **Discord permalink self-feed (D2 message)** | Paste message link → visible Read embed → informed Turtle reply | **0** | **Slice 1 shipped** — [chapter](chapters/2026-06-20-discord-permalink-self-feed.md) |
+| **Discord permalink self-feed (D2/D2b)** | Message or thread link → visible Read embed → thread history when applicable | **0** | **Slices 1–2 shipped** — [chapter](chapters/2026-06-20-discord-permalink-self-feed.md) |
 | River summarizes Discord URL | River-side digest | — | **Rejected** for consistency — Turtle owns link ingestion |
 
 Optimizing `!fetch` when the pain is "paste link and talk" is a **tier mismatch**.

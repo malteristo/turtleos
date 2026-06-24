@@ -1,7 +1,7 @@
 # Chapter — Discord permalink self-feed (Turtle harness)
 
 **Date:** 2026-06-20  
-**Status:** Slice 1 shipped (2026-06-24) · Slices 2–4 pending  
+**Status:** Slice 1–2 shipped (2026-06-24) · Slices 3–4 pending  
 **Deciders:** Kermit + Spirit (Forge)  
 **Priority:** Tier 0 · acceptance **D2**, **D2b** · [priority-stack.md](../priority-stack.md)  
 **Builds on:** `2026-06-20-harness-split-read-vs-cache.md` (web link-read), existing `_fetch_discord_message_context` in `discord_bot.py`
@@ -124,11 +124,11 @@ Mirror web: honest N/M in context on embed.
 
 **Acceptance:** D2 on Mini (dogfood pending).
 
-### Slice 2 — Thread history fetch
+### Slice 2 — Thread history fetch — **Done**
 
-- Given thread id, fetch last N messages (bot permissions, rate limits).
-- Apply char cap + inject policy.
-- **Acceptance:** D2b.
+- Given thread id (message permalink in thread or thread-only link), fetch last N messages (40 cap).
+- Apply char cap + inject policy via existing DIALOGUE_INJECT_MAX truncation.
+- **Acceptance:** D2b dogfood pending on Mini.
 
 ### Slice 3 — Optional qwen summary for long threads
 

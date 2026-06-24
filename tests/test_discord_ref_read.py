@@ -3,14 +3,25 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock
 
 sys.modules.setdefault("discord", MagicMock())
+discord = sys.modules["discord"]
+discord.Thread = type("Thread", (), {})
+discord.ChannelType = MagicMock(
+    public_thread="public_thread",
+    private_thread="private_thread",
+    news_thread="news_thread",
+)
 
 from discord_ref_read import (
     DISCORD_REF_INJECT_LABEL,
+    DISCORD_THREAD_REF_LABEL,
     DiscordRefResult,
+    extract_all_discord_refs,
     extract_discord_message_refs,
+    extract_discord_thread_only_refs,
     format_dereferenced_message,
     format_discord_ref_for_dialogue,
     format_discord_refs_for_dialogue,
+    format_thread_context_block,
     permalink_for,
 )
 
@@ -21,6 +32,26 @@ class DiscordRefParseTests(unittest.TestCase):
         text = f"what did we decide here? {url}"
         self.assertEqual(extract_discord_message_refs(text), [(111, 222, 333)])
 
+    def test_extract_thread_only_permalink(self) -> None:
+        url = "https://discord.com/channels/111/222"
+        text = f"what happened in this eddy? {url}"
+        self.assertEqual(extract_discord_thread_only_refs(text), [(111, 222)])
+
+    def test_message_link_excludes_thread_only_duplicate(self) -> None:
+        text = "https://discord.com/channels/1/2/3"
+        self.assertEqual(extract_discord_thread_only_refs(text), [])
+        self.assertEqual(extract_all_discord_refs(text), [(1, 2, 3)])
+
+    def test_extract_all_includes_both_kinds(self) -> None:
+        text = (
+            "thread https://discord.com/channels/1/10 "
+            "msg https://discord.com/channels/1/20/30"
+        )
+        self.assertEqual(
+            extract_all_discord_refs(text),
+            [(1, 20, 30), (1, 10, None)],
+        )
+
     def test_dedupes_repeated_links(self) -> None:
         url = "https://discord.com/channels/1/2/3"
         text = f"{url} and again {url}"
@@ -30,6 +61,10 @@ class DiscordRefParseTests(unittest.TestCase):
         self.assertEqual(
             permalink_for(1, 2, 3),
             "https://discord.com/channels/1/2/3",
+        )
+        self.assertEqual(
+            permalink_for(1, 2),
+            "https://discord.com/channels/1/2",
         )
 
 
@@ -46,6 +81,17 @@ class DiscordRefFormatTests(unittest.TestCase):
         self.assertIn("Kermit", block)
         self.assertIn("ship Navigator", block)
 
+    def test_format_thread_context_block(self) -> None:
+        block = format_thread_context_block(
+            thread_name="planning",
+            lines=["Kermit: first", "Turtle: second"],
+            permalink="https://discord.com/channels/1/2/3",
+            anchor_message_id=3,
+        )
+        self.assertIn(DISCORD_THREAD_REF_LABEL, block)
+        self.assertIn("messages (2)", block)
+        self.assertIn("Turtle: second", block)
+
     def test_inject_label_constant(self) -> None:
         result = DiscordRefResult(
             guild_id=1,
@@ -61,6 +107,22 @@ class DiscordRefFormatTests(unittest.TestCase):
         self.assertIn(f"[{DISCORD_REF_INJECT_LABEL}]", block)
         self.assertIn("hello", block)
         self.assertNotIn("[Dereferenced Discord context]", block)
+
+    def test_thread_inject_label(self) -> None:
+        result = DiscordRefResult(
+            guild_id=1,
+            channel_id=2,
+            message_id=3,
+            ok=True,
+            content=f"[{DISCORD_THREAD_REF_LABEL}] x\nmessages (2):\na\nb",
+            char_count=40,
+            permalink="https://discord.com/channels/1/2/3",
+            scope="thread",
+            message_count=2,
+            thread_name="planning",
+        )
+        block = format_discord_ref_for_dialogue(result)
+        self.assertIn(f"[{DISCORD_THREAD_REF_LABEL}]", block)
 
     def test_failure_inject_is_honest(self) -> None:
         result = DiscordRefResult(
@@ -102,6 +164,22 @@ class DiscordRefFormatTests(unittest.TestCase):
         self.assertIn("---", block)
 
 
+def _mock_message(content: str, *, author: str = "Kermit", bot: bool = False, msg_id: int = 1):
+    msg = MagicMock()
+    msg.id = msg_id
+    msg.content = content
+    msg.author.bot = bot
+    msg.author.display_name = author
+    msg.author.name = author
+    msg.attachments = []
+    return msg
+
+
+async def _async_history(messages):
+    for msg in messages:
+        yield msg
+
+
 class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
     async def test_fetch_with_status_posts_and_edits_embed(self) -> None:
         from discord_ref_read import fetch_discord_refs_with_status
@@ -114,13 +192,9 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
         status_msg.edit = AsyncMock()
         channel.send = AsyncMock(return_value=status_msg)
 
-        source = MagicMock()
+        source = _mock_message("decision: use bootstrap not modal", author="Spirit", msg_id=3)
+        source.channel = MagicMock()
         source.channel.id = 2
-        source.id = 3
-        source.content = "decision: use bootstrap not modal"
-        source.author.display_name = "Spirit"
-        source.created_at = None
-        source.attachments = []
 
         ch = MagicMock()
         ch.fetch_message = AsyncMock(return_value=source)
@@ -132,9 +206,59 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].ok)
+        self.assertEqual(results[0].scope, "message")
         self.assertIn("bootstrap", block)
         channel.send.assert_awaited_once()
         status_msg.edit.assert_awaited_once()
+
+    async def test_message_in_thread_fetches_thread_history(self) -> None:
+        from discord_ref_read import fetch_one_discord_ref
+
+        thread = MagicMock(spec=discord.Thread)
+        thread.name = "planning-eddy"
+        thread.id = 99
+        msgs = [
+            _mock_message("we should ship bootstrap", msg_id=10),
+            _mock_message("agreed — one step at a time", author="Turtle", bot=True, msg_id=11),
+            _mock_message("decision: bootstrap wins", msg_id=12),
+        ]
+        thread.history = lambda limit=40, oldest_first=True: _async_history(msgs)
+
+        anchor = _mock_message("decision: bootstrap wins", msg_id=12)
+        anchor.channel = thread
+        thread.fetch_message = AsyncMock(return_value=anchor)
+
+        client = MagicMock()
+        client.fetch_channel = AsyncMock(return_value=thread)
+
+        result = await fetch_one_discord_ref(client, 1, 99, 12)
+        self.assertTrue(result.ok)
+        self.assertEqual(result.scope, "thread")
+        self.assertEqual(result.message_count, 3)
+        self.assertIn("ship bootstrap", result.content)
+        self.assertIn("bootstrap wins", result.content)
+
+    async def test_thread_only_link_fetches_history(self) -> None:
+        from discord_ref_read import fetch_one_discord_thread
+
+        thread = MagicMock(spec=discord.Thread)
+        thread.name = "long-eddy"
+        thread.id = 55
+        msgs = [
+            _mock_message("alpha", msg_id=1),
+            _mock_message("beta", msg_id=2),
+        ]
+        thread.history = lambda limit=40, oldest_first=True: _async_history(msgs)
+
+        client = MagicMock()
+        client.fetch_channel = AsyncMock(return_value=thread)
+
+        result = await fetch_one_discord_thread(client, 1, 55)
+        self.assertTrue(result.ok)
+        self.assertEqual(result.scope, "thread")
+        self.assertEqual(result.message_count, 2)
+        self.assertIn("alpha", result.content)
+        self.assertIn("beta", result.content)
 
 
 if __name__ == "__main__":
