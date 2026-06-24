@@ -142,6 +142,8 @@ Eddy: you've been talking for a while (no flow, or different flow)
 
 Same harness as Journey 2; difference is **bootstrap input** and **rename policy**.
 
+**Example — Feedback:** User loads **Feedback** mid-thread when something felt good or wrong. Bootstrap pulls thread excerpt; Turtle asks only what's missing (kind, moment, worked / didn't). Outcome: structured summary for the operator — user-initiated, never prompted by River or Turtle. See [hosted-tester-program.md](hosted-tester-program.md).
+
 ---
 
 ## Journey 5 — Drop a URL in an eddy (with or without flow)

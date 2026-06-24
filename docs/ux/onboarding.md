@@ -35,7 +35,21 @@ No cloud API key is required for the default path. Your hardware picks the best 
 
 ## Onboarding embed (generic — target copy)
 
-Use this shape for first-run river embed, install skill success message, and hosted-river welcome (locale variants in `template/practitioner/`). **Longer and generic** — flows are a short optional section at the end, not the headline.
+Use this shape for first-run river embed, install skill success message, and hosted-river welcome. **English is the default** for the current friends-and-family cohort; locale variants in `template/practitioner/` are for a later localization pass. **Longer and generic** — flows are a short optional section at the end, not the headline.
+
+---
+
+## Language (current cohort)
+
+**Product copy is English-only** for hosted and self-install onboarding until a deliberate localization pass.
+
+| What | Stance |
+|------|--------|
+| Onboarding embed, flows, invite copy | **`onboarding_en.md`** — provision hosted rivers with **`locale=en`** |
+| In-eddy dialogue | Practitioners may use any language; Turtle follows without extra configuration |
+| **`onboarding_de.md`**, claim-room DE strings | Retained in repo; **not** maintained for current testers |
+
+Past German onboarding drift reflected one practitioner's conversational preference, not a product requirement. LLMs handle occasional language switches in thread; that is separate from shipping localized UX.
 
 ---
 
@@ -56,6 +70,8 @@ It works like the familiar pattern: open a chat, start typing, follow up, paste 
 - **Your data stays local** — practice files and flow checkpoints live on your machine under your practice root  
 
 **Optional — flows:** Inside an eddy you can open the **flow library** and load a guided conversation (structured programs for specific jobs — clarity, reflection, a recurring dynamic, and more). You don't need flows for regular use. If you're curious what a flow feels like, try **Navigator** once — it walks through finding one concrete next step toward something you care about.
+
+**Feedback:** Anytime something works well or doesn't, load **Feedback** from the flow library — it collects a short note for the person who runs your river. You choose when to share; nothing is sent unless you start that flow.
 
 No homework. No framework vocabulary. Open an eddy and talk.
 
@@ -80,7 +96,7 @@ No homework. No framework vocabulary. Open an eddy and talk.
 | Surface | Tone |
 |---------|------|
 | **Self-install (Pop 2)** | Generic personal AI first; flows optional; sovereignty/local models mentioned briefly |
-| **Hosted river (claim room)** | Same core loop; privacy boundary (your channel is yours); locale from `onboarding_de.md` / `onboarding_en.md` |
+| **Hosted river (claim room)** | Same core loop; privacy boundary (your channel is yours); **`locale=en`** onboarding for current cohort |
 | **Magic-attuned operator** | Same generic onboarding for product; Magic overlay is not the install story |
 
 ---
@@ -99,8 +115,8 @@ No homework. No framework vocabulary. Open an eddy and talk.
 
 | File | Use |
 |------|-----|
-| `template/practitioner/onboarding_en.md` | Hosted claim embed (EN) — keep aligned with this doc |
-| `template/practitioner/onboarding_de.md` | Hosted claim embed (DE) |
+| `template/practitioner/onboarding_en.md` | Hosted claim embed (EN) — **active**; keep aligned with this doc |
+| `template/practitioner/onboarding_de.md` | Hosted claim embed (DE) — **deferred** until localization pass |
 | `docs/install/SKILL.md` | Agent-assisted install — first-success = J1, not flow shake |
 
 ---

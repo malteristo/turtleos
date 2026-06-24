@@ -11,7 +11,7 @@ Flows are prompt programs loaded when `context_type` / `flow_id` is set (histori
 
 ## Flow menu (bar) — retired
 
-Lists only **installed** flows — `.md` files under `practice/flows/` or `template/flows/`. Template ships **Navigator**, **Thread**, **Companion**; practitioners see whatever is installed under their practice root.
+Lists only **installed** flows — `.md` files under `practice/flows/` or `template/flows/`. Template ships **Navigator**, **Thread**, **Companion**, **Feedback**; practitioners see whatever is installed under their practice root.
 
 **Two entry paths (legacy):** flows **without** `intake` in front matter vs flows **with** `intake` declared (Navigator). Intake makes a flow feel like a **program** (contract → prepare → handoff), not a dressed-up prompt.
 
