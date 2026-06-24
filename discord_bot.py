@@ -266,12 +266,13 @@ async def _retire_legacy_river_chrome(channel) -> int:
     return removed
 
 
-def _build_native_runtime_env(message, cfg):
+def _build_native_runtime_env(message, cfg, history: list[dict] | None = None):
     """Minimal runtime block for vanilla native eddies."""
     channel = message.channel
     parent = channel.parent if isinstance(channel, discord.Thread) else None
     channel_name = parent.name if parent else (channel.name if hasattr(channel, "name") else "(DM)")
     thread_name = channel.name if isinstance(channel, discord.Thread) else None
+    history = history or []
 
     lines = [
         "## Eddy Context",
@@ -279,6 +280,18 @@ def _build_native_runtime_env(message, cfg):
     ]
     if thread_name:
         lines.append(f"- **Eddy:** {thread_name}")
+        prior_user_turns = sum(1 for m in history if m.get("role") == "user")
+        if prior_user_turns > 1:
+            lines.append(
+                "- **Resume:** This thread has prior conversation in your working history — "
+                "continue naturally from where you left off. Do not ask them to recap or claim "
+                "you lack earlier messages in this eddy."
+            )
+        thread_card = read_thread_state(thread_name)
+        if thread_card:
+            lines.append("")
+            lines.append("## Thread continuity")
+            lines.append(thread_card)
     if (cfg or {}).get("blank_eddy") or (cfg or {}).get("awaiting_title"):
         lines.append(
             "- **Entry:** Blank eddy — the practitioner's first message is what they brought; "
@@ -831,7 +844,7 @@ async def _continue_dialogue_turn(
         await _update_thread_state(message.channel, cfg, history)
 
     if native_eddy:
-        runtime_env = _build_native_runtime_env(message, cfg)
+        runtime_env = _build_native_runtime_env(message, cfg, history)
         system_prompt = runtime_env + system_prompt
     else:
         runtime_env = _build_runtime_env(message, cfg)

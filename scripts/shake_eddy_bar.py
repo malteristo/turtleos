@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Shakedown for standing eddy bar → blank eddy + in-eddy flow library (Slice 1).
 
-Exercises `_spawn_eddy_from_anchor(channel)` → `spawn_river_eddy` → optional
-`post_eddy_flow_library` inside the thread.
+Exercises `_spawn_eddy_from_anchor(channel)` → `spawn_river_eddy` (empty room)
+→ first practitioner message → bottom flow library bar via migrate.
 
 Offline checks always run. With --live, uses River bot token on Mac Mini.
 
@@ -163,10 +163,10 @@ def check_live(wait_seconds: int) -> list[str]:
     time.sleep(2)
     transcript = _read_thread(thread_id)
     lower = transcript.lower()
-    if "guided flow" not in lower and "start typing" not in lower and "flow library" not in lower:
+    if "guided flow" in lower or "load a guided flow" in lower:
         errors.append(
-            "in-eddy flow library embed not visible "
-            "(expected guided flow / start typing / flow library)"
+            "top flow library embed visible at materialize "
+            "(expected empty room until first practitioner message)"
         )
 
     try:

@@ -108,14 +108,19 @@ def clear_history(channel_id: int) -> None:
 
 async def load_thread_history(thread: discord.Thread, max_messages: int = 50) -> list[dict]:
     """Load a thread's Discord message history into the in-memory format."""
+    from eddy_spawn import is_turtle_bot_message
+
     history = []
     try:
         async for msg in thread.history(limit=max_messages, oldest_first=True):
-            if msg.author.bot and msg.author == client.user:
-                content = msg.content
-                if content and not content.startswith("🧵"):
-                    history.append({"role": "assistant", "content": content})
-            elif not msg.author.bot:
+            if msg.author.bot:
+                if not (is_turtle_bot_message(msg) or msg.author == client.user):
+                    continue
+                content = (msg.content or "").strip()
+                if not content or content.startswith("🧵"):
+                    continue
+                history.append({"role": "assistant", "content": content})
+            else:
                 note = ""
                 content = msg.content or ""
                 if msg.attachments:

@@ -1182,14 +1182,6 @@ async def spawn_river_eddy(
 
     print(f"River eddy materialized: {thread_name} (id: {thread.id}) split_bot={split_bot}")
 
-    if not flow_id:
-        try:
-            from eddy_flow_library import post_eddy_flow_library
-
-            await post_eddy_flow_library(thread, bot_client)
-        except Exception as exc:
-            print(f"Eddy flow library post failed: {type(exc).__name__}: {exc}")
-
     return thread
 
 

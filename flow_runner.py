@@ -162,17 +162,27 @@ def read_state_bundle(spec: FlowSpec, practice_dir: str | None = None) -> dict[s
 def flow_presence_line(spec: FlowSpec, practice_dir: str | None = None) -> str:
     """Human-readable flow presence for shell injection (not model prose)."""
     pd = practice_dir or get_pd()
-    loaded: list[str] = []
+    has_checkpoint = False
+    has_empty_read = False
     for rel in spec.reads:
         path = _safe_practice_path(rel, pd)
         if path and path.is_file():
-            loaded.append(Path(rel).name)
-    if loaded:
-        return f"{spec.title} · loaded {', '.join(loaded)}"
+            if path.read_text(encoding="utf-8").strip():
+                has_checkpoint = True
+                break
+            has_empty_read = True
+    if has_checkpoint:
+        return f"{spec.title} · continuing from last time"
+    if has_empty_read:
+        return f"{spec.title} · starting fresh"
     return spec.title
 
 
 _FLOW_OPS_LINE = re.compile(r"^\s*-#\s*(?:flow:|read\s).*\s*$", re.MULTILINE | re.IGNORECASE)
+_FLOW_PRESENCE_ECHO = re.compile(
+    r"^\s*(?:-#\s*)?.+\s·\s+(?:loaded\s+.+|continuing from last time|starting fresh)\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
 _FLOW_META_LINE = re.compile(
     r"^\s*\*\([^)]*(?:no question|end here)[^)]*\)\*\s*$",
     re.MULTILINE | re.IGNORECASE,
@@ -188,6 +198,7 @@ def strip_model_operational_lines(text: str) -> tuple[str, list[str]]:
         return ""
 
     cleaned = _FLOW_OPS_LINE.sub(_collect, text)
+    cleaned = _FLOW_PRESENCE_ECHO.sub(_collect, cleaned)
     cleaned = _FLOW_META_LINE.sub(_collect, cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
     return cleaned, stripped

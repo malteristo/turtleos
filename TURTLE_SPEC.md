@@ -174,8 +174,8 @@ After each practitioner river message, the harness MUST ensure the eddy bar rema
 2. Bar message deletes; River creates a thread anchor; Discord renders the native **thread-list embed**.
 3. Thread opens as **`new eddy`** — no seed, no Turtle monologue.
 4. Fresh bar posts below the new thread card.
-5. River posts a **compact flow library** embed in the thread (optional programs — user-initiated load).
-6. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); Turtle replies.
+5. Thread is an **empty room** until the practitioner speaks — no orientation embed at materialize.
+6. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); **bottom flow library bar** appears; Turtle replies.
 
 **Load flow in eddy (Layer 2 — intentional):**
 
@@ -205,7 +205,7 @@ The River executes; it does not discuss.
 
 ### 5.6. Flow Discovery
 
-**Primary (in-eddy):** After **`new eddy`** materialize, the shell posts a compact **flow library** embed in the thread. Practitioners load a flow deliberately — **`!flows`** in an eddy opens the same picker. **`!flows`** in the parent river redirects practitioners to open an eddy first.
+**Primary (in-eddy):** After the practitioner's **first message** in a blank eddy, the shell posts a compact **flow library bar** at the thread bottom. Practitioners load a flow deliberately — **`!flows`** in an eddy opens the same picker. **`!flows`** in the parent river redirects practitioners to open an eddy first.
 
 **Secondary (parent channel):** When a river message signals intent to browse programs, the River MAY emit **`offer_flow_menu`** or **`offer_flow`** on **that message** — contextual, not proactive spam.
 
@@ -285,7 +285,7 @@ Cross-eddy memory, curated distillates, and what Turtle/River may read across ti
 
 When an eddy is materialized:
 
-1. **Blank eddy (bar — default):** no seed at materialize — the practitioner's **first message** is the opening. Thread title starts as **`new eddy`**; River retitles from first message content. Compact flow library embed MAY appear (§5.6).
+1. **Blank eddy (bar — default):** no seed at materialize — the practitioner's **first message** is the opening. Thread title starts as **`new eddy`**; River retitles from first message content. Bottom flow library bar appears after first message (§5.6).
 2. **Flow active (in-eddy load):** Turtle bootstrap opening; conversational intake when declared; flow prompt sections loaded; presence tag before first flow reply (§7.6).
 3. **Seeded eddy (contextual / legacy):** practitioner's river input MAY be posted as a seed embed.
 4. **Deferred Turtle join:** Turtle does not join at thread create. On first in-eddy practitioner message, River adds Turtle, then Turtle replies (§7.7).
@@ -332,7 +332,7 @@ The agent harness (system prompt assembly, tool access, flow loading) is shaped 
 
 Transparency is **mostly conversational** — Turtle explains gaps, active flows, and uncertainty in dialogue.
 
-The shell harness MAY inject **compact presence tags** for active flows and loaded state files (e.g. `Navigator · loaded navigator-last.md`) — visible trust signals, not chat. In native attunement, operational `-#` lines MUST NOT be emitted by the model; the shell owns load visibility.
+The shell harness MAY inject **compact presence tags** for active flows (e.g. `Navigator · continuing from last time` when a checkpoint exists, or `Navigator` on a fresh start) — practitioner-facing outcomes, not filenames. In native attunement, operational `-#` lines MUST NOT be emitted by the model; the shell owns load visibility.
 
 **Link reading:** URL fetch progress and outcomes MUST appear as **silent embeds** on the eddy timeline (Reading → Read, or failure/opt-in offers). Turtle MUST NOT narrate fetch mechanics in conversational voice; the practitioner sees trace in embeds only (§9.5).
 
@@ -499,7 +499,7 @@ The repository ships a **flow library** — optional prompt programs (Navigator,
 
 Users run a flow by:
 
-- **In-eddy flow library** embed after `new eddy` (primary discoverability),
+- **In-eddy flow library bar** after first practitioner message in a blank eddy (primary discoverability),
 - **`!flows`** inside an eddy (same picker),
 - Contextual **`offer_flow_menu`** / **`offer_flow`** on a parent river message, or
 - Custom install under `practice_root/flows/`

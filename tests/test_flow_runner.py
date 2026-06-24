@@ -88,6 +88,19 @@ class FlowRunnerTests(unittest.TestCase):
         assert spec is not None
         self.assertEqual(flow_presence_line(spec), "Navigator")
 
+    def test_flow_presence_line_continuing(self) -> None:
+        spec = load_flow_spec("navigator")
+        assert spec is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            note_path = os.path.join(tmp, "state/notes/navigator-last.md")
+            os.makedirs(os.path.dirname(note_path), exist_ok=True)
+            with open(note_path, "w", encoding="utf-8") as fh:
+                fh.write("2026-06-01 — Next step: ship the thing.")
+            self.assertEqual(
+                flow_presence_line(spec, tmp),
+                "Navigator · continuing from last time",
+            )
+
     def test_strip_model_operational_lines(self) -> None:
         raw = "I'm here.\n\n-# flow: Shelter\n\n-# read state/notes/shelter-last.md\n\nStill here."
         cleaned, stripped = strip_model_operational_lines(raw)
@@ -95,6 +108,20 @@ class FlowRunnerTests(unittest.TestCase):
         self.assertNotIn("-# flow:", cleaned)
         self.assertIn("I'm here.", cleaned)
         self.assertIn("Still here.", cleaned)
+
+    def test_strip_model_presence_echo(self) -> None:
+        raw = (
+            "Let's pick up.\n\n"
+            "Navigator · loaded navigator-last.md\n\n"
+            "-# Navigator · continuing from last time\n\n"
+            "What happened since last time?"
+        )
+        cleaned, stripped = strip_model_operational_lines(raw)
+        self.assertEqual(len(stripped), 2)
+        self.assertNotIn("navigator-last.md", cleaned)
+        self.assertNotIn("continuing from last time", cleaned)
+        self.assertIn("Let's pick up.", cleaned)
+        self.assertIn("What happened since last time?", cleaned)
 
         meta = "You made it.\n\n*(No question. End here.)*"
         cleaned_meta, stripped_meta = strip_model_operational_lines(meta)

@@ -53,11 +53,11 @@ River bar: **`[ 🌀 new eddy ]` only** — no flow menu on the river.
 ```
 River: click [new eddy]
   → thread card "new eddy"
-  → enter thread
-  → in-eddy: flow library picker visible (compact) + implicit "or just type"
+  → enter thread — empty room (no orientation embed)
   → you send first message
   → river added turtle
   → thread may rename from your message (generate_topic)
+  → bottom flow library bar appears (compact picker)
   → Turtle replies — open dialogue, no flow loaded
 ```
 
@@ -100,7 +100,7 @@ River: [new eddy] → enter empty thread
 [Date] — Working toward: [intention]. Next step: [specific thing]. Because: [why it matters].
 ```
 
-**Shell trace (not Turtle voice):** `-# Navigator · loaded navigator-last.md` once before first flow reply when checkpoint exists.
+**Shell trace (not Turtle voice):** `-# Navigator · continuing from last time` once before first flow reply when a checkpoint exists; `-# Navigator` on a fresh start. The model must not echo these lines.
 
 **What this replaces:** river `flow menu` → Navigator → Prepare modal → Begin embed handoff.
 

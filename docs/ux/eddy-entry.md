@@ -16,8 +16,9 @@ How practitioners enter eddies and what they see before Turtle speaks.
 | First message | They speak first — that message **is** the opening |
 | Rename | River harness retitles thread from first message content (`generate_topic`); **`!rename Exact title`** anytime in-eddy for manual override |
 | First Turtle reply | `river added turtle` system line, then dialogue |
+| **Resume** (return after days) | Same thread — history reloads from disk or Discord; Turtle continues without recap disclaimer |
 
-**Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`.
+**Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`; `load_thread_history`, `dialogue_store`, `_build_native_runtime_env` in `discord_bot.py`.
 
 **Lifecycle bar (planned):** After first practitioner message, River posts checkpoint/release/dissolve bar at thread bottom — not on empty materialize. See [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md).
 
@@ -35,7 +36,7 @@ When materializing **from a practitioner’s river message** (contextual flow bu
 
 - **Split-bot:** River adds the practitioner at materialize (`river added you`). On first in-eddy message, River adds Turtle (`river added turtle`) — same native Discord system line, no green embed.
 - Turtle does not join at thread create; entry is deferred until the practitioner speaks.
-- Flow context loads in the Turtle prompt. On first reply in a flow eddy, the shell posts a compact `-#` presence line (e.g. `Shelter · loaded shelter-last.md`) — timeline trace, not Turtle dialogue. The model must not emit `-# flow:` / `-# read` lines.
+- Flow context loads in the Turtle prompt. On first reply in a flow eddy, the shell posts a compact `-#` presence line (e.g. `Navigator · continuing from last time`) — practitioner-facing outcome, not filenames or tool trace. The model must not emit `-# flow:` / `-# read` lines or echo the presence line.
 
 **Implementation:** `ensure_native_presence`, `post_flow_presence_if_needed` in `eddy_spawn.py`; `flow_runner.flow_presence_line`; `conduct.md`.
 
