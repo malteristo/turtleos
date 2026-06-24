@@ -177,8 +177,16 @@ def check_live(wait_seconds: int) -> list[str]:
 
     time.sleep(wait_seconds)
     transcript = _read_thread(thread_id)
-    if "turtle" not in transcript.lower():
+    lower = transcript.lower()
+    if "turtle" not in lower:
         errors.append("no Turtle reply after first message in blank eddy")
+    if "checkpoint" in lower and "release" in lower and "dissolve" in lower:
+        errors.append("standing lifecycle bar still visible (expected flow library bar)")
+    if "guided flow" not in lower and "load a guided flow" not in lower:
+        errors.append(
+            "bottom flow library bar not visible after first message "
+            "(expected guided flow / Load a guided flow)"
+        )
 
     return errors
 

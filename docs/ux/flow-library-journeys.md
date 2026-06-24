@@ -27,7 +27,7 @@ First install and onboarding stay **generic and longer** — see [onboarding.md]
 |------|---------|
 | **Eddy** | A focused Discord thread — your private conversation room |
 | **Flow** | A guided conversation program you load when you want structure |
-| **Flow library** | Installed flows available from inside an eddy (not the river bar) |
+| **Flow library** | Installed flows available from inside an eddy — intro embed at materialize, **bottom bar** after first message (native) |
 | **Bootstrap** | Turtle's opening when a flow loads — connects the flow to what you already have |
 | **Checkpoint** | Where a flow saved your last outcome (e.g. `state/notes/navigator-last.md`) |
 

@@ -869,16 +869,10 @@ async def river_add_turtle_to_eddy(thread) -> bool:
         print("River add turtle: could not resolve Turtle bot user id")
         return False
 
-    import asyncio
-
-    # Discord omits "X added Y" when Y is already a thread member (e.g. early join/rejoin).
     try:
         await thread.fetch_member(turtle_id)
-        try:
-            await thread.remove_user(discord.Object(id=turtle_id))
-            await asyncio.sleep(0.25)
-        except discord.HTTPException as exc:
-            print(f"River remove turtle before add: {type(exc).__name__}: {exc}")
+        # Already present — skip remove/re-add (avoids noisy timeline on first message).
+        return True
     except discord.HTTPException:
         pass
 

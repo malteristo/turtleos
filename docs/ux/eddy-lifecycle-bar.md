@@ -1,6 +1,6 @@
 # Eddy lifecycle bar
 
-**Status:** Implemented (2026-06-19)  
+**Status:** Implemented (2026-06-19) · **Native attunement:** standing bar **retired** (2026-06-24) — use typed `!checkpoint` / `!release` / `!dissolve` + bottom **flow library** bar + contextual act rows (D3)  
 **Principles:** [principles.md](principles.md) · **Sessions:** [sessions.md](sessions.md) · **River bar:** [river.md](river.md)
 
 ---

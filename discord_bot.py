@@ -1075,11 +1075,11 @@ async def _continue_dialogue_turn(
 _intake_runner = None
 
 
-async def _touch_lifecycle_after_dialogue(message: discord.Message) -> None:
+async def _touch_flow_library_after_dialogue(message: discord.Message) -> None:
     if isinstance(message.channel, discord.Thread):
-        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+        from eddy_flow_library import touch_eddy_flow_library_bar
 
-        await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+        await touch_eddy_flow_library_bar(message, from_practitioner=True)
 
 
 async def _route_practice_dialogue(message: discord.Message) -> None:
@@ -1088,7 +1088,7 @@ async def _route_practice_dialogue(message: discord.Message) -> None:
     ch = getattr(message.channel, "name", message.channel.id)
     visible, _ = _visible_message_content(message)
     print(f"Turtle inbound [{ch}]: {visible[:120]!r}")
-    await enqueue_dialogue(message, handle_dialogue, after_turn=_touch_lifecycle_after_dialogue)
+    await enqueue_dialogue(message, handle_dialogue, after_turn=_touch_flow_library_after_dialogue)
 
 
 async def _should_skip_native_starter(message: discord.Message) -> bool:

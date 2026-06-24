@@ -41,6 +41,21 @@ class EddyFlowLibraryTests(unittest.TestCase):
         self.assertIn("FlowRenameOfferView", src)
         self.assertIn("post_flow_rename_offer", src)
 
+    def test_bottom_flow_library_bar(self) -> None:
+        src = (REPO / "eddy_flow_library.py").read_text(encoding="utf-8")
+        for needle in (
+            "EddyFlowLibraryBarView",
+            "post_eddy_flow_library_bar",
+            "touch_eddy_flow_library_bar",
+            "migrate_eddy_flow_library_to_bottom",
+        ):
+            self.assertIn(needle, src)
+
+    def test_bar_anchor_prefers_flow_library_on_native(self) -> None:
+        src = (REPO / "bar_anchor.py").read_text(encoding="utf-8")
+        self.assertIn("flow_library_bar", src)
+        self.assertIn("standing_lifecycle_bar_enabled", src)
+
 
 if __name__ == "__main__":
     unittest.main()

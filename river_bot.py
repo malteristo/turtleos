@@ -161,9 +161,6 @@ async def on_message(message: discord.Message):
             lock = get_channel_lock(message.channel.id)
             async with lock:
                 await handle_eddy_first_message(message)
-            from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
-
-            await touch_eddy_lifecycle_bar(message, from_practitioner=True)
             _maybe_schedule_save_offer(message)
             return
 

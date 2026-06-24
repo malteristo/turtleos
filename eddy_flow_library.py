@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import discord
@@ -10,6 +11,83 @@ import discord
 from flow_runner import list_resolvable_flow_ids
 
 _BLANK_EDDY_NAMES = frozenset({"new eddy", "blank eddy", "thread"})
+
+
+def flow_library_bar_enabled() -> bool:
+    """Native eddies: bottom flow library bar replaces standing lifecycle bar."""
+    from mage import get_attunement_profile
+
+    return get_attunement_profile() == "native"
+
+
+def _flow_library_bar_state_path() -> str:
+    from mage import get_runtime_dir
+
+    bar_dir = os.path.join(get_runtime_dir(), "thread-state", "eddy")
+    os.makedirs(bar_dir, exist_ok=True)
+    return os.path.join(bar_dir, "flow_library_bar.json")
+
+
+def _load_flow_library_bar_state() -> dict[str, int]:
+    path = _flow_library_bar_state_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return {str(k): int(v) for k, v in data.items()}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {}
+
+
+def _save_flow_library_bar_state(state: dict[str, int]) -> None:
+    with open(_flow_library_bar_state_path(), "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
+
+
+def is_flow_library_bar_active(thread_id: int) -> bool:
+    return str(thread_id) in _load_flow_library_bar_state()
+
+
+def _mark_flow_library_bar_message(thread_id: int, message_id: int) -> None:
+    state = _load_flow_library_bar_state()
+    state[str(thread_id)] = message_id
+    _save_flow_library_bar_state(state)
+
+
+def clear_flow_library_bar_state(thread_id: int) -> None:
+    state = _load_flow_library_bar_state()
+    if state.pop(str(thread_id), None) is not None:
+        _save_flow_library_bar_state(state)
+
+
+def flow_library_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
+    if not flow_library_bar_enabled() or not parent_id:
+        return False
+    from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
+    from prompts import uses_native_turtle_prompt
+
+    if not uses_native_turtle_prompt(parent_id):
+        return False
+    if is_awaiting_flow_intake(thread_id, parent_id):
+        return False
+    if is_awaiting_title(thread_id, parent_id):
+        return False
+    return True
+
+
+def get_flow_library_bar_client(thread: discord.Thread):
+    from mage import river_bot_enabled
+
+    if river_bot_enabled():
+        from river_state import river_client
+
+        if getattr(river_client, "is_ready", lambda: False)():
+            return river_client
+        return None
+    if thread.guild:
+        return thread.guild._state._get_client()
+    return None
 
 
 def _flow_display_name(flow_id: str) -> str:
@@ -222,7 +300,7 @@ async def load_flow_in_eddy(
 
 
 async def dismiss_eddy_flow_library(thread: discord.Thread, parent_id: int) -> None:
-    """Remove the flow library affordance when the practitioner starts talking."""
+    """Remove the intro flow library embed (top of thread). Bottom bar stays."""
     from eddy_spawn import patch_awaiting_title, read_awaiting_title
 
     data = read_awaiting_title(thread.id, parent_id)
@@ -237,6 +315,49 @@ async def dismiss_eddy_flow_library(thread: discord.Thread, parent_id: int) -> N
     except discord.HTTPException:
         pass
     patch_awaiting_title(thread.id, parent_id, flow_library_msg_id=None)
+
+
+async def dismiss_eddy_flow_library_bar(thread: discord.Thread) -> None:
+    """Remove bottom flow library bar after practitioner loads a flow."""
+    bar_id = _load_flow_library_bar_state().get(str(thread.id))
+    clear_flow_library_bar_state(thread.id)
+    if not bar_id:
+        return
+    try:
+        msg = await thread.fetch_message(int(bar_id))
+        await msg.delete()
+    except discord.HTTPException:
+        pass
+
+
+async def _complete_flow_pick(
+    interaction: discord.Interaction,
+    *,
+    thread_id: int,
+    parent_id: int,
+    flow_id: str,
+    dismiss_message: bool = True,
+) -> None:
+    thread = interaction.channel
+    if not isinstance(thread, discord.Thread):
+        await interaction.followup.send("Open an eddy first.", ephemeral=True)
+        return
+
+    ok = await load_flow_in_eddy(thread, flow_id, interaction.client)
+    if not ok:
+        await interaction.followup.send("Could not load that flow.", ephemeral=True)
+        return
+
+    from eddy_spawn import patch_awaiting_title
+
+    patch_awaiting_title(thread_id, parent_id, flow_library_msg_id=None)
+    await dismiss_eddy_flow_library(thread, parent_id)
+    await dismiss_eddy_flow_library_bar(thread)
+    if dismiss_message and interaction.message:
+        try:
+            await interaction.message.delete()
+        except discord.HTTPException as exc:
+            print(f"Eddy flow library dismiss failed: {exc}")
 
 
 class EddyFlowLibraryView(discord.ui.View):
@@ -274,18 +395,55 @@ class EddyFlowLibraryView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        ok = await load_flow_in_eddy(thread, flow_id, interaction.client)
-        if not ok:
-            await interaction.followup.send("Could not load that flow.", ephemeral=True)
+        await _complete_flow_pick(
+            interaction,
+            thread_id=self._thread_id,
+            parent_id=self._parent_id,
+            flow_id=flow_id,
+        )
+
+
+class EddyFlowLibraryBarView(discord.ui.View):
+    """Bottom-anchored flow picker — persists after first practitioner message."""
+
+    def __init__(self, thread_id: int, parent_id: int, flow_ids: list[str]):
+        super().__init__(timeout=None)
+        self._thread_id = thread_id
+        self._parent_id = parent_id
+        options = [
+            discord.SelectOption(
+                label=_flow_display_name(fid)[:100],
+                value=fid,
+            )
+            for fid in flow_ids[:25]
+        ]
+        select = discord.ui.Select(
+            placeholder="Load a guided flow…",
+            options=options,
+            custom_id=f"eddy:flowlib:bar:{thread_id}",
+        )
+        select.callback = self._on_pick
+        self.add_item(select)
+
+    async def _on_pick(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") or []
+        flow_id = values[0] if values else None
+        if not flow_id:
+            await interaction.response.send_message("No flow selected.", ephemeral=True)
             return
 
-        from eddy_spawn import patch_awaiting_title
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread) or thread.id != self._thread_id:
+            await interaction.response.send_message("Open this from the eddy thread.", ephemeral=True)
+            return
 
-        patch_awaiting_title(self._thread_id, self._parent_id, flow_library_msg_id=None)
-        try:
-            await interaction.message.delete()
-        except discord.HTTPException as exc:
-            print(f"Eddy flow library dismiss failed: {exc}")
+        await interaction.response.defer()
+        await _complete_flow_pick(
+            interaction,
+            thread_id=self._thread_id,
+            parent_id=self._parent_id,
+            flow_id=flow_id,
+        )
 
 
 async def post_eddy_flow_library(thread: discord.Thread, bot_client) -> discord.Message | None:
@@ -318,3 +476,187 @@ async def post_eddy_flow_library(thread: discord.Thread, bot_client) -> discord.
     bot_client.add_view(view)
     patch_awaiting_title(thread.id, parent_id, flow_library_msg_id=msg.id)
     return msg
+
+
+async def post_eddy_flow_library_bar(
+    thread: discord.Thread,
+    client,
+) -> discord.Message | None:
+    """Post bottom flow library bar (native eddies after first practitioner message)."""
+    if not flow_library_bar_enabled():
+        return None
+
+    parent_id = thread.parent_id
+    if not parent_id:
+        return None
+
+    flows = list_resolvable_flow_ids()
+    if not flows:
+        return None
+
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(thread, client)
+    view = EddyFlowLibraryBarView(ch.id, parent_id, flows)
+    try:
+        msg = await ch.send(
+            "\u200b",
+            embed=discord.Embed(
+                description="Optional — load a **guided flow** or keep talking.",
+                color=0x5865F2,
+            ),
+            view=view,
+            silent=True,
+        )
+    except discord.HTTPException as exc:
+        print(f"Eddy flow library bar post failed for {ch.id}: {type(exc).__name__}: {exc}")
+        return None
+
+    _mark_flow_library_bar_message(ch.id, msg.id)
+    client.add_view(view)
+    return msg
+
+
+async def ensure_eddy_flow_library_bar_at_bottom(
+    thread: discord.Thread,
+    client=None,
+) -> None:
+    from state import get_channel_lock
+
+    lock = get_channel_lock(thread.id)
+    async with lock:
+        await _ensure_eddy_flow_library_bar_at_bottom_unlocked(thread, client)
+
+
+async def _ensure_eddy_flow_library_bar_at_bottom_unlocked(
+    thread: discord.Thread,
+    client=None,
+) -> None:
+    parent_id = getattr(thread, "parent_id", None)
+    if not parent_id or not is_flow_library_bar_active(thread.id):
+        return
+    if not flow_library_bar_eligible(thread.id, parent_id):
+        return
+
+    client = client or get_flow_library_bar_client(thread)
+    if not client:
+        return
+
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(thread, client)
+    state = _load_flow_library_bar_state()
+    bar_id = state.get(str(ch.id))
+    flows = list_resolvable_flow_ids()
+    if not flows:
+        return
+
+    if bar_id:
+        try:
+            bar_msg = await ch.fetch_message(bar_id)
+            async for last in ch.history(limit=1):
+                if last.id == bar_id:
+                    view = EddyFlowLibraryBarView(ch.id, parent_id, flows)
+                    client.add_view(view)
+                    try:
+                        await bar_msg.edit(view=view)
+                    except discord.HTTPException:
+                        pass
+                    return
+            try:
+                await bar_msg.delete()
+            except discord.HTTPException:
+                pass
+        except discord.HTTPException:
+            pass
+
+    msg = await post_eddy_flow_library_bar(ch, client)
+    if msg:
+        print(f"Flow library bar reposted in #{getattr(ch, 'name', ch.id)} ({ch.id})")
+
+
+async def touch_eddy_flow_library_bar(
+    message: discord.Message,
+    *,
+    from_practitioner: bool = False,
+) -> None:
+    """Activate bottom flow library bar on first live eddy activity."""
+    if not flow_library_bar_enabled():
+        return
+    if not isinstance(message.channel, discord.Thread):
+        return
+    thread = message.channel
+    parent_id = thread.parent_id
+    if not parent_id or not flow_library_bar_eligible(thread.id, parent_id):
+        return
+
+    from eddy_lifecycle_bar import is_practitioner_input
+
+    client = get_flow_library_bar_client(thread)
+    if not client:
+        return
+
+    from state import get_channel_lock
+
+    lock = get_channel_lock(thread.id)
+    async with lock:
+        await _touch_eddy_flow_library_bar_unlocked(
+            message, from_practitioner=from_practitioner, client=client
+        )
+
+
+async def _touch_eddy_flow_library_bar_unlocked(
+    message: discord.Message,
+    *,
+    from_practitioner: bool = False,
+    client=None,
+) -> None:
+    if not isinstance(message.channel, discord.Thread):
+        return
+    thread = message.channel
+    parent_id = thread.parent_id
+    if not parent_id or not flow_library_bar_eligible(thread.id, parent_id):
+        return
+
+    from eddy_lifecycle_bar import is_practitioner_input
+
+    client = client or get_flow_library_bar_client(thread)
+    if not client:
+        return
+
+    if from_practitioner and is_practitioner_input(message):
+        if not is_flow_library_bar_active(thread.id):
+            await dismiss_eddy_flow_library(thread, parent_id)
+            msg = await post_eddy_flow_library_bar(thread, client)
+            if msg:
+                print(f"Flow library bar activated in #{thread.name} ({thread.id})")
+            return
+
+    if is_flow_library_bar_active(thread.id):
+        await _ensure_eddy_flow_library_bar_at_bottom_unlocked(thread, client)
+
+
+async def migrate_eddy_flow_library_to_bottom(
+    thread: discord.Thread,
+    client=None,
+) -> None:
+    """After first practitioner message: collapse intro embed → bottom bar."""
+    if not flow_library_bar_enabled():
+        return
+    parent_id = thread.parent_id
+    if not parent_id or not flow_library_bar_eligible(thread.id, parent_id):
+        return
+    client = client or get_flow_library_bar_client(thread)
+    if not client:
+        return
+    from state import get_channel_lock
+
+    lock = get_channel_lock(thread.id)
+    async with lock:
+        if is_flow_library_bar_active(thread.id):
+            await _ensure_eddy_flow_library_bar_at_bottom_unlocked(thread, client)
+            return
+        await dismiss_eddy_flow_library(thread, parent_id)
+        msg = await post_eddy_flow_library_bar(thread, client)
+        if msg:
+            print(f"Flow library bar activated in #{thread.name} ({thread.id})")

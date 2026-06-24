@@ -137,12 +137,10 @@ async def dispatch_direct_command(message, *, bar_client=None) -> bool:
         from bar_anchor import _ensure_channel_bars_unlocked, _is_eddy_thread
 
         if _is_eddy_thread(message.channel):
-            from eddy_lifecycle_bar import (
-                _touch_eddy_lifecycle_bar_unlocked,
-                is_practitioner_input,
-            )
+            from eddy_flow_library import _touch_eddy_flow_library_bar_unlocked
+            from eddy_lifecycle_bar import is_practitioner_input
 
-            await _touch_eddy_lifecycle_bar_unlocked(
+            await _touch_eddy_flow_library_bar_unlocked(
                 message, from_practitioner=is_practitioner_input(message)
             )
         await _ensure_channel_bars_unlocked(message.channel, bar_client)

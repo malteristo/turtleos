@@ -90,7 +90,7 @@ Paste-URL-and-talk is standard in ChatGPT/Gemini; **simplicity for the Mage ≠ 
 
 ### Eddy bar — contextual only (for now)
 
-**No standing lifecycle bar inside eddies** for the north-star loop. River provides a **well-working contextual bar**: listens after Turtle replies, offers what fits the moment. Palette and hit/miss rate improve over time. Standing checkpoint · release · dissolve is **not** the daily affordance target.
+**No standing lifecycle bar inside eddies** on native attunement (shipped 2026-06-24). **`!checkpoint` / `!release` / `!dissolve`** remain typed commands. Bottom **flow library** bar persists after first message; River **contextual act rows** (D3) replace lifecycle trio over time.
 
 **Negative (must not regress):** X2 (Fetch required before discuss) · X3 (duplicate Fetch buttons)
 

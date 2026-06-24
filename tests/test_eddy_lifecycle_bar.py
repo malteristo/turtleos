@@ -26,10 +26,18 @@ class TestLifecycleBarEligibility(unittest.TestCase):
                     self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
 
     def test_allows_live_eddy(self) -> None:
-        with patch("eddy_spawn.is_awaiting_title", return_value=False):
-            with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
-                with patch("prompts.uses_native_turtle_prompt", return_value=True):
-                    self.assertTrue(bar.lifecycle_bar_eligible(11, 22))
+        with patch.object(bar, "standing_lifecycle_bar_enabled", return_value=True):
+            with patch("eddy_spawn.is_awaiting_title", return_value=False):
+                with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
+                    with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                        self.assertTrue(bar.lifecycle_bar_eligible(11, 22))
+
+    def test_native_disables_standing_bar(self) -> None:
+        with patch.object(bar, "standing_lifecycle_bar_enabled", return_value=False):
+            with patch("eddy_spawn.is_awaiting_title", return_value=False):
+                with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
+                    with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                        self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
 
 
 class TestLifecycleBarState(unittest.TestCase):

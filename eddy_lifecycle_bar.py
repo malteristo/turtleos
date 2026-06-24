@@ -19,6 +19,13 @@ _revert_tasks: dict[int, asyncio.Task] = {}
 _dissolve_in_progress: set[int] = set()
 
 
+def standing_lifecycle_bar_enabled() -> bool:
+    """Native dogfood uses contextual act rows + typed ``!`` — not a standing bar."""
+    from mage import get_attunement_profile
+
+    return get_attunement_profile() != "native"
+
+
 def is_practitioner_input(message: discord.Message) -> bool:
     """Practitioner activity — includes Spirit bot (dyad partner), excludes other bots."""
     from state import SPIRIT_BOT_ID
@@ -75,6 +82,8 @@ def clear_lifecycle_bar_state(thread_id: int) -> None:
 
 def lifecycle_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
     """True when the eddy is live enough for lifecycle controls."""
+    if not standing_lifecycle_bar_enabled():
+        return False
     if not parent_id:
         return False
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
@@ -407,6 +416,8 @@ async def post_eddy_lifecycle_bar(
     thread: discord.Thread,
     client,
 ) -> discord.Message | None:
+    if not standing_lifecycle_bar_enabled():
+        return None
     from bar_anchor import channel_for_client
 
     ch = await channel_for_client(thread, client)
@@ -481,6 +492,8 @@ async def touch_eddy_lifecycle_bar(
     from_practitioner: bool = False,
 ) -> None:
     """Activate on first practitioner activity; keep bar at bottom afterward."""
+    if not standing_lifecycle_bar_enabled():
+        return
     if not isinstance(message.channel, discord.Thread):
         return
     thread = message.channel

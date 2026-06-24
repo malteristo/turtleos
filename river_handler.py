@@ -517,13 +517,6 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
     if is_awaiting_flow_intake(thread.id, parent_id):
         return False
 
-    try:
-        from eddy_flow_library import dismiss_eddy_flow_library
-
-        await dismiss_eddy_flow_library(thread, parent_id)
-    except Exception as exc:
-        print(f"Eddy flow library dismiss failed: {type(exc).__name__}: {exc}")
-
     awaiting = pop_awaiting_title(thread.id, parent_id)
     if not awaiting:
         return False
@@ -567,6 +560,14 @@ async def handle_eddy_first_message(message: discord.Message) -> bool:
         {"thread_id": str(thread.id), "message_id": message.id, "title": title},
     )
     print(f"Eddy renamed: {thread.id} → {title!r}")
+
+    try:
+        from eddy_flow_library import migrate_eddy_flow_library_to_bottom
+
+        await migrate_eddy_flow_library_to_bottom(thread)
+    except Exception as exc:
+        print(f"Eddy flow library bar migrate failed: {type(exc).__name__}: {exc}")
+
     return True
 
 
