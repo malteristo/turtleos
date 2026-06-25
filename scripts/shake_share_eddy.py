@@ -63,14 +63,26 @@ def check_commands() -> list[str]:
 
 def check_tests() -> list[str]:
     errors: list[str] = []
-    result = subprocess.run(
+    pytest = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/test_share_eddy.py", "-q"],
         cwd=REPO,
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        errors.append(f"test_share_eddy failed:\n{result.stdout}\n{result.stderr}")
+    if pytest.returncode == 0:
+        return errors
+    unittest = subprocess.run(
+        [sys.executable, "-m", "unittest", "tests.test_share_eddy", "-q"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    if unittest.returncode != 0:
+        errors.append(
+            "test_share_eddy failed:\n"
+            f"{pytest.stdout}\n{pytest.stderr}\n"
+            f"unittest fallback:\n{unittest.stdout}\n{unittest.stderr}"
+        )
     return errors
 
 

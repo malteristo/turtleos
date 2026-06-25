@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.modules.setdefault("discord", __import__("unittest.mock").mock.MagicMock())
 sys.modules.setdefault("discord.ui", sys.modules["discord"])
@@ -99,6 +99,19 @@ class ShareEddyRiverChannelTests(unittest.TestCase):
         with patch("share_eddy.get_registry", return_value=registry):
             self.assertEqual(river_channel_for_mage("guest"), 42)
             self.assertIsNone(river_channel_for_mage("missing"))
+
+
+class ShareEddyClientTests(unittest.TestCase):
+    def test_get_share_bot_client_uses_guild_not_message_client(self) -> None:
+        from share_eddy import get_share_bot_client
+
+        mock_client = object()
+        message = MagicMock()
+        message.channel.guild._state._get_client.return_value = mock_client
+        del message.client  # discord.Message has no .client in our runtime
+
+        with patch("mage.river_bot_enabled", return_value=False):
+            self.assertIs(get_share_bot_client(message), mock_client)
 
 
 if __name__ == "__main__":

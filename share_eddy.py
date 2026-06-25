@@ -545,7 +545,25 @@ class ShareContinueView(discord.ui.View):
         )
 
 
-def register_persistent_share_views(client: discord.Client) -> None:
+def get_share_bot_client(message: discord.Message | None = None):
+    """Discord client for share views — River bot in split mode, else guild client."""
+    from mage import river_bot_enabled
+
+    if river_bot_enabled():
+        from river_state import river_client
+
+        if getattr(river_client, "is_ready", lambda: False)():
+            return river_client
+    if message is not None:
+        channel = message.channel
+        guild = getattr(channel, "guild", None)
+        if guild is not None:
+            return guild._state._get_client()
+    from state import client as turtle_client
+
+    return turtle_client
+
+
     """Re-register Continue buttons after restart (inbox bundles on disk)."""
     for mage_key in get_registry().get("mages", {}):
         runtime = runtime_dir_for_mage(mage_key)
@@ -619,7 +637,8 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         author_id=message.author.id,
         targets=targets,
     )
-    message.client.add_view(view)
+    bot_client = get_share_bot_client(message)
+    bot_client.add_view(view)
     names = ", ".join(t.address for t in targets[:6])
     embed = discord.Embed(
         title="Share eddy",
