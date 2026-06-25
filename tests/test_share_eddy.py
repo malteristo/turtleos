@@ -329,7 +329,7 @@ class ShareReceivedHistoryTests(unittest.TestCase):
 
 
 class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_materialize_uses_sibling_thread_and_reposts_digest(self) -> None:
+    async def test_materialize_uses_message_create_thread(self) -> None:
         from share_eddy import materialize_received_eddy
 
         bundle = {
@@ -345,14 +345,18 @@ class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
         interaction.user.id = 222
         interaction.client = MagicMock()
         interaction.client.get_channel.return_value = None
-        interaction.channel = AsyncMock()
+        interaction.channel = MagicMock()
         interaction.channel.name = "nesrine-dialogue"
-        interaction.channel.create_thread = AsyncMock()
+
+        digest_msg = AsyncMock()
+        digest_msg.thread = None
+        digest_msg.create_thread = AsyncMock()
+        interaction.message = digest_msg
 
         fake_thread = AsyncMock()
         fake_thread.id = 555
         fake_thread.send = AsyncMock()
-        interaction.channel.create_thread.return_value = fake_thread
+        digest_msg.create_thread.return_value = fake_thread
 
         with tempfile.TemporaryDirectory() as tmp:
             from share_eddy import write_inbox_bundle
@@ -374,10 +378,31 @@ class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
                 thread = await materialize_received_eddy(interaction, "abc123", 1002)
 
         self.assertIs(thread, fake_thread)
-        interaction.channel.create_thread.assert_awaited_once()
-        self.assertEqual(fake_thread.send.await_count, 2)
-        first_call = fake_thread.send.await_args_list[0]
-        self.assertIn("embed", first_call.kwargs)
+        digest_msg.create_thread.assert_awaited_once()
+        fake_thread.send.assert_awaited_once()
+        self.assertNotIn("embed", fake_thread.send.await_args.kwargs)
+
+    async def test_materialize_reuses_existing_thread_on_message(self) -> None:
+        from share_eddy import materialize_received_eddy
+
+        interaction = MagicMock()
+        interaction.user.id = 222
+        existing = MagicMock()
+        existing.add_user = AsyncMock()
+        interaction.message = MagicMock()
+        interaction.message.thread = existing
+
+        with patch("share_eddy.set_practice_context_for_channel"), patch(
+            "mage.get_runtime_dir",
+            return_value="/tmp",
+        ), patch(
+            "share_eddy.load_inbox_bundle",
+            return_value={"share_id": "abc123", "recipient_discord_id": "222"},
+        ):
+            thread = await materialize_received_eddy(interaction, "abc123", 1002)
+
+        self.assertIs(thread, existing)
+        interaction.message.create_thread.assert_not_called()
 
     async def test_materialize_reuses_existing_thread_for_share(self) -> None:
         from share_eddy import materialize_received_eddy, save_received_thread_config
@@ -389,6 +414,9 @@ class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
         interaction.client = MagicMock()
         interaction.client.get_channel.return_value = existing
         interaction.channel = MagicMock()
+        digest_msg = MagicMock()
+        digest_msg.thread = None
+        interaction.message = digest_msg
 
         cfg = {
             "origin": "received",
@@ -422,7 +450,7 @@ class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
                 thread = await materialize_received_eddy(interaction, "abc123", 1002)
 
         self.assertIs(thread, existing)
-        interaction.channel.create_thread.assert_not_called()
+        digest_msg.create_thread.assert_not_called()
 
 
 class ShareContinueContractTests(unittest.IsolatedAsyncioTestCase):
