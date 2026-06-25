@@ -698,14 +698,25 @@ class ShareTargetSelect(discord.ui.Select):
         draft["digest"] = bundle["digest"]
         write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
 
+        preview = SharePreviewView(self._thread_id, self._author_id, target)
+        embed = build_preview_embed(draft, target)
+        try:
+            if interaction.message:
+                await interaction.message.edit(embed=embed, view=preview)
+            else:
+                await interaction.edit_original_response(embed=embed, view=preview)
+        except discord.HTTPException as exc:
+            print(f"Share preview edit failed: {type(exc).__name__}: {exc}")
+            await interaction.followup.send(
+                f"Could not show share preview: {exc}",
+                ephemeral=True,
+            )
+            return
+
         if isinstance(interaction.channel, discord.Thread) and is_placeholder_eddy_title(
             draft.get("title", "")
         ):
             await maybe_post_share_rename_offer(interaction.channel, draft, interaction.client)
-
-        preview = SharePreviewView(self._thread_id, self._author_id, target)
-        embed = build_preview_embed(draft, target)
-        await interaction.edit_message(embed=embed, view=preview)
 
 
 class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
@@ -756,7 +767,17 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
 
         preview = SharePreviewView(self._thread_id, self._author_id, self._target)
         embed = build_preview_embed(draft, self._target)
-        await interaction.response.edit_message(embed=embed, view=preview)
+        try:
+            if interaction.message:
+                await interaction.message.edit(embed=embed, view=preview)
+            else:
+                await interaction.response.edit_message(embed=embed, view=preview)
+        except discord.HTTPException as exc:
+            await interaction.response.send_message(
+                f"Could not update preview: {exc}",
+                ephemeral=True,
+            )
+            return
 
         if isinstance(interaction.channel, discord.Thread):
             await maybe_post_share_rename_offer(
@@ -863,11 +884,25 @@ class SharePreviewView(discord.ui.View):
         for child in self.children:
             child.disabled = True
         label = share_label(bundle)
-        await interaction.message.edit(
-            content=f"📤 Shared **“{label}”** with **{self._target.address}**.",
-            embed=None,
-            view=self,
-        )
+        try:
+            if interaction.message:
+                await interaction.message.edit(
+                    content=f"📤 Shared **“{label}”** with **{self._target.address}**.",
+                    embed=None,
+                    view=self,
+                )
+            else:
+                await interaction.edit_original_response(
+                    content=f"📤 Shared **“{label}”** with **{self._target.address}**.",
+                    embed=None,
+                    view=self,
+                )
+        except discord.HTTPException as exc:
+            print(f"Share success edit failed: {type(exc).__name__}: {exc}")
+            await interaction.followup.send(
+                f"📤 Shared **“{label}”** with **{self._target.address}**.",
+                ephemeral=True,
+            )
 
 
 class ShareConfirmView(SharePreviewView):
