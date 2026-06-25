@@ -694,14 +694,17 @@ async def materialize_received_eddy(
     label = share_label(bundle)
     eddy_archive = EDDY_TYPES.get("standard", {}).get("archive_minutes", 10080)
 
-    channel = interaction.channel
-    if channel is None or not hasattr(channel, "create_thread"):
+    msg = interaction.message
+    if msg is None:
         return None
 
-    thread = await channel.create_thread(
+    existing = getattr(msg, "thread", None)
+    if existing is not None:
+        return existing
+
+    thread = await msg.create_thread(
         name=label[:100],
         auto_archive_duration=eddy_archive,
-        type=discord.ChannelType.public_thread,
     )
 
     from eddy_spawn import river_add_turtle_to_eddy
@@ -712,7 +715,7 @@ async def materialize_received_eddy(
     except discord.HTTPException:
         pass
 
-    bot_client = _materialize_client(interaction.message)
+    bot_client = _materialize_client(msg)
     thread_configs[thread.id] = {
         "model": TURTLE_MODEL,
         "use_api": False,
@@ -765,7 +768,27 @@ async def materialize_received_eddy(
     except Exception:
         pass
 
-    return thread
+        return thread
+
+
+async def _disable_share_continue_button(
+    message: discord.Message | None,
+    view: "ShareContinueView",
+) -> None:
+    """Disable Continue while keeping digest content and embed visible in the river."""
+    if message is None:
+        return
+    for child in view.children:
+        child.disabled = True
+    edit_kwargs: dict[str, Any] = {"view": view}
+    if message.content is not None:
+        edit_kwargs["content"] = message.content
+    if message.embeds:
+        edit_kwargs["embeds"] = list(message.embeds)
+    try:
+        await message.edit(**edit_kwargs)
+    except discord.HTTPException as exc:
+        print(f"Share continue button disable failed: {type(exc).__name__}: {exc}")
 
 
 class ShareTargetSelect(discord.ui.Select):
@@ -1112,16 +1135,7 @@ class ShareContinueView(discord.ui.View):
             return
         for child in self.children:
             child.disabled = True
-        if interaction.message:
-            edit_kwargs: dict[str, Any] = {"view": None}
-            if interaction.message.content:
-                edit_kwargs["content"] = interaction.message.content
-            if interaction.message.embeds:
-                edit_kwargs["embeds"] = list(interaction.message.embeds)
-            try:
-                await interaction.message.edit(**edit_kwargs)
-            except discord.HTTPException:
-                pass
+        await _disable_share_continue_button(interaction.message, self)
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:
