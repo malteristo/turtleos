@@ -5,7 +5,10 @@ Tracks all eddies (threads) with lifecycle state, enabling stale detection,
 harvest tracking, and river stewardship.
 """
 
+from __future__ import annotations
+
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,42 +16,116 @@ import yaml
 
 from mage import get_runtime_dir
 
+_REGISTRY_CACHE: dict | None = None
+_LAST_PERSIST_MONO: float = 0.0
+_SAVE_DEBOUNCE_S = 2.0
+
 
 def _registry_path() -> Path:
     return Path(get_runtime_dir()) / "thread-state" / "registry.yaml"
 
 
+def _default_registry() -> dict:
+    return {"threads": {}, "last_backfill": None, "last_updated": None}
+
+
 def load_registry() -> dict:
+    global _REGISTRY_CACHE
+    if _REGISTRY_CACHE is not None:
+        return _REGISTRY_CACHE
     path = _registry_path()
     if not path.exists():
-        return {"threads": {}, "last_backfill": None, "last_updated": None}
+        _REGISTRY_CACHE = _default_registry()
+        return _REGISTRY_CACHE
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         if "threads" not in data:
             data["threads"] = {}
-        return data
+        _REGISTRY_CACHE = data
+        return _REGISTRY_CACHE
     except Exception as e:
         print(f"Registry load failed: {e}")
-        return {"threads": {}, "last_backfill": None, "last_updated": None}
+        _REGISTRY_CACHE = _default_registry()
+        return _REGISTRY_CACHE
 
 
-def save_registry(registry: dict):
+def _persist_registry(registry: dict) -> None:
     path = _registry_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    registry["last_updated"] = datetime.now(timezone.utc).isoformat()
-    tmp = path.with_suffix(".yaml.tmp")
+    payload = yaml.dump(
+        registry,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
+    fd, tmp_path = None, None
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            yaml.dump(registry, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        tmp.replace(path)
+        fd, tmp_path = _mkstemp_in(path.parent)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = None
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+        tmp_path = None
     except Exception as e:
         print(f"Registry save failed: {e}")
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        raise
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+def _mkstemp_in(directory: Path) -> tuple[int, str]:
+    import tempfile
+
+    return tempfile.mkstemp(dir=directory, suffix=".tmp")
+
+
+def save_registry(registry: dict, *, force: bool = False) -> None:
+    global _REGISTRY_CACHE, _LAST_PERSIST_MONO
+    registry["last_updated"] = datetime.now(timezone.utc).isoformat()
+    _REGISTRY_CACHE = registry
+    now = time.monotonic()
+    if force or (now - _LAST_PERSIST_MONO) >= _SAVE_DEBOUNCE_S:
         try:
-            if tmp.exists():
-                tmp.unlink()
-        except OSError:
-            pass
+            _persist_registry(registry)
+            _LAST_PERSIST_MONO = now
+        except Exception:
+            if not force:
+                return
+            try:
+                _persist_registry(registry)
+                _LAST_PERSIST_MONO = time.monotonic()
+            except Exception as retry_exc:
+                print(f"Registry save retry failed: {retry_exc}")
+
+
+def flush_registry() -> None:
+    """Persist cached registry immediately (debounce flush / shutdown)."""
+    global _LAST_PERSIST_MONO
+    if _REGISTRY_CACHE is None:
+        return
+    try:
+        _persist_registry(_REGISTRY_CACHE)
+        _LAST_PERSIST_MONO = time.monotonic()
+    except Exception as e:
+        print(f"Registry flush failed: {e}")
+
+
+def clear_registry_cache_for_tests() -> None:
+    global _REGISTRY_CACHE, _LAST_PERSIST_MONO
+    _REGISTRY_CACHE = None
+    _LAST_PERSIST_MONO = 0.0
 
 
 def register_thread(thread_id: int, name: str, parent_channel: str = "",
@@ -58,8 +135,9 @@ def register_thread(thread_id: int, name: str, parent_channel: str = "",
     registry = load_registry()
     tid = str(thread_id)
     now = datetime.now(timezone.utc).isoformat()
+    is_new = tid not in registry["threads"]
 
-    if tid not in registry["threads"]:
+    if is_new:
         registry["threads"][tid] = {
             "name": name,
             "parent_channel": parent_channel,
@@ -78,7 +156,7 @@ def register_thread(thread_id: int, name: str, parent_channel: str = "",
         if message_count > entry.get("message_count", 0):
             entry["message_count"] = message_count
 
-    save_registry(registry)
+    save_registry(registry, force=is_new)
     return registry["threads"][tid]
 
 
@@ -99,7 +177,7 @@ def update_thread_name(thread_id: int, new_name: str):
     tid = str(thread_id)
     if tid in registry["threads"]:
         registry["threads"][tid]["name"] = new_name
-        save_registry(registry)
+        save_registry(registry, force=True)
 
 
 def update_thread_context_type(thread_id: int, context_type: str | None) -> None:
@@ -253,7 +331,7 @@ def mark_harvested(thread_id: int):
     tid = str(thread_id)
     if tid in registry["threads"]:
         registry["threads"][tid]["harvest_status"] = "harvested"
-        save_registry(registry)
+        save_registry(registry, force=True)
 
 
 def mark_dissolved(thread_id: int):
@@ -261,7 +339,7 @@ def mark_dissolved(thread_id: int):
     tid = str(thread_id)
     if tid in registry["threads"]:
         registry["threads"][tid]["harvest_status"] = "dissolved"
-        save_registry(registry)
+        save_registry(registry, force=True)
 
 
 def remove_thread(thread_id: int):
@@ -269,7 +347,7 @@ def remove_thread(thread_id: int):
     tid = str(thread_id)
     if tid in registry["threads"]:
         del registry["threads"][tid]
-        save_registry(registry)
+        save_registry(registry, force=True)
 
 
 def get_stale_threads(days: int = 7) -> list[dict]:
@@ -382,5 +460,5 @@ async def backfill_from_discord(guild, parent_channels: list[int] | None = None)
             updated += 1
 
     registry["last_backfill"] = datetime.now(timezone.utc).isoformat()
-    save_registry(registry)
+    save_registry(registry, force=True)
     return added, updated

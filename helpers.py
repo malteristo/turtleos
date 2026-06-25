@@ -43,6 +43,10 @@ def local_now():
 # ─── Activity Logging ───────────────────────────────────────────
 
 async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
+    """Post a silent ops embed. Does not re-anchor bars — callers own that.
+
+    Re-anchoring from here caused channel-lock deadlocks when invoked inside
+    ``dispatch_direct_command`` or during idle ``checkpoint_session``."""
     target = channel or get_channel("dialogue")
     if not target:
         return
@@ -53,7 +57,7 @@ async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
     )
     try:
         from mage import river_bot_enabled
-        from bar_anchor import channel_for_client, ensure_channel_bars
+        from bar_anchor import channel_for_client
         from river_handler import _river_client_for_channel
 
         send_channel = target
@@ -62,7 +66,6 @@ async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
             if act_client:
                 send_channel = await channel_for_client(target, act_client)
         await send_channel.send(embed=embed, silent=True)
-        await ensure_channel_bars(target)
     except Exception:
         pass
 

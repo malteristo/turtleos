@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -86,15 +87,42 @@ def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> No
         print(f"Checkpoint chronicle failed: {type(exc).__name__}: {exc}")
 
 
-@tasks.loop(seconds=60)
-async def session_monitor():
-    now = datetime.now(timezone.utc)
+_idle_checkpoint_running: set[int] = set()
+
+
+async def _run_idle_checkpoint(channel_id: int) -> None:
+    try:
+        await checkpoint_session(channel_id, trigger="idle", mark_paused=True)
+    except Exception as exc:
+        print(f"Idle checkpoint failed for {channel_id}: {type(exc).__name__}: {exc}")
+    finally:
+        _idle_checkpoint_running.discard(channel_id)
+        try:
+            from thread_registry import flush_registry
+
+            flush_registry()
+        except Exception:
+            pass
+
+
+def _scan_idle_sessions(now: datetime | None = None) -> None:
+    """Schedule idle checkpoints without blocking the monitor loop."""
+    now = now or datetime.now(timezone.utc)
     for channel_id, state in list(active_sessions.items()):
         if state["closed"]:
             continue
         elapsed = (now - state["last_message"]).total_seconds()
-        if elapsed >= SESSION_TIMEOUT_SECONDS:
-            await checkpoint_session(channel_id, trigger="idle", mark_paused=True)
+        if elapsed < SESSION_TIMEOUT_SECONDS:
+            continue
+        if channel_id in _idle_checkpoint_running:
+            continue
+        _idle_checkpoint_running.add(channel_id)
+        asyncio.create_task(_run_idle_checkpoint(channel_id))
+
+
+@tasks.loop(seconds=60)
+async def session_monitor():
+    _scan_idle_sessions()
 
 
 async def _write_flow_checkpoint_if_needed(
