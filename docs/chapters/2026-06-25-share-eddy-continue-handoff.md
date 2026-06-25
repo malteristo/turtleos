@@ -1,26 +1,28 @@
 # Handoff: Share Continue — silent success on digest
 
 **Date:** 2026-06-25 (session 2, reframed 2026-06-25 evening)  
-**Status:** **VERIFY** — fix shipped; Nesrine re-dogfood pending  
-**Mini deploy:** `1b3cf8d` on `main` (plus contract test on next push)  
+**Status:** **ACCEPTED (v1)** — sibling-thread path; `message.create_thread` parked  
+**Mini deploy:** `20cb268` on `main` (`aef872c` behavior restored)  
 **Prior doc:** [2026-06-25-share-eddy-slice1-dogfood.md](2026-06-25-share-eddy-slice1-dogfood.md)
 
 ---
 
-## Target UX (Mage-confirmed resonance)
+## Target UX (Mage-confirmed — v1 accepted 2026-06-25 night)
 
 When Nesrine taps **Continue** on a share digest in her river:
 
 | Surface | Expected |
 |---------|----------|
-| **River digest message** | **Unchanged** — `@` line + embed + Continue button stay in the river after Continue (no vanish on mobile) |
-| **Second river message** | **None on success** — no "Opened received eddy…", no "This share is no longer available", no other ephemeral confirmation |
-| **Received eddy (thread)** | Sibling thread in sidebar; digest embed reposted inside; attribution line; Turtle has seeded history |
+| **River after Continue** | Discord system line ("river hat einen Thread begonnen…") with **thread chip** attached — no River success ephemeral |
+| **River digest act** | May leave the river view on Continue (Discord/client behavior); **not fighting this for v1** |
+| **Received eddy (thread)** | Sibling thread in sidebar; **digest embed reposted inside**; attribution line; Turtle has seeded history |
 | **Sharer river** | `@` act when recipient first replies (working) |
 
-**Trade-off:** Sibling-thread creation (`channel.create_thread`) keeps the river digest visible. We do **not** get Discord's thread chip on the digest message (that path used `message.create_thread`, which made the digest disappear on mobile).
+**Sign read:** Repeated dogfood (`message.create_thread` → chip-on-digest ideal) never held reliably — digest vanished without chip on desktop too. Mage accepts sibling-thread UX: chip on system line, digest preserved **inside the eddy**.
 
-**Not required for v1:** disabling Continue after open; ephemeral success toasts; thread chip on digest.
+**Parked (not v1):** thread chip on the original digest message via `message.create_thread`.
+
+**Not required for v1:** disabling Continue after open; ephemeral success toasts.
 
 ---
 
@@ -30,7 +32,7 @@ Two issues were conflated during debugging:
 
 1. **Redundant ephemeral (the Mage's ask)** — After Continue, River posted a private second message ("Opened…" or spurious "no longer available"). **Fixed** by `9c31aba`, `e247f02`, `1b3cf8d`.
 
-2. **Digest vanishes on mobile (chicken joke ~22:20)** — `message.create_thread` opened the eddy server-side but the digest left the river without a thread chip. **Fixed** by switching to sibling `channel.create_thread` + repost digest inside thread.
+2. **Digest / chip instability with `message.create_thread`** — Ideal UX (chip on digest, digest stays) worked once (neurodiversity ~14:48) but failed repeatedly on re-test (chicken joke, post-revert desktop). **Accepted v1:** sibling `channel.create_thread` + digest repost inside eddy; chip on system line (~22:41 dogfood looked fine).
 
 ---
 
@@ -62,7 +64,9 @@ ShareContinueView._on_continue → continue_received_share()
 | `8d7a183` | Restore `message.create_thread` | **Good** |
 | `e247f02` | Fix `return thread` indentation; drop spurious "no longer available" | **Good** |
 | `1b3cf8d` | Stop editing digest after Continue | **Good** — digest stays untouched |
-| *(next)* | Sibling thread + digest repost inside | **Verify** — fixes mobile vanish |
+| `aef872c` | Sibling `channel.create_thread` + digest inside eddy | **Accepted v1** |
+| `77f0ce5` | Restore `message.create_thread` | **Reverted** — digest vanished again on desktop |
+| `20cb268` | Revert to sibling-thread path | **Current** |
 
 ---
 
@@ -71,11 +75,10 @@ ShareContinueView._on_continue → continue_received_share()
 1. Mini at `git log -1` ≥ handoff commit; restart `com.turtle.river` + `com.turtle.discord` if needed
 2. Kermit: fresh eddy → `!share` → Nesrine
 3. Nesrine: tap **Continue** once on one share
-4. **Pass criteria:**
-   - Digest message **still visible** in river (unchanged text + embed + Continue button)
-   - **No second ephemeral/message** from River on success
-   - New eddy appears in sidebar; **digest embed reposted** as first message inside thread
-   - Nesrine can talk; Turtle has context
+4. **Pass criteria (v1):**
+   - **No River success ephemeral** on Continue
+   - System thread-start line + chip in river (or sidebar thread visible)
+   - **Digest embed inside eddy**; Nesrine can talk; Turtle has context
 5. Optional: thread interior screenshot (mobile DE); disk checks under `~/workshops/nesrine/share/`
 
 **Fail criteria:** Any success-path second message; digest stripped from river; thread interior empty with no workaround.
@@ -84,19 +87,13 @@ ShareContinueView._on_continue → continue_received_share()
 
 ## Acceptance impact
 
-S1 in [acceptance/README.md](../acceptance/README.md): **Partial** until verify pass.
-
-Do **not** mark S1 closed until Nesrine re-test confirms silent Continue.
+S1 in [acceptance/README.md](../acceptance/README.md): **Partial** — Continue silent + eddy opens with digest inside; chip-on-digest ideal deferred.
 
 ---
 
-## If verify fails
+## If revisiting chip-on-digest
 
-Investigate in order:
-
-1. Which code path sent a second message? (error branch vs old deploy)
-2. Thread interior only — consider reposting digest inside thread (narrow fix), not sibling-thread architecture
-3. Compare with working message IDs in channel history; River logs around Continue timestamp
+`message.create_thread` on the digest act is the Discord-native pattern for chip-on-message. Dogfood showed it is **not reliable** in our River-bot context (digest disappears without chip). Before retrying: capture message IDs, client platform, and whether `interaction.message` is the delivery act at click time.
 
 ---
 
