@@ -292,13 +292,13 @@ def _build_native_runtime_env(message, cfg, history: list[dict] | None = None):
             lines.append("")
             lines.append("## Thread continuity")
             lines.append(thread_card)
-    if (cfg or {}).get("origin") == "received":
-        sharer = (cfg or {}).get("from_sharer") or "another practitioner"
-        lines.append(
-            f"- **Received eddy:** Conversation shared by **{sharer}** — "
-            "full prior dialogue is in your working history; continue naturally, "
-            "do not ask them to re-tell what you already have."
-        )
+    if isinstance(channel, discord.Thread):
+        from share_eddy import received_eddy_context_lines, resolve_eddy_thread_cfg
+
+        parent_id = channel.parent_id
+        cfg = resolve_eddy_thread_cfg(channel.id, parent_id, cfg)
+        if cfg and cfg.get("origin") == "received":
+            lines.extend(received_eddy_context_lines(cfg))
     if (cfg or {}).get("blank_eddy") or (cfg or {}).get("awaiting_title"):
         lines.append(
             "- **Entry:** Blank eddy — the practitioner's first message is what they brought; "

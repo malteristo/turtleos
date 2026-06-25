@@ -106,6 +106,55 @@ def _transcript_from_history(history: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def label_shared_history(history: list[dict], sharer_address: str) -> list[dict]:
+    """Prefix sharer turns so the recipient is not read as the same speaker."""
+    tag = (sharer_address or "Sharer").strip()
+    prefix = f"[{tag}]: "
+    labeled: list[dict] = []
+    for entry in history:
+        row = dict(entry)
+        if row.get("role") == "user":
+            content = (row.get("content") or "").strip()
+            if content and not content.startswith(prefix):
+                row["content"] = prefix + content
+        labeled.append(row)
+    return labeled
+
+
+def resolve_eddy_thread_cfg(
+    thread_id: int,
+    parent_id: int | None,
+    cfg: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Merge in-memory thread config with persisted received-eddy metadata."""
+    if cfg and cfg.get("origin") == "received":
+        return cfg
+    disk = _received_eddy_notify_config(thread_id, parent_id)
+    if disk and disk.get("origin") == "received":
+        merged = dict(cfg or {})
+        merged.update(disk)
+        return merged
+    return cfg
+
+
+def received_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
+    """Runtime scaffolding so Turtle continues with the recipient, not the sharer."""
+    from mage import get_mage_name
+
+    sharer = (cfg.get("from_sharer") or "another practitioner").strip()
+    recipient = get_mage_name()
+    return [
+        f"- **Received eddy:** **{sharer}** shared their conversation with you. "
+        f"You are with **{recipient}** now — **{sharer} is not in this thread**.",
+        f"- **Shared history:** Turns labeled `[{sharer}]` are from the original eddy; "
+        f"messages without that label are from **{recipient}**.",
+        "- **Conduct:** Continue from the shared topic with **"
+        f"{recipient}** as your practitioner. Do not welcome them as \"joining\" or "
+        f"say \"we\" when you mean you and **{sharer}** — they are not here. "
+        "Answer from the shared context; the recipient may explore, disagree, or take it elsewhere.",
+    ]
+
+
 def is_placeholder_eddy_title(title: str) -> bool:
     """True when Discord thread name is not a useful handoff label."""
     t = (title or "").strip().lower()
@@ -671,6 +720,8 @@ async def materialize_received_eddy(
     }
 
     history = filter_share_history(bundle.get("history") or [])
+    sharer_address = bundle.get("sharer_address", "someone")
+    history = label_shared_history(history, sharer_address)
     if history:
         dialogue_histories[thread.id] = list(history)
         sync_history(thread.id)

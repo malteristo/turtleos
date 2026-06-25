@@ -298,6 +298,29 @@ class ShareReceivedThreadConfigTests(unittest.TestCase):
             self.assertFalse(loaded["share_notify_pending"])
 
 
+class ShareReceivedHistoryTests(unittest.TestCase):
+    def test_label_shared_history_prefixes_sharer_turns(self) -> None:
+        from share_eddy import label_shared_history
+
+        history = [
+            {"role": "user", "content": "hello from sharer"},
+            {"role": "assistant", "content": "hi back"},
+        ]
+        labeled = label_shared_history(history, "Kermit")
+        self.assertEqual(labeled[0]["content"], "[Kermit]: hello from sharer")
+        self.assertEqual(labeled[1]["content"], "hi back")
+
+    def test_received_eddy_context_lines_name_recipient_not_sharer(self) -> None:
+        from share_eddy import received_eddy_context_lines
+
+        with patch("mage.get_mage_name", return_value="Nesrine"):
+            lines = received_eddy_context_lines({"from_sharer": "Kermit"})
+        joined = "\n".join(lines)
+        self.assertIn("Kermit is not in this thread", joined)
+        self.assertIn("Nesrine", joined)
+        self.assertIn("joining", joined.lower())
+
+
 class ShareNotifyTests(unittest.IsolatedAsyncioTestCase):
     async def test_maybe_notify_loads_config_from_disk(self) -> None:
         from share_eddy import maybe_notify_sharer_on_first_peer_reply, save_received_thread_config
