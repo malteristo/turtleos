@@ -384,7 +384,6 @@ class ShareTargetSelect(discord.ui.Select):
         write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
 
         confirm = ShareConfirmView(self._thread_id, self._author_id, target)
-        interaction.client.add_view(confirm)
         embed = discord.Embed(
             title="Confirm share",
             description=(
@@ -637,8 +636,6 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         author_id=message.author.id,
         targets=targets,
     )
-    bot_client = get_share_bot_client(message)
-    bot_client.add_view(view)
     names = ", ".join(t.address for t in targets[:6])
     embed = discord.Embed(
         title="Share eddy",
