@@ -1,7 +1,7 @@
 # Design Chapter: Share Eddy (Thinking Together)
 
 **Opened:** 2026-06-25  
-**Status:** Design — spec ripple complete; implementation not started
+**Status:** Slice 1 implemented (practitioner target); space share deferred to shared-river
 **Spec trace:** TURTLE_SPEC §15.6  
 **Depends on:** §15 multi-practitioner law; **space target** requires `shared-river` harness ([design-family-shared-river.md](design-family-shared-river.md))  
 **First dogfood targets:** Share to practitioner (1:1); Share to family (space invitation)
@@ -193,11 +193,11 @@ channels:
 
 ### Slice 1 — Export + share to practitioner
 
-- [ ] `share_eddy.py` — export bundle, metadata types (`received`)
-- [ ] River act + materialize received eddy
-- [ ] Picker + confirm UI (practitioners section only)
-- [ ] Sender chronicle
-- [ ] Tests + `scripts/shake_share_eddy.py` (offline)
+- [x] `share_eddy.py` — export bundle, metadata types (`received`)
+- [x] River act + materialize received eddy
+- [x] Picker + confirm UI (practitioners section only)
+- [x] Sender chronicle
+- [x] Tests + `scripts/shake_share_eddy.py` (offline)
 
 ### Slice 2 — Family shared-river prerequisite
 

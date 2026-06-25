@@ -89,6 +89,7 @@ from cmd_dispatch import (
     try_direct_command,
 )
 from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_release
+from share_eddy import cmd_share
 from cmd_practice_io import cmd_ls, cmd_read, cmd_search
 from cmd_threads import (
     ControlPanelView,
@@ -294,6 +295,7 @@ def _help_embed_fields() -> list[tuple[str, str]]:
         ("`!status`", "System + practice-root dashboard"),
         ("`!readiness`", "Substrate / practice-readiness check"),
         ("`!rename <title>`", "Exact eddy title (in thread)"),
+        ("`!share`", "Send this eddy to another practitioner (digest + received eddy)"),
         ("`!fetch <url>`", "Distill URL to library (not auto link-read in chat)"),
         ("`!read` / `!ls` / `!search`", "Browse files under practice root"),
     ]
@@ -920,4 +922,5 @@ DIRECT_COMMANDS = {
     "help": lambda msg, args: cmd_help(msg),
     "admin": lambda msg, args: cmd_admin(msg, args),
     "new": lambda msg, args: cmd_new(msg, args),
+    "share": lambda msg, args: cmd_share(msg, args),
 }

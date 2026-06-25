@@ -292,6 +292,13 @@ def _build_native_runtime_env(message, cfg, history: list[dict] | None = None):
             lines.append("")
             lines.append("## Thread continuity")
             lines.append(thread_card)
+    if (cfg or {}).get("origin") == "received":
+        sharer = (cfg or {}).get("from_sharer") or "another practitioner"
+        lines.append(
+            f"- **Received eddy:** Conversation shared by **{sharer}** — "
+            "full prior dialogue is in your working history; continue naturally, "
+            "do not ask them to re-tell what you already have."
+        )
     if (cfg or {}).get("blank_eddy") or (cfg or {}).get("awaiting_title"):
         lines.append(
             "- **Entry:** Blank eddy — the practitioner's first message is what they brought; "
@@ -1185,6 +1192,12 @@ async def on_ready():
     global _intake_runner
     client.add_view(ControlPanelView())
     client.add_view(ThreadConfigView())
+    try:
+        from share_eddy import register_persistent_share_views
+
+        register_persistent_share_views(client)
+    except Exception as exc:
+        print(f"Share view registration failed: {exc}")
     print(f"Turtle online: {client.user}")
     try:
         from eddy_spawn import cache_turtle_bot_user_id

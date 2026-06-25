@@ -120,7 +120,7 @@ python scripts/shake_lifecycle.py
 | S5 | Picker `share_policy` | Non-member practitioner shares to Family via picker; no Discord channel join required |
 | S6 | Dissolve | Only share creator can dissolve shared/received eddy |
 
-**Verification (planned):** `test_share_eddy`, `scripts/shake_share_eddy.py`
+**Verification:** `test_share_eddy`, `scripts/shake_share_eddy.py` (Slice 1 practitioner; space scenarios S2–S5 after shared-river)
 
 ---
 

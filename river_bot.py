@@ -92,6 +92,9 @@ async def on_ready():
         try:
             await ensure_river_eddy_bar(river_client)
             await ensure_hosted_river_onboarding(river_client)
+            from share_eddy import register_persistent_share_views
+
+            register_persistent_share_views(river_client)
         except Exception as exc:
             print(f"River startup setup failed: {exc}")
     print("River bot ready — acts + turtle-talk in practice channels")

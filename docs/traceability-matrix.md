@@ -52,7 +52,7 @@
 | §4 | Attunement `native` / `craft` / `magic` | `mage.py`, `attunement.py` | same | **Partial** | `test_craft_attunement`, `test_flow_runner` | `mage_registry.example.yaml` | **Integrate** — operator instance attunement truth |
 | §4 / App A | Magic-attuned overlay | `prompts.py`, `tos_tools.py`, boom/compass | widespread | **Legacy** | partial | Appendix A | **Strangle** — no new features; shrink |
 | §13+ | Hosted river onboarding | `river_keys`, spawn | same | **Aligned** | `test_hosted_river_onboarding`, `shake_hosted_river.py` | `design-hosted-river.md` | **Keep** |
-| §15.6 | Share eddy (practitioner + space) | `share_eddy.py` (planned) | — | **Gap** | `test_share_eddy`, `shake_share_eddy.py` (planned) | `design-share-eddy.md` | **Integrate** — Slice 1 practitioner; Slice 3 needs `shared-river` |
+| §15.6 | Share eddy (practitioner + space) | `share_eddy.py`, `!share` | same | **Partial** | `test_share_eddy`, `shake_share_eddy.py` | `design-share-eddy.md` | **Integrate** — Slice 1 shipped; Slice 3 needs `shared-river` |
 | §22.8 | Read-only update awareness | `runtime/update.py`, `cli.py` | same | **Aligned** | `test_runtime_update` | `development.md` | **Keep** |
 | — | Runtime task/audit slice | `runtime/*`, `cli.py` | same | **Partial** | `test_runtime_update` | `ARCHITECTURE.md` | **Integrate** — expand per development.md backlog |
 | — | `commands.py` god-object | decomposed modules | `commands.py` (~918), 5× `cmd_*` | **Aligned** (Slice 5) | full test suite | chapter decomposition-commands | **Keep** — Slice 6 seneschal retire optional |

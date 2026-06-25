@@ -98,6 +98,7 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 | `!search <query>` | `cmd_search` | Search practice files |
 | `!fetch <url>` | `cmd_fetch` | Distill URL to library cache |
 | `!rename <title>` | `cmd_rename` | Exact eddy title (in thread) |
+| `!share` | `cmd_share` | §15.6 — send eddy to another practitioner (digest + received eddy) |
 
 Paths resolve to `practice_root` from `mage_registry.yaml` — typically `~/workshops/<name>/`, not Magic `desk/`.
 
