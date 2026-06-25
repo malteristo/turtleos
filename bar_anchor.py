@@ -1,4 +1,12 @@
-"""Bottom-anchor bars — keep river and lifecycle bars last after timeline activity."""
+"""Bottom-anchor bars — keep *standing* River chrome last after timeline activity.
+
+Two River UI layers in native eddies (different positioning rules):
+
+- **Contextual act rows** (D3 Save / Checkpoint) — one-shot embed + button posted
+  after the triggering turn; stays on the timeline near that context.
+- **Standing bars** (flow library, legacy lifecycle) — tracked in thread-state;
+  ``ensure_channel_bars`` reposts them as the last message when dialogue continues.
+"""
 
 from __future__ import annotations
 

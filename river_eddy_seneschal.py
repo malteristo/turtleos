@@ -2,7 +2,12 @@
 
 After Turtle replies in a native eddy, River may post **one** situational act row:
 Save to library (uncached URL) or Checkpoint (explicit practitioner intent).
-Runs in the **River bot process** only — polls thread history for Turtle prose.
+Runs in the **River bot process** only.
+
+**Positioning (intentional):** contextual rows stay on the timeline where the turn
+happened — close to the link-read / dialogue that triggered them. They are *not*
+bottom-anchored. Only the standing **flow library bar** re-anchors to the thread
+bottom after each turn (see ``bar_anchor``).
 """
 
 from __future__ import annotations
@@ -393,8 +398,8 @@ async def _wait_for_turtle_reply_after(
     return False
 
 
-async def _reanchor_eddy_bars(channel) -> None:
-    """Keep River-owned bottom bars last after Turtle finishes a turn."""
+async def _reanchor_standing_eddy_bars(channel) -> None:
+    """Repost standing bottom chrome (flow library bar) — not contextual act rows."""
     from bar_anchor import ensure_channel_bars
     from river_state import river_client
 
@@ -448,7 +453,7 @@ async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> N
             channel, practitioner_text=practitioner_text
         )
 
-    await _reanchor_eddy_bars(channel)
+    await _reanchor_standing_eddy_bars(channel)
 
 
 def schedule_contextual_offer_after_practitioner_turn(

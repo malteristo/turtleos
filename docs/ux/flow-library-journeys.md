@@ -59,7 +59,11 @@ River: click [new eddy]
   → thread may rename from your message (generate_topic)
   → bottom flow library bar appears (compact picker)
   → Turtle replies — open dialogue, no flow loaded
+  → flow library bar **follows** new messages to the thread bottom
+  → contextual offers (Save / Checkpoint) **stay** on the turn that triggered them
 ```
+
+**Two chrome layers:** the flow library is standing bottom UI (always reachable). Save-to-library and checkpoint rows are situational — they appear once, next to the link or ask that earned them, and do not chase the bottom.
 
 **What good feels like:** walking into an empty room. No modal, no orientation embed, no Turtle monologue before you speak.
 

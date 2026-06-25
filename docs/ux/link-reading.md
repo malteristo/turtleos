@@ -114,7 +114,7 @@ When raw transcript exceeds ~8k chars (`PROMPT_INLINE_MAX`), River model summari
 | Fetch | HTTP via `content_fetch` | Discord bot API |
 | Auto-read rule | URL-primary / incidental opt-in | Permalink + short ask (always read when detected) |
 | Spill | `box/intake/` for long pages | Summary for long threads |
-| `!fetch` / Save to library | Optional post-Turtle | **Not applicable** — graph is already on Discord |
+| `!fetch` / Save to library | Optional post-Turtle; **timeline-anchored** (stays near the turn) | **Not applicable** — graph is already on Discord |
 | Preview | Discord cosmetic preview ≠ what Turtle read | Same — embed trace is authoritative |
 
 Wrap permalinks in `<>` to hide Discord’s cosmetic preview if desired.
