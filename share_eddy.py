@@ -267,6 +267,55 @@ def pending_path(runtime_dir: str, author_id: int, thread_id: int) -> Path:
     return _share_dir(runtime_dir, "pending") / f"{author_id}_{thread_id}.json"
 
 
+def received_thread_path(runtime_dir: str, thread_id: int) -> Path:
+    return _share_dir(runtime_dir, "received") / f"{thread_id}.json"
+
+
+def save_received_thread_config(runtime_dir: str, thread_id: int, cfg: dict[str, Any]) -> None:
+    """Persist received-eddy notify metadata for cross-process reads (River vs Turtle bots)."""
+    payload = {
+        "origin": cfg.get("origin"),
+        "share_id": cfg.get("share_id"),
+        "share_creator": cfg.get("share_creator"),
+        "sharer_key": cfg.get("sharer_key"),
+        "share_recipient_id": cfg.get("share_recipient_id"),
+        "share_notify_pending": cfg.get("share_notify_pending", False),
+        "topic": cfg.get("topic"),
+        "from_sharer": cfg.get("from_sharer"),
+    }
+    received_thread_path(runtime_dir, thread_id).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_received_thread_config(runtime_dir: str, thread_id: int) -> dict[str, Any] | None:
+    path = received_thread_path(runtime_dir, thread_id)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def mark_received_thread_notified(runtime_dir: str, thread_id: int) -> None:
+    path = received_thread_path(runtime_dir, thread_id)
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        path.unlink(missing_ok=True)
+        return
+    if not isinstance(data, dict):
+        path.unlink(missing_ok=True)
+        return
+    data["share_notify_pending"] = False
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def write_inbox_bundle(runtime_dir: str, bundle: dict[str, Any]) -> Path:
     path = inbox_path(runtime_dir, bundle["share_id"])
     path.write_text(json.dumps(bundle, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -335,21 +384,21 @@ async def supersede_stale_share_acts(
     keep_share_id: str,
     keep_message_id: int,
 ) -> None:
-    """Disable Continue on older share acts in this recipient river."""
+    """Track active share acts; only strip Continue when re-delivering the same share."""
     prior = _load_active_share_acts(runtime_dir)
     kept: list[dict[str, Any]] = []
     for act in prior:
         sid = act.get("share_id")
         mid = act.get("message_id")
-        if sid == keep_share_id:
+        if sid == keep_share_id and mid:
+            try:
+                msg = await channel.fetch_message(int(mid))
+                await msg.edit(view=None)
+            except discord.HTTPException:
+                pass
             continue
-        if not mid:
-            continue
-        try:
-            msg = await channel.fetch_message(int(mid))
-            await msg.edit(view=None)
-        except discord.HTTPException:
-            pass
+        if sid and sid != keep_share_id:
+            kept.append(act)
     kept.append({"share_id": keep_share_id, "message_id": str(keep_message_id)})
     _save_active_share_acts(runtime_dir, kept)
 
@@ -455,6 +504,21 @@ async def notify_sharer_first_peer_reply(
     )
 
 
+def _received_eddy_notify_config(thread_id: int, parent_id: int | None) -> dict[str, Any] | None:
+    """Load received-eddy notify config from in-memory or disk (split River/Turtle bots)."""
+    from commands import thread_configs
+
+    cfg = thread_configs.get(thread_id)
+    if cfg and cfg.get("origin") == "received":
+        return cfg
+    if not parent_id:
+        return None
+    set_practice_context_for_channel(parent_id)
+    from mage import get_runtime_dir
+
+    return load_received_thread_config(get_runtime_dir(), thread_id)
+
+
 async def maybe_notify_sharer_on_first_peer_reply(message: discord.Message) -> None:
     from commands import thread_configs
     from eddy_lifecycle_bar import is_practitioner_input
@@ -464,7 +528,8 @@ async def maybe_notify_sharer_on_first_peer_reply(message: discord.Message) -> N
     if message.author.bot or not is_practitioner_input(message):
         return
 
-    cfg = thread_configs.get(message.channel.id)
+    parent_id = message.channel.parent_id
+    cfg = _received_eddy_notify_config(message.channel.id, parent_id)
     if not cfg or cfg.get("origin") != "received":
         return
     if not cfg.get("share_notify_pending"):
@@ -473,10 +538,25 @@ async def maybe_notify_sharer_on_first_peer_reply(message: discord.Message) -> N
         return
 
     cfg["share_notify_pending"] = False
+    in_memory = thread_configs.get(message.channel.id)
+    if in_memory is not None:
+        in_memory["share_notify_pending"] = False
+    runtime_dir = None
+    if parent_id:
+        set_practice_context_for_channel(parent_id)
+        from mage import get_runtime_dir
+
+        runtime_dir = get_runtime_dir()
+        mark_received_thread_notified(runtime_dir, message.channel.id)
+
     try:
         await notify_sharer_first_peer_reply(message, cfg)
     except Exception as exc:
         cfg["share_notify_pending"] = True
+        if in_memory is not None:
+            in_memory["share_notify_pending"] = True
+        if runtime_dir:
+            save_received_thread_config(runtime_dir, message.channel.id, cfg)
         print(f"Share sharer notify failed: {type(exc).__name__}: {exc}")
 
 
@@ -611,6 +691,9 @@ async def materialize_received_eddy(
         attunement="native",
         eddy_type="standard",
     )
+
+    recipient_runtime = get_runtime_dir()
+    save_received_thread_config(recipient_runtime, thread.id, thread_configs[thread.id])
 
     try:
         await bot_client.fetch_user(int(bundle["sharer_id"]))

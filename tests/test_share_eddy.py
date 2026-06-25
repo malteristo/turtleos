@@ -197,5 +197,157 @@ class ShareEddyClientTests(unittest.TestCase):
             self.assertIs(get_share_bot_client(message), mock_client)
 
 
+class ShareActiveActsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_supersede_keeps_older_different_shares(self) -> None:
+        from share_eddy import _save_active_share_acts, supersede_stale_share_acts
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _save_active_share_acts(
+                tmp,
+                [
+                    {"share_id": "share_a", "message_id": "100"},
+                    {"share_id": "share_b", "message_id": "200"},
+                ],
+            )
+            channel = AsyncMock()
+            old_msg = AsyncMock()
+            channel.fetch_message = AsyncMock(return_value=old_msg)
+
+            await supersede_stale_share_acts(
+                AsyncMock(),
+                channel,
+                tmp,
+                keep_share_id="share_c",
+                keep_message_id=300,
+            )
+
+            channel.fetch_message.assert_not_called()
+            old_msg.edit.assert_not_called()
+
+            from share_eddy import _load_active_share_acts
+
+            acts = _load_active_share_acts(tmp)
+            share_ids = {act["share_id"] for act in acts}
+            self.assertEqual(share_ids, {"share_a", "share_b", "share_c"})
+
+    async def test_supersede_strips_duplicate_share_only(self) -> None:
+        from share_eddy import _save_active_share_acts, supersede_stale_share_acts
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _save_active_share_acts(
+                tmp,
+                [
+                    {"share_id": "share_a", "message_id": "100"},
+                    {"share_id": "dup", "message_id": "200"},
+                ],
+            )
+            channel = AsyncMock()
+            stale_msg = AsyncMock()
+            channel.fetch_message = AsyncMock(return_value=stale_msg)
+
+            await supersede_stale_share_acts(
+                AsyncMock(),
+                channel,
+                tmp,
+                keep_share_id="dup",
+                keep_message_id=999,
+            )
+
+            channel.fetch_message.assert_called_once_with(200)
+            stale_msg.edit.assert_called_once_with(view=None)
+
+            from share_eddy import _load_active_share_acts
+
+            acts = _load_active_share_acts(tmp)
+            self.assertEqual(
+                acts,
+                [
+                    {"share_id": "share_a", "message_id": "100"},
+                    {"share_id": "dup", "message_id": "999"},
+                ],
+            )
+
+
+class ShareReceivedThreadConfigTests(unittest.TestCase):
+    def test_received_thread_config_roundtrip(self) -> None:
+        from share_eddy import (
+            load_received_thread_config,
+            mark_received_thread_notified,
+            save_received_thread_config,
+        )
+
+        cfg = {
+            "origin": "received",
+            "share_id": "abc",
+            "share_creator": "111",
+            "sharer_key": "kermit",
+            "share_recipient_id": "222",
+            "share_notify_pending": True,
+            "topic": "testing eddy sharing",
+            "from_sharer": "Kermit",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            save_received_thread_config(tmp, 555, cfg)
+            loaded = load_received_thread_config(tmp, 555)
+            self.assertIsNotNone(loaded)
+            assert loaded is not None
+            self.assertTrue(loaded["share_notify_pending"])
+            mark_received_thread_notified(tmp, 555)
+            loaded = load_received_thread_config(tmp, 555)
+            assert loaded is not None
+            self.assertFalse(loaded["share_notify_pending"])
+
+
+class ShareNotifyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_maybe_notify_loads_config_from_disk(self) -> None:
+        from share_eddy import maybe_notify_sharer_on_first_peer_reply, save_received_thread_config
+
+        class FakeThread:
+            id = 777
+            parent_id = 1002
+            name = "testing eddy sharing"
+            jump_url = "https://discord.com/channels/x/y/z"
+
+        message = MagicMock()
+        message.author.bot = False
+        message.author.id = 222
+        message.author.display_name = "Nesrine"
+        message.channel = FakeThread()
+
+        cfg = {
+            "origin": "received",
+            "share_id": "abc",
+            "share_creator": "111",
+            "sharer_key": "kermit",
+            "share_recipient_id": "222",
+            "share_notify_pending": True,
+            "topic": "testing eddy sharing",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            save_received_thread_config(tmp, 777, cfg)
+            with patch("eddy_lifecycle_bar.is_practitioner_input", return_value=True), patch(
+                "commands.thread_configs",
+                {},
+            ), patch("share_eddy.set_practice_context_for_channel"), patch(
+                "share_eddy.discord.Thread",
+                FakeThread,
+            ), patch(
+                "mage.get_runtime_dir",
+                return_value=tmp,
+            ), patch(
+                "share_eddy.notify_sharer_first_peer_reply",
+                new=AsyncMock(),
+            ) as notify:
+                await maybe_notify_sharer_on_first_peer_reply(message)
+                notify.assert_awaited_once()
+
+            from share_eddy import load_received_thread_config
+
+            loaded = load_received_thread_config(tmp, 777)
+            assert loaded is not None
+            self.assertFalse(loaded["share_notify_pending"])
+
+
 if __name__ == "__main__":
     unittest.main()
