@@ -36,6 +36,10 @@ class EddyFlowLibraryTests(unittest.TestCase):
         self.assertIn('"flow":', cmd_src)
         dispatch_src = (REPO / "cmd_dispatch.py").read_text(encoding="utf-8")
         self.assertNotIn("touch_eddy_flow_library_bar", dispatch_src)
+        lib_src = (REPO / "eddy_flow_library.py").read_text(encoding="utf-8")
+        self.assertIn("retire_standing_flow_library_bars", lib_src)
+        share_src = (REPO / "share_eddy.py").read_text(encoding="utf-8")
+        self.assertIn("dismiss_eddy_flow_library_bar", share_src)
 
     def test_prepare_flow_uses_bootstrap(self) -> None:
         src = (REPO / "eddy_spawn.py").read_text(encoding="utf-8")
@@ -62,7 +66,7 @@ class EddyFlowLibraryTests(unittest.TestCase):
 
     def test_bar_anchor_prefers_flow_library_on_native(self) -> None:
         src = (REPO / "bar_anchor.py").read_text(encoding="utf-8")
-        self.assertIn("flow_library_bar", src)
+        self.assertNotIn("flow_library_bar", src)
         self.assertIn("standing_lifecycle_bar_enabled", src)
 
 

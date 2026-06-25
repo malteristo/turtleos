@@ -1063,6 +1063,14 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
     }
     write_pending_draft(get_runtime_dir(), message.author.id, message.channel.id, draft)
 
+    try:
+        from eddy_flow_library import dismiss_eddy_flow_library, dismiss_eddy_flow_library_bar
+
+        await dismiss_eddy_flow_library_bar(message.channel)
+        await dismiss_eddy_flow_library(message.channel, parent_id)
+    except Exception as exc:
+        print(f"Share flow bar dismiss failed: {type(exc).__name__}: {exc}")
+
     view = SharePickerView(
         thread_id=message.channel.id,
         author_id=message.author.id,

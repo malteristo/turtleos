@@ -354,6 +354,33 @@ async def dismiss_eddy_flow_library_bar(thread: discord.Thread) -> None:
         pass
 
 
+async def retire_standing_flow_library_bars(client) -> None:
+    """Delete legacy auto-posted bottom flow bars (picker is now ``!flows`` inline only)."""
+    if not flow_library_bar_enabled():
+        return
+    state = _load_flow_library_bar_state()
+    if not state:
+        return
+    retired = 0
+    for thread_id_str, message_id in list(state.items()):
+        try:
+            ch = client.get_channel(int(thread_id_str))
+            if ch is None:
+                ch = await client.fetch_channel(int(thread_id_str))
+            if isinstance(ch, discord.Thread):
+                try:
+                    msg = await ch.fetch_message(int(message_id))
+                    await msg.delete()
+                    retired += 1
+                except discord.HTTPException:
+                    pass
+        except Exception as exc:
+            print(f"Flow library bar retire failed for {thread_id_str}: {exc}")
+    _save_flow_library_bar_state({})
+    if retired:
+        print(f"Retired {retired} standing flow library bar(s)")
+
+
 async def _complete_flow_pick(
     interaction: discord.Interaction,
     *,
