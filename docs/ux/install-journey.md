@@ -330,7 +330,7 @@ If **N**, show one troubleshooting link block (token, intents, channel ID mismat
 | 2 | User types: *“Hey — testing my install.”* | Normal Discord |
 | 3 | System line: **`river added turtle`** | “Something joined” — not a green embed |
 | 4 | Thread may rename (e.g. `install test`) | Optional; fine if it stays odd |
-| 5 | **Bottom bar** appears: flow library (compact) | “Optional extras — I can ignore this” |
+| 5 | *(optional)* Type **`!flows`** for guided programs | “Optional — only if I want structure” |
 | 6 | **Turtle reply** in thread | **Success** — personal AI works |
 
 ### What must NOT happen (negative UX)
@@ -358,7 +358,7 @@ If **N**, show one troubleshooting link block (token, intents, channel ID mismat
 >
 > **Eddies** are where you talk. At the bottom of this channel you'll see **`new eddy`** — click it, send a message, Turtle joins and replies. Open a chat, follow up, paste a link when you want to discuss something on the web. Threads stay in your sidebar — come back anytime.
 >
-> **Optional — flows:** Inside an eddy you can open the **flow library** for guided conversations. You don't need flows for regular use. Curious? Try **Navigator** once.
+> **Optional — flows:** Inside an eddy, run **`!flows`** when you want a guided conversation. You don't need flows for regular use. Curious? Try **Navigator** once.
 >
 > No homework. Open an eddy and talk.
 

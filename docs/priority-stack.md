@@ -82,7 +82,7 @@ Optimizing `!fetch` when the pain is "paste link and talk" is a **tier mismatch*
 | **Discord permalink cross-ref** | Paste thread/message link → Turtle self-feeds prior context (transparent inject) | D2 |
 | **River standing bar** | `new eddy` only (target); bar last message after post | R1, R2 |
 | **Contextual River offers** | River listens to Turtle↔Mage dialogue; posts **situationally useful** act row (hit rate improves over time) | D3 |
-| **In-eddy flow library** | Load flow inside thread; Turtle bootstrap; conversational intake | **J2–J4** (Tier 2 when used) |
+| **In-eddy flow library** | **`!flows`** / **`!flow`** in eddy when chosen; Turtle bootstrap; conversational intake | **J2–J4** (Tier 2 when used) |
 
 ### Link-read — Tier 0 and hard
 
@@ -90,7 +90,7 @@ Paste-URL-and-talk is standard in ChatGPT/Gemini; **simplicity for the Mage ≠ 
 
 ### Eddy bar — contextual only (for now)
 
-**No standing lifecycle bar inside eddies** on native attunement (shipped 2026-06-24). **`!checkpoint` / `!release` / `!dissolve`** remain typed commands. Bottom **flow library** bar persists after first message; River **contextual act rows** (D3) replace lifecycle trio over time.
+**No standing lifecycle bar inside eddies** on native attunement (shipped 2026-06-24). **`!checkpoint` / `!release` / `!dissolve`** remain typed commands. **No standing flow library bar** (retired 2026-06-25) — use **`!flows`** when wanted. River **contextual act rows** (D3) replace lifecycle trio over time.
 
 **Negative (must not regress):** X2 (Fetch required before discuss) · X3 (duplicate Fetch buttons)
 
@@ -155,10 +155,10 @@ Do not reinvent Discord search; **do** make permalinks legible to Turtle the way
 | **Discord permalink self-feed** | Turtle ingests thread/message links like web URLs; qwen for fast fetch/summary | 0 (D2) · [chapter](../chapters/2026-06-20-discord-permalink-self-feed.md) |
 | **Contextual River bar** | Replace standing eddy lifecycle bar with situational offers; grow palette + hit rate | 0 (D3) |
 | **Family channel design** | Shared practice without treating it as default Pop 2 | 2 |
-| **Share eddy** | Cross-practitioner / family thinking together — `@`+River act only; any space member re-share with transparency · [chapter](../chapters/design-share-eddy.md) · S1–S6 | 3 (Slice 1 practitioner) · 2 (space after shared-river) |
+| **Share eddy** | Cross-practitioner / family thinking together — `@`+River act only; any space member re-share with transparency · [design](../chapters/design-share-eddy.md) · [dogfood](../chapters/2026-06-25-share-eddy-slice1-dogfood.md) · S1–S6 | 3 — **Slice 1 shipped** (practitioner) · 2 (space after shared-river) |
 | **Idle & reflection** | Silent default; rare reflection; drop checkpoint noise | 1 |
 | **Link-read hardening** | OSS harness patterns; bot-blocked content | 0 (H1) |
-| **In-eddy flow library** | ✅ Shipped 2026-06-23 — bar = `new eddy` only; Turtle bootstrap; Shelter archived · [chapter](chapters/2026-06-20-in-eddy-flow-library.md) · [journeys](ux/flow-library-journeys.md) |
+| **In-eddy flow library** | ✅ Shipped 2026-06-23 · amended 2026-06-25 on-demand (`!flows`); Turtle bootstrap; Shelter archived · [chapter](chapters/2026-06-20-in-eddy-flow-library.md) · [dogfood](chapters/2026-06-25-share-eddy-slice1-dogfood.md) |
 
 **Onboarding (target):** generic personal AI — [ux/onboarding.md](ux/onboarding.md). Flows optional; Navigator as sample when exploring structure.
 
@@ -200,6 +200,7 @@ If tier ≥ 2 and Tier 1 blockers remain (idle wedge, registry save) — **defau
 | 2026-06-20 | v2.1 — Flow library target journeys; in-eddy flows; Shelter retire; guided emergence framing |
 | 2026-06-20 | v2.2 — Two-layer product (ChatGPT-style default + optional flows); generic onboarding doc; Navigator as sample flow |
 | 2026-06-25 | v2.3 — Share eddy design chapter + §15.6; acceptance S1–S6; Slice 1 practitioner before shared-river |
+| 2026-06-25 | v2.4 — Share Slice 1 dogfood harvest; flow library on-demand; spec/turtle-talk/acceptance rippled |
 
 ---
 

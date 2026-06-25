@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-06-23 (in-eddy flow library, bar = new eddy only)  
+**Version:** 2026-06-25 (Share eddy Slice 1; flow library on-demand via `!flows`)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -175,7 +175,7 @@ After each practitioner river message, the harness MUST ensure the eddy bar rema
 3. Thread opens as **`new eddy`** — no seed, no Turtle monologue.
 4. Fresh bar posts below the new thread card.
 5. Thread is an **empty room** until the practitioner speaks — no orientation embed at materialize.
-6. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); **bottom flow library bar** appears; Turtle replies.
+6. On first in-eddy message: River retitles the thread from content; River adds Turtle (split-bot: Discord system line); Turtle replies. Flow library is **not** auto-posted — practitioner loads via **`!flows`** / **`!flow`** when wanted (§5.6).
 
 **Load flow in eddy (Layer 2 — intentional):**
 
@@ -205,11 +205,11 @@ The River executes; it does not discuss.
 
 ### 5.6. Flow Discovery
 
-**Primary (in-eddy):** After the practitioner's **first message** in a blank eddy, the shell posts a compact **flow library bar** at the thread bottom. Practitioners load a flow deliberately — **`!flows`** in an eddy opens the same picker. **`!flows`** in the parent river redirects practitioners to open an eddy first.
+**Primary (in-eddy):** Practitioner-initiated only. **`!flows`** or **`!flow`** inside an eddy posts an inline flow library embed with picker; load → Turtle bootstrap (§10). **`!flows`** in the parent river redirects practitioners to open an eddy first.
 
 **Secondary (parent channel):** When a river message signals intent to browse programs, the River MAY emit **`offer_flow_menu`** or **`offer_flow`** on **that message** — contextual, not proactive spam.
 
-**Not shipped:** standing-bar flow picker; proactive flow offers in dialogue (same policy as intentions — discoverable, user-initiated).
+**Not shipped:** standing bottom flow library bar (retired 2026-06-25 after dogfood); standing-bar flow picker; proactive flow offers in dialogue (same policy as intentions — discoverable, user-initiated).
 
 No prose catalog in the river.
 
@@ -499,8 +499,7 @@ The repository ships a **flow library** — optional prompt programs (Navigator,
 
 Users run a flow by:
 
-- **In-eddy flow library bar** after first practitioner message in a blank eddy (primary discoverability),
-- **`!flows`** inside an eddy (same picker),
+- **`!flows`** or **`!flow`** inside an eddy (inline picker — primary discoverability),
 - Contextual **`offer_flow_menu`** / **`offer_flow`** on a parent river message, or
 - Custom install under `practice_root/flows/`
 
@@ -906,6 +905,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-20 | §5.8 — River bot owns all turtle-talk `!` execution (split-bot); Turtle reads `[Act: !cmd]` digests; bar posts use River client identity |
 | 2026-06-20 | §5.8 / §9.5 — harness split: Turtle silent link-read vs River post-Turtle Save to library (`!fetch`); distinct skip logging |
 | 2026-06-23 | In-eddy flow library — bar = `new eddy` only; Turtle bootstrap intake; Shelter archived; user-facing **flows** / **flow library** |
+| 2026-06-25 | §15.6 Share eddy Slice 1 (practitioner target, `!share`); flow library on-demand (`!flows` / `!flow`); standing bottom flow bar retired — see `docs/chapters/2026-06-25-share-eddy-slice1-dogfood.md` |
 | 2026-06-20 | §9.5 — Discord permalink read-for-dialogue (`discord_ref_read.py`): visible trace, thread history, long-thread summary; distinct from external URL read and `!fetch` |
 
 ---

@@ -108,8 +108,9 @@ python scripts/shake_lifecycle.py
 ## Share eddy (thinking together)
 
 **Spec:** §15.6  
-**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md)  
-**Depends on:** Share to **space** requires `shared-river` ([design-family-shared-river.md](../chapters/design-family-shared-river.md))
+**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md) · **Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](../chapters/2026-06-25-share-eddy-slice1-dogfood.md)  
+**Depends on:** Share to **space** requires `shared-river` ([design-family-shared-river.md](../chapters/design-family-shared-river.md))  
+**Status:** Slice 1 shipped (practitioner target) · sender path dogfooded 2026-06-25 · recipient Continue + first-reply notify pending Nesrine-side pass
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
@@ -120,7 +121,7 @@ python scripts/shake_lifecycle.py
 | S5 | Picker `share_policy` | Non-member practitioner shares to Family via picker; no Discord channel join required |
 | S6 | Dissolve | Only share creator can dissolve shared/received eddy |
 
-**Verification:** `test_share_eddy`, `scripts/shake_share_eddy.py` (Slice 1 practitioner; space scenarios S2–S5 after shared-river)
+**Verification:** `test_share_eddy`, `scripts/shake_share_eddy.py` · live Mini dogfood (Slice 1 practitioner; space scenarios S2–S5 after shared-river)
 
 ---
 

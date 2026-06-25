@@ -1,7 +1,8 @@
 # Design Chapter: Share Eddy (Thinking Together)
 
 **Opened:** 2026-06-25  
-**Status:** Slice 1 implemented (practitioner target); space share deferred to shared-river
+**Status:** Slice 1 implemented (practitioner target); space share deferred to shared-river  
+**Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](2026-06-25-share-eddy-slice1-dogfood.md)
 **Spec trace:** TURTLE_SPEC §15.6  
 **Depends on:** §15 multi-practitioner law; **space target** requires `shared-river` harness ([design-family-shared-river.md](design-family-shared-river.md))  
 **First dogfood targets:** Share to practitioner (1:1); Share to family (space invitation)
@@ -42,7 +43,7 @@ This chapter defines **Share eddy** — one primitive covering (1). **Invite to 
 
 ### Source
 
-Practitioner initiates **Share…** from inside a live eddy (lifecycle bar act or equivalent). Source eddy remains unchanged.
+Practitioner initiates **`!share`** inside a live eddy (minimum dialogue before export). Source eddy remains unchanged.
 
 ### Export bundle
 
@@ -123,10 +124,15 @@ Spaces
 
 ### Confirm
 
-> Share **“Birthday party — heat & sprinkler”** with **Family**?  
-> Family members will see a digest and can open a shared eddy when ready. You won’t join until someone responds.
+Preview embed after target selection (LLM-synthesized title + digest):
 
-[ Cancel ] [ Share ]
+> Share **“Birthday party — heat & sprinkler”** with **Family**?  
+> [digest body]  
+> They get this digest in their river and can open a received eddy when ready.
+
+[ Edit ] [ Cancel ] [ Share ]
+
+**Edit** opens modal (title + digest). Optional contextual **rename thread** nudge when eddy title is still a placeholder.
 
 Practitioner variant names recipient and received-eddy behavior.
 
@@ -195,8 +201,9 @@ channels:
 
 - [x] `share_eddy.py` — export bundle, metadata types (`received`)
 - [x] River act + materialize received eddy
-- [x] Picker + confirm UI (practitioners section only)
-- [x] Sender chronicle
+- [x] Picker + confirm UI (practitioners section only) — entry via **`!share`**
+- [x] Preview + Edit modal; LLM synthesize; rename nudge supersede
+- [x] Sender chronicle; sharer notify on recipient first reply (1:1)
 - [x] Tests + `scripts/shake_share_eddy.py` (offline)
 
 ### Slice 2 — Family shared-river prerequisite
@@ -214,7 +221,8 @@ channels:
 
 ### Slice 4 — Dogfood
 
-- [ ] Kermit → Nesrine (1:1) low-stakes
+- [x] Kermit → Nesrine (1:1) — multiple eddies 2026-06-25 (sender path)
+- [ ] Nesrine Continue + first-reply notify (recipient path)
 - [ ] Kermit → Family birthday logistics
 - [ ] Guest → Family (picker without channel membership)
 

@@ -2,7 +2,7 @@
 
 **Status:** Operator doc (implementation inventory)  
 **Spec anchor:** `TURTLE_SPEC.md` §5.5 — full palette lives here, not in the spec body  
-**Last aligned:** 2026-06-23 (in-eddy flow library; bar = new eddy only)
+**Last aligned:** 2026-06-25 (Share eddy `!share`; flow library on-demand via `!flows` / `!flow`)
 
 ---
 
@@ -42,8 +42,8 @@ Hosted practitioners (`mage_type: practitioner`) receive a **minimal allowlist**
 
 | Affordance | Behavior | Spec |
 |------------|----------|------|
-| **new eddy** (standing bar) | Materialize blank thread; compact flow library in thread; practitioner speaks first; Turtle joins on first message | §5.4, §17 |
-| **flow library** (in-eddy) | Compact embed on blank spawn; **`!flows`** in eddy opens picker; load → Turtle bootstrap | §5.4, §5.6, §10.2 |
+| **new eddy** (standing bar) | Materialize blank thread; practitioner speaks first; Turtle joins on first message | §5.4, §17 |
+| **flow library** (in-eddy) | **`!flows`** or **`!flow`** in eddy posts inline picker; load → Turtle bootstrap | §5.4, §5.6, §10.2 |
 | Contextual flow acts | `offer_flow_menu` / `offer_flow` on a river message when intent detected | §5.6 |
 
 Implementation: `river_handler.py` (`StandingEddyBarView`).
@@ -53,7 +53,8 @@ Implementation: `river_handler.py` (`StandingEddyBarView`).
 | Command | Status | Notes |
 |---------|--------|-------|
 | `!dissolve` | `cmd_dissolve` | §9.2 — archive eddy + `🍃 dissolved` chronicle (distinct from `!release`) |
-| `!flows` | `cmd_flows` | §5.6 — in-eddy flow picker; in parent river, redirects to open an eddy |
+| `!flows` | `cmd_flows` | §5.6 — in-eddy flow picker (`!flow` alias); in parent river, redirects to open an eddy |
+| `!flow` | `cmd_flows` | Alias for `!flows` |
 | `!pin` | `cmd_pin` | §6 — pin message (reply or message id) |
 
 ### River prohibitions
@@ -190,7 +191,7 @@ Turtle dialogue prompts (`prompts.py`) SHOULD recommend platform commands only:
 - **Operator eddy:** same + `!fetch` when distill is intended (not auto link-read)  
 - **Do not** surface boom/compass/sweep/recall vocabulary — Magic practice stays on Forge
 
-**Platform flows** — markdown programs in `practice_root/flows/`, loaded via **in-eddy flow library** or **`!flows`** (not required for daily use).
+**Platform flows** — markdown programs in `practice_root/flows/`, loaded via **`!flows`** / **`!flow`** in an eddy (not required for daily use).
 
 **Magic `@` flows** — Forge/Anvil only; not turtle-talk.
 

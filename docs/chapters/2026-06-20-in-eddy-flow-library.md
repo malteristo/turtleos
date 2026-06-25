@@ -6,6 +6,8 @@
 **Priority:** Tier 0 (blank eddy) + Tier 2 (flows) · acceptance **J1–J4** · [priority-stack.md](../priority-stack.md)  
 **UX spec:** [flow-library-journeys.md](../ux/flow-library-journeys.md) · [onboarding.md](../ux/onboarding.md)
 
+> **Amendment 2026-06-25:** Standing **bottom flow library bar** retired after share-eddy dogfood — flow picker is on-demand via **`!flows`** / **`!flow`** only. See [2026-06-25-share-eddy-slice1-dogfood.md](2026-06-25-share-eddy-slice1-dogfood.md).
+
 ---
 
 ## Problem
