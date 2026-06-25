@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", __import__("unittest.mock").mock.MagicMock())
 sys.modules.setdefault("discord.ui", sys.modules["discord"])
@@ -102,6 +102,13 @@ class ShareEddyRiverChannelTests(unittest.TestCase):
 
 
 class ShareEddyFilterTests(unittest.TestCase):
+    def test_is_placeholder_eddy_title(self) -> None:
+        from share_eddy import is_placeholder_eddy_title
+
+        self.assertTrue(is_placeholder_eddy_title("new eddy"))
+        self.assertTrue(is_placeholder_eddy_title("hello to turtle please update your status"))
+        self.assertFalse(is_placeholder_eddy_title("birthday party heat"))
+
     def test_filter_share_history_drops_act_digests_and_commands(self) -> None:
         from share_eddy import build_digest, build_export_bundle, filter_share_history
 
@@ -126,6 +133,35 @@ class ShareEddyFilterTests(unittest.TestCase):
             source_thread_id=9,
         )
         self.assertEqual(len(bundle["history"]), 2)
+
+
+class ShareEddyEnrichTests(unittest.IsolatedAsyncioTestCase):
+    async def test_enrich_export_bundle_uses_llm_digest(self) -> None:
+        from share_eddy import build_export_bundle, enrich_export_bundle
+
+        bundle = build_export_bundle(
+            title="hello to turtle please update your status",
+            history=[
+                {"role": "user", "content": "Birthday party shade and sprinkler plan"},
+                {"role": "assistant", "content": "Active monitoring makes sense."},
+            ],
+            sharer_id="1",
+            sharer_key="k",
+            sharer_address="Kermit",
+            source_thread_id=9,
+        )
+        with patch(
+            "share_eddy.synthesize_share_metadata",
+            new=AsyncMock(
+                return_value=(
+                    "birthday party safety",
+                    "Kids' party in heat — parents as active monitors for shade and water.",
+                )
+            ),
+        ):
+            enriched = await enrich_export_bundle(bundle)
+        self.assertEqual(enriched["display_title"], "birthday party safety")
+        self.assertIn("party", enriched["digest"].lower())
 
 
 class ShareEddyClientTests(unittest.TestCase):

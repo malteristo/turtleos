@@ -106,6 +106,30 @@ def _transcript_from_history(history: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def is_placeholder_eddy_title(title: str) -> bool:
+    """True when Discord thread name is not a useful handoff label."""
+    t = (title or "").strip().lower()
+    if not t:
+        return True
+    placeholders = {
+        "new eddy",
+        "blank eddy",
+        "new thread",
+        "intake",
+        "vortex",
+        "thread",
+        "received eddy",
+    }
+    if t in placeholders:
+        return True
+    if t.startswith("hello to turtle"):
+        return True
+    # Sentence pasted as title, not a short label
+    if len(t) > 55 or t.count(" ") >= 8:
+        return True
+    return False
+
+
 def build_digest(title: str, history: list[dict]) -> str:
     """2–4 line digest for river act (sync fallback — no model required)."""
     user_bits = [
@@ -131,6 +155,74 @@ def build_digest(title: str, history: list[dict]) -> str:
     return body
 
 
+async def synthesize_share_metadata(
+    title: str,
+    history: list[dict],
+) -> tuple[str, str]:
+    """LLM summary for river handoff — (display_title, digest). Sync fallback on failure."""
+    filtered = filter_share_history(history)
+    transcript = _transcript_from_history(filtered)
+    if len(transcript) < 40:
+        display = title[:100]
+        return display, build_digest(display, filtered)
+
+    display_title = title[:100]
+    if is_placeholder_eddy_title(title):
+        try:
+            from eddy_spawn import generate_topic
+
+            generated = await generate_topic(transcript[:2000])
+            if generated and not is_placeholder_eddy_title(generated):
+                display_title = generated[:100]
+        except Exception as exc:
+            print(f"Share title synthesis failed: {type(exc).__name__}: {exc}")
+
+    from llm import chat_ollama
+    from state import REFLECTION_MODEL
+
+    prompt = (
+        "You write share digests for async handoff between practitioners.\n"
+        "Given a conversation excerpt, write ONLY 2-4 short lines summarizing:\n"
+        "- what the conversation is about (concrete — party logistics, health, planning, etc.)\n"
+        "- what question, plan, or tension is alive\n"
+        "Use the same language as the conversation. No markdown headers. No speaker labels.\n"
+        "Do not quote long passages verbatim."
+    )
+    try:
+        result = await chat_ollama(
+            prompt,
+            [{"role": "user", "content": f"Topic hint: {display_title}\n\n{transcript[:4500]}"}],
+            model=REFLECTION_MODEL,
+            num_ctx=8192,
+            think=False,
+        )
+        digest = (result or "").strip()
+        if digest and len(digest) > 20:
+            if len(digest) > 500:
+                digest = digest[:497] + "…"
+            return display_title, digest
+    except Exception as exc:
+        print(f"Share digest synthesis failed: {type(exc).__name__}: {exc}")
+
+    return display_title, build_digest(display_title, filtered)
+
+
+async def enrich_export_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
+    """Add synthesized display_title + digest before delivery."""
+    enriched = dict(bundle)
+    display_title, digest = await synthesize_share_metadata(
+        enriched.get("title", ""),
+        enriched.get("history") or [],
+    )
+    enriched["display_title"] = display_title
+    enriched["digest"] = digest
+    return enriched
+
+
+def share_label(bundle: dict[str, Any]) -> str:
+    return (bundle.get("display_title") or bundle.get("title") or "shared eddy")[:100]
+
+
 def build_export_bundle(
     *,
     title: str,
@@ -149,6 +241,7 @@ def build_export_bundle(
     return {
         "share_id": sid,
         "title": title[:100],
+        "display_title": title[:100],
         "digest": digest,
         "transcript": transcript,
         "history": list(history),
@@ -238,9 +331,10 @@ async def deliver_practitioner_share(
     act_client = _river_client_for_channel(recipient_channel) or client
     ch = await channel_for_client(recipient_channel, act_client)
 
+    label = share_label(bundle)
     embed = discord.Embed(
         title=f"📥 {bundle['sharer_address']} shared a conversation",
-        description=f"**{bundle['title']}**\n\n{bundle['digest']}",
+        description=f"**{label}**\n\n{bundle['digest']}",
         color=0x3498DB,
     )
     view = ShareContinueView(bundle["share_id"], target.channel_id)
@@ -257,7 +351,7 @@ async def deliver_practitioner_share(
     sender_pd = practice_dir_for_mage(bundle["sharer_key"])
     _append_chronicle(
         sender_pd,
-        f"📤 Shared to {target.address}: \"{bundle['title']}\"",
+        f"📤 Shared to {target.address}: \"{label}\"",
         {"share_id": bundle["share_id"], "target": target.mage_key},
     )
     return msg
@@ -285,11 +379,11 @@ async def materialize_received_eddy(
     if str(interaction.user.id) != str(bundle.get("recipient_discord_id", "")):
         raise PermissionError("Only the recipient can continue this share.")
 
-    title = (bundle.get("title") or "received eddy")[:100]
+    label = share_label(bundle)
     eddy_archive = EDDY_TYPES.get("standard", {}).get("archive_minutes", 10080)
 
     thread = await interaction.message.create_thread(
-        name=title,
+        name=label[:100],
         auto_archive_duration=eddy_archive,
     )
 
@@ -301,7 +395,7 @@ async def materialize_received_eddy(
         "model_label": "local",
         "eddy_type": "standard",
         "context_type": None,
-        "topic": title,
+        "topic": label,
         "origin": "received",
         "share_id": share_id,
         "from_sharer": bundle.get("sharer_address", "someone"),
@@ -316,26 +410,17 @@ async def materialize_received_eddy(
         dialogue_histories[thread.id] = list(history)
         sync_history(thread.id)
 
-    display_digest = bundle.get("digest") or build_digest(title, history)
-    if "[Act: !" in display_digest:
-        display_digest = build_digest(title, history)
-
-    embed = discord.Embed(
-        title="📥 Received conversation",
-        description=(
-            f"From **{bundle.get('sharer_address', 'someone')}** · "
-            f"*{bundle.get('title', 'shared eddy')}*\n\n"
-            f"{display_digest}\n\n"
-            "Turtle has the full thread in context — continue when you are ready."
-        ),
-        color=0x3498DB,
+    # Digest already on the river act — attribution only inside the eddy.
+    await thread.send(
+        f"-# 📥 From **{bundle.get('sharer_address', 'someone')}** · shared conversation ready — "
+        "Turtle has the full thread; say hello when you want to continue.",
+        silent=True,
     )
-    await thread.send(embed=embed, silent=True)
 
     parent_name = interaction.channel.name if interaction.channel else "river"
     register_thread(
         thread.id,
-        title,
+        label,
         parent_channel=parent_name,
         model="local",
         attunement="native",
@@ -477,6 +562,14 @@ class ShareConfirmView(discord.ui.View):
             source_thread_id=draft["source_thread_id"],
             share_id=draft.get("share_id"),
         )
+        try:
+            bundle = await enrich_export_bundle(bundle)
+        except Exception as exc:
+            await interaction.followup.send(
+                f"Could not summarize for share: {type(exc).__name__}: {exc}",
+                ephemeral=True,
+            )
+            return
         try:
             await deliver_practitioner_share(bundle, self._target, client=interaction.client)
         except Exception as exc:
