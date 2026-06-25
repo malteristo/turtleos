@@ -676,7 +676,7 @@ async def materialize_received_eddy(
 ) -> discord.Thread | None:
     """Open received eddy from inbox bundle — seeds Turtle history, not Discord replay."""
     from commands import thread_configs
-    from eddy_spawn import _materialize_client
+    from eddy_spawn import river_add_turtle_to_eddy
     from helpers import sync_history
     from state import EDDY_TYPES, TURTLE_MODEL, dialogue_histories
     from thread_registry import register_thread
@@ -715,7 +715,6 @@ async def materialize_received_eddy(
     except discord.HTTPException:
         pass
 
-    bot_client = _materialize_client(msg)
     thread_configs[thread.id] = {
         "model": TURTLE_MODEL,
         "use_api": False,
@@ -763,11 +762,40 @@ async def materialize_received_eddy(
     recipient_runtime = get_runtime_dir()
     save_received_thread_config(recipient_runtime, thread.id, thread_configs[thread.id])
 
-    try:
-        await bot_client.fetch_user(int(bundle["sharer_id"]))
-    except Exception:
-        pass
+    return thread
 
+
+async def continue_received_share(
+    interaction: discord.Interaction,
+    share_id: str,
+    parent_channel_id: int,
+) -> discord.Thread | None:
+    """Continue contract: thread chip on digest is success feedback; silent on happy path."""
+    if interaction.channel and interaction.channel.id != parent_channel_id:
+        await interaction.response.send_message("Wrong channel.", ephemeral=True)
+        return None
+    try:
+        await interaction.response.defer(ephemeral=True)
+        thread = await materialize_received_eddy(
+            interaction,
+            share_id,
+            parent_channel_id,
+        )
+    except PermissionError as exc:
+        await interaction.followup.send(str(exc), ephemeral=True)
+        return None
+    except Exception as exc:
+        await interaction.followup.send(
+            f"Could not open received eddy: {type(exc).__name__}: {exc}",
+            ephemeral=True,
+        )
+        return None
+    if not thread:
+        return None
+    try:
+        await interaction.delete_original_response()
+    except discord.HTTPException:
+        pass
     return thread
 
 
@@ -1088,34 +1116,11 @@ class ShareContinueView(discord.ui.View):
         self.add_item(btn)
 
     async def _on_continue(self, interaction: discord.Interaction):
-        if interaction.channel and interaction.channel.id != self._parent_channel_id:
-            await interaction.response.send_message("Wrong channel.", ephemeral=True)
-            return
-        try:
-            await interaction.response.defer(ephemeral=True)
-            thread = await materialize_received_eddy(
-                interaction,
-                self._share_id,
-                self._parent_channel_id,
-            )
-        except PermissionError as exc:
-            await interaction.followup.send(str(exc), ephemeral=True)
-            return
-        except Exception as exc:
-            await interaction.followup.send(
-                f"Could not open received eddy: {type(exc).__name__}: {exc}",
-                ephemeral=True,
-            )
-            return
-        if not thread:
-            return
-        # Do not edit the digest message after Continue. It is the thread starter;
-        # any edit (even view-only) can strip the embed on mobile and hide it from
-        # the river. Re-clicks are idempotent via msg.thread in materialize.
-        try:
-            await interaction.delete_original_response()
-        except discord.HTTPException:
-            pass
+        await continue_received_share(
+            interaction,
+            self._share_id,
+            self._parent_channel_id,
+        )
 
 
 def get_share_bot_client(message: discord.Message | None = None):

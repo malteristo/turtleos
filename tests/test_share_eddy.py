@@ -328,6 +328,56 @@ class ShareReceivedHistoryTests(unittest.TestCase):
         self.assertIn("joining", joined.lower())
 
 
+class ShareContinueContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_continue_success_is_silent(self) -> None:
+        """Success = thread chip on digest only; no second river/ephemeral message."""
+        from share_eddy import continue_received_share
+
+        interaction = MagicMock()
+        interaction.channel = MagicMock()
+        interaction.channel.id = 1002
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
+
+        fake_thread = MagicMock()
+        fake_thread.name = "testing eddy sharing"
+
+        with patch(
+            "share_eddy.materialize_received_eddy",
+            new=AsyncMock(return_value=fake_thread),
+        ):
+            thread = await continue_received_share(interaction, "share-abc", 1002)
+
+        self.assertIs(thread, fake_thread)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+        interaction.delete_original_response.assert_awaited_once()
+        interaction.followup.send.assert_not_awaited()
+
+    async def test_continue_failure_sends_ephemeral_error(self) -> None:
+        from share_eddy import continue_received_share
+
+        interaction = MagicMock()
+        interaction.channel = MagicMock()
+        interaction.channel.id = 1002
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
+
+        with patch(
+            "share_eddy.materialize_received_eddy",
+            new=AsyncMock(side_effect=PermissionError("Only the recipient can continue.")),
+        ):
+            thread = await continue_received_share(interaction, "share-abc", 1002)
+
+        self.assertIsNone(thread)
+        interaction.followup.send.assert_awaited_once_with(
+            "Only the recipient can continue.",
+            ephemeral=True,
+        )
+        interaction.delete_original_response.assert_not_awaited()
+
+
 class ShareNotifyTests(unittest.IsolatedAsyncioTestCase):
     async def test_maybe_notify_loads_config_from_disk(self) -> None:
         from share_eddy import maybe_notify_sharer_on_first_peer_reply, save_received_thread_config

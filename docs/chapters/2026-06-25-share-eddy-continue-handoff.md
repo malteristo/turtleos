@@ -1,141 +1,102 @@
-# Handoff: Share Continue — digest disappears from river
+# Handoff: Share Continue — silent success on digest
 
-**Date:** 2026-06-25 (session 2)  
-**Status:** **BLOCKED** — S1 not acceptance-closed  
-**Mini deploy:** `1b3cf8d` on `main`  
+**Date:** 2026-06-25 (session 2, reframed 2026-06-25 evening)  
+**Status:** **VERIFY** — fix shipped; Nesrine re-dogfood pending  
+**Mini deploy:** `1b3cf8d` on `main` (plus contract test on next push)  
 **Prior doc:** [2026-06-25-share-eddy-slice1-dogfood.md](2026-06-25-share-eddy-slice1-dogfood.md)
 
 ---
 
-## Target UX (confirmed by Mage + Nesrine dogfood)
+## Target UX (Mage-confirmed resonance)
+
+When Nesrine taps **Continue** on a share digest in her river:
 
 | Surface | Expected |
 |---------|----------|
-| **River (`#nesrine-dialogue`)** | Digest card stays visible after Continue: `@` line + embed + thread chip underneath (see neurodiversity lore share ~14:48) |
-| **Received eddy (thread)** | Digest is the **first visible message** inside the thread, then attribution line, then conversation |
-| **Turtle (invisible)** | Full shared history from `share/inbox/{share_id}.json` seeded into `dialogue/{thread_id}.json` |
-| **Sharer river** | `@` + act when recipient first replies (working as of ~14:50 dogfood) |
+| **River digest message** | **Unchanged** — `@` line + embed + Continue button; after Continue, Discord adds the **thread chip** on this same message (see neurodiversity share ~14:48) |
+| **Second river message** | **None on success** — no "Opened received eddy…", no "This share is no longer available", no other ephemeral confirmation |
+| **Received eddy (thread)** | Thread opens on the digest; attribution line inside; Turtle has seeded history |
+| **Sharer river** | `@` act when recipient first replies (working) |
+
+The thread chip on message 1 **is** the confirmation UX. River should not narrate success afterward.
 
 **Not required for v1:** disabling Continue after open; ephemeral success toasts.
 
 ---
 
-## What works (do not regress)
+## What was actually broken (session 2 diagnosis)
 
-- `!share` sender path: synthesize → preview → confirm → chronicle
-- Multiple pending shares: each digest keeps its own Continue button (`supersede_stale_share_acts` only replaces same `share_id`)
-- Continue opens received eddy; Nesrine can converse; Turtle has seeded history
-- Sharer first-reply notify (split-bot disk persistence: `share/received/{thread_id}.json`)
-- Received-eddy conduct scaffolding (`received_eddy_context_lines`, `label_shared_history`)
-- No ephemeral “Opened received eddy …” clutter (removed `9c31aba`)
+Two issues were conflated during debugging:
 
----
+1. **Redundant ephemeral (the Mage's ask)** — After Continue, River posted a private second message ("Opened…" or spurious "no longer available"). **Fixed** by `9c31aba`, `e247f02`, `1b3cf8d`.
 
-## What is broken (reproducible 2026-06-25 afternoon)
+2. **Digest vanishes (handoff over-focus)** — Some dogfood runs showed digest loss or empty thread interior on mobile. The **good reference** (neurodiversity ~14:48) shows `message.create_thread` working with digest + thread chip intact. Experiments with sibling threads and post-Continue `message.edit` were **reverted**; they fought the target UX.
 
-**Symptom:** Nesrine taps **Continue** → digest **vanishes from river**; thread appears in sidebar; inside thread the digest/starter often **fails to load** (“could not load first message” on mobile DE client) or shows only the attribution line.
-
-**Not fixed by:** `1b3cf8d` (stop editing digest after Continue).
-
-**Working reference:** Older share “magic resonance neurodiversity lore thread” (~14:48) — digest + Continue + thread chip all visible in river. Later shares (storytime, contra chiang) degraded.
+**Do not reopen Option A (two-message repost)** unless verify fails on thread *interior*, not on the redundant ephemeral.
 
 ---
 
-## Architecture (current code)
+## Continue contract (code)
 
 ```
-deliver_practitioner_share()     → River posts digest msg (text + embed + ShareContinueView)
-ShareContinueView._on_continue   → defer(ephemeral); materialize_received_eddy()
-materialize_received_eddy()      → msg.create_thread() on digest message
-                                 → river_add_turtle_to_eddy()
-                                 → seed dialogue_histories + sync_history
-                                 → thread.send(attribution line)
-                                 → save_received_thread_config()
-discord_bot.handle_dialogue()    → maybe_notify_sharer_on_first_peer_reply() [Turtle process]
+ShareContinueView._on_continue → continue_received_share()
+  → defer(ephemeral=True)          # Discord 3s ack only
+  → materialize_received_eddy()    # msg.create_thread on digest; never edit digest
+  → delete_original_response()     # remove thinking bubble; NO followup on success
 ```
 
-**Split bots:** River owns Continue + thread creation; Turtle owns dialogue + notify. Cross-process state on disk under `~/workshops/nesrine/share/`.
+Errors (wrong recipient, materialize exception) may still send a private ephemeral — that is correct.
 
-**Key file:** `share_eddy.py` — `materialize_received_eddy`, `ShareContinueView._on_continue`, `deliver_practitioner_share`
+**Key file:** `share_eddy.py` — `ShareContinueView._on_continue`, `materialize_received_eddy`
+
+**Test lock:** `tests/test_share_eddy.py` — `ShareContinueContractTests` (`continue_received_share`)
 
 ---
 
-## Commits attempted this session (chronological)
+## Commits (chronological)
 
 | Commit | Intent | Outcome |
 |--------|--------|---------|
-| `e414c35` | Multi-Continue + cross-bot notify | **Good** — fixes real bugs |
-| `9c31aba` | Remove ephemeral “Opened…” | **Good** |
-| `c0434a8` | Received-eddy Turtle conduct | **Good** for tone; unrelated to digest UX |
-| `fdf38c9` | Sibling `channel.create_thread` | **Bad UX** — digest stays but thread detached (“river started thread”); no digest in thread |
-| `8d7a183` | Restore `message.create_thread` | Digest-attached UX back; spurious ephemeral |
-| `e247f02` | Fix `return thread` indentation | Fixed spurious “no longer available”; **triggered post-Continue edit path** |
-| `1b3cf8d` | Stop editing digest after Continue | **Did not fix** disappear — edit was red herring or not sole cause |
+| `e414c35` | Multi-Continue + cross-bot notify | **Good** |
+| `9c31aba` | Remove "Opened received eddy…" followup | **Good** — matches Mage ask |
+| `c0434a8` | Received-eddy Turtle conduct | **Good** |
+| `fdf38c9` | Sibling `channel.create_thread` | **Reverted** — wrong UX |
+| `8d7a183` | Restore `message.create_thread` | **Good** |
+| `e247f02` | Fix `return thread` indentation; drop spurious "no longer available" | **Good** |
+| `1b3cf8d` | Stop editing digest after Continue | **Good** — digest stays untouched |
 
 ---
 
-## Hypotheses (for fresh eyes)
+## Verify protocol (closes S1 UX if pass)
 
-### Likely wrong (tested or accidental)
+1. Mini at `git log -1` ≥ handoff commit; restart `com.turtle.river` + `com.turtle.discord` if needed
+2. Kermit: fresh eddy → `!share` → Nesrine
+3. Nesrine: tap **Continue** once on one share
+4. **Pass criteria:**
+   - Digest message unchanged in river + thread chip visible
+   - **No second ephemeral/message from River on success**
+   - Thread opens; Nesrine can talk; Turtle has context
+5. Optional: thread interior screenshot (mobile DE); disk checks under `~/workshops/nesrine/share/`
 
-- ~~Post-Continue `message.edit(view=…)` alone causes disappear~~ — removing edit (`1b3cf8d`) did not restore UX
-- ~~`return thread` bug caused disappear~~ — it *prevented* edit from running, masking the issue
-
-### Still open (investigate first)
-
-1. **`message.create_thread()` + split River/Turtle** — River creates thread from River-owned message; Turtle sends inside thread. Does Discord mobile fail to render the starter when the creating bot ≠ the bot posting follow-ups? Compare with `eddy_spawn.py` patterns that work.
-
-2. **Interaction message staleness** — `interaction.message` at Continue time may not reflect post-thread state; `getattr(msg, "thread", None)` may miss existing thread on re-click.
-
-3. **Embed + components on thread starter** — Discord may treat embed+button starter differently on mobile when forked into thread. Neurodiversity “good” case may have been luck/timing before other state changed.
-
-4. **`ensure_bar_at_bottom` / river housekeeping** — Could a river re-anchor or bar pass touch/delete messages near the digest? Grep river logs around Continue timestamp.
-
-5. **Two-message design (recommended fallback)** — Do **not** fork digest into thread:
-   - Leave digest message **untouched** in river (`channel.create_thread` on parent)
-   - **Repost embed** as first message *inside* new thread (explicit copy from inbox bundle)
-   - Link thread to share via `active_river_acts.json` `{share_id, message_id, thread_id}`
-   - Matches design “digest first in river” without making digest the thread starter
-
----
-
-## Repro protocol (next session)
-
-1. Confirm Mini at `git log -1` ≥ `1b3cf8d`; restart `com.turtle.river` + `com.turtle.discord`
-2. Kermit: fresh eddy with 4+ turns → `!share` → Nesrine
-3. Nesrine: **do not open Discord until both shares posted** (multi-Continue test optional)
-4. Nesrine: tap Continue on **one** share; capture:
-   - River channel screenshot (digest visible?)
-   - Thread interior screenshot (digest as first message?)
-   - `~/workshops/nesrine/share/received/{thread_id}.json` exists
-   - `~/workshops/nesrine/dialogue/{thread_id}.json` has labeled history
-5. River log grep: `Share continue`, `HTTPException`, `materialize` around timestamp
+**Fail criteria:** Any success-path second message; digest stripped from river; thread interior empty with no workaround.
 
 ---
 
 ## Acceptance impact
 
-S1 row in [acceptance/README.md](../acceptance/README.md): **Partial** — sender + notify dogfooded; **recipient Continue UX not shippable** until digest-in-river + digest-in-thread stable.
+S1 in [acceptance/README.md](../acceptance/README.md): **Partial** until verify pass.
 
-Do **not** mark S1 closed until Continue UX passes Nesrine re-test.
+Do **not** mark S1 closed until Nesrine re-test confirms silent Continue.
 
 ---
 
-## Suggested next implementation (when resuming)
+## If verify fails
 
-**Option A — Two-message (safest):**
+Investigate in order:
 
-```python
-# materialize_received_eddy — sketch
-thread = await channel.create_thread(name=label, type=public_thread, ...)
-embed = discord.Embed(title=f"📥 {sharer} shared…", description=f"**{label}**\n\n{bundle['digest']}", ...)
-await thread.send(embed=embed)  # digest copy inside thread
-await thread.send(attribution_line, silent=True)
-# DO NOT touch river digest message
-# Record thread_id in active_river_acts next to message_id
-```
-
-**Option B — Debug `message.create_thread` path** with River-only thread seeding + fetch fresh message after create before any side effects; compare with working neurodiversity message IDs in channel history.
+1. Which code path sent a second message? (error branch vs old deploy)
+2. Thread interior only — consider reposting digest inside thread (narrow fix), not sibling-thread architecture
+3. Compare with working message IDs in channel history; River logs around Continue timestamp
 
 ---
 
@@ -143,12 +104,11 @@ await thread.send(attribution_line, silent=True)
 
 | Path | Role |
 |------|------|
-| `share_eddy.py` | All Continue logic |
-| `discord_bot.py` | `_build_native_runtime_env`, notify hook |
-| `dialogue_store.py` | Shared history Turtle reads |
-| `eddy_spawn.py` | Working `create_thread` patterns |
-| `docs/chapters/design-share-eddy.md` | “Digest first” product law |
+| `share_eddy.py` | Continue logic |
+| `tests/test_share_eddy.py` | Contract tests |
+| `docs/chapters/design-share-eddy.md` | Product law |
+| `eddy_spawn.py` | Other working `create_thread` patterns |
 
 ---
 
-*Handoff written 2026-06-25. Next agent: start here, not from chat memory.*
+*Reframed after Mage–Spirit resonance session 2026-06-25. Start with verify, not redesign.*
