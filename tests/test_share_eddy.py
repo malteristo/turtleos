@@ -310,6 +310,13 @@ class ShareReceivedHistoryTests(unittest.TestCase):
         self.assertEqual(labeled[0]["content"], "[Kermit]: hello from sharer")
         self.assertEqual(labeled[1]["content"], "hi back")
 
+    def test_label_shared_history_skips_already_labeled(self) -> None:
+        from share_eddy import label_shared_history
+
+        history = [{"role": "user", "content": "[kermit]: already tagged"}]
+        labeled = label_shared_history(history, "Kermit")
+        self.assertEqual(labeled[0]["content"], "[kermit]: already tagged")
+
     def test_received_eddy_context_lines_name_recipient_not_sharer(self) -> None:
         from share_eddy import received_eddy_context_lines
 

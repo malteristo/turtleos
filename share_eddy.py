@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -115,7 +116,7 @@ def label_shared_history(history: list[dict], sharer_address: str) -> list[dict]
         row = dict(entry)
         if row.get("role") == "user":
             content = (row.get("content") or "").strip()
-            if content and not content.startswith(prefix):
+            if content and not re.match(r"^\[[^\]]+\]: ", content):
                 row["content"] = prefix + content
         labeled.append(row)
     return labeled
@@ -693,10 +694,23 @@ async def materialize_received_eddy(
     label = share_label(bundle)
     eddy_archive = EDDY_TYPES.get("standard", {}).get("archive_minutes", 10080)
 
-    thread = await interaction.message.create_thread(
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "create_thread"):
+        return None
+
+    thread = await channel.create_thread(
         name=label[:100],
         auto_archive_duration=eddy_archive,
+        type=discord.ChannelType.public_thread,
     )
+
+    from eddy_spawn import river_add_turtle_to_eddy
+
+    await river_add_turtle_to_eddy(thread)
+    try:
+        await thread.add_user(interaction.user)
+    except discord.HTTPException:
+        pass
 
     bot_client = _materialize_client(interaction.message)
     thread_configs[thread.id] = {
@@ -1098,11 +1112,16 @@ class ShareContinueView(discord.ui.View):
             return
         for child in self.children:
             child.disabled = True
-        try:
-            if interaction.message:
-                await interaction.message.edit(view=self)
-        except discord.HTTPException:
-            pass
+        if interaction.message:
+            edit_kwargs: dict[str, Any] = {"view": None}
+            if interaction.message.content:
+                edit_kwargs["content"] = interaction.message.content
+            if interaction.message.embeds:
+                edit_kwargs["embeds"] = list(interaction.message.embeds)
+            try:
+                await interaction.message.edit(**edit_kwargs)
+            except discord.HTTPException:
+                pass
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:
