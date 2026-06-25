@@ -768,7 +768,7 @@ async def materialize_received_eddy(
     except Exception:
         pass
 
-        return thread
+    return thread
 
 
 async def _disable_share_continue_button(
@@ -1128,10 +1128,6 @@ class ShareContinueView(discord.ui.View):
             )
             return
         if not thread:
-            await interaction.followup.send(
-                "This share is no longer available.",
-                ephemeral=True,
-            )
             return
         for child in self.children:
             child.disabled = True
