@@ -136,14 +136,7 @@ async def dispatch_direct_command(message, *, bar_client=None) -> bool:
     async with lock:
         if not await try_direct_command(message):
             return False
-        from bar_anchor import _ensure_channel_bars_unlocked, _is_eddy_thread
+        from bar_anchor import _ensure_channel_bars_unlocked
 
-        if _is_eddy_thread(message.channel):
-            from eddy_flow_library import _touch_eddy_flow_library_bar_unlocked
-            from eddy_lifecycle_bar import is_practitioner_input
-
-            await _touch_eddy_flow_library_bar_unlocked(
-                message, from_practitioner=is_practitioner_input(message)
-            )
         await _ensure_channel_bars_unlocked(message.channel, bar_client)
     return True

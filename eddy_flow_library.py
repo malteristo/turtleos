@@ -133,12 +133,25 @@ def _rename_offer_path(thread_id: int) -> Path:
     return offer_dir / f"{thread_id}.json"
 
 
-def write_rename_offer(thread_id: int, parent_id: int, suggested: str) -> None:
+def write_rename_offer(
+    thread_id: int,
+    parent_id: int,
+    suggested: str,
+    *,
+    message_id: int | None = None,
+) -> None:
     path = _rename_offer_path(thread_id)
-    path.write_text(
-        json.dumps({"parent_id": parent_id, "suggested": suggested[:100]}),
-        encoding="utf-8",
-    )
+    data: dict = {"parent_id": parent_id, "suggested": suggested[:100]}
+    if message_id is not None:
+        data["message_id"] = message_id
+    elif path.exists():
+        try:
+            prior = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(prior, dict) and prior.get("message_id"):
+                data["message_id"] = prior["message_id"]
+        except json.JSONDecodeError:
+            pass
+    path.write_text(json.dumps(data), encoding="utf-8")
 
 
 def read_rename_offer(thread_id: int) -> dict | None:
@@ -249,6 +262,14 @@ async def post_flow_rename_offer(
     if proposed.lower() == current:
         return
 
+    existing = read_rename_offer(thread_id)
+    if existing and existing.get("message_id"):
+        try:
+            old_msg = await channel.fetch_message(int(existing["message_id"]))
+            await old_msg.delete()
+        except (discord.HTTPException, TypeError, ValueError):
+            pass
+
     write_rename_offer(thread_id, parent_id, proposed)
     view = FlowRenameOfferView(thread_id, parent_id)
     bot_client.add_view(view)
@@ -258,9 +279,11 @@ async def post_flow_rename_offer(
     )
     embed.set_footer(text="Optional — only if a new name helps you find this eddy.")
     try:
-        await channel.send(embed=embed, view=view, silent=True)
+        msg = await channel.send(embed=embed, view=view, silent=True)
     except discord.HTTPException as exc:
         print(f"Flow rename offer post failed: {exc}")
+        return
+    write_rename_offer(thread_id, parent_id, proposed, message_id=msg.id)
 
 
 async def load_flow_in_eddy(

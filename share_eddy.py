@@ -768,10 +768,7 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
         preview = SharePreviewView(self._thread_id, self._author_id, self._target)
         embed = build_preview_embed(draft, self._target)
         try:
-            if interaction.message:
-                await interaction.message.edit(embed=embed, view=preview)
-            else:
-                await interaction.response.edit_message(embed=embed, view=preview)
+            await interaction.response.edit_message(embed=embed, view=preview)
         except discord.HTTPException as exc:
             await interaction.response.send_message(
                 f"Could not update preview: {exc}",

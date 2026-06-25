@@ -28,7 +28,14 @@ class EddyFlowLibraryTests(unittest.TestCase):
         spawn_block = src.split("async def spawn_river_eddy")[1].split("async def spawn_blank_river_eddy")[0]
         self.assertNotIn("post_eddy_flow_library", spawn_block)
         river_src = (REPO / "river_bot.py").read_text(encoding="utf-8")
-        self.assertIn("migrate_eddy_flow_library_to_bottom", river_src)
+        self.assertNotIn("migrate_eddy_flow_library_to_bottom", river_src)
+        self.assertNotIn("touch_eddy_flow_library_bar", river_src)
+
+    def test_flow_library_on_demand_via_command(self) -> None:
+        cmd_src = (REPO / "commands.py").read_text(encoding="utf-8")
+        self.assertIn('"flow":', cmd_src)
+        dispatch_src = (REPO / "cmd_dispatch.py").read_text(encoding="utf-8")
+        self.assertNotIn("touch_eddy_flow_library_bar", dispatch_src)
 
     def test_prepare_flow_uses_bootstrap(self) -> None:
         src = (REPO / "eddy_spawn.py").read_text(encoding="utf-8")

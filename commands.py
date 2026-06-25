@@ -281,7 +281,7 @@ def _help_embed_fields() -> list[tuple[str, str]]:
 
     river_cmds = [
         ("**new eddy**", "Standing bar — open a blank eddy (TURTLE_SPEC §5.4)"),
-        ("`!flows`", "In-eddy flow library — load a guided flow"),
+        ("`!flows`", "In-eddy flow library — load a guided flow (`!flow` alias)"),
         ("`!pin`", "Pin a message — reply with `!pin` or `!pin <message_id>`"),
         ("`!dissolve`", "Archive eddy + chronicle (river or in-thread)"),
     ]
@@ -906,6 +906,7 @@ DIRECT_COMMANDS = {
     "release": lambda msg, args: cmd_release(msg),
     "dissolve": lambda msg, args: cmd_dissolve(msg, args),
     "flows": lambda msg, args: cmd_flows(msg, args),
+    "flow": lambda msg, args: cmd_flows(msg, args),
     "pin": lambda msg, args: cmd_pin(msg, args),
     "thread": lambda msg, args: cmd_thread(msg, args),
     "threads": lambda msg, args: cmd_threads(msg, args),
