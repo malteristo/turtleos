@@ -1052,10 +1052,10 @@ class ShareContinueView(discord.ui.View):
                 await interaction.message.edit(view=self)
         except discord.HTTPException:
             pass
-        await interaction.followup.send(
-            f"Opened received eddy **{thread.name}** — jump in when ready.",
-            ephemeral=True,
-        )
+        try:
+            await interaction.delete_original_response()
+        except discord.HTTPException:
+            pass
 
 
 def get_share_bot_client(message: discord.Message | None = None):
