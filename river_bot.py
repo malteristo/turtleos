@@ -156,11 +156,33 @@ async def on_message(message: discord.Message):
             set_practice_context(message)
             lock = get_channel_lock(message.channel.id)
             async with lock:
-                await handle_eddy_first_message(message)
+                renamed = await handle_eddy_first_message(message)
+            if renamed:
+                try:
+                    from eddy_flow_library import migrate_eddy_flow_library_to_bottom
+
+                    await migrate_eddy_flow_library_to_bottom(
+                        message.channel,
+                        client=river_client,
+                    )
+                except Exception as exc:
+                    print(
+                        f"Eddy flow library bar migrate failed: {type(exc).__name__}: {exc}"
+                    )
             _maybe_schedule_contextual_offer(message)
             return
 
         # Ongoing eddy dialogue: Turtle harness (link-read, prose). River handles `!` only.
+        try:
+            from eddy_flow_library import touch_eddy_flow_library_bar
+
+            await touch_eddy_flow_library_bar(
+                message,
+                from_practitioner=True,
+                client=river_client,
+            )
+        except Exception as exc:
+            print(f"Eddy flow library touch failed: {type(exc).__name__}: {exc}")
         _maybe_schedule_contextual_offer(message)
         return
 

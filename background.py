@@ -183,7 +183,6 @@ async def interoception_loop():
     )
     await ch.send(embed=embed, silent=True)
     save_river_state("\U0001f9e0 Interoception", description)
-import re as _re
 
 
 @tasks.loop(hours=1)
@@ -197,43 +196,7 @@ async def daily_reminders_loop():
         return
     _state.last_reminder_date = today
 
-    await _check_signal_drip()
     await _check_practice_invitation()
-
-
-async def _check_signal_drip():
-    """Check for pending signal drip and offer next tweet."""
-    drip_path = os.path.join(get_pd(), "outfacing", "drip-state.md")
-    content = read_safe(drip_path)
-    if not content:
-        return
-
-    pending = _re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", content)
-    if not pending:
-        return
-    next_num = int(pending[0])
-
-    total_matches = _re.findall(r"\|\s*(\d+)\s*\|\s*(?:posted|pending)\s*\|", content)
-    total = max(int(n) for n in total_matches) if total_matches else 18
-
-    thread = _state.client.get_channel(_state.SIGNAL_DRIP_THREAD_ID)
-    if not thread:
-        print(f"Signal drip: thread {_state.SIGNAL_DRIP_THREAD_ID} not found")
-        return
-
-    from outfacing import get_story_tweet
-    tweet_text = get_story_tweet(next_num)
-    if not tweet_text:
-        print(f"Signal drip: Tweet {next_num} text not found in story file")
-        return
-
-    embed = discord.Embed(
-        title=f"\U0001f422 Tweet {next_num}/{total}",
-        description=f"{tweet_text}\n\n*Relay to @turtle_of_magic. `!drip done` when posted.*",
-        color=OPS_EMBED_COLOR,
-    )
-    await thread.send(embed=embed, silent=True)
-    print(f"Signal drip: Tweet {next_num}/{total} reminder sent")
 
 
 async def _check_practice_invitation():

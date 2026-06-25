@@ -167,6 +167,26 @@ class TestDialogueSnapshot(unittest.TestCase):
             snap = res._dialogue_history_snapshot(42)
         self.assertEqual(snap[0]["content"], "from disk")
 
+    def test_assistant_after_practitioner_turn(self) -> None:
+        history = [
+            {"role": "user", "content": "old"},
+            {"role": "assistant", "content": "old reply"},
+            {"role": "user", "content": "see https://example.com/article"},
+            {"role": "assistant", "content": "interesting article"},
+        ]
+        self.assertTrue(
+            res._assistant_replied_for_practitioner_turn(
+                history,
+                "see https://example.com/article",
+            )
+        )
+        self.assertFalse(
+            res._assistant_replied_for_practitioner_turn(
+                history,
+                "not in history",
+            )
+        )
+
 
 class TestScheduleContextualOffer(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:

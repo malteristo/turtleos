@@ -1090,9 +1090,16 @@ _intake_runner = None
 
 async def _touch_flow_library_after_dialogue(message: discord.Message) -> None:
     if isinstance(message.channel, discord.Thread):
-        from eddy_flow_library import touch_eddy_flow_library_bar
+        from mage import river_bot_enabled
 
-        await touch_eddy_flow_library_bar(message, from_practitioner=True)
+        if river_bot_enabled():
+            from river_turn_signal import mark_turtle_turn_complete
+
+            mark_turtle_turn_complete(message.channel.id, message.id)
+        else:
+            from eddy_flow_library import touch_eddy_flow_library_bar
+
+            await touch_eddy_flow_library_bar(message, from_practitioner=True)
 
 
 async def _route_practice_dialogue(message: discord.Message) -> None:

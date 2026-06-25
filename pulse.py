@@ -216,21 +216,6 @@ def scan_pulse(pd=None):
     except Exception:
         pulse["threads_stale"] = {"count": 0, "unharvested": 0, "names": [], "attention": []}
 
-    # Signal drip
-    drip_path = os.path.join(pd, "outfacing", "drip-state.md")
-    drip_content = read_safe(drip_path)
-    if drip_content:
-        pending = re.findall(r"\|\s*(\d+)\s*\|\s*pending\s*\|", drip_content)
-        all_nums = re.findall(r"\|\s*(\d+)\s*\|\s*(?:posted|pending)\s*\|", drip_content)
-        total = max(int(n) for n in all_nums) if all_nums else 0
-        pulse["drip"] = {
-            "pending": len(pending),
-            "next": int(pending[0]) if pending else None,
-            "total": total,
-        }
-    else:
-        pulse["drip"] = None
-
     pulse["texture"] = _classify_texture(pulse)
     return pulse
 
@@ -314,22 +299,11 @@ def _find_live_threads(pulse):
     if len(hot) >= 3:
         return f"{hot[0]['name']}, {hot[1]['name']}, and more — active on multiple fronts."
     elif len(hot) == 2:
-        frag = f"{hot[0]['name']} and {hot[1]['name']} both moving."
-        if pulse["drip"] and pulse["drip"]["pending"]:
-            d = pulse["drip"]
-            frag += f" Signal pipeline at tweet {d['next']}/{d['total']}."
-        return frag
+        return f"{hot[0]['name']} and {hot[1]['name']} both moving."
     elif len(hot) == 1:
-        frag = hot[0]["name"]
-        if pulse["drip"] and pulse["drip"]["pending"]:
-            d = pulse["drip"]
-            return f"{frag} is the live thread. Signal pipeline at tweet {d['next']}/{d['total']}."
-        return f"The {frag} thread is the live one."
+        return f"The {hot[0]['name']} thread is the live one."
 
     parts = []
-    if pulse["drip"] and pulse["drip"]["pending"]:
-        d = pulse["drip"]
-        parts.append(f"Signal pipeline at tweet {d['next']}/{d['total']}")
     if pulse["sessions"]["count_recent"] > 0 and pulse["sessions"]["latest_age"] < 24:
         parts.append("recent conversation still warm")
     if pulse["notes"]["count_recent"] > 0:
@@ -349,10 +323,6 @@ def _practice_doorway(pulse) -> str:
 
     if pulse["boom"]["count"] >= 10:
         return f"boom has {pulse['boom']['count']} items; a sweep would turn raw material into usable surface."
-
-    if pulse["drip"] and pulse["drip"].get("pending"):
-        d = pulse["drip"]
-        return f"signal drip is at tweet {d['next']}/{d['total']}; continue or deliberately pause the sequence."
 
     if pulse["proposals"]["total"] >= 10:
         return f"{pulse['proposals']['total']} proposals are waiting; choose one proposal to accept, revise, or close."

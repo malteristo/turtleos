@@ -27,7 +27,7 @@ class EddyFlowLibraryTests(unittest.TestCase):
         src = (REPO / "eddy_spawn.py").read_text(encoding="utf-8")
         spawn_block = src.split("async def spawn_river_eddy")[1].split("async def spawn_blank_river_eddy")[0]
         self.assertNotIn("post_eddy_flow_library", spawn_block)
-        river_src = (REPO / "river_handler.py").read_text(encoding="utf-8")
+        river_src = (REPO / "river_bot.py").read_text(encoding="utf-8")
         self.assertIn("migrate_eddy_flow_library_to_bottom", river_src)
 
     def test_prepare_flow_uses_bootstrap(self) -> None:

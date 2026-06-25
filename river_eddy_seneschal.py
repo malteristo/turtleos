@@ -30,7 +30,7 @@ _CHECKPOINT_INTENT_RE = re.compile(
     re.IGNORECASE,
 )
 
-TURTLE_REPLY_TIMEOUT_S = 60.0
+TURTLE_REPLY_TIMEOUT_S = 120.0
 
 
 @dataclass(frozen=True)
@@ -308,6 +308,38 @@ async def maybe_offer_eddy_save_after_turn(
     await maybe_offer_contextual_act_after_turn(channel, practitioner_text=practitioner_text)
 
 
+def _assistant_replied_for_practitioner_turn(
+    history: list[dict],
+    practitioner_text: str,
+) -> bool:
+    """True when shared dialogue history has assistant prose after this user turn."""
+    needle = (practitioner_text or "").strip()
+    if not needle:
+        return False
+    last_user_idx: int | None = None
+    for i, entry in enumerate(history):
+        if entry.get("role") != "user":
+            continue
+        content = (entry.get("content") or "").strip()
+        if needle[:240] in content or content[:240] in needle:
+            last_user_idx = i
+    if last_user_idx is None:
+        return False
+    for entry in history[last_user_idx + 1 :]:
+        if entry.get("role") != "assistant":
+            continue
+        if (entry.get("content") or "").strip():
+            return True
+    return False
+
+
+def _turtle_discord_message_ready(msg: discord.Message) -> bool:
+    if (msg.content or "").strip():
+        return True
+    embeds = getattr(msg, "embeds", None) or []
+    return any((getattr(e, "description", None) or "").strip() for e in embeds)
+
+
 async def _wait_for_turtle_reply_after(
     channel: discord.Thread,
     practitioner_message: discord.Message,
@@ -315,8 +347,9 @@ async def _wait_for_turtle_reply_after(
     timeout_s: float = TURTLE_REPLY_TIMEOUT_S,
     poll_s: float = 2.0,
 ) -> bool:
-    """Return True when a Turtle prose message appears after the practitioner turn."""
+    """Return True when Turtle finishes the practitioner turn (split-bot safe)."""
     from eddy_spawn import resolve_turtle_bot_user_id
+    from river_turn_signal import consume_turtle_turn_complete
 
     turtle_id = resolve_turtle_bot_user_id(getattr(channel, "guild", None))
     if not turtle_id:
@@ -324,15 +357,31 @@ async def _wait_for_turtle_reply_after(
         return False
 
     practitioner_id = practitioner_message.id
+    practitioner_text = practitioner_message.content or ""
     deadline = asyncio.get_event_loop().time() + timeout_s
     while asyncio.get_event_loop().time() < deadline:
+        if consume_turtle_turn_complete(channel.id, practitioner_id):
+            print(
+                f"Contextual offer poll: Turtle turn signal in "
+                f"#{getattr(channel, 'name', channel.id)} (msg {practitioner_id})"
+            )
+            return True
+
+        history = _dialogue_history_snapshot(channel.id)
+        if _assistant_replied_for_practitioner_turn(history, practitioner_text):
+            print(
+                f"Contextual offer poll: shared history assistant in "
+                f"#{getattr(channel, 'name', channel.id)}"
+            )
+            return True
+
         try:
             async for msg in channel.history(limit=30, after=practitioner_message):
                 if msg.id <= practitioner_id:
                     continue
                 if getattr(msg.author, "id", None) != turtle_id:
                     continue
-                if not (msg.content or "").strip():
+                if not _turtle_discord_message_ready(msg):
                     continue
                 print(
                     f"Contextual offer poll: Turtle reply seen in "

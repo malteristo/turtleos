@@ -23,12 +23,6 @@ from llm import chat_ollama
 from prompts import get_system_prompt
 from readiness import assess_readiness, save_readiness_trail
 from helpers import get_history, log_activity, local_now, reload_history
-from outfacing import (
-    evaluate_outfacing_signal,
-    save_signal_drafts,
-    should_evaluate_outfacing_signal,
-    MIN_EXCHANGES_FOR_SIGNAL,
-)
 from state import client
 
 
@@ -257,28 +251,6 @@ async def checkpoint_session(
 
         except Exception as e:
             print(f"Session reflection failed for {channel_id}: {type(e).__name__}: {e}")
-
-    if reflection and get_mage_type() != "practitioner" and len(history) >= MIN_EXCHANGES_FOR_SIGNAL:
-        try:
-            should_evaluate, reason = should_evaluate_outfacing_signal(conversation, reflection)
-            if not should_evaluate:
-                print(f"Outfacing signal skipped: {reason}")
-                signals = []
-            else:
-                signals = await evaluate_outfacing_signal(conversation, reflection)
-            if signals:
-                paths = save_signal_drafts(signals)
-                if paths:
-                    session_channel = client.get_channel(channel_id)
-                    count = len(paths)
-                    label = f"{count} signal draft{'s' if count > 1 else ''}"
-                    drafts_rel = "outfacing/drafts/signals"
-                    await log_activity(
-                        f"Outfacing: {label} in `{drafts_rel}/`",
-                        "📡", channel=session_channel,
-                    )
-        except Exception as e:
-            print(f"Outfacing signal evaluation failed: {type(e).__name__}: {e}")
 
     if get_mage_type() == "practitioner" and len(history) >= 4:
         await _extract_practice_state(conversation, mage_name)
