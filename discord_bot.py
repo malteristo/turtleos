@@ -1051,10 +1051,13 @@ async def _continue_dialogue_turn(
     if isinstance(message.channel, discord.Thread):
         await _update_thread_state(message.channel, cfg, history)
         if native_eddy:
-            from bar_anchor import ensure_channel_bars
+            from mage import river_bot_enabled
 
-            # One re-anchor after Turtle reply (River Save offer is separate harness).
-            await ensure_channel_bars(message.channel)
+            # Split-bot: River re-anchors bars after each turn (see river_eddy_seneschal).
+            if not river_bot_enabled():
+                from bar_anchor import ensure_channel_bars
+
+                await ensure_channel_bars(message.channel)
         # Phase 1 Eyes: update thread registry on every exchange
         if isinstance(message.channel, discord.Thread):
             try:

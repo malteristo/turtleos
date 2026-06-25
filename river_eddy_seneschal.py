@@ -36,7 +36,7 @@ TURTLE_REPLY_TIMEOUT_S = 120.0
 @dataclass(frozen=True)
 class ContextualOffer:
     kind: str
-    label: str
+    description: str
     actions: list[tuple[str, str]]
 
 
@@ -178,7 +178,7 @@ def pick_contextual_offer(
     if url:
         return ContextualOffer(
             kind="save",
-            label="-# Save to library",
+            description="Optional — **save this link** to your practice library.",
             actions=[("Save to library", f"!fetch {url}")],
         )
     if not checkpoint_offer_skip_reason(
@@ -186,7 +186,7 @@ def pick_contextual_offer(
     ):
         return ContextualOffer(
             kind="checkpoint",
-            label="-# Checkpoint this thread",
+            description="Optional — **checkpoint** this thread when you are ready.",
             actions=[("Checkpoint", "!checkpoint")],
         )
     return None
@@ -275,9 +275,9 @@ async def maybe_offer_contextual_act_after_turn(
     try:
         msg = await post_act_suggestion_row(
             channel,
-            offer.label,
             offer.actions,
             river_client,
+            description=offer.description,
         )
     except Exception as exc:
         print(f"Contextual offer failed for {channel.id}: {type(exc).__name__}: {exc}")
@@ -294,9 +294,6 @@ async def maybe_offer_contextual_act_after_turn(
             mark_save_offer_posted(channel.id, url)
 
     _log_contextual_posted(channel, offer.kind)
-    from bar_anchor import ensure_channel_bars
-
-    await ensure_channel_bars(channel, river_client)
 
 
 async def maybe_offer_eddy_save_after_turn(
@@ -396,6 +393,14 @@ async def _wait_for_turtle_reply_after(
     return False
 
 
+async def _reanchor_eddy_bars(channel) -> None:
+    """Keep River-owned bottom bars last after Turtle finishes a turn."""
+    from bar_anchor import ensure_channel_bars
+    from river_state import river_client
+
+    await ensure_channel_bars(channel, river_client)
+
+
 async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> None:
     channel = practitioner_message.channel
     if not getattr(channel, "parent_id", None):
@@ -419,7 +424,10 @@ async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> N
         is_cached=is_cached,
         min_exchanges=MIN_EXCHANGES_FOR_CHECKPOINT,
     )
-    if not pre_offer:
+    if pre_offer:
+        ch_name = getattr(channel, "name", channel.id)
+        print(f"Contextual offer polling ({pre_offer.kind}) in #{ch_name} ({channel.id})")
+    else:
         save_skip = save_offer_skip_reason(
             practitioner_text, pre_history, channel.id, is_cached=is_cached
         )
@@ -431,13 +439,16 @@ async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> N
             "pre_poll",
             f"save={save_skip};checkpoint={ckpt_skip}",
         )
-        return
 
-    ch_name = getattr(channel, "name", channel.id)
-    print(f"Contextual offer polling ({pre_offer.kind}) in #{ch_name} ({channel.id})")
     if not await _wait_for_turtle_reply_after(channel, practitioner_message):
         return
-    await maybe_offer_contextual_act_after_turn(channel, practitioner_text=practitioner_text)
+
+    if pre_offer:
+        await maybe_offer_contextual_act_after_turn(
+            channel, practitioner_text=practitioner_text
+        )
+
+    await _reanchor_eddy_bars(channel)
 
 
 def schedule_contextual_offer_after_practitioner_turn(

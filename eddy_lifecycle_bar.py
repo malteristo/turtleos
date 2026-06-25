@@ -594,11 +594,13 @@ class RiverActSuggestionView(discord.ui.View):
 
 async def post_act_suggestion_row(
     channel,
-    label: str,
     actions: list[tuple[str, str]],
     client,
+    *,
+    description: str | None = None,
+    content: str | None = None,
 ) -> discord.Message | None:
-    """Post Turtle's recommended acts as a River-owned button row."""
+    """Post River-owned act buttons — embed hint (native) or legacy content line."""
     from bar_anchor import channel_for_client
 
     ch = await channel_for_client(channel, client)
@@ -606,8 +608,16 @@ async def post_act_suggestion_row(
     if not view.children:
         return None
     client.add_view(view)
+    embed = None
+    send_content = "\u200b"
+    if description:
+        from bar_anchor import RIVER_OFFER_EMBED_COLOR
+
+        embed = discord.Embed(description=description, color=RIVER_OFFER_EMBED_COLOR)
+    elif content:
+        send_content = content
     try:
-        msg = await ch.send(label, view=view, silent=True)
+        msg = await ch.send(send_content, embed=embed, view=view, silent=True)
         bot_name = getattr(getattr(client, "user", None), "name", "?")
         print(f"Seneschal row posted as {bot_name} in #{getattr(ch, 'name', ch.id)}")
         return msg

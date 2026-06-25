@@ -119,8 +119,11 @@ class TestMaybeOfferEddySaveAfterTurn(unittest.IsolatedAsyncioTestCase):
             await res.maybe_offer_contextual_act_after_turn(channel, practitioner_text=text)
 
         post_mock.assert_awaited_once()
-        args = post_mock.await_args[0]
-        self.assertEqual(args[1], "-# Save to library")
+        kwargs = post_mock.await_args.kwargs
+        self.assertEqual(
+            kwargs.get("description"),
+            "Optional — **save this link** to your practice library.",
+        )
 
 
 class TestCheckpointOffer(unittest.TestCase):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+RIVER_OFFER_EMBED_COLOR = 0x5865F2
+
 
 def _is_eddy_thread(channel) -> bool:
     """True for Discord thread channels (eddies), not parent river surfaces."""

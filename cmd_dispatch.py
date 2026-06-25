@@ -95,7 +95,7 @@ async def send_with_actions(channel, message: str, actions: list[tuple[str, str]
 
     from eddy_lifecycle_bar import post_act_suggestion_row
 
-    return await post_act_suggestion_row(channel, message, actions, client)
+    return await post_act_suggestion_row(channel, actions, client, content=message)
 
 
 async def try_direct_command(message) -> bool:

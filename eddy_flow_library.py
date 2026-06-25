@@ -8,6 +8,7 @@ from pathlib import Path
 
 import discord
 
+from bar_anchor import RIVER_OFFER_EMBED_COLOR
 from flow_runner import list_resolvable_flow_ids
 
 _BLANK_EDDY_NAMES = frozenset({"new eddy", "blank eddy", "thread"})
@@ -253,7 +254,7 @@ async def post_flow_rename_offer(
     bot_client.add_view(view)
     embed = discord.Embed(
         description=f"Suggested thread title: **{proposed}**",
-        color=0x5865F2,
+        color=RIVER_OFFER_EMBED_COLOR,
     )
     embed.set_footer(text="Optional — only if a new name helps you find this eddy.")
     try:
@@ -464,7 +465,7 @@ async def post_eddy_flow_library(thread: discord.Thread, bot_client) -> discord.
             "Talk about anything — or load a **guided flow** if you want structure. "
             "Flows are optional."
         ),
-        color=0x5865F2,
+        color=RIVER_OFFER_EMBED_COLOR,
     )
     embed.set_footer(text="Or just start typing — no flow required.")
     try:
@@ -503,7 +504,7 @@ async def post_eddy_flow_library_bar(
             "\u200b",
             embed=discord.Embed(
                 description="Optional — load a **guided flow** or keep talking.",
-                color=0x5865F2,
+                color=RIVER_OFFER_EMBED_COLOR,
             ),
             view=view,
             silent=True,
