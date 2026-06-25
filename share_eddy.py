@@ -273,6 +273,43 @@ def share_label(bundle: dict[str, Any]) -> str:
     return (bundle.get("display_title") or bundle.get("title") or "shared eddy")[:100]
 
 
+def build_received_share_embed(bundle: dict[str, Any]) -> discord.Embed:
+    label = share_label(bundle)
+    return discord.Embed(
+        title=f"📥 {bundle['sharer_address']} shared a conversation",
+        description=f"**{label}**\n\n{bundle['digest']}",
+        color=0x3498DB,
+    )
+
+
+def find_received_thread_for_share(runtime_dir: str, share_id: str) -> int | None:
+    """Return thread id if this share was already continued (idempotent re-click)."""
+    received = Path(runtime_dir) / "share" / "received"
+    if not received.is_dir():
+        return None
+    for path in received.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if data.get("share_id") == share_id:
+            try:
+                return int(path.stem)
+            except ValueError:
+                continue
+    return None
+
+
+async def _fetch_thread(client: discord.Client, thread_id: int) -> discord.Thread | None:
+    ch = client.get_channel(thread_id)
+    if ch is None:
+        try:
+            ch = await client.fetch_channel(thread_id)
+        except discord.HTTPException:
+            return None
+    return ch  # type: ignore[return-value]
+
+
 def build_export_bundle(
     *,
     title: str,
@@ -636,11 +673,7 @@ async def deliver_practitioner_share(
     ch = await channel_for_client(recipient_channel, act_client)
 
     label = share_label(bundle)
-    embed = discord.Embed(
-        title=f"📥 {bundle['sharer_address']} shared a conversation",
-        description=f"**{label}**\n\n{bundle['digest']}",
-        color=0x3498DB,
-    )
+    embed = build_received_share_embed(bundle)
     view = ShareContinueView(bundle["share_id"], target.channel_id)
     act_client.add_view(view)
 
@@ -674,7 +707,11 @@ async def materialize_received_eddy(
     share_id: str,
     parent_channel_id: int,
 ) -> discord.Thread | None:
-    """Open received eddy from inbox bundle — seeds Turtle history, not Discord replay."""
+    """Open received eddy — sibling thread; river digest stays untouched.
+
+    Uses channel.create_thread (not message.create_thread) so the digest act
+    remains visible in the river on mobile. Digest is reposted inside the eddy.
+    """
     from commands import thread_configs
     from eddy_spawn import river_add_turtle_to_eddy
     from helpers import sync_history
@@ -684,7 +721,8 @@ async def materialize_received_eddy(
     set_practice_context_for_channel(parent_channel_id)
     from mage import get_runtime_dir
 
-    bundle = load_inbox_bundle(get_runtime_dir(), share_id)
+    runtime_dir = get_runtime_dir()
+    bundle = load_inbox_bundle(runtime_dir, share_id)
     if not bundle:
         return None
 
@@ -694,20 +732,25 @@ async def materialize_received_eddy(
     label = share_label(bundle)
     eddy_archive = EDDY_TYPES.get("standard", {}).get("archive_minutes", 10080)
 
-    msg = interaction.message
-    if msg is None:
+    existing_id = find_received_thread_for_share(runtime_dir, share_id)
+    if existing_id:
+        thread = await _fetch_thread(interaction.client, existing_id)
+        if thread is not None:
+            try:
+                await thread.add_user(interaction.user)
+            except discord.HTTPException:
+                pass
+            return thread
+
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "create_thread"):
         return None
 
-    existing = getattr(msg, "thread", None)
-    if existing is not None:
-        return existing
-
-    thread = await msg.create_thread(
+    thread = await channel.create_thread(
         name=label[:100],
         auto_archive_duration=eddy_archive,
+        type=discord.ChannelType.public_thread,
     )
-
-    from eddy_spawn import river_add_turtle_to_eddy
 
     await river_add_turtle_to_eddy(thread)
     try:
@@ -742,7 +785,7 @@ async def materialize_received_eddy(
         dialogue_histories[thread.id] = list(history)
         sync_history(thread.id)
 
-    # Digest already on the river act — attribution only inside the eddy.
+    await thread.send(embed=build_received_share_embed(bundle))
     await thread.send(
         f"-# 📥 From **{bundle.get('sharer_address', 'someone')}** · shared conversation ready — "
         "Turtle has the full thread; say hello when you want to continue.",
@@ -759,8 +802,7 @@ async def materialize_received_eddy(
         eddy_type="standard",
     )
 
-    recipient_runtime = get_runtime_dir()
-    save_received_thread_config(recipient_runtime, thread.id, thread_configs[thread.id])
+    save_received_thread_config(runtime_dir, thread.id, thread_configs[thread.id])
 
     return thread
 

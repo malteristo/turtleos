@@ -328,6 +328,103 @@ class ShareReceivedHistoryTests(unittest.TestCase):
         self.assertIn("joining", joined.lower())
 
 
+class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_materialize_uses_sibling_thread_and_reposts_digest(self) -> None:
+        from share_eddy import materialize_received_eddy
+
+        bundle = {
+            "share_id": "abc123",
+            "recipient_discord_id": "222",
+            "sharer_address": "Kermit",
+            "display_title": "chicken joke",
+            "digest": "Why did the chicken cross the road?",
+            "history": [{"role": "user", "content": "tell me a joke"}],
+        }
+
+        interaction = MagicMock()
+        interaction.user.id = 222
+        interaction.client = MagicMock()
+        interaction.client.get_channel.return_value = None
+        interaction.channel = AsyncMock()
+        interaction.channel.name = "nesrine-dialogue"
+        interaction.channel.create_thread = AsyncMock()
+
+        fake_thread = AsyncMock()
+        fake_thread.id = 555
+        fake_thread.send = AsyncMock()
+        interaction.channel.create_thread.return_value = fake_thread
+
+        with tempfile.TemporaryDirectory() as tmp:
+            from share_eddy import write_inbox_bundle
+
+            write_inbox_bundle(tmp, bundle)
+            with patch("share_eddy.set_practice_context_for_channel"), patch(
+                "mage.get_runtime_dir",
+                return_value=tmp,
+            ), patch("eddy_spawn.river_add_turtle_to_eddy", new=AsyncMock()), patch(
+                "commands.thread_configs",
+                {},
+            ), patch("state.dialogue_histories", {}), patch(
+                "helpers.sync_history"
+            ), patch(
+                "thread_registry.register_thread"
+            ), patch(
+                "share_eddy.save_received_thread_config"
+            ):
+                thread = await materialize_received_eddy(interaction, "abc123", 1002)
+
+        self.assertIs(thread, fake_thread)
+        interaction.channel.create_thread.assert_awaited_once()
+        self.assertEqual(fake_thread.send.await_count, 2)
+        first_call = fake_thread.send.await_args_list[0]
+        self.assertIn("embed", first_call.kwargs)
+
+    async def test_materialize_reuses_existing_thread_for_share(self) -> None:
+        from share_eddy import materialize_received_eddy, save_received_thread_config
+
+        interaction = MagicMock()
+        interaction.user.id = 222
+        existing = MagicMock()
+        existing.add_user = AsyncMock()
+        interaction.client = MagicMock()
+        interaction.client.get_channel.return_value = existing
+        interaction.channel = MagicMock()
+
+        cfg = {
+            "origin": "received",
+            "share_id": "abc123",
+            "share_creator": "111",
+            "sharer_key": "kermit",
+            "share_recipient_id": "222",
+            "share_notify_pending": False,
+            "topic": "chicken joke",
+            "from_sharer": "Kermit",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            save_received_thread_config(tmp, 777, cfg)
+            from share_eddy import write_inbox_bundle
+
+            write_inbox_bundle(
+                tmp,
+                {
+                    "share_id": "abc123",
+                    "recipient_discord_id": "222",
+                    "sharer_address": "Kermit",
+                    "digest": "x",
+                    "history": [],
+                },
+            )
+            with patch("share_eddy.set_practice_context_for_channel"), patch(
+                "mage.get_runtime_dir",
+                return_value=tmp,
+            ):
+                thread = await materialize_received_eddy(interaction, "abc123", 1002)
+
+        self.assertIs(thread, existing)
+        interaction.channel.create_thread.assert_not_called()
+
+
 class ShareContinueContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_continue_success_is_silent(self) -> None:
         """Success = thread chip on digest only; no second river/ephemeral message."""
