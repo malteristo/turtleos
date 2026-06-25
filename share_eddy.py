@@ -771,26 +771,6 @@ async def materialize_received_eddy(
     return thread
 
 
-async def _disable_share_continue_button(
-    message: discord.Message | None,
-    view: "ShareContinueView",
-) -> None:
-    """Disable Continue while keeping digest content and embed visible in the river."""
-    if message is None:
-        return
-    for child in view.children:
-        child.disabled = True
-    edit_kwargs: dict[str, Any] = {"view": view}
-    if message.content is not None:
-        edit_kwargs["content"] = message.content
-    if message.embeds:
-        edit_kwargs["embeds"] = list(message.embeds)
-    try:
-        await message.edit(**edit_kwargs)
-    except discord.HTTPException as exc:
-        print(f"Share continue button disable failed: {type(exc).__name__}: {exc}")
-
-
 class ShareTargetSelect(discord.ui.Select):
     def __init__(
         self,
@@ -1129,9 +1109,9 @@ class ShareContinueView(discord.ui.View):
             return
         if not thread:
             return
-        for child in self.children:
-            child.disabled = True
-        await _disable_share_continue_button(interaction.message, self)
+        # Do not edit the digest message after Continue. It is the thread starter;
+        # any edit (even view-only) can strip the embed on mobile and hide it from
+        # the river. Re-clicks are idempotent via msg.thread in materialize.
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:
