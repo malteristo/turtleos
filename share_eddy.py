@@ -707,10 +707,10 @@ async def materialize_received_eddy(
     share_id: str,
     parent_channel_id: int,
 ) -> discord.Thread | None:
-    """Open received eddy from the river digest act (message.create_thread).
+    """Open received eddy — sibling thread; river digest stays untouched.
 
-    Thread chip attaches to the digest message — the target UX (see neurodiversity
-    share ~14:48). Digest stays in river; attribution only inside the eddy.
+    Uses channel.create_thread (not message.create_thread) so the digest act
+    remains visible in the river on mobile. Digest is reposted inside the eddy.
     """
     from commands import thread_configs
     from eddy_spawn import river_add_turtle_to_eddy
@@ -732,18 +732,6 @@ async def materialize_received_eddy(
     label = share_label(bundle)
     eddy_archive = EDDY_TYPES.get("standard", {}).get("archive_minutes", 10080)
 
-    msg = interaction.message
-    if msg is None:
-        return None
-
-    existing = getattr(msg, "thread", None)
-    if existing is not None:
-        try:
-            await existing.add_user(interaction.user)
-        except discord.HTTPException:
-            pass
-        return existing
-
     existing_id = find_received_thread_for_share(runtime_dir, share_id)
     if existing_id:
         thread = await _fetch_thread(interaction.client, existing_id)
@@ -754,9 +742,14 @@ async def materialize_received_eddy(
                 pass
             return thread
 
-    thread = await msg.create_thread(
+    channel = interaction.channel
+    if channel is None or not hasattr(channel, "create_thread"):
+        return None
+
+    thread = await channel.create_thread(
         name=label[:100],
         auto_archive_duration=eddy_archive,
+        type=discord.ChannelType.public_thread,
     )
 
     await river_add_turtle_to_eddy(thread)
@@ -792,6 +785,7 @@ async def materialize_received_eddy(
         dialogue_histories[thread.id] = list(history)
         sync_history(thread.id)
 
+    await thread.send(embed=build_received_share_embed(bundle))
     await thread.send(
         f"-# 📥 From **{bundle.get('sharer_address', 'someone')}** · shared conversation ready — "
         "Turtle has the full thread; say hello when you want to continue.",
