@@ -105,6 +105,25 @@ python scripts/shake_lifecycle.py
 
 ---
 
+## Share eddy (thinking together)
+
+**Spec:** §15.6  
+**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md)  
+**Depends on:** Share to **space** requires `shared-river` ([design-family-shared-river.md](../chapters/design-family-shared-river.md))
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| S1 | Share to practitioner | Recipient digest act; received eddy on continue; sender chronicle; source eddy unchanged |
+| S2 | Share to space | Space digest + shared eddy at confirm; members `@`+act; sharer not in thread until chooses |
+| S3 | First peer reply | Sharer `@`+act when space member first speaks in shared eddy |
+| S4 | Re-share transparency | Space member shares space eddy to practitioner; space parent transparency act |
+| S5 | Picker `share_policy` | Non-member practitioner shares to Family via picker; no Discord channel join required |
+| S6 | Dissolve | Only share creator can dissolve shared/received eddy |
+
+**Verification (planned):** `test_share_eddy`, `scripts/shake_share_eddy.py`
+
+---
+
 ## Discord mastery — resume, cross-ref, contextual offers
 
 **Spec:** §8 (session continuity); §9.5 (link-read pattern); §5.8 (Turtle harness vs River)  

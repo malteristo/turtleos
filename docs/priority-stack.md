@@ -155,6 +155,7 @@ Do not reinvent Discord search; **do** make permalinks legible to Turtle the way
 | **Discord permalink self-feed** | Turtle ingests thread/message links like web URLs; qwen for fast fetch/summary | 0 (D2) · [chapter](../chapters/2026-06-20-discord-permalink-self-feed.md) |
 | **Contextual River bar** | Replace standing eddy lifecycle bar with situational offers; grow palette + hit rate | 0 (D3) |
 | **Family channel design** | Shared practice without treating it as default Pop 2 | 2 |
+| **Share eddy** | Cross-practitioner / family thinking together — `@`+River act only; any space member re-share with transparency · [chapter](../chapters/design-share-eddy.md) · S1–S6 | 3 (Slice 1 practitioner) · 2 (space after shared-river) |
 | **Idle & reflection** | Silent default; rare reflection; drop checkpoint noise | 1 |
 | **Link-read hardening** | OSS harness patterns; bot-blocked content | 0 (H1) |
 | **In-eddy flow library** | ✅ Shipped 2026-06-23 — bar = `new eddy` only; Turtle bootstrap; Shelter archived · [chapter](chapters/2026-06-20-in-eddy-flow-library.md) · [journeys](ux/flow-library-journeys.md) |
@@ -198,6 +199,7 @@ If tier ≥ 2 and Tier 1 blockers remain (idle wedge, registry save) — **defau
 | 2026-06-20 | v2 — Mage notes: navigation vs reliability; no standing eddy bar → contextual River; Turtle Discord self-feed; idle silent/rare reflection/explicit checkpoint; family → Tier 2; Discord mastery; D1–D3 targets |
 | 2026-06-20 | v2.1 — Flow library target journeys; in-eddy flows; Shelter retire; guided emergence framing |
 | 2026-06-20 | v2.2 — Two-layer product (ChatGPT-style default + optional flows); generic onboarding doc; Navigator as sample flow |
+| 2026-06-25 | v2.3 — Share eddy design chapter + §15.6; acceptance S1–S6; Slice 1 practitioner before shared-river |
 
 ---
 

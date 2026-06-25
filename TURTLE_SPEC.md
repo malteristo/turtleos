@@ -738,6 +738,51 @@ The operator MUST NOT surface hosted-river message content in the operator's riv
 
 Full seneschal, permission, and multi-server law from prior spec remains valid for operators; see implementation `docs/architecture.md` and `docs/operations/hosted-river-boundaries.md`.
 
+### 15.6 Share eddy (thinking together)
+
+A node MAY implement **Share eddy** — sender-initiated export of an eddy conversation to another practitioner or to a registered **space**. Share is explicit practitioner action; it satisfies §15.5 when content crosses sovereign boundaries. Design chapter: `docs/chapters/design-share-eddy.md`.
+
+#### 15.6.1 Primitive
+
+- **Share** creates on confirm: export bundle (digest + full transcript for Turtle context), destination digest River act, and destination eddy (received or shared). The source eddy MUST remain unchanged.
+- **One primitive, two targets:** `practitioner` (1:1 fork) or `space` (shared invitation). Same confirm flow; routing differs.
+- **Digest first:** Parent channel shows digest only. Full transcript MUST load into Turtle dialogue context on continue; replaying the full transcript into the Discord timeline MUST NOT be the default.
+
+#### 15.6.2 Practitioner target
+
+- Recipient MUST receive digest River act in their parent channel and a **received eddy** distinct from self-spawned eddies (`origin: received`, sharer attribution).
+- Recipient MUST be notified at creation via **`@` mention and River act** — not DM (v1).
+- Sender MUST receive chronicle-style feedback in their own parent river.
+
+#### 15.6.3 Space target
+
+- Requires channel `type: shared-river` (or successor) and space registry entry with `members` and `share_policy`.
+- On confirm: digest River act in space parent channel and **shared eddy** created immediately (space-tagged, space default context).
+- Space **members** MUST be notified at creation (`@` + River act). Sharer MUST NOT be auto-joined to the shared eddy.
+- When any space member sends the **first human message** in that shared eddy, the original sharer MUST be notified (`@` + River act in sharer's river). Turtle-only opening content MUST NOT trigger this notification.
+
+#### 15.6.4 Picker and confirmation
+
+- Share entry point MUST offer targets from registry policy, **not** Discord channel membership alone.
+- Picker MUST visually separate **Practitioners** and **Spaces**.
+- A practitioner who is not a Discord member of a space channel MAY appear in the Spaces picker when `share_policy` allows (e.g. `all_practitioners`).
+- A confirmation step MUST precede send, naming target and source title.
+
+#### 15.6.5 Re-share and transparency
+
+- Any **space member** MAY share from a **space-tagged** shared eddy to a **practitioner** target (with confirmation).
+- That outbound share MUST post a **transparency River act** in the space parent channel naming who shared, with whom, and digest/title. Recipient private continuation MUST NOT appear in the space act.
+- Share from a private (non-space) eddy to a practitioner MUST NOT post to unrelated spaces.
+
+#### 15.6.6 Dissolve authority
+
+- Only the practitioner who created the share (`share_creator`) MAY dissolve the shared or received eddy created by that share (v1).
+
+#### 15.6.7 Operator boundaries
+
+- Share satisfies explicit-action rules in §15.5. Operator prompts and proposals MUST still forbid quoting hosted content without such action.
+- Server norm: practitioners who decline cross-share boundaries SHOULD resolve with the operator privately; product v1 MAY omit per-practitioner share deny lists.
+
 ---
 
 ## 16. Deferred and Out of Scope (Vanilla v1)

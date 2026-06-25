@@ -32,6 +32,10 @@ spaces:
     runtime_dir: ~/workshops/shared
     members:
       - default
+    # share_policy: who may share TO this space from the Share eddy picker (TURTLE_SPEC §15.6)
+    #   all_practitioners — every hosted practitioner on the node (may share without Discord channel membership)
+    #   members_only — only space.members
+    share_policy: all_practitioners
 
 channels:
   "YOUR_DIALOGUE_CHANNEL_ID":

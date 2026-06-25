@@ -18,6 +18,8 @@ After v1 reorientation:
 
 **Decision (2026-06-19):** Family becomes a **shared river** — same platform law as individual rivers (acts in parent, dialogue in eddies), but with **shared eddies** both parents (and eventually children) can enter.
 
+**Share eddy (2026-06-25):** Cross-eddy “thinking together” is specified in [design-share-eddy.md](design-share-eddy.md) (TURTLE_SPEC §15.6). **Share to family** (space target) posts a digest act + creates a shared eddy at confirm; members notified; sharer notified on first peer reply. Implementation of space share depends on this chapter’s `shared-river` slice.
+
 ## Design intent
 
 | Principle | Meaning |

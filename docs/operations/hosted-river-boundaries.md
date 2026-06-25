@@ -34,6 +34,18 @@ If a practitioner has `couchdb_database` in registry (e.g. `nesrine_sync`), veri
 
 Not required for Tier 1 hosted (Discord-only) practitioners.
 
+## Share eddy (§15.6)
+
+**Share** is explicit practitioner action — it satisfies the content-boundary rule when a guest exports an eddy to another practitioner or to a registered space.
+
+| Allowed | Not allowed |
+|---------|-------------|
+| Guest shares their eddy to another practitioner or to Family (per `share_policy`) | Operator quoting guest content in operator river without guest share |
+| Transparency act in space when a member re-shares space content outward | Surfacing recipient's private continuation in space parent channel |
+| Pattern observations in proposals about share UX | Using share transcripts as dogfood evidence with identifiable content without consent |
+
+Notifications: `@` mention + River act only (no DM in v1). See `docs/chapters/design-share-eddy.md`.
+
 ## Verification
 
 ```bash
@@ -41,3 +53,5 @@ Not required for Tier 1 hosted (Discord-only) practitioners.
 ```
 
 See `docs/chapters/design-hosted-river.md` for full design chapter.
+
+**Share to family:** Once `shared-river` ships, use **Share eddy** (space target) per [design-share-eddy.md](design-share-eddy.md) — digest act in parent + shared eddy invitation; sharer not auto-joined; notify on first peer reply. Does not require duplicating share mechanics in this chapter.

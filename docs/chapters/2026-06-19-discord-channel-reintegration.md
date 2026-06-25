@@ -25,6 +25,7 @@ After the v1 platform reorientation (`attunement: native`), satellite Discord ch
 |---------|-----|
 | Craft channel | `design-craft-channel.md` |
 | Family shared river | `design-family-shared-river.md` |
+| Share eddy (thinking together) | `design-share-eddy.md` — §15.6; Slice 1 practitioner first |
 
 ## Verify
 
