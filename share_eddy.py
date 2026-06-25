@@ -306,6 +306,180 @@ def clear_pending_draft(runtime_dir: str, author_id: int, thread_id: int) -> Non
     pending_path(runtime_dir, author_id, thread_id).unlink(missing_ok=True)
 
 
+def _active_acts_path(runtime_dir: str) -> Path:
+    return _share_dir(runtime_dir, ".") / "active_river_acts.json"
+
+
+def _load_active_share_acts(runtime_dir: str) -> list[dict[str, Any]]:
+    path = _active_acts_path(runtime_dir)
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    acts = data.get("acts") if isinstance(data, dict) else data
+    return acts if isinstance(acts, list) else []
+
+
+def _save_active_share_acts(runtime_dir: str, acts: list[dict[str, Any]]) -> None:
+    path = _active_acts_path(runtime_dir)
+    path.write_text(json.dumps({"acts": acts}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+async def supersede_stale_share_acts(
+    client: discord.Client,
+    channel: discord.abc.Messageable,
+    runtime_dir: str,
+    *,
+    keep_share_id: str,
+    keep_message_id: int,
+) -> None:
+    """Disable Continue on older share acts in this recipient river."""
+    prior = _load_active_share_acts(runtime_dir)
+    kept: list[dict[str, Any]] = []
+    for act in prior:
+        sid = act.get("share_id")
+        mid = act.get("message_id")
+        if sid == keep_share_id:
+            continue
+        if not mid:
+            continue
+        try:
+            msg = await channel.fetch_message(int(mid))
+            await msg.edit(view=None)
+        except discord.HTTPException:
+            pass
+    kept.append({"share_id": keep_share_id, "message_id": str(keep_message_id)})
+    _save_active_share_acts(runtime_dir, kept)
+
+
+def build_export_bundle_from_draft(draft: dict[str, Any]) -> dict[str, Any]:
+    bundle = build_export_bundle(
+        title=draft["title"],
+        history=draft["history"],
+        sharer_id=draft["sharer_id"],
+        sharer_key=draft["sharer_key"],
+        sharer_address=draft["sharer_address"],
+        source_thread_id=draft["source_thread_id"],
+        share_id=draft.get("share_id"),
+    )
+    if draft.get("display_title"):
+        bundle["display_title"] = draft["display_title"][:100]
+    if draft.get("digest"):
+        bundle["digest"] = draft["digest"][:500]
+    return bundle
+
+
+def build_preview_embed(draft: dict[str, Any], target: ShareTarget) -> discord.Embed:
+    label = (draft.get("display_title") or draft.get("title") or "this eddy")[:100]
+    digest = (draft.get("digest") or "").strip()
+    body = (
+        f"Share **“{label}”** with **{target.address}**?\n\n"
+        f"{digest}\n\n"
+        "They get this digest in their river and can open a **received eddy** when ready. "
+        "Your original eddy stays unchanged."
+    )
+    return discord.Embed(title="Confirm share", description=body[:4096], color=0xF1C40F)
+
+
+async def maybe_post_share_rename_offer(
+    thread: discord.Thread,
+    draft: dict[str, Any],
+    client: discord.Client,
+    *,
+    suggested: str | None = None,
+) -> None:
+    """Contextual opt-in rename in the source eddy when title lags the share label."""
+    from eddy_flow_library import post_flow_rename_offer
+
+    proposed = (suggested or draft.get("display_title") or "").strip()[:100]
+    current = (draft.get("title") or thread.name or "").strip()
+    if not proposed or proposed.lower() == current.lower():
+        return
+    parent_id = thread.parent_id or draft.get("parent_id")
+    if not parent_id:
+        return
+    await post_flow_rename_offer(thread, thread.id, parent_id, proposed, client)
+
+
+async def notify_sharer_first_peer_reply(
+    message: discord.Message,
+    cfg: dict[str, Any],
+) -> None:
+    """@ + River act in sharer's river when recipient first speaks in received eddy."""
+    from bar_anchor import channel_for_client
+    from river_handler import _append_chronicle, _river_client_for_channel
+    from state import client as turtle_client
+
+    sharer_key = cfg.get("sharer_key")
+    sharer_id = cfg.get("share_creator")
+    if not sharer_key or not sharer_id:
+        return
+
+    sharer_channel_id = river_channel_for_mage(sharer_key)
+    if not sharer_channel_id:
+        return
+
+    label = (cfg.get("topic") or message.channel.name)[:100]
+    peer = message.author.display_name
+    jump = message.channel.jump_url if isinstance(message.channel, discord.Thread) else ""
+
+    client = turtle_client
+    channel = client.get_channel(sharer_channel_id)
+    if channel is None:
+        channel = await client.fetch_channel(sharer_channel_id)
+
+    act_client = _river_client_for_channel(channel) or client
+    ch = await channel_for_client(channel, act_client)
+
+    mention = f"<@{sharer_id}>"
+    embed = discord.Embed(
+        description=(
+            f"💬 **{peer}** replied in shared eddy **{label}**"
+            + (f" · [open thread]({jump})" if jump else "")
+        ),
+        color=0x3498DB,
+    )
+    await ch.send(
+        mention,
+        embed=embed,
+        allowed_mentions=discord.AllowedMentions(users=True),
+    )
+
+    sender_pd = practice_dir_for_mage(sharer_key)
+    _append_chronicle(
+        sender_pd,
+        f"💬 {peer} replied in shared eddy · {label}",
+        {"thread_id": str(message.channel.id), "jump_url": jump},
+    )
+
+
+async def maybe_notify_sharer_on_first_peer_reply(message: discord.Message) -> None:
+    from commands import thread_configs
+    from eddy_lifecycle_bar import is_practitioner_input
+
+    if not isinstance(message.channel, discord.Thread):
+        return
+    if message.author.bot or not is_practitioner_input(message):
+        return
+
+    cfg = thread_configs.get(message.channel.id)
+    if not cfg or cfg.get("origin") != "received":
+        return
+    if not cfg.get("share_notify_pending"):
+        return
+    if str(message.author.id) != str(cfg.get("share_recipient_id", "")):
+        return
+
+    cfg["share_notify_pending"] = False
+    try:
+        await notify_sharer_first_peer_reply(message, cfg)
+    except Exception as exc:
+        cfg["share_notify_pending"] = True
+        print(f"Share sharer notify failed: {type(exc).__name__}: {exc}")
+
+
 async def deliver_practitioner_share(
     bundle: dict[str, Any],
     target: ShareTarget,
@@ -346,6 +520,14 @@ async def deliver_practitioner_share(
         embed=embed,
         view=view,
         allowed_mentions=discord.AllowedMentions(users=True),
+    )
+
+    await supersede_stale_share_acts(
+        act_client,
+        ch,
+        recipient_runtime,
+        keep_share_id=bundle["share_id"],
+        keep_message_id=msg.id,
     )
 
     sender_pd = practice_dir_for_mage(bundle["sharer_key"])
@@ -400,6 +582,9 @@ async def materialize_received_eddy(
         "share_id": share_id,
         "from_sharer": bundle.get("sharer_address", "someone"),
         "share_creator": bundle.get("sharer_id"),
+        "sharer_key": bundle.get("sharer_key"),
+        "share_recipient_id": bundle.get("recipient_discord_id"),
+        "share_notify_pending": True,
         "created": datetime.now(timezone.utc),
         "native_vanilla": True,
         "presence_posted": False,
@@ -487,28 +672,116 @@ class ShareTargetSelect(discord.ui.Select):
         draft["target_address"] = target.address
         draft["target_discord_id"] = target.discord_id
         draft["target_channel_id"] = target.channel_id
+        draft["parent_id"] = interaction.channel.parent_id
         write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
 
-        confirm = ShareConfirmView(self._thread_id, self._author_id, target)
-        embed = discord.Embed(
-            title="Confirm share",
-            description=(
-                f"Share **“{draft.get('title', 'this eddy')}”** with **{target.address}**?\n\n"
-                f"They will get a digest in their river and can open a **received eddy** "
-                f"when ready. Your original eddy stays unchanged."
-            ),
-            color=0xF1C40F,
+        await interaction.response.defer()
+        try:
+            bundle = build_export_bundle(
+                title=draft["title"],
+                history=draft["history"],
+                sharer_id=draft["sharer_id"],
+                sharer_key=draft["sharer_key"],
+                sharer_address=draft["sharer_address"],
+                source_thread_id=draft["source_thread_id"],
+                share_id=draft.get("share_id"),
+            )
+            bundle = await enrich_export_bundle(bundle)
+        except Exception as exc:
+            await interaction.followup.send(
+                f"Could not summarize for share: {type(exc).__name__}: {exc}",
+                ephemeral=True,
+            )
+            return
+
+        draft["display_title"] = bundle["display_title"]
+        draft["digest"] = bundle["digest"]
+        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+
+        if isinstance(interaction.channel, discord.Thread) and is_placeholder_eddy_title(
+            draft.get("title", "")
+        ):
+            await maybe_post_share_rename_offer(interaction.channel, draft, interaction.client)
+
+        preview = SharePreviewView(self._thread_id, self._author_id, target)
+        embed = build_preview_embed(draft, target)
+        await interaction.edit_message(embed=embed, view=preview)
+
+
+class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
+    """Edit title and digest — submit to confirm; dismiss modal to cancel."""
+
+    def __init__(
+        self,
+        thread_id: int,
+        author_id: int,
+        target: ShareTarget,
+        display_title: str,
+        digest: str,
+    ):
+        super().__init__()
+        self._thread_id = thread_id
+        self._author_id = author_id
+        self._target = target
+        self.title_input = discord.ui.TextInput(
+            label="Title",
+            default=display_title[:100],
+            max_length=100,
+            required=True,
         )
-        await interaction.response.edit_message(embed=embed, view=confirm)
+        self.digest_input = discord.ui.TextInput(
+            label="Digest",
+            style=discord.TextStyle.paragraph,
+            default=digest[:500],
+            max_length=500,
+            required=True,
+        )
+        self.add_item(self.title_input)
+        self.add_item(self.digest_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from mage import get_runtime_dir
+
+        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        if not draft:
+            await interaction.response.send_message(
+                "Share session expired — run `!share` again.",
+                ephemeral=True,
+            )
+            return
+
+        draft["display_title"] = self.title_input.value.strip()[:100]
+        draft["digest"] = self.digest_input.value.strip()[:500]
+        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+
+        preview = SharePreviewView(self._thread_id, self._author_id, self._target)
+        embed = build_preview_embed(draft, self._target)
+        await interaction.response.edit_message(embed=embed, view=preview)
+
+        if isinstance(interaction.channel, discord.Thread):
+            await maybe_post_share_rename_offer(
+                interaction.channel,
+                draft,
+                interaction.client,
+                suggested=draft["display_title"],
+            )
 
 
-class ShareConfirmView(discord.ui.View):
+class SharePreviewView(discord.ui.View):
+    """Preview synthesized title/digest before send."""
+
     def __init__(self, thread_id: int, author_id: int, target: ShareTarget):
         super().__init__(timeout=600)
         self._thread_id = thread_id
         self._author_id = author_id
         self._target = target
 
+        edit_btn = discord.ui.Button(
+            label="Edit",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"share:edit:{thread_id}:{author_id}:{target.mage_key}",
+        )
+        edit_btn.callback = self._on_edit
         cancel = discord.ui.Button(
             label="Cancel",
             style=discord.ButtonStyle.secondary,
@@ -522,8 +795,31 @@ class ShareConfirmView(discord.ui.View):
             custom_id=f"share:send:{thread_id}:{author_id}:{target.mage_key}",
         )
         share.callback = self._on_share
+        self.add_item(edit_btn)
         self.add_item(cancel)
         self.add_item(share)
+
+    async def _on_edit(self, interaction: discord.Interaction):
+        if interaction.user.id != self._author_id:
+            await interaction.response.send_message("Not your share.", ephemeral=True)
+            return
+        from mage import get_runtime_dir
+
+        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        if not draft:
+            await interaction.response.send_message(
+                "Share session expired — run `!share` again.",
+                ephemeral=True,
+            )
+            return
+        modal = ShareEditModal(
+            self._thread_id,
+            self._author_id,
+            self._target,
+            draft.get("display_title") or draft.get("title", ""),
+            draft.get("digest") or "",
+        )
+        await interaction.response.send_modal(modal)
 
     async def _on_cancel(self, interaction: discord.Interaction):
         if interaction.user.id != self._author_id:
@@ -553,23 +849,7 @@ class ShareConfirmView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        bundle = build_export_bundle(
-            title=draft["title"],
-            history=draft["history"],
-            sharer_id=draft["sharer_id"],
-            sharer_key=draft["sharer_key"],
-            sharer_address=draft["sharer_address"],
-            source_thread_id=draft["source_thread_id"],
-            share_id=draft.get("share_id"),
-        )
-        try:
-            bundle = await enrich_export_bundle(bundle)
-        except Exception as exc:
-            await interaction.followup.send(
-                f"Could not summarize for share: {type(exc).__name__}: {exc}",
-                ephemeral=True,
-            )
-            return
+        bundle = build_export_bundle_from_draft(draft)
         try:
             await deliver_practitioner_share(bundle, self._target, client=interaction.client)
         except Exception as exc:
@@ -582,11 +862,16 @@ class ShareConfirmView(discord.ui.View):
         clear_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
         for child in self.children:
             child.disabled = True
+        label = share_label(bundle)
         await interaction.message.edit(
-            content=f"📤 Shared with **{self._target.address}**.",
+            content=f"📤 Shared **“{label}”** with **{self._target.address}**.",
             embed=None,
             view=self,
         )
+
+
+class ShareConfirmView(SharePreviewView):
+    """Backward-compatible alias for in-flight share messages."""
 
 
 class SharePickerView(discord.ui.View):
@@ -677,6 +962,7 @@ def get_share_bot_client(message: discord.Message | None = None):
     return turtle_client
 
 
+def register_persistent_share_views(client: discord.Client) -> None:
     """Re-register Continue buttons after restart (inbox bundles on disk)."""
     for mage_key in get_registry().get("mages", {}):
         runtime = runtime_dir_for_mage(mage_key)

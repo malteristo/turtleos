@@ -585,6 +585,13 @@ async def _attachments_from_forward_chain(source_ref: tuple) -> tuple[list, list
 
 
 async def handle_dialogue(message):
+    try:
+        from share_eddy import maybe_notify_sharer_on_first_peer_reply
+
+        await maybe_notify_sharer_on_first_peer_reply(message)
+    except Exception as exc:
+        print(f"Share notify hook failed: {type(exc).__name__}: {exc}")
+
     channel_id = message.channel.id
     visible_content, forwarded_context = _visible_message_content(message)
     attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (

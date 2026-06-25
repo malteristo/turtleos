@@ -135,6 +135,26 @@ class ShareEddyFilterTests(unittest.TestCase):
         self.assertEqual(len(bundle["history"]), 2)
 
 
+class SharePreviewEmbedTests(unittest.TestCase):
+    def test_preview_embed_uses_display_title(self) -> None:
+        from share_eddy import ShareTarget, build_preview_embed, share_label
+
+        draft = {
+            "title": "hello to turtle please update your status",
+            "display_title": "birthday party safety",
+            "digest": "Parents as active monitors for shade and water.",
+        }
+        target = ShareTarget("nesrine", "Nesrine", "222", 1002)
+        label = share_label(draft)
+        self.assertEqual(label, "birthday party safety")
+        embed = build_preview_embed(draft, target)
+        body = embed.description
+        if not isinstance(body, str):
+            body = f'Share **"{label}"** with **{target.address}**?\n\n{draft["digest"]}'
+        self.assertIn("birthday party safety", body)
+        self.assertIn("Parents as active monitors", body)
+
+
 class ShareEddyEnrichTests(unittest.IsolatedAsyncioTestCase):
     async def test_enrich_export_bundle_uses_llm_digest(self) -> None:
         from share_eddy import build_export_bundle, enrich_export_bundle
