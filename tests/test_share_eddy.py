@@ -101,6 +101,33 @@ class ShareEddyRiverChannelTests(unittest.TestCase):
             self.assertIsNone(river_channel_for_mage("missing"))
 
 
+class ShareEddyFilterTests(unittest.TestCase):
+    def test_filter_share_history_drops_act_digests_and_commands(self) -> None:
+        from share_eddy import build_digest, build_export_bundle, filter_share_history
+
+        history = [
+            {"role": "user", "content": "!share"},
+            {"role": "user", "content": "[Act: !share] Failed: View is not persistent."},
+            {"role": "user", "content": "Birthday party heat and sprinkler plan"},
+            {"role": "assistant", "content": "Active monitoring makes sense."},
+        ]
+        filtered = filter_share_history(history)
+        self.assertEqual(len(filtered), 2)
+        digest = build_digest("party", filtered)
+        self.assertNotIn("[Act:", digest)
+        self.assertIn("Birthday", digest)
+
+        bundle = build_export_bundle(
+            title="party",
+            history=history,
+            sharer_id="1",
+            sharer_key="k",
+            sharer_address="K",
+            source_thread_id=9,
+        )
+        self.assertEqual(len(bundle["history"]), 2)
+
+
 class ShareEddyClientTests(unittest.TestCase):
     def test_get_share_bot_client_uses_guild_not_message_client(self) -> None:
         from share_eddy import get_share_bot_client

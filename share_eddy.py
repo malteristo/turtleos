@@ -79,6 +79,21 @@ def list_practitioner_targets(
     return sorted(targets, key=lambda t: t.address.lower())
 
 
+def filter_share_history(history: list[dict]) -> list[dict]:
+    """Drop platform act digests and bare ``!`` commands from share export."""
+    cleaned: list[dict] = []
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        content = (entry.get("content") or "").strip()
+        if content.startswith("[Act: !"):
+            continue
+        if entry.get("role") == "user" and content.startswith("!"):
+            continue
+        cleaned.append(entry)
+    return cleaned
+
+
 def _transcript_from_history(history: list[dict]) -> str:
     lines: list[str] = []
     for entry in history:
@@ -127,6 +142,7 @@ def build_export_bundle(
     share_id: str | None = None,
 ) -> dict[str, Any]:
     """Export bundle for practitioner share (source eddy unchanged)."""
+    history = filter_share_history(history)
     sid = share_id or uuid.uuid4().hex[:12]
     transcript = _transcript_from_history(history)
     digest = build_digest(title, history)
@@ -256,7 +272,7 @@ async def materialize_received_eddy(
     from commands import thread_configs
     from eddy_spawn import _materialize_client
     from helpers import sync_history
-    from state import EDDY_TYPES, TURTLE_MODEL
+    from state import EDDY_TYPES, TURTLE_MODEL, dialogue_histories
     from thread_registry import register_thread
 
     set_practice_context_for_channel(parent_channel_id)
@@ -295,16 +311,21 @@ async def materialize_received_eddy(
         "presence_posted": False,
     }
 
-    history = bundle.get("history") or []
-    if isinstance(history, list):
-        sync_history(thread.id, history)
+    history = filter_share_history(bundle.get("history") or [])
+    if history:
+        dialogue_histories[thread.id] = list(history)
+        sync_history(thread.id)
+
+    display_digest = bundle.get("digest") or build_digest(title, history)
+    if "[Act: !" in display_digest:
+        display_digest = build_digest(title, history)
 
     embed = discord.Embed(
         title="📥 Received conversation",
         description=(
             f"From **{bundle.get('sharer_address', 'someone')}** · "
             f"*{bundle.get('title', 'shared eddy')}*\n\n"
-            f"{bundle.get('digest', '')}\n\n"
+            f"{display_digest}\n\n"
             "Turtle has the full thread in context — continue when you are ready."
         ),
         color=0x3498DB,
