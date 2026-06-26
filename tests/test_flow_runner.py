@@ -86,7 +86,8 @@ class FlowRunnerTests(unittest.TestCase):
     def test_flow_presence_line(self) -> None:
         spec = load_flow_spec("navigator")
         assert spec is not None
-        self.assertEqual(flow_presence_line(spec), "Navigator")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(flow_presence_line(spec, tmp), "Navigator")
 
     def test_flow_presence_line_continuing(self) -> None:
         spec = load_flow_spec("navigator")
@@ -277,8 +278,10 @@ class FlowRunnerTests(unittest.TestCase):
     def test_flow_entry_blurb(self) -> None:
         spec = load_flow_spec("navigator")
         assert spec is not None
-        blurb = flow_entry_blurb(spec)
-        self.assertIn("Fresh start", blurb)
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("flow_runner.get_pd", return_value=tmp):
+                blurb = flow_entry_blurb(spec)
+            self.assertIn("Fresh start", blurb)
 
     def test_resolve_flow_for_close_by_context_type(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

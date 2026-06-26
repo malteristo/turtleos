@@ -19,15 +19,16 @@ class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
         thread.parent_id = 123
         client = MagicMock()
 
-        with patch("eddy_lifecycle_bar.is_lifecycle_bar_active", return_value=True):
-            with patch("mage.river_bot_enabled", return_value=False):
-                with patch("eddy_lifecycle_bar.get_lifecycle_bar_client", return_value=client):
-                    with patch(
-                        "eddy_lifecycle_bar._ensure_eddy_lifecycle_bar_at_bottom_unlocked",
-                        new_callable=AsyncMock,
-                    ) as ensure_lifecycle:
-                        await bar_anchor.ensure_channel_bars(thread)
-                        ensure_lifecycle.assert_awaited_once_with(thread, client)
+        with patch("eddy_lifecycle_bar.standing_lifecycle_bar_enabled", return_value=True):
+            with patch("eddy_lifecycle_bar.is_lifecycle_bar_active", return_value=True):
+                with patch("mage.river_bot_enabled", return_value=False):
+                    with patch("eddy_lifecycle_bar.get_lifecycle_bar_client", return_value=client):
+                        with patch(
+                            "eddy_lifecycle_bar._ensure_eddy_lifecycle_bar_at_bottom_unlocked",
+                            new_callable=AsyncMock,
+                        ) as ensure_lifecycle:
+                            await bar_anchor.ensure_channel_bars(thread)
+                            ensure_lifecycle.assert_awaited_once_with(thread, client)
 
     async def test_thread_without_lifecycle_bar_is_noop(self) -> None:
         thread = MagicMock()

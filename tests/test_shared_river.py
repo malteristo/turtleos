@@ -73,8 +73,9 @@ class SharedRiverHarnessTests(unittest.TestCase):
         )
         msg = self._parent_message(self.FAMILY_CHANNEL)
         with patch.object(mage, "is_river_message", return_value=True):
-            self.assertTrue(mage.uses_native_river(msg))
-            self.assertTrue(mage.turtle_handles_native_river(msg))
+            with patch.object(mage, "river_bot_enabled", return_value=False):
+                self.assertTrue(mage.uses_native_river(msg))
+                self.assertTrue(mage.turtle_handles_native_river(msg))
 
     def test_operator_river_still_dialogue_under_magic(self) -> None:
         self._set_registry(
