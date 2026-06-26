@@ -118,13 +118,18 @@ def main() -> int:
     except Exception:
         split_bot = False
     report = {
+        "capability": "river/offline",
         "status": "pass" if not any(all_errors.values()) else "fail",
+        "live": live,
         "attunement": _safe_profile(),
         "river_bot_configured": split_bot,
         "flows_sample": flows[:4],
         "checks": {k: "ok" if not v else v for k, v in all_errors.items()},
     }
     print(json.dumps(report, indent=2))
+    out_dir = REPO / "test-runs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "shake-river-latest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return 0 if report["status"] == "pass" else 1
 
 

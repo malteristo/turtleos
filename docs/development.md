@@ -112,6 +112,7 @@ Manual apply remains an operator action:
 9. Run flow shakedown: `python scripts/shake_flow.py navigator` (offline) and `SHAKE_LIVE=1 python scripts/shake_flow.py navigator --live` on the Mini after restart when flow_runner or native eddy behavior changed.
 10. Run link-read shakedown: `python scripts/shake_link_read.py` (offline) after link_read / content_fetch / dialogue fetch changes; `--live` on Mini when dogfooding.
 11. Report the result in the relevant craft/admin surface.
+12. Run `python scripts/shake_report.py` and close the functional gate before Mage UX dogfood ([functional-gate-protocol.md](automation/functional-gate-protocol.md)).
 
 Consequence tiers:
 

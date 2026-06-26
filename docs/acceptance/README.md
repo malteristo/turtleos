@@ -4,6 +4,13 @@
 
 **Priority filter (Mage):** Before adding scenarios or chapters, tag work against [priority-stack.md](../priority-stack.md) — tier + which H/R/D/F/O row it serves.
 
+**Functional gate (2026-06-26):** Each scenario has two gates — **Spirit** (shake/unittest plumbing) and **Mage** (async UX dogfood). Spirit closes the functional gate before Mage tests feel. See [functional-gate-protocol.md](../automation/functional-gate-protocol.md) and `python scripts/shake_report.py`.
+
+| Gate | Owner | Pass means |
+|------|-------|------------|
+| **Spirit** | Spirit on Mini/Forge | Scenario covered by `shake_*` verdict JSON |
+| **Mage** | Mage async | Practice feel — screenshot + felt-sense in Forge |
+
 **North-star shift (2026-06-20):** Mage dogfood priority moves from standing lifecycle bar (R4/R5 as primary feel) toward **resume eddy (D1)**, **Discord permalink self-feed (D2)**, **contextual River offers (D3)**, and **link-read (H1)**. R4/R5 remain plumbing/shake rows until eddy-bar redesign lands.
 
 **Run offline shakes from repo root:**
@@ -27,13 +34,13 @@ python scripts/shake_lifecycle.py
 **Acceptance:** `docs/chapters/2026-06-20-acceptance.md`  
 **Status:** Slice 1 ✅ · Slice 2 ✅ · Slice 3 ✅ · **Mini dogfood H1–H5 ✅ (2026-06-20)**
 
-| # | Scenario | Pass criteria |
-|---|----------|---------------|
-| H1 | New eddy, paste article URL + short comment | Turtle first reply informed **without** button click |
-| H2 | After H1 | Optional **Save to library** appears once (River) |
-| H3 | Tap Save | Cached in `link-resonance/`; act digest; no duplicate Save |
-| H4 | Follow-up questions | Cite fetched content; no fetch disclaimers |
-| H5 | Typed `!fetch` on River | Still works; lifecycle bar unchanged |
+| # | Scenario | Spirit gate | Mage gate |
+|---|----------|-------------|-----------|
+| H1 | New eddy, paste article URL + short comment | `shake_link_read` | First reply *feels* informed |
+| H2 | After H1 | `shake_link_read` (offer) | Save UX (Tier 2) |
+| H3 | Tap Save | manual / dogfood | Library act digest |
+| H4 | Follow-up questions | `shake_link_read` | No fetch disclaimers in feel |
+| H5 | Typed `!fetch` on River | `shake_link_read` | River lifecycle unchanged |
 
 **Verification:** `test_link_read`, `test_river_eddy_seneschal`, `shake_link_read.py`, dogfood `river.log` grep `Save offer`
 
