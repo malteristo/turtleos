@@ -69,6 +69,8 @@ River noise during development is acceptable; scope live runs to what the chapte
 
 Shortcut: `./scripts/shake_after_deploy.sh` (offline) and `SHAKE_LIVE=1 ./scripts/shake_after_deploy.sh` (partial live — extend script as suite grows).
 
+**Mini ops (Layer 1+2, sanctioned 2026-06-26):** `./scripts/ops_runner.sh` or `python scripts/ops_runner.py` — full offline suite + canary + update drift + Spirit Ops Report to `desk/craft/automation-reports/latest.md`. Local qwen summary on FAIL only. Scheduled via `docs/install/com.turtle.ops-gate.plist.example`. See `docs/automation/registry.md`.
+
 **Dashboard:**
 
 ```bash

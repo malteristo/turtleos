@@ -113,6 +113,7 @@ Manual apply remains an operator action:
 10. Run link-read shakedown: `python scripts/shake_link_read.py` (offline) after link_read / content_fetch / dialogue fetch changes; `--live` on Mini when dogfooding.
 11. Report the result in the relevant craft/admin surface.
 12. Run `python scripts/shake_report.py` and close the functional gate before Mage UX dogfood ([functional-gate-protocol.md](automation/functional-gate-protocol.md)).
+13. Mini steady-state ops: `python scripts/ops_runner.py` writes Spirit Ops Report to `desk/craft/automation-reports/latest.md` ([registry.md](automation/registry.md)).
 
 Consequence tiers:
 
