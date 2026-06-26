@@ -523,12 +523,7 @@ async def spawn_eddy_in_channel(channel, content: str, topic: str | None = None,
         "created": datetime.now(timezone.utc),
     }
 
-    for uid in get_thread_member_ids(channel.id):
-        try:
-            user = await client.fetch_user(int(uid))
-            await thread.add_user(user)
-        except Exception:
-            pass
+    await add_users_to_thread(thread, get_thread_member_ids(channel.id))
 
     register_thread(
         thread.id, topic,
@@ -593,12 +588,7 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
     await thread.send(config_line, view=view)
 
     parent_id = message.channel.id
-    for uid in get_thread_member_ids(parent_id):
-        try:
-            user = await client.fetch_user(int(uid))
-            await thread.add_user(user)
-        except Exception:
-            pass
+    await add_users_to_thread(thread, get_thread_member_ids(parent_id))
 
     register_thread(
         thread.id, topic,
@@ -859,11 +849,7 @@ async def river_add_turtle_to_eddy(thread) -> bool:
 
     from river_state import river_client
 
-    guild = getattr(thread, "guild", None)
-    if guild is None:
-        parent = getattr(thread, "parent", None)
-        guild = getattr(parent, "guild", None) if parent else None
-
+    guild = _resolve_thread_guild(thread)
     turtle_id = _resolve_turtle_bot_user_id(guild)
     if not turtle_id:
         print("River add turtle: could not resolve Turtle bot user id")
@@ -889,11 +875,25 @@ async def river_add_turtle_to_eddy(thread) -> bool:
 
 
 def _turtle_bot_id_cache_path() -> Path:
-    from mage import get_runtime_dir
+    """Instance-wide Turtle bot id — always under operator primary runtime, not per-channel context."""
+    from mage import _resolve_primary_runtime_dir
 
-    cache_dir = Path(get_runtime_dir()) / "thread-state" / "river"
+    cache_dir = Path(_resolve_primary_runtime_dir()) / "thread-state" / "river"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / "turtle_bot_user_id"
+
+
+async def add_users_to_thread(thread, member_ids, *, label: str = "add_user") -> None:
+    """Add practitioners to a thread without fetch_user (avoids discord.py _MissingSentinel)."""
+    for uid in member_ids:
+        try:
+            await thread.add_user(discord.Object(id=int(uid)))
+        except discord.HTTPException as exc:
+            if getattr(exc, "code", None) in (30083, 50025):
+                continue
+            print(f"River {label} failed for {uid}: {exc}")
+        except Exception as exc:
+            print(f"River {label} failed for {uid}: {exc}")
 
 
 def cache_turtle_bot_user_id(user_id: int) -> None:
@@ -928,6 +928,27 @@ def resolve_turtle_bot_user_id(guild=None) -> int | None:
 
 def _resolve_turtle_bot_user_id(guild) -> int | None:
     return resolve_turtle_bot_user_id(guild)
+
+
+def _resolve_thread_guild(thread):
+    guild = getattr(thread, "guild", None)
+    if guild is not None:
+        return guild
+    parent = getattr(thread, "parent", None)
+    if parent is not None:
+        guild = getattr(parent, "guild", None)
+        if guild is not None:
+            return guild
+    try:
+        from state import client
+
+        if client and getattr(thread, "parent_id", None):
+            parent = client.get_channel(thread.parent_id)
+            if parent is not None:
+                return getattr(parent, "guild", None)
+    except Exception:
+        pass
+    return None
 
 
 def is_turtle_bot_message(message) -> bool:
@@ -1126,12 +1147,9 @@ async def spawn_river_eddy(
         from mage import set_practice_context_for_channel
 
         set_practice_context_for_channel(parent_id)
-        for uid in get_thread_member_ids(parent_id):
-            try:
-                user = await bot_client.fetch_user(int(uid))
-                await thread.add_user(user)
-            except Exception as exc:
-                print(f"River add_user failed for {uid}: {exc}")
+        await add_users_to_thread(
+            thread, get_thread_member_ids(parent_id), label="add_user"
+        )
         write_pending_native_eddy(
             thread.id,
             parent_id,
@@ -1148,12 +1166,9 @@ async def spawn_river_eddy(
 
     if not split_bot:
         parent_id = message.channel.id
-        for uid in get_thread_member_ids(parent_id):
-            try:
-                user = await bot_client.fetch_user(int(uid))
-                await thread.add_user(user)
-            except Exception:
-                pass
+        await add_users_to_thread(
+            thread, get_thread_member_ids(parent_id), label="add_user"
+        )
 
     register_thread(
         thread.id,
@@ -1236,6 +1251,12 @@ async def spawn_blank_river_eddy(
     }
 
     if split_bot:
+        from mage import set_practice_context_for_channel
+
+        set_practice_context_for_channel(channel.id)
+        await add_users_to_thread(
+            thread, get_thread_member_ids(channel.id), label="add_user"
+        )
         write_pending_native_eddy(thread.id, channel.id, config)
         write_awaiting_title(thread.id, channel.id, {"flow_id": flow_id})
     else:
@@ -1249,12 +1270,9 @@ async def spawn_blank_river_eddy(
         }
         write_awaiting_title(thread.id, channel.id, {"flow_id": flow_id})
 
-        for uid in get_thread_member_ids(channel.id):
-            try:
-                user = await bot_client.fetch_user(int(uid))
-                await thread.add_user(user)
-            except Exception:
-                pass
+        await add_users_to_thread(
+            thread, get_thread_member_ids(channel.id), label="add_user"
+        )
 
     register_thread(
         thread.id,
