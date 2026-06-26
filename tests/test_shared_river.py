@@ -1,6 +1,6 @@
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 sys.modules.setdefault("discord.ui", MagicMock())
@@ -11,7 +11,7 @@ from river_handler import _iter_river_channels
 from state import THREAD_CONTEXTS
 
 
-class SharedRiverHarnessTests(unittest.TestCase):
+class SharedRiverHarnessTests(unittest.IsolatedAsyncioTestCase):
     FAMILY_CHANNEL = 1491163697278881836
     RIVER_CHANNEL = 999001
 
@@ -115,6 +115,43 @@ class SharedRiverHarnessTests(unittest.TestCase):
         )
         ids = mage.get_thread_member_ids(self.FAMILY_CHANNEL)
         self.assertEqual(ids, ["1", "2"])
+
+    async def test_ensure_space_channel_access_grants_missing_members(self) -> None:
+        self._set_registry(
+            channels={
+                str(self.FAMILY_CHANNEL): {
+                    "type": "shared-river",
+                    "mage": "family",
+                }
+            }
+        )
+        member = MagicMock()
+        member.id = 2
+        guild = MagicMock()
+        guild.get_member.return_value = member
+
+        channel = MagicMock()
+        channel.id = self.FAMILY_CHANNEL
+        channel.guild = guild
+        channel.overwrites = {}
+        channel.edit = AsyncMock()
+
+        ok = await mage.ensure_space_channel_access(channel)
+        self.assertTrue(ok)
+        channel.edit.assert_awaited_once()
+        overwrites = channel.edit.await_args.kwargs["overwrites"]
+        self.assertIn(member, overwrites)
+
+    async def test_ensure_space_channel_access_skips_non_shared_river(self) -> None:
+        channel = MagicMock()
+        channel.id = self.RIVER_CHANNEL
+        channel.edit = AsyncMock()
+        self._set_registry(
+            channels={str(self.RIVER_CHANNEL): {"type": "river", "mage": "kermit"}}
+        )
+        ok = await mage.ensure_space_channel_access(channel)
+        self.assertFalse(ok)
+        channel.edit.assert_not_awaited()
 
 
 class SharedRiverNativePromptTests(unittest.TestCase):

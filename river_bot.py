@@ -101,6 +101,12 @@ async def on_ready():
             await retire_standing_flow_library_bars(river_client)
         except Exception as exc:
             print(f"River startup setup failed: {exc}")
+        try:
+            from mage import sync_shared_river_channel_access
+
+            await sync_shared_river_channel_access(river_client)
+        except Exception as exc:
+            print(f"Shared-river channel sync failed: {exc}")
     print("River bot ready — acts + turtle-talk in practice channels")
     if get_attunement_profile() == "native":
         try:

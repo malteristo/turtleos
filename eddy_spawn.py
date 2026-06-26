@@ -523,6 +523,7 @@ async def spawn_eddy_in_channel(channel, content: str, topic: str | None = None,
         "created": datetime.now(timezone.utc),
     }
 
+    await ensure_shared_river_parent_access(channel)
     await add_users_to_thread(thread, get_thread_member_ids(channel.id))
 
     register_thread(
@@ -588,6 +589,7 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
     await thread.send(config_line, view=view)
 
     parent_id = message.channel.id
+    await ensure_shared_river_parent_access(message.channel)
     await add_users_to_thread(thread, get_thread_member_ids(parent_id))
 
     register_thread(
@@ -896,6 +898,11 @@ async def add_users_to_thread(thread, member_ids, *, label: str = "add_user") ->
             print(f"River {label} failed for {uid}: {exc}")
 
 
+async def ensure_shared_river_parent_access(channel) -> None:
+    from mage import ensure_space_channel_access
+
+    await ensure_space_channel_access(channel)
+
 def cache_turtle_bot_user_id(user_id: int) -> None:
     _turtle_bot_id_cache_path().write_text(str(user_id), encoding="utf-8")
 
@@ -1147,6 +1154,7 @@ async def spawn_river_eddy(
         from mage import set_practice_context_for_channel
 
         set_practice_context_for_channel(parent_id)
+        await ensure_shared_river_parent_access(message.channel)
         await add_users_to_thread(
             thread, get_thread_member_ids(parent_id), label="add_user"
         )
@@ -1166,6 +1174,7 @@ async def spawn_river_eddy(
 
     if not split_bot:
         parent_id = message.channel.id
+        await ensure_shared_river_parent_access(message.channel)
         await add_users_to_thread(
             thread, get_thread_member_ids(parent_id), label="add_user"
         )
@@ -1254,6 +1263,7 @@ async def spawn_blank_river_eddy(
         from mage import set_practice_context_for_channel
 
         set_practice_context_for_channel(channel.id)
+        await ensure_shared_river_parent_access(channel)
         await add_users_to_thread(
             thread, get_thread_member_ids(channel.id), label="add_user"
         )
@@ -1270,6 +1280,7 @@ async def spawn_blank_river_eddy(
         }
         write_awaiting_title(thread.id, channel.id, {"flow_id": flow_id})
 
+        await ensure_shared_river_parent_access(channel)
         await add_users_to_thread(
             thread, get_thread_member_ids(channel.id), label="add_user"
         )

@@ -451,3 +451,90 @@ def get_thread_member_ids(channel_id):
     if mage.get("discord_id"):
         return [mage["discord_id"]]
     return []
+
+
+def _shared_river_member_overwrite() -> discord.PermissionOverwrite:
+    return discord.PermissionOverwrite(
+        view_channel=True,
+        send_messages=True,
+        read_message_history=True,
+        create_public_threads=True,
+        send_messages_in_threads=True,
+    )
+
+
+async def ensure_space_channel_access(channel, guild=None) -> bool:
+    """Grant registry space members access to a shared-river parent channel."""
+    ch_type = _get_channel_type(channel.id)
+    if ch_type != "shared-river":
+        return False
+
+    mage_key = _get_channel_mage(channel.id)
+    if not mage_key:
+        return False
+    space = _MAGE_REGISTRY.get("spaces", {}).get(mage_key, {})
+    if not space:
+        return False
+
+    guild = guild or getattr(channel, "guild", None)
+    if guild is None:
+        return False
+
+    overwrites = dict(channel.overwrites)
+    changed = False
+    perms = _shared_river_member_overwrite()
+
+    for member_key in space.get("members", []):
+        mage = _MAGE_REGISTRY.get("mages", {}).get(member_key, {})
+        raw_id = mage.get("discord_id")
+        if not raw_id:
+            continue
+        try:
+            uid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+
+        member = guild.get_member(uid)
+        if member is None:
+            try:
+                member = await guild.fetch_member(uid)
+            except discord.HTTPException:
+                print(
+                    f"ensure_space_channel_access: member {member_key} ({uid}) not in guild"
+                )
+                continue
+
+        existing = overwrites.get(member)
+        if existing is not None and existing.view_channel is not False:
+            continue
+
+        overwrites[member] = perms
+        changed = True
+
+    if not changed:
+        return False
+
+    try:
+        await channel.edit(overwrites=overwrites)
+        print(f"ensure_space_channel_access: granted access on channel {channel.id}")
+        return True
+    except discord.HTTPException as exc:
+        print(f"ensure_space_channel_access failed: {exc}")
+        return False
+
+
+async def sync_shared_river_channel_access(client) -> None:
+    """On startup: align Discord overwrites with registry space members."""
+    for ch_id_str, entry in _MAGE_REGISTRY.get("channels", {}).items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") != "shared-river":
+            continue
+        try:
+            ch_id = int(ch_id_str)
+        except (TypeError, ValueError):
+            continue
+        channel = client.get_channel(ch_id)
+        if channel is None:
+            continue
+        await ensure_space_channel_access(channel)
