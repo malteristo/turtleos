@@ -104,13 +104,13 @@ def uses_native_eddy(channel_id) -> bool:
 
 
 def _channel_is_river(ch_id: int) -> bool:
-    """True when channel id is a parent river or hosted-river surface."""
+    """True when channel id is a parent river, hosted-river, or shared-river surface."""
     if str(ch_id) not in _MAGE_REGISTRY.get("channels", {}):
         dialogue = get_channel("dialogue")
         if not dialogue or ch_id != dialogue.id:
             return False
     ch_type = _get_channel_type(ch_id)
-    if ch_type in ("river", "hosted-river"):
+    if ch_type in ("river", "hosted-river", "shared-river"):
         return True
     if ch_type is None and get_attunement_profile() == "native":
         return True
@@ -133,7 +133,11 @@ def is_river_message(message) -> bool:
 
 def uses_native_river(message) -> bool:
     """True when this message should use the River act harness (not Turtle dialogue)."""
-    return get_attunement_profile() == "native" and is_river_message(message)
+    if not is_river_message(message):
+        return False
+    if _get_channel_type(message.channel.id) == "shared-river":
+        return True
+    return get_attunement_profile() == "native"
 
 
 def river_bot_enabled() -> bool:
@@ -164,7 +168,7 @@ def _get_channel_mage(channel_id):
 
 
 def _get_channel_type(channel_id):
-    """Get channel type (river, hosted-river, shared). Returns None for legacy format."""
+    """Get channel type (river, hosted-river, shared-river, shared). Returns None for legacy format."""
     entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
     if isinstance(entry, dict):
         return entry.get("type")

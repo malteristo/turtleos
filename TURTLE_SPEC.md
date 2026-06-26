@@ -697,7 +697,8 @@ turtleOS MAY host multiple practitioners via `mage_registry.yaml` — each with 
 | `river` | Operator/practitioner main practice surface on their own server or as primary mage |
 | `hosted-river` | Sovereign practitioner's private river on an operator's server — same River harness as `river` |
 | `unclaimed-river` | Private claim room before first bind; becomes `hosted-river` on river key drop |
-| `shared` / future `shared-river` | Multi-member practice spaces (family, etc.) — separate design |
+| `shared` | Legacy multi-practitioner dialogue — migrate to `shared-river` |
+| `shared-river` | Multi-member practice spaces (family, etc.) — River harness in parent; shared eddies with space `members` auto-join |
 
 ### 15.2 Practitioner profile
 

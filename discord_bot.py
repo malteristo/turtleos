@@ -610,7 +610,10 @@ async def handle_dialogue(message):
         triage_task = asyncio.create_task(triage_message(visible_content))
         proprioceptor_task = None
         if not isinstance(message.channel, discord.Thread) and get_attunement_profile() == "magic":
-            proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
+            from mage import is_river_message
+
+            if not is_river_message(message):
+                proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
         triage = await triage_task
         triage_cat = triage.get("category", "practice")
         print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {visible_content[:80]}")

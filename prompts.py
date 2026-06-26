@@ -605,8 +605,11 @@ def load_character_file(name: str) -> str:
     return ""
 
 
-def build_native_eddy_prompt(flow_id: str | None = None) -> str:
-    """Vanilla Turtle system prompt — soul + conduct + optional flow (TURTLE_SPEC §7, §14)."""
+def build_native_eddy_prompt(
+    flow_id: str | None = None,
+    context_type: str | None = None,
+) -> str:
+    """Vanilla Turtle system prompt — soul + conduct + optional context/flow (TURTLE_SPEC §7, §14)."""
     from flow_runner import build_flow_prompt_sections
 
     soul = load_character_file("soul.md")
@@ -616,6 +619,10 @@ def build_native_eddy_prompt(flow_id: str | None = None) -> str:
         parts.append(soul)
     if conduct:
         parts.append(conduct)
+    if context_type:
+        context_block = _build_context_resonance(context_type)
+        if context_block:
+            parts.append(context_block)
     if get_mage_type() == "practitioner":
         resonance = read_safe(os.path.join(get_pd(), "resonance.md"))
         if resonance.strip():
@@ -632,8 +639,16 @@ def build_native_eddy_prompt(flow_id: str | None = None) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def get_native_eddy_prompt(flow_id: str | None = None) -> str:
-    return build_native_eddy_prompt(flow_id)
+def get_native_eddy_prompt(ctx: str | None = None) -> str:
+    """Build native eddy prompt from channel default_context or flow id."""
+    context_type = None
+    flow_id = None
+    if ctx:
+        if ctx in THREAD_CONTEXTS:
+            context_type = ctx
+        else:
+            flow_id = ctx
+    return build_native_eddy_prompt(flow_id=flow_id, context_type=context_type)
 
 
 def uses_native_turtle_prompt(channel_id=None) -> bool:

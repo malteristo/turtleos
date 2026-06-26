@@ -87,7 +87,7 @@ ShareContinueView._on_continue → continue_received_share()
 
 ## Acceptance impact
 
-S1 in [acceptance/README.md](../acceptance/README.md): **Partial** — Continue silent + eddy opens with digest inside; chip-on-digest ideal deferred.
+S1 in [acceptance/README.md](../acceptance/README.md): **Accepted (v1)** — Continue silent + sibling-thread eddy with digest inside; chip-on-digest ideal parked.
 
 ---
 

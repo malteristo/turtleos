@@ -108,13 +108,13 @@ python scripts/shake_lifecycle.py
 ## Share eddy (thinking together)
 
 **Spec:** §15.6  
-**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md) · **Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](../chapters/2026-06-25-share-eddy-slice1-dogfood.md)  
+**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md) · **Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](../chapters/2026-06-25-share-eddy-slice1-dogfood.md) · **Continue v1:** [2026-06-25-share-eddy-continue-handoff.md](../chapters/2026-06-25-share-eddy-continue-handoff.md)  
 **Depends on:** Share to **space** requires `shared-river` ([design-family-shared-river.md](../chapters/design-family-shared-river.md))  
-**Status:** Slice 1 shipped (practitioner target) · sender path dogfooded 2026-06-25 · recipient Continue + first-reply notify pending Nesrine-side pass
+**Status:** Slice 1 **S1 accepted (v1)** — sibling-thread Continue, digest inside eddy · sender + Continue UX dogfooded 2026-06-25 · Mini `ab75b11` · chip-on-digest **parked** · S2–S6 after shared-river
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
-| S1 | Share to practitioner | Recipient digest act; received eddy on continue; sender chronicle; source eddy unchanged |
+| S1 | Share to practitioner (v1) | Sharer: digest act to recipient; source eddy unchanged; `@` act on first peer reply. Recipient: **Continue** with **no River success ephemeral**; sibling thread (Discord system line + chip); **digest reposted inside received eddy** with Turtle context. *(Parked: thread chip on digest via `message.create_thread`.)* |
 | S2 | Share to space | Space digest + shared eddy at confirm; members `@`+act; sharer not in thread until chooses |
 | S3 | First peer reply | Sharer `@`+act when space member first speaks in shared eddy |
 | S4 | Re-share transparency | Space member shares space eddy to practitioner; space parent transparency act |

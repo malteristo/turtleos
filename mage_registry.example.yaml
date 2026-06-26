@@ -11,7 +11,8 @@
 #   river         — operator/practitioner main practice surface (acts in parent, dialogue in eddies)
 #   hosted-river  — sovereign practitioner's river on operator's server (same harness as river)
 #   unclaimed-river — private claim room; becomes hosted-river on river key drop
-#   shared        — legacy multi-practitioner dialogue (migrating to shared-river — see docs/chapters/design-family-shared-river.md)
+#   shared        — legacy multi-practitioner dialogue (migrate to shared-river)
+#   shared-river  — multi-member space river (acts in parent, shared eddies) — see docs/chapters/design-family-shared-river.md
 #   craft         — builder vocation surface (design chapter: docs/chapters/design-craft-channel.md)
 #
 # Two-bot native mode (TURTLE_SPEC §5.8): set RIVER_BOT_TOKEN in .env and run river_bot.py
@@ -36,6 +37,12 @@ spaces:
     #   all_practitioners — every hosted practitioner on the node (may share without Discord channel membership)
     #   members_only — only space.members
     share_policy: all_practitioners
+  family:
+    practice_dir: ~/workshops/family
+    runtime_dir: ~/workshops/family
+    members:
+      - nesrine
+    share_policy: members_only
 
 channels:
   "YOUR_DIALOGUE_CHANNEL_ID":
