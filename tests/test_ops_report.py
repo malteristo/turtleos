@@ -75,5 +75,25 @@ class OpsReportTests(unittest.TestCase):
             self.assertIn("Spirit Ops Report", latest)
 
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_resolve_desk_root_when_practice_dir_is_desk(self) -> None:
+        from scripts.ops_paths import _resolve_desk_root
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            desk = Path(tmp) / "desk"
+            desk.mkdir()
+            (desk / "boom.md").write_text("boom", encoding="utf-8")
+            self.assertEqual(_resolve_desk_root(desk), desk)
+
+    def test_resolve_desk_root_when_practice_dir_is_parent(self) -> None:
+        from scripts.ops_paths import _resolve_desk_root
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            desk = root / "desk"
+            desk.mkdir()
+            (desk / "boom.md").write_text("boom", encoding="utf-8")
+            self.assertEqual(_resolve_desk_root(root), desk)
