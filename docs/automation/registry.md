@@ -14,6 +14,7 @@ Spirit harvests reports from `desk/craft/automation-reports/latest.md` at `. cra
 | Scripts own truth | Pass/fail from `shake_report`, `canary`, unittest — never LLM |
 | Local LLM optional | `ops_summarize.py` runs only when `ops_overall != pass` |
 | River quiet | Ops reports go to workshop desk files, not `#craft-turtle` |
+| Forge harvest | After each run, `ops_harvest_sync.py` commits report markdown to workshop `origin` |
 | Canary alerts | Existing `canary.py` river alert on RED/degraded signature only |
 | Forge fixes | FAIL → Spirit on Forge; Mage not in plumbing loop |
 
@@ -41,6 +42,16 @@ Spirit harvests reports from `desk/craft/automation-reports/latest.md` at `. cra
 | `~/turtleos/logs/ops-gate.log` | launchd log |
 
 Report directory resolves via `mage_registry.yaml` practice_dir when available.
+
+### Harvest sync (Forge)
+
+After `write_ops_artifacts`, `ops_runner.py` calls `ops_harvest_sync.sync_ops_harvest()` unless `--no-harvest-sync`:
+
+1. Stage only `desk/craft/automation-reports/latest.md` and the dated archive from this run.
+2. Commit: `ops harvest: {job} {ops_overall}`
+3. Push workshop `origin` (turtle bare → Forge `git pull turtle main`)
+
+Harvest sync failure does **not** change `ops_overall` exit code — ops truth stays script-owned; sync status appears in bundle `harvest_sync` and stdout.
 
 ---
 

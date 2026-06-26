@@ -8,6 +8,7 @@ Usage:
   python scripts/ops_runner.py              # full offline gate (default)
   python scripts/ops_runner.py --quick      # canary + shake_report only
   python scripts/ops_runner.py --no-summarize # template report only
+  python scripts/ops_runner.py --no-harvest-sync # skip workshop git push
   python scripts/ops_runner.py --job post-merge
 
 See docs/automation/registry.md
@@ -172,6 +173,7 @@ def run_ops(
     mode: str,
     job: str,
     summarize: bool,
+    harvest_sync: bool = True,
 ) -> dict[str, Any]:
     py = venv_python()
     suite_steps: list[dict[str, Any]] = []
@@ -214,6 +216,15 @@ def run_ops(
 
     paths = write_ops_artifacts(bundle)
     bundle["written_paths"] = paths
+
+    if harvest_sync:
+        try:
+            from ops_harvest_sync import sync_ops_harvest
+        except ImportError:
+            from scripts.ops_harvest_sync import sync_ops_harvest
+
+        bundle["harvest_sync"] = sync_ops_harvest(paths, bundle=bundle)
+
     return bundle
 
 
@@ -230,6 +241,11 @@ def main() -> int:
         "--no-summarize",
         action="store_true",
         help="skip Layer 2 qwen summary even on FAIL",
+    )
+    parser.add_argument(
+        "--no-harvest-sync",
+        action="store_true",
+        help="skip git commit/push of automation reports to workshop origin",
     )
     parser.add_argument("--json", action="store_true", help="print bundle JSON to stdout")
     args = parser.parse_args()
@@ -248,6 +264,7 @@ def main() -> int:
         mode=args.mode,
         job=args.job,
         summarize=not args.no_summarize,
+        harvest_sync=not args.no_harvest_sync,
     )
 
     if args.json:
@@ -257,6 +274,10 @@ def main() -> int:
         print(f"ops_overall={bundle['ops_overall']}")
         print(f"latest_md={paths.get('latest_md')}")
         print(f"latest_json={paths.get('latest_json')}")
+        harvest = bundle.get("harvest_sync") or {}
+        print(f"harvest_sync={harvest.get('status', 'skipped')}")
+        if harvest.get("reason"):
+            print(f"harvest_reason={harvest['reason']}")
 
     if bundle["ops_overall"] == "fail":
         return 1
