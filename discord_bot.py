@@ -66,6 +66,7 @@ from mage import (
     get_registry, _resolve_mage_from_author,
     get_thread_member_ids, uses_native_river, river_bot_enabled, turtle_handles_native_river,
     suppress_turtle_river_voice, get_attunement_profile,
+    maybe_reload_mage_registry, reload_mage_registry,
 )
 
 from practice_io import (
@@ -1148,6 +1149,7 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     if (before.content or "").strip() == (after.content or "").strip():
         return
+    maybe_reload_mage_registry()
     if not is_practice_channel(after):
         return
     if after.author.bot and after.author.id != SPIRIT_BOT_ID:
@@ -1196,6 +1198,7 @@ async def on_interaction(interaction: discord.Interaction):
 @client.event
 async def on_ready():
     global _intake_runner
+    reload_mage_registry()
     client.add_view(ControlPanelView())
     client.add_view(ThreadConfigView())
     try:
@@ -1578,6 +1581,8 @@ async def on_message(message):
 
     if message.type not in (discord.MessageType.default, discord.MessageType.reply) and not getattr(message, "message_snapshots", None):
         return
+
+    maybe_reload_mage_registry()
 
     set_practice_context(message)
 

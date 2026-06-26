@@ -24,14 +24,24 @@ _workshop_root_ctx = contextvars.ContextVar("workshop_root", default=None)
 
 # ─── Registry Loading ────────────────────────────────────────────
 
+REGISTRY_PATH = os.path.expanduser("~/turtleos/mage_registry.yaml")
+_registry_mtime: float | None = None
+
+
+def _registry_file_mtime() -> float | None:
+    try:
+        return os.path.getmtime(REGISTRY_PATH)
+    except OSError:
+        return None
+
+
 def _load_mage_registry():
     """Load the mage registry from YAML config."""
-    registry_path = os.path.expanduser("~/turtleos/mage_registry.yaml")
-    if not os.path.exists(registry_path):
+    if not os.path.exists(REGISTRY_PATH):
         return {"channels": {}, "mages": {}, "spaces": {}}
     try:
         import yaml
-        with open(registry_path) as f:
+        with open(REGISTRY_PATH) as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         print(f"Warning: Could not load mage registry: {e}")
@@ -39,12 +49,32 @@ def _load_mage_registry():
 
 
 _MAGE_REGISTRY = _load_mage_registry()
+_registry_mtime = _registry_file_mtime()
 
 
 def reload_mage_registry():
     """Reload the mage registry from disk."""
-    global _MAGE_REGISTRY
+    global _MAGE_REGISTRY, _registry_mtime
     _MAGE_REGISTRY = _load_mage_registry()
+    _registry_mtime = _registry_file_mtime()
+
+
+def maybe_reload_mage_registry() -> bool:
+    """Reload registry when mage_registry.yaml changed on disk (split-bot safe).
+
+    River bot reloads on claim; Turtle bot must observe the same file without restart.
+    Returns True when a reload occurred.
+    """
+    current = _registry_file_mtime()
+    if current is None:
+        if _registry_mtime is not None:
+            reload_mage_registry()
+            return True
+        return False
+    if _registry_mtime is None or current != _registry_mtime:
+        reload_mage_registry()
+        return True
+    return False
 
 
 def get_registry():

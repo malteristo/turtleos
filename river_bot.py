@@ -43,6 +43,7 @@ from mage import (
     get_attunement_profile,
     is_practice_channel,
     is_river_message,
+    maybe_reload_mage_registry,
     reload_mage_registry,
     set_practice_context,
     set_practice_context_for_channel,
@@ -132,6 +133,7 @@ async def on_message(message: discord.Message):
         return
     if message.type not in (discord.MessageType.default, discord.MessageType.reply):
         return
+    maybe_reload_mage_registry()
     if not is_practice_channel(message):
         return
     if get_attunement_profile() != "native":

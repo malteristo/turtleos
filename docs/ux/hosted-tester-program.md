@@ -65,6 +65,57 @@ Do not provision hosted rivers with `locale=de` until a deliberate localization 
 
 ---
 
+## Live onboarding runbook
+
+Use this during a **phone/video walkthrough** (hosted river #2 — Lukas, 2026-06-26). Offline provisioning is not enough; verify both handoffs before ending the call.
+
+### Two handoffs
+
+| Handoff | What must work | Failure mode |
+|---------|----------------|--------------|
+| **Discord visibility** | Guest sees `#river-<name>` after joining | Empty server — “no channels could be loaded” |
+| **Runtime visibility** | Turtle bot knows the new hosted channel | Eddy renames but Turtle never replies |
+
+### Before the call
+
+1. Run `!admin river-key <Name> <emoji> en` — copy the **channel invite** from the output (not a generic server invite).
+2. Send the [invite message](#invite-message-send-to-guest) with that link.
+
+### On the call — checklist
+
+| Step | Pass criterion | If it fails |
+|------|----------------|-------------|
+| Guest joins | Sees `#river-<name>` in channel list | **Manual fix:** Discord → `#river-<name>` → Edit Channel → Members → add guest. Do **not** “Sync Now” on Practice category (can wipe manual access). |
+| Key ceremony | Guest drops emoji → channel renames to `#<name>-dialogue` | Wrong key → re-read pinned claim copy. Pre-claim name is `river-<name>` (matches onboarding “river” vocabulary, not `claim-<name>`). |
+| First eddy | `new eddy` → guest sends message → thread title changes, Turtle added | Normal — **first message does not get a Turtle reply** |
+| Turtle reply | Guest sends **second** message in eddy → Turtle responds | If silent: check `Turtle inbound` in `~/turtleos/logs/discord.log` for that thread. Until hot-reload is deployed, restart `com.turtle.discord` after claim. |
+| Handoff | Guest understands River ≠ chatbot; knows to open more eddies async | Point at pinned onboarding embed |
+
+### Why the empty server happens
+
+Claim rooms are created **operator-only** (`@everyone` cannot view). The guest is added to channel permissions only **after** claim (`_claimed_overwrites`). The channel invite *should* grant visibility before claim — on a fully private server (Practice category), it may not. Treat “guest is server member but not channel member” as expected until claim or manual add.
+
+### Why Turtle goes silent after claim
+
+River bot reloads `mage_registry.yaml` on claim; Turtle bot historically loaded it once at startup. New hosted channels were invisible to `is_practice_channel()` until restart. **Fix shipped:** `maybe_reload_mage_registry()` on each inbound message (mtime check). Post-deploy: no restart required after claim.
+
+### Eddy UX (set expectation)
+
+- **Message 1** in a blank eddy → names the thread, adds Turtle (no reply).
+- **Message 2+** → Turtle dialogue.
+
+Say this aloud during the first eddy demo so silence is not read as failure.
+
+### Post-call
+
+- Guest explores on their own (2–3 eddies, optional Feedback flow).
+- Operator watches Discord digest + `~/workshops/<guest>/` for feedback files.
+- Log friction in hosted beta notes; update this runbook when new patterns appear.
+
+**Reference session:** Lukas (hosted river #2, 2026-06-26) — claim + eddy OK; empty-server + stale-registry fixed live.
+
+---
+
 ## Feedback flow (tester-facing)
 
 **Invoke:** In any eddy → **flow library** → **Feedback** (works mid-conversation — lens load).

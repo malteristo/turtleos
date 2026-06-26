@@ -394,7 +394,7 @@ async def provision_unclaimed_river(
     }
 
     category = discord.utils.get(guild.categories, name="Practice")
-    channel_name = f"claim-{mage_key.replace('_', '-')}"[:100]
+    channel_name = f"river-{mage_key.replace('_', '-')}"[:100]
     overwrites = _guild_bot_overwrites(guild)
 
     create_kwargs = {
