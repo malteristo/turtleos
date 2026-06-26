@@ -34,7 +34,7 @@ Sovereign install (Ollama, Discord apps, drivers, config) is a **parallel chapte
 > I set up a private **river** channel for you on Discord — personal AI that runs on my machine, but **your channel is yours**.
 >
 > **River** (main channel) doesn’t chat like ChatGPT — you’ll see buttons and short acts. That’s normal.  
-> **Eddies** are threads: click **`new eddy`** at the bottom, send a message, **Turtle** replies there.
+> **Eddies** are threads: click **`new eddy`**, send a message (that **names** the thread — no reply yet), then send a **second** message and **Turtle** replies there.
 >
 > Use it like any chat app — follow up, paste links, come back to threads later.
 >
@@ -88,7 +88,7 @@ Use this during a **phone/video walkthrough** (hosted river #2 — Lukas, 2026-0
 | Guest joins | Sees `#river-<name>` in channel list | **Manual fix:** Discord → `#river-<name>` → Edit Channel → Members → add guest. Do **not** “Sync Now” on Practice category (can wipe manual access). |
 | Key ceremony | Guest drops emoji → channel renames to `#<name>-dialogue` | Wrong key → re-read pinned claim copy. Pre-claim name is `river-<name>` (matches onboarding “river” vocabulary, not `claim-<name>`). |
 | First eddy | `new eddy` → guest sends message → thread title changes, Turtle added | Normal — **first message does not get a Turtle reply** |
-| Turtle reply | Guest sends **second** message in eddy → Turtle responds | If silent: check `Turtle inbound` in `~/turtleos/logs/discord.log` for that thread. Until hot-reload is deployed, restart `com.turtle.discord` after claim. |
+| Turtle reply | Guest sends **second** message in eddy → Turtle responds | If silent after message 2: check `Turtle inbound` in `~/turtleos/logs/discord.log`. Post-`7c23593`: registry hot-reload — no restart after claim. |
 | Handoff | Guest understands River ≠ chatbot; knows to open more eddies async | Point at pinned onboarding embed |
 
 ### Why the empty server happens
