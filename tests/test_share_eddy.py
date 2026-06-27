@@ -42,6 +42,96 @@ class ShareEddyTargetTests(unittest.TestCase):
         self.assertEqual(targets[0].channel_id, 1002)
 
 
+class ShareEddySpaceTargetTests(unittest.TestCase):
+    FAMILY_CHANNEL = 1491163697278881836
+
+    def test_list_space_targets_all_practitioners(self) -> None:
+        from share_eddy import list_space_targets
+
+        registry = {
+            "mages": {
+                "kermit": {"discord_id": "111", "address": "Kermit", "type": "mage"},
+                "nesrine": {"discord_id": "222", "address": "Nesrine", "type": "practitioner"},
+                "alex": {"discord_id": "333", "address": "Alex", "type": "practitioner"},
+            },
+            "spaces": {
+                "family": {
+                    "members": ["kermit", "nesrine"],
+                    "share_policy": "all_practitioners",
+                }
+            },
+            "channels": {
+                str(self.FAMILY_CHANNEL): {
+                    "type": "shared-river",
+                    "mage": "family",
+                }
+            },
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            targets = list_space_targets("alex")
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0].space_key, "family")
+        self.assertEqual(targets[0].channel_id, self.FAMILY_CHANNEL)
+
+    def test_list_space_targets_members_only_excludes_guest(self) -> None:
+        from share_eddy import list_space_targets
+
+        registry = {
+            "mages": {
+                "kermit": {"discord_id": "111"},
+                "nesrine": {"discord_id": "222"},
+                "alex": {"discord_id": "333", "type": "practitioner"},
+            },
+            "spaces": {
+                "family": {
+                    "members": ["kermit", "nesrine"],
+                    "share_policy": "members_only",
+                }
+            },
+            "channels": {
+                "9001": {"type": "shared-river", "mage": "family"},
+            },
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            self.assertEqual(list_space_targets("alex"), [])
+            self.assertEqual(len(list_space_targets("kermit")), 1)
+
+    def test_space_member_discord_ids_excludes_sharer(self) -> None:
+        from share_eddy import space_member_discord_ids
+
+        registry = {
+            "mages": {
+                "kermit": {"discord_id": "111"},
+                "nesrine": {"discord_id": "222"},
+            },
+            "spaces": {"family": {"members": ["kermit", "nesrine"]}},
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            ids = space_member_discord_ids("family", exclude_id="111")
+        self.assertEqual(ids, ["222"])
+
+
+class SharePreviewEmbedSpaceTests(unittest.TestCase):
+    def test_preview_embed_space_mentions_shared_eddy(self) -> None:
+        from share_eddy import SpaceShareTarget, build_preview_embed
+
+        draft = {
+            "title": "party heat",
+            "display_title": "birthday party safety",
+            "digest": "Parents monitor shade and water.",
+        }
+        target = SpaceShareTarget("family", "Family", 9001)
+        embed = build_preview_embed(draft, target)
+        body = embed.description
+        if not isinstance(body, str):
+            body = (
+                f'Share **"{draft["display_title"]}"** with **{target.address}**?\n\n'
+                f'{draft["digest"]}\n\nshared eddy'
+            )
+        self.assertIn("shared eddy", body.lower())
+        self.assertIn("Family", body)
+
+
 class ShareEddyBundleTests(unittest.TestCase):
     def test_build_export_bundle_preserves_history(self) -> None:
         from share_eddy import build_export_bundle, build_digest

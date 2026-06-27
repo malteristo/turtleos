@@ -16,7 +16,7 @@ COMMAND_ACT_FALLBACK = {
     "fetch": "URL fetched and distilled to practice library cache.",
     "checkpoint": "Checkpoint complete — flow state and/or session note saved.",
     "release": "Session released — checkpoint saved, history cleared.",
-    "share": "Share eddy picker opened — choose practitioner and confirm.",
+    "share": "Share eddy picker opened — choose target and confirm.",
     "dissolve": "Eddy dissolved — thread archived, chronicle updated.",
     "flows": "Flow menu opened.",
     "pin": "Message pinned in river channel.",

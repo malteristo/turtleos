@@ -1,4 +1,4 @@
-"""Share eddy — export and practitioner-target delivery (TURTLE_SPEC §15.6 Slice 1)."""
+"""Share eddy — export and delivery (TURTLE_SPEC §15.6 Slice 1 + space Slice 3a)."""
 
 from __future__ import annotations
 
@@ -22,6 +22,13 @@ class ShareTarget:
     mage_key: str
     address: str
     discord_id: str
+    channel_id: int
+
+
+@dataclass(frozen=True)
+class SpaceShareTarget:
+    space_key: str
+    address: str
     channel_id: int
 
 
@@ -80,6 +87,87 @@ def list_practitioner_targets(
     return sorted(targets, key=lambda t: t.address.lower())
 
 
+def runtime_dir_for_space(space_key: str) -> str:
+    space = get_registry().get("spaces", {}).get(space_key, {})
+    raw = space.get("runtime_dir") or space.get("practice_dir") or f"~/workshops/{space_key}"
+    return os.path.expanduser(raw)
+
+
+def shared_river_channel_for_space(space_key: str) -> int | None:
+    """Parent shared-river channel id for a registry space key."""
+    for ch_id_str, entry in get_registry().get("channels", {}).items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") != "shared-river":
+            continue
+        if entry.get("mage") != space_key:
+            continue
+        try:
+            return int(ch_id_str)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _sender_may_share_to_space(sender_mage_key: str, space: dict[str, Any]) -> bool:
+    policy = space.get("share_policy", "members_only")
+    members = space.get("members") or []
+    if policy == "all_practitioners":
+        return True
+    if policy == "members_only":
+        return sender_mage_key in members
+    if isinstance(policy, dict):
+        explicit = policy.get("explicit")
+        if isinstance(explicit, list):
+            return sender_mage_key in explicit
+    if isinstance(policy, list):
+        return sender_mage_key in policy
+    return sender_mage_key in members
+
+
+def list_space_targets(sender_mage_key: str) -> list[SpaceShareTarget]:
+    """Slice 3a picker: registry spaces where sender satisfies share_policy."""
+    targets: list[SpaceShareTarget] = []
+    for space_key, space in get_registry().get("spaces", {}).items():
+        if not isinstance(space, dict):
+            continue
+        if not _sender_may_share_to_space(sender_mage_key, space):
+            continue
+        channel_id = shared_river_channel_for_space(space_key)
+        if not channel_id:
+            continue
+        address = (space.get("address") or space_key.replace("_", " ").title())[:100]
+        targets.append(
+            SpaceShareTarget(
+                space_key=space_key,
+                address=address,
+                channel_id=channel_id,
+            )
+        )
+    return sorted(targets, key=lambda t: t.address.lower())
+
+
+def space_member_discord_ids(
+    space_key: str,
+    *,
+    exclude_id: str | int | None = None,
+) -> list[str]:
+    """Discord user ids for space members (optional exclude — e.g. sharer)."""
+    exclude = str(exclude_id) if exclude_id is not None else None
+    space = get_registry().get("spaces", {}).get(space_key, {})
+    ids: list[str] = []
+    for member_key in space.get("members") or []:
+        mage = get_registry().get("mages", {}).get(member_key, {})
+        uid = mage.get("discord_id")
+        if not uid:
+            continue
+        uid_str = str(uid)
+        if exclude and uid_str == exclude:
+            continue
+        ids.append(uid_str)
+    return ids
+
+
 def filter_share_history(history: list[dict]) -> list[dict]:
     """Drop platform act digests and bare ``!`` commands from share export."""
     cleaned: list[dict] = []
@@ -127,11 +215,11 @@ def resolve_eddy_thread_cfg(
     parent_id: int | None,
     cfg: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """Merge in-memory thread config with persisted received-eddy metadata."""
-    if cfg and cfg.get("origin") == "received":
+    """Merge in-memory thread config with persisted share-eddy metadata."""
+    if cfg and cfg.get("origin") in ("received", "shared"):
         return cfg
     disk = _received_eddy_notify_config(thread_id, parent_id)
-    if disk and disk.get("origin") == "received":
+    if disk and disk.get("origin") in ("received", "shared"):
         merged = dict(cfg or {})
         merged.update(disk)
         return merged
@@ -153,6 +241,21 @@ def received_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
         f"{recipient}** as your practitioner. Do not welcome them as \"joining\" or "
         f"say \"we\" when you mean you and **{sharer}** — they are not here. "
         "Answer from the shared context; the recipient may explore, disagree, or take it elsewhere.",
+    ]
+
+
+def shared_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
+    """Runtime scaffolding for space-tagged shared eddies."""
+    sharer = (cfg.get("from_sharer") or "another practitioner").strip()
+    space_label = (cfg.get("space_key") or "this space").replace("_", " ").title()
+    return [
+        f"- **Shared eddy:** **{sharer}** shared a conversation with **{space_label}**. "
+        f"**{sharer} is not in this thread** unless they open it themselves.",
+        f"- **Shared history:** Turns labeled `[{sharer}]` are from the original eddy; "
+        "other messages are from space members who joined.",
+        "- **Conduct:** Facilitate the shared topic for whoever is present. Do not welcome "
+        f"**{sharer}** as if they are here — they may read later. Turtle-only opening "
+        "content does not count as a member reply.",
     ]
 
 
@@ -282,6 +385,15 @@ def build_received_share_embed(bundle: dict[str, Any]) -> discord.Embed:
     )
 
 
+def build_space_share_embed(bundle: dict[str, Any]) -> discord.Embed:
+    label = share_label(bundle)
+    return discord.Embed(
+        title=f"📤 {bundle['sharer_address']} shared a conversation",
+        description=f"**{label}**\n\n{bundle['digest']}",
+        color=0x3498DB,
+    )
+
+
 def find_received_thread_for_share(runtime_dir: str, share_id: str) -> int | None:
     """Return thread id if this share was already continued (idempotent re-click)."""
     received = Path(runtime_dir) / "share" / "received"
@@ -359,7 +471,7 @@ def received_thread_path(runtime_dir: str, thread_id: int) -> Path:
 
 
 def save_received_thread_config(runtime_dir: str, thread_id: int, cfg: dict[str, Any]) -> None:
-    """Persist received-eddy notify metadata for cross-process reads (River vs Turtle bots)."""
+    """Persist share-eddy notify metadata for cross-process reads (River vs Turtle bots)."""
     payload = {
         "origin": cfg.get("origin"),
         "share_id": cfg.get("share_id"),
@@ -369,6 +481,7 @@ def save_received_thread_config(runtime_dir: str, thread_id: int, cfg: dict[str,
         "share_notify_pending": cfg.get("share_notify_pending", False),
         "topic": cfg.get("topic"),
         "from_sharer": cfg.get("from_sharer"),
+        "space_key": cfg.get("space_key"),
     }
     received_thread_path(runtime_dir, thread_id).write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
@@ -507,15 +620,23 @@ def build_export_bundle_from_draft(draft: dict[str, Any]) -> dict[str, Any]:
     return bundle
 
 
-def build_preview_embed(draft: dict[str, Any], target: ShareTarget) -> discord.Embed:
+def build_preview_embed(draft: dict[str, Any], target: ShareTarget | SpaceShareTarget) -> discord.Embed:
     label = (draft.get("display_title") or draft.get("title") or "this eddy")[:100]
     digest = (draft.get("digest") or "").strip()
-    body = (
-        f"Share **“{label}”** with **{target.address}**?\n\n"
-        f"{digest}\n\n"
-        "They get this digest in their river and can open a **received eddy** when ready. "
-        "Your original eddy stays unchanged."
-    )
+    if isinstance(target, SpaceShareTarget):
+        body = (
+            f"Share **“{label}”** with **{target.address}**?\n\n"
+            f"{digest}\n\n"
+            "Space members get a digest in the parent river and a **shared eddy** opens "
+            "immediately. You are not added to the thread until you choose to open it."
+        )
+    else:
+        body = (
+            f"Share **“{label}”** with **{target.address}**?\n\n"
+            f"{digest}\n\n"
+            "They get this digest in their river and can open a **received eddy** when ready. "
+            "Your original eddy stays unchanged."
+        )
     return discord.Embed(title="Confirm share", description=body[:4096], color=0xF1C40F)
 
 
@@ -592,11 +713,11 @@ async def notify_sharer_first_peer_reply(
 
 
 def _received_eddy_notify_config(thread_id: int, parent_id: int | None) -> dict[str, Any] | None:
-    """Load received-eddy notify config from in-memory or disk (split River/Turtle bots)."""
+    """Load share-eddy notify config from in-memory or disk (split River/Turtle bots)."""
     from commands import thread_configs
 
     cfg = thread_configs.get(thread_id)
-    if cfg and cfg.get("origin") == "received":
+    if cfg and cfg.get("origin") in ("received", "shared"):
         return cfg
     if not parent_id:
         return None
@@ -698,6 +819,193 @@ async def deliver_practitioner_share(
         sender_pd,
         f"📤 Shared to {target.address}: \"{label}\"",
         {"share_id": bundle["share_id"], "target": target.mage_key},
+    )
+    return msg
+
+
+async def materialize_space_shared_eddy(
+    channel: discord.abc.GuildChannel,
+    bundle: dict[str, Any],
+    *,
+    client: discord.Client,
+) -> discord.Thread:
+    """Create space-tagged shared eddy at confirm — sibling thread; digest stays in parent."""
+    from commands import thread_configs
+    from eddy_spawn import (
+        add_users_to_thread,
+        ensure_shared_river_parent_access,
+        river_add_turtle_to_eddy,
+    )
+    from helpers import sync_history
+    from mage import (
+        get_channel_default_context,
+        get_effective_attunement,
+        get_thread_member_ids,
+        set_practice_context_for_channel,
+    )
+    from thread_registry import register_thread
+    from state import EDDY_TYPES, TURTLE_MODEL, dialogue_histories
+
+    set_practice_context_for_channel(channel.id)
+    from mage import get_runtime_dir
+
+    runtime_dir = get_runtime_dir()
+    label = share_label(bundle)
+    eddy_archive = EDDY_TYPES.get("standard", {}).get("archive_minutes", 10080)
+    channel_att = get_effective_attunement(channel.id)
+    if channel_att == "native":
+        model_id = TURTLE_MODEL
+        use_api = False
+        attunement = "native"
+    else:
+        from llm import resolve_model
+
+        model_id, use_api = resolve_model("local")
+        attunement = "semi"
+
+    thread = await channel.create_thread(
+        name=label[:100],
+        auto_archive_duration=eddy_archive,
+        type=discord.ChannelType.public_thread,
+    )
+
+    await river_add_turtle_to_eddy(thread)
+
+    context_type = get_channel_default_context(channel.id) or bundle.get("space_key")
+    thread_configs[thread.id] = {
+        "model": model_id,
+        "use_api": use_api,
+        "attunement": attunement,
+        "model_label": "local",
+        "eddy_type": "standard",
+        "context_type": context_type,
+        "topic": label,
+        "origin": "shared",
+        "space_key": bundle.get("space_key"),
+        "share_id": bundle.get("share_id"),
+        "from_sharer": bundle.get("sharer_address", "someone"),
+        "share_creator": bundle.get("sharer_id"),
+        "sharer_key": bundle.get("sharer_key"),
+        "share_notify_pending": True,
+        "created": datetime.now(timezone.utc),
+        "native_vanilla": channel_att == "native",
+        "presence_posted": False,
+    }
+
+    history = filter_share_history(bundle.get("history") or [])
+    sharer_address = bundle.get("sharer_address", "someone")
+    history = label_shared_history(history, sharer_address)
+    if history:
+        dialogue_histories[thread.id] = list(history)
+        sync_history(thread.id)
+
+    await thread.send(embed=build_space_share_embed(bundle))
+    await thread.send(
+        f"-# 📤 From **{bundle.get('sharer_address', 'someone')}** · shared conversation ready — "
+        "Turtle has the full thread; members can jump in when ready.",
+        silent=True,
+    )
+
+    parent_name = channel.name if hasattr(channel, "name") else "river"
+    register_thread(
+        thread.id,
+        label,
+        parent_channel=parent_name,
+        model="local",
+        attunement=attunement,
+        eddy_type="standard",
+    )
+
+    await ensure_shared_river_parent_access(channel)
+    sharer_id = str(bundle.get("sharer_id", ""))
+    member_ids = [
+        uid
+        for uid in get_thread_member_ids(channel.id)
+        if str(uid) != sharer_id
+    ]
+    await add_users_to_thread(thread, member_ids)
+
+    save_received_thread_config(runtime_dir, thread.id, thread_configs[thread.id])
+
+    outbox = _share_dir(runtime_dir, "outbox") / f"{bundle.get('share_id')}.json"
+    outbox.write_text(
+        json.dumps(
+            {
+                **bundle,
+                "shared_thread_id": str(thread.id),
+                "space_key": bundle.get("space_key"),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    return thread
+
+
+async def deliver_space_share(
+    bundle: dict[str, Any],
+    target: SpaceShareTarget,
+    *,
+    client: discord.Client,
+) -> discord.Message | None:
+    """Post space parent digest act, materialize shared eddy, notify members."""
+    from bar_anchor import channel_for_client
+    from river_handler import _append_chronicle, _river_client_for_channel
+
+    bundle = dict(bundle)
+    bundle["space_key"] = target.space_key
+    bundle["target_kind"] = "space"
+
+    space_channel = client.get_channel(target.channel_id)
+    if space_channel is None:
+        space_channel = await client.fetch_channel(target.channel_id)
+
+    act_client = _river_client_for_channel(space_channel) or client
+    if act_client is not client:
+        resolved = act_client.get_channel(target.channel_id)
+        if resolved is None:
+            resolved = await act_client.fetch_channel(target.channel_id)
+        space_channel = resolved
+
+    set_practice_context_for_channel(target.channel_id)
+    thread = await materialize_space_shared_eddy(
+        space_channel,
+        bundle,
+        client=act_client,
+    )
+
+    ch = await channel_for_client(space_channel, act_client)
+
+    label = share_label(bundle)
+    embed = build_space_share_embed(bundle)
+    if thread.jump_url:
+        embed.add_field(name="Shared eddy", value=f"[Open thread]({thread.jump_url})", inline=False)
+
+    member_ids = space_member_discord_ids(target.space_key, exclude_id=bundle.get("sharer_id"))
+    mention = " ".join(f"<@{uid}>" for uid in member_ids)
+    lead = (
+        f"{mention} — **{bundle['sharer_address']}** shared **“{label}”** with **{target.address}**."
+        if mention
+        else f"**{bundle['sharer_address']}** shared **“{label}”** with **{target.address}**."
+    )
+    msg = await ch.send(
+        lead,
+        embed=embed,
+        allowed_mentions=discord.AllowedMentions(users=True),
+    )
+
+    sender_pd = practice_dir_for_mage(bundle["sharer_key"])
+    _append_chronicle(
+        sender_pd,
+        f'📤 Shared to {target.address}: "{label}"',
+        {
+            "share_id": bundle["share_id"],
+            "target": target.space_key,
+            "thread_id": str(thread.id),
+            "jump_url": thread.jump_url,
+        },
     )
     return msg
 
@@ -893,6 +1201,106 @@ class ShareTargetSelect(discord.ui.Select):
         draft["target_address"] = target.address
         draft["target_discord_id"] = target.discord_id
         draft["target_channel_id"] = target.channel_id
+        draft["target_kind"] = "practitioner"
+        draft["parent_id"] = interaction.channel.parent_id
+        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+
+        await interaction.response.defer()
+        try:
+            bundle = build_export_bundle(
+                title=draft["title"],
+                history=draft["history"],
+                sharer_id=draft["sharer_id"],
+                sharer_key=draft["sharer_key"],
+                sharer_address=draft["sharer_address"],
+                source_thread_id=draft["source_thread_id"],
+                share_id=draft.get("share_id"),
+            )
+            bundle = await enrich_export_bundle(bundle)
+        except Exception as exc:
+            await interaction.followup.send(
+                f"Could not summarize for share: {type(exc).__name__}: {exc}",
+                ephemeral=True,
+            )
+            return
+
+        draft["display_title"] = bundle["display_title"]
+        draft["digest"] = bundle["digest"]
+        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+
+        preview = SharePreviewView(self._thread_id, self._author_id, target)
+        embed = build_preview_embed(draft, target)
+        try:
+            if interaction.message:
+                await interaction.message.edit(embed=embed, view=preview)
+            else:
+                await interaction.edit_original_response(embed=embed, view=preview)
+        except discord.HTTPException as exc:
+            print(f"Share preview edit failed: {type(exc).__name__}: {exc}")
+            await interaction.followup.send(
+                f"Could not show share preview: {exc}",
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(interaction.channel, discord.Thread) and is_placeholder_eddy_title(
+            draft.get("title", "")
+        ):
+            await maybe_post_share_rename_offer(interaction.channel, draft, interaction.client)
+
+
+class ShareSpaceSelect(discord.ui.Select):
+    def __init__(
+        self,
+        *,
+        thread_id: int,
+        author_id: int,
+        targets: list[SpaceShareTarget],
+    ):
+        options = [
+            discord.SelectOption(
+                label=t.address[:100],
+                value=t.space_key,
+                description=f"Share to {t.address}"[:100],
+            )
+            for t in targets[:25]
+        ]
+        super().__init__(
+            placeholder="Choose a space…",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id=f"share:space:{thread_id}:{author_id}",
+        )
+        self._thread_id = thread_id
+        self._author_id = author_id
+        self._targets = {t.space_key: t for t in targets}
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self._author_id:
+            await interaction.response.send_message(
+                "Only the person who started Share can pick a space.",
+                ephemeral=True,
+            )
+            return
+        target = self._targets.get(self.values[0])
+        if not target:
+            await interaction.response.send_message("Unknown space.", ephemeral=True)
+            return
+
+        from mage import get_runtime_dir
+
+        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        if not draft:
+            await interaction.response.send_message(
+                "Share session expired — run `!share` again.",
+                ephemeral=True,
+            )
+            return
+        draft["target_space_key"] = target.space_key
+        draft["target_address"] = target.address
+        draft["target_channel_id"] = target.channel_id
+        draft["target_kind"] = "space"
         draft["parent_id"] = interaction.channel.parent_id
         write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
 
@@ -947,7 +1355,7 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
         self,
         thread_id: int,
         author_id: int,
-        target: ShareTarget,
+        target: ShareTarget | SpaceShareTarget,
         display_title: str,
         digest: str,
     ):
@@ -1009,16 +1417,26 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
 class SharePreviewView(discord.ui.View):
     """Preview synthesized title/digest before send."""
 
-    def __init__(self, thread_id: int, author_id: int, target: ShareTarget):
+    def __init__(
+        self,
+        thread_id: int,
+        author_id: int,
+        target: ShareTarget | SpaceShareTarget,
+    ):
         super().__init__(timeout=600)
         self._thread_id = thread_id
         self._author_id = author_id
         self._target = target
+        target_token = (
+            f"s:{target.space_key}"
+            if isinstance(target, SpaceShareTarget)
+            else f"p:{target.mage_key}"
+        )
 
         edit_btn = discord.ui.Button(
             label="Edit",
             style=discord.ButtonStyle.secondary,
-            custom_id=f"share:edit:{thread_id}:{author_id}:{target.mage_key}",
+            custom_id=f"share:edit:{thread_id}:{author_id}:{target_token}",
         )
         edit_btn.callback = self._on_edit
         cancel = discord.ui.Button(
@@ -1031,7 +1449,7 @@ class SharePreviewView(discord.ui.View):
             label="Share",
             style=discord.ButtonStyle.primary,
             emoji="📤",
-            custom_id=f"share:send:{thread_id}:{author_id}:{target.mage_key}",
+            custom_id=f"share:send:{thread_id}:{author_id}:{target_token}",
         )
         share.callback = self._on_share
         self.add_item(edit_btn)
@@ -1090,7 +1508,10 @@ class SharePreviewView(discord.ui.View):
         await interaction.response.defer()
         bundle = build_export_bundle_from_draft(draft)
         try:
-            await deliver_practitioner_share(bundle, self._target, client=interaction.client)
+            if isinstance(self._target, SpaceShareTarget):
+                await deliver_space_share(bundle, self._target, client=interaction.client)
+            else:
+                await deliver_practitioner_share(bundle, self._target, client=interaction.client)
         except Exception as exc:
             await interaction.followup.send(
                 f"Share failed: {type(exc).__name__}: {exc}",
@@ -1128,7 +1549,7 @@ class ShareConfirmView(SharePreviewView):
 
 
 class SharePickerView(discord.ui.View):
-    """Practitioners section only (Slice 1)."""
+    """Practitioners + Spaces sections (Slice 1 + 3a)."""
 
     def __init__(
         self,
@@ -1136,11 +1557,21 @@ class SharePickerView(discord.ui.View):
         thread_id: int,
         author_id: int,
         targets: list[ShareTarget],
+        space_targets: list[SpaceShareTarget] | None = None,
     ):
         super().__init__(timeout=600)
-        self.add_item(
-            ShareTargetSelect(thread_id=thread_id, author_id=author_id, targets=targets)
-        )
+        if targets:
+            self.add_item(
+                ShareTargetSelect(thread_id=thread_id, author_id=author_id, targets=targets)
+            )
+        if space_targets:
+            self.add_item(
+                ShareSpaceSelect(
+                    thread_id=thread_id,
+                    author_id=author_id,
+                    targets=space_targets,
+                )
+            )
 
 
 class ShareContinueView(discord.ui.View):
@@ -1207,10 +1638,10 @@ def register_persistent_share_views(client: discord.Client) -> None:
 
 
 async def cmd_share(message: discord.Message, args: list[str]) -> None:
-    """Start Share eddy flow — picker + confirm (practitioner targets, Slice 1)."""
+    """Start Share eddy flow — picker + confirm (practitioner and space targets)."""
     if not isinstance(message.channel, discord.Thread):
         await message.reply(
-            "Use `!share` inside an eddy to send this conversation to another practitioner.",
+            "Use `!share` inside an eddy to send this conversation to another practitioner or space.",
             mention_author=False,
         )
         return
@@ -1233,9 +1664,10 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
 
     sender_key = get_mage_key()
     targets = list_practitioner_targets(sender_key, message.author.id)
-    if not targets:
+    space_targets = list_space_targets(sender_key)
+    if not targets and not space_targets:
         await message.reply(
-            "No other practitioners with rivers are registered to share with yet.",
+            "No practitioners or spaces are registered to share with yet.",
             mention_author=False,
         )
         return
@@ -1265,16 +1697,24 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         thread_id=message.channel.id,
         author_id=message.author.id,
         targets=targets,
+        space_targets=space_targets,
     )
-    names = ", ".join(t.address for t in targets[:6])
+    sections: list[str] = []
+    if targets:
+        names = ", ".join(t.address for t in targets[:6])
+        sections.append(f"**Practitioners**\n{names}")
+    if space_targets:
+        space_names = ", ".join(t.address for t in space_targets[:6])
+        sections.append(f"**Spaces**\n{space_names}")
+    body = (
+        "\n\n".join(sections)
+        + "\n\nPick who should receive a digest. Practitioners get a **received eddy**; "
+        "spaces get a **shared eddy** in the parent river. Your thread here stays unchanged."
+    )
     embed = discord.Embed(
         title="Share eddy",
-        description=(
-            f"**Practitioners**\n{names}\n\n"
-            "Pick who should receive a digest and their own **received eddy**. "
-            "Your thread here stays unchanged."
-        ),
+        description=body,
         color=0x3498DB,
     )
     await message.reply(embed=embed, view=view, mention_author=False)
-    return "Share eddy picker opened — choose practitioner and confirm."
+    return "Share eddy picker opened — choose target and confirm."

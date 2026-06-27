@@ -29,8 +29,11 @@ def check_module() -> list[str]:
 
     for name in (
         "list_practitioner_targets",
+        "list_space_targets",
         "build_export_bundle",
         "deliver_practitioner_share",
+        "deliver_space_share",
+        "materialize_space_shared_eddy",
         "cmd_share",
         "ShareContinueView",
     ):
@@ -99,7 +102,7 @@ def main() -> int:
             print(f"  - {err}")
         return 1
 
-    print("shake_share_eddy: PASS (Slice 1 — export + practitioner share)")
+    print("shake_share_eddy: PASS (Slice 1 + 3a — practitioner + space share core)")
     return 0
 
 
