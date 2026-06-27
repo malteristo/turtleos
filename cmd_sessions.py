@@ -101,6 +101,17 @@ async def cmd_dissolve(message, args):
         await message.reply("Use `!dissolve` in your practice eddies.", mention_author=False)
         return
 
+    from share_eddy import check_share_dissolve_authority
+
+    dissolve_auth = check_share_dissolve_authority(
+        message.channel.id,
+        message.channel.parent_id,
+        message.author.id,
+    )
+    if not dissolve_auth.allowed:
+        await message.reply(dissolve_auth.reason or "You cannot dissolve this eddy.", mention_author=False)
+        return
+
     channel_id = message.channel.id
     history = reload_history(channel_id)
     from_lifecycle_bar = getattr(message, "from_lifecycle_bar", False)

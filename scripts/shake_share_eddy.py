@@ -37,7 +37,7 @@ def check_module() -> list[str]:
         "should_notify_sharer_on_first_peer_reply",
         "shared_eddy_response_decision",
         "post_reshare_transparency_act",
-        "build_reshare_transparency_embed",
+        "check_share_dissolve_authority",
         "cmd_share",
         "ShareContinueView",
     ):

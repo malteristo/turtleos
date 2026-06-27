@@ -1,7 +1,7 @@
 # Design Chapter: Share Eddy (Thinking Together)
 
 **Opened:** 2026-06-25  
-**Status:** Slice 1 implemented (practitioner target); Slice 3a (space share core) implemented; 3b–3d deferred  
+**Status:** Slice 1 + space share stack (3a–3f) implemented; Slice 4 dogfood in progress  
 **Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](2026-06-25-share-eddy-slice1-dogfood.md)
 **Spec trace:** TURTLE_SPEC §15.6  
 **Depends on:** §15 multi-practitioner law; **space target** requires `shared-river` harness ([design-family-shared-river.md](design-family-shared-river.md))  
@@ -218,7 +218,7 @@ channels:
 - [x] **3e — Visibility scaffolding:** Speaker + member/sharer visibility in native shared-eddy runtime
 - [x] **3f — Mention gate:** Shared eddy reply only when @Turtle, reply-to-Turtle, or explicit invoke; witness-only otherwise
 - [x] **3c — S4:** Re-share transparency acts
-- [ ] **3d — S6:** Dissolve creator-only enforcement
+- [x] **3d — S6:** Dissolve creator-only enforcement
 
 ### Slice 4 — Dogfood
 

@@ -310,6 +310,17 @@ class EddyDissolutionView(discord.ui.View):
                     }
                 )
 
+        from share_eddy import check_share_dissolve_authority
+
+        auth = check_share_dissolve_authority(
+            self.thread_id,
+            thread.parent_id if thread.parent else None,
+            interaction.user.id,
+        )
+        if not auth.allowed:
+            await interaction.followup.send(auth.reason or "You cannot dissolve this eddy.", ephemeral=True)
+            return
+
         from sessions import dissolve_eddy
 
         result = await dissolve_eddy(self.thread_id, history)

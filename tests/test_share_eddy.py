@@ -918,6 +918,42 @@ class ShareReshareTransparencyTests(unittest.TestCase):
         self.assertEqual(bundle["source_origin"], "shared")
 
 
+class ShareDissolveAuthorityTests(unittest.TestCase):
+    def test_non_creator_cannot_dissolve_shared_eddy(self) -> None:
+        from share_eddy import check_share_dissolve_authority
+
+        cfg = {
+            "origin": "shared",
+            "share_creator": "111",
+            "from_sharer": "Kermit",
+            "space_key": "family",
+        }
+        decision = check_share_dissolve_authority(888, 9001, "222", cfg)
+        self.assertFalse(decision.allowed)
+        self.assertIn("shared", decision.reason or "")
+
+    def test_creator_can_dissolve_shared_eddy(self) -> None:
+        from share_eddy import check_share_dissolve_authority
+
+        cfg = {"origin": "shared", "share_creator": "111"}
+        decision = check_share_dissolve_authority(888, 9001, "111", cfg)
+        self.assertTrue(decision.allowed)
+
+    def test_non_creator_cannot_dissolve_received_eddy(self) -> None:
+        from share_eddy import check_share_dissolve_authority
+
+        cfg = {"origin": "received", "share_creator": "111"}
+        decision = check_share_dissolve_authority(777, 1002, "222", cfg)
+        self.assertFalse(decision.allowed)
+        self.assertIn("received", decision.reason or "")
+
+    def test_regular_eddy_allows_anyone_with_practice_access(self) -> None:
+        from share_eddy import check_share_dissolve_authority
+
+        decision = check_share_dissolve_authority(555, 1001, "222", {"origin": None})
+        self.assertTrue(decision.allowed)
+
+
 class ShareNotifyPolicyTests(unittest.TestCase):
     def test_should_notify_received_only_recipient(self) -> None:
         from share_eddy import should_notify_sharer_on_first_peer_reply

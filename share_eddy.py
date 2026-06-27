@@ -241,6 +241,8 @@ def received_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
         f"{recipient}** as your practitioner. Do not welcome them as \"joining\" or "
         f"say \"we\" when you mean you and **{sharer}** — they are not here. "
         "Answer from the shared context; the recipient may explore, disagree, or take it elsewhere.",
+        f"- **Dissolve:** Only **{sharer}** (who shared this conversation) may dissolve this "
+        "received eddy; the recipient may checkpoint/release per normal eddy law.",
     ]
 
 
@@ -384,6 +386,9 @@ def shared_eddy_context_lines(
             "- **Response policy:** Mention-gated — you only speak when @mentioned, replied to, "
             "or explicitly invoked (e.g. \"hey Turtle\"). Peer-to-peer lines (thanks to the sharer, "
             "@another member) are witness-only; do not reply to those.",
+            "- **Dissolve:** Only **"
+            f"{sharer}** (who shared into this space) may dissolve this shared eddy; other members "
+            "may checkpoint/release per normal eddy law.",
         ]
     )
     return lines
@@ -484,6 +489,44 @@ def shared_eddy_response_decision(
     if content_looks_like_peer_thanks(content):
         return SharedEddyResponseDecision(False, "peer_thanks")
     return SharedEddyResponseDecision(False, "mention_gated_default")
+
+
+@dataclass(frozen=True)
+class ShareDissolveDecision:
+    allowed: bool
+    reason: str | None = None
+
+
+def check_share_dissolve_authority(
+    thread_id: int,
+    parent_id: int | None,
+    actor_discord_id: str | int,
+    cfg: dict[str, Any] | None = None,
+) -> ShareDissolveDecision:
+    """Only share_creator may dissolve received/shared eddies created by Share (Slice 3d)."""
+    from commands import thread_configs
+
+    merged = resolve_eddy_thread_cfg(
+        thread_id,
+        parent_id,
+        cfg if cfg is not None else thread_configs.get(thread_id),
+    )
+    if not merged or merged.get("origin") not in ("received", "shared"):
+        return ShareDissolveDecision(True)
+    creator = merged.get("share_creator")
+    if not creator:
+        return ShareDissolveDecision(True)
+    if str(actor_discord_id) == str(creator):
+        return ShareDissolveDecision(True)
+    if merged.get("origin") == "received":
+        return ShareDissolveDecision(
+            False,
+            "Only the practitioner who shared this conversation can dissolve the received eddy.",
+        )
+    return ShareDissolveDecision(
+        False,
+        "Only the practitioner who shared into this space can dissolve the shared eddy.",
+    )
 
 
 async def append_shared_eddy_witness_turn(message: discord.Message, content: str) -> None:

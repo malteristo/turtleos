@@ -28,7 +28,7 @@ class _FakeEmbed:
 
 
 class _FakeThread:
-    pass
+    parent_id = None
 
 
 class TestCmdCheckpoint(unittest.IsolatedAsyncioTestCase):
@@ -116,6 +116,27 @@ class TestCmdDissolve(unittest.IsolatedAsyncioTestCase):
         message.reply.assert_awaited_once()
         self.assertIn("inside an eddy thread", message.reply.await_args[0][0])
 
+    async def test_blocks_dissolve_for_non_creator_share_eddy(self) -> None:
+        message = MagicMock()
+        thread = _FakeThread()
+        thread.id = 4
+        thread.parent_id = 9001
+        message.channel = thread
+        message.author.id = 222
+        message.reply = AsyncMock()
+
+        with patch.object(cs.discord, "Thread", _FakeThread), patch(
+            "cmd_sessions.is_practice_channel",
+            return_value=True,
+        ), patch(
+            "share_eddy.check_share_dissolve_authority",
+            return_value=type("D", (), {"allowed": False, "reason": "Only the sharer."})(),
+        ):
+            await cs.cmd_dissolve(message, [])
+
+        message.reply.assert_awaited_once()
+        self.assertIn("Only the sharer", message.reply.await_args[0][0])
+
     async def test_archives_thread(self) -> None:
         from state import dialogue_histories
 
@@ -132,7 +153,10 @@ class TestCmdDissolve(unittest.IsolatedAsyncioTestCase):
             "cmd_sessions.discord.Embed", _FakeEmbed
         ), patch("cmd_sessions.is_practice_channel", return_value=True), patch(
             "cmd_sessions.get_history", return_value=dialogue_histories[channel_id]
-        ), patch("sessions.dissolve_eddy", new_callable=AsyncMock, return_value=result):
+        ), patch("sessions.dissolve_eddy", new_callable=AsyncMock, return_value=result), patch(
+            "share_eddy.check_share_dissolve_authority",
+            return_value=type("D", (), {"allowed": True, "reason": None})(),
+        ):
             await cs.cmd_dissolve(message, [])
 
         self.assertNotIn(channel_id, dialogue_histories)
