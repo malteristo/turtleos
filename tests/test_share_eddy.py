@@ -615,6 +615,135 @@ class ShareNotifyTests(unittest.IsolatedAsyncioTestCase):
             assert loaded is not None
             self.assertFalse(loaded["share_notify_pending"])
 
+    async def test_maybe_notify_shared_eddy_on_member_first_reply(self) -> None:
+        from share_eddy import maybe_notify_sharer_on_first_peer_reply, save_received_thread_config
+
+        class FakeThread:
+            id = 888
+            parent_id = 1491163697278881836
+            name = "birthday party safety"
+            jump_url = "https://discord.com/channels/x/y/z"
+
+        message = MagicMock()
+        message.author.bot = False
+        message.author.id = 222
+        message.author.display_name = "Nesrine"
+        message.channel = FakeThread()
+
+        cfg = {
+            "origin": "shared",
+            "share_id": "abc",
+            "share_creator": "111",
+            "sharer_key": "kermit",
+            "space_key": "family",
+            "share_notify_pending": True,
+            "topic": "birthday party safety",
+            "from_sharer": "Kermit",
+        }
+
+        registry = {
+            "mages": {
+                "kermit": {"discord_id": "111"},
+                "nesrine": {"discord_id": "222"},
+            },
+            "spaces": {"family": {"members": ["kermit", "nesrine"]}},
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            save_received_thread_config(tmp, 888, cfg)
+            with patch("share_eddy.get_registry", return_value=registry), patch(
+                "eddy_lifecycle_bar.is_practitioner_input",
+                return_value=True,
+            ), patch("commands.thread_configs", {}), patch(
+                "share_eddy.set_practice_context_for_channel"
+            ), patch("share_eddy.discord.Thread", FakeThread), patch(
+                "mage.get_runtime_dir",
+                return_value=tmp,
+            ), patch(
+                "share_eddy.notify_sharer_first_peer_reply",
+                new=AsyncMock(),
+            ) as notify:
+                await maybe_notify_sharer_on_first_peer_reply(message)
+                notify.assert_awaited_once()
+
+            from share_eddy import load_received_thread_config
+
+            loaded = load_received_thread_config(tmp, 888)
+            assert loaded is not None
+            self.assertFalse(loaded["share_notify_pending"])
+
+    async def test_maybe_notify_shared_eddy_skips_sharer_own_message(self) -> None:
+        from share_eddy import maybe_notify_sharer_on_first_peer_reply, save_received_thread_config
+
+        class FakeThread:
+            id = 888
+            parent_id = 1491163697278881836
+            name = "birthday party safety"
+
+        message = MagicMock()
+        message.author.bot = False
+        message.author.id = 111
+        message.author.display_name = "Kermit"
+        message.channel = FakeThread()
+
+        cfg = {
+            "origin": "shared",
+            "share_creator": "111",
+            "sharer_key": "kermit",
+            "space_key": "family",
+            "share_notify_pending": True,
+            "topic": "birthday party safety",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            save_received_thread_config(tmp, 888, cfg)
+            with patch("eddy_lifecycle_bar.is_practitioner_input", return_value=True), patch(
+                "commands.thread_configs",
+                {},
+            ), patch("share_eddy.set_practice_context_for_channel"), patch(
+                "share_eddy.discord.Thread",
+                FakeThread,
+            ), patch("mage.get_runtime_dir", return_value=tmp), patch(
+                "share_eddy.notify_sharer_first_peer_reply",
+                new=AsyncMock(),
+            ) as notify:
+                await maybe_notify_sharer_on_first_peer_reply(message)
+                notify.assert_not_awaited()
+
+
+class ShareNotifyPolicyTests(unittest.TestCase):
+    def test_should_notify_received_only_recipient(self) -> None:
+        from share_eddy import should_notify_sharer_on_first_peer_reply
+
+        cfg = {
+            "origin": "received",
+            "share_notify_pending": True,
+            "share_recipient_id": "222",
+        }
+        self.assertTrue(should_notify_sharer_on_first_peer_reply(cfg, "222"))
+        self.assertFalse(should_notify_sharer_on_first_peer_reply(cfg, "111"))
+
+    def test_should_notify_shared_space_member_not_sharer(self) -> None:
+        from share_eddy import should_notify_sharer_on_first_peer_reply
+
+        registry = {
+            "mages": {
+                "kermit": {"discord_id": "111"},
+                "nesrine": {"discord_id": "222"},
+            },
+            "spaces": {"family": {"members": ["kermit", "nesrine"]}},
+        }
+        cfg = {
+            "origin": "shared",
+            "share_notify_pending": True,
+            "share_creator": "111",
+            "space_key": "family",
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            self.assertTrue(should_notify_sharer_on_first_peer_reply(cfg, "222"))
+            self.assertFalse(should_notify_sharer_on_first_peer_reply(cfg, "111"))
+            self.assertFalse(should_notify_sharer_on_first_peer_reply(cfg, "999"))
+
 
 if __name__ == "__main__":
     unittest.main()

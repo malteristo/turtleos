@@ -214,7 +214,7 @@ channels:
 ### Slice 3 — Share to space
 
 - [x] **3a — S2 core:** Spaces section in picker (`share_policy`); space parent digest + shared eddy at confirm; member `@`+act; sharer not auto-added
-- [ ] **3b — S3:** Sharer notify on first peer reply in space shared eddy
+- [x] **3b — S3:** Sharer notify on first peer reply in space shared eddy
 - [ ] **3c — S4:** Re-share transparency acts
 - [ ] **3d — S6:** Dissolve creator-only enforcement
 

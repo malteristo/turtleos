@@ -34,6 +34,7 @@ def check_module() -> list[str]:
         "deliver_practitioner_share",
         "deliver_space_share",
         "materialize_space_shared_eddy",
+        "should_notify_sharer_on_first_peer_reply",
         "cmd_share",
         "ShareContinueView",
     ):
@@ -102,7 +103,7 @@ def main() -> int:
             print(f"  - {err}")
         return 1
 
-    print("shake_share_eddy: PASS (Slice 1 + 3a — practitioner + space share core)")
+    print("shake_share_eddy: PASS (Slice 1 + 3a/3b — practitioner + space share + peer notify)")
     return 0
 
 

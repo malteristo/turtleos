@@ -727,6 +727,29 @@ def _received_eddy_notify_config(thread_id: int, parent_id: int | None) -> dict[
     return load_received_thread_config(get_runtime_dir(), thread_id)
 
 
+def should_notify_sharer_on_first_peer_reply(
+    cfg: dict[str, Any],
+    author_id: str | int,
+) -> bool:
+    """True when this practitioner message should trigger sharer notify (received or shared)."""
+    if not cfg.get("share_notify_pending"):
+        return False
+    origin = cfg.get("origin")
+    aid = str(author_id)
+    if origin == "received":
+        return aid == str(cfg.get("share_recipient_id", ""))
+    if origin == "shared":
+        if aid == str(cfg.get("share_creator", "")):
+            return False
+        space_key = cfg.get("space_key")
+        if space_key:
+            members = space_member_discord_ids(space_key)
+            if members and aid not in members:
+                return False
+        return True
+    return False
+
+
 async def maybe_notify_sharer_on_first_peer_reply(message: discord.Message) -> None:
     from commands import thread_configs
     from eddy_lifecycle_bar import is_practitioner_input
@@ -738,11 +761,9 @@ async def maybe_notify_sharer_on_first_peer_reply(message: discord.Message) -> N
 
     parent_id = message.channel.parent_id
     cfg = _received_eddy_notify_config(message.channel.id, parent_id)
-    if not cfg or cfg.get("origin") != "received":
+    if not cfg or cfg.get("origin") not in ("received", "shared"):
         return
-    if not cfg.get("share_notify_pending"):
-        return
-    if str(message.author.id) != str(cfg.get("share_recipient_id", "")):
+    if not should_notify_sharer_on_first_peer_reply(cfg, message.author.id):
         return
 
     cfg["share_notify_pending"] = False
