@@ -711,6 +711,77 @@ class ShareNotifyTests(unittest.IsolatedAsyncioTestCase):
                 notify.assert_not_awaited()
 
 
+class ShareSharedEddyContextTests(unittest.TestCase):
+    def test_sharer_is_space_member(self) -> None:
+        from share_eddy import sharer_is_space_member
+
+        registry = {
+            "spaces": {"family": {"members": ["kermit", "nesrine"]}},
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            self.assertTrue(
+                sharer_is_space_member(
+                    {"space_key": "family", "sharer_key": "kermit"},
+                )
+            )
+            self.assertFalse(
+                sharer_is_space_member(
+                    {"space_key": "family", "sharer_key": "lukas"},
+                )
+            )
+
+    def test_shared_context_member_sharer_visibility(self) -> None:
+        from share_eddy import shared_eddy_context_lines
+
+        registry = {
+            "mages": {
+                "kermit": {"address": "Kermit"},
+                "nesrine": {"address": "Nesrine"},
+            },
+            "spaces": {"family": {"members": ["kermit", "nesrine"]}},
+        }
+        cfg = {
+            "from_sharer": "Kermit",
+            "sharer_key": "kermit",
+            "space_key": "family",
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            lines = shared_eddy_context_lines(
+                cfg,
+                speaker_display="Nesrine",
+                speaker_mage_key="nesrine",
+            )
+        joined = "\n".join(lines)
+        self.assertIn("You are Turtle", joined)
+        self.assertIn("you did not initiate the share", joined)
+        self.assertIn("Kermit", joined)
+        self.assertIn("is a **Family** member", joined)
+        self.assertIn("Speaking now:** **Nesrine**", joined)
+        self.assertIn("thanks for sharing", joined.lower())
+        self.assertIn("do **not** reply", joined.lower())
+
+    def test_shared_context_guest_sharer_visibility(self) -> None:
+        from share_eddy import shared_eddy_context_lines
+
+        registry = {
+            "mages": {
+                "lukas": {"address": "Lukas"},
+                "nesrine": {"address": "Nesrine"},
+            },
+            "spaces": {"family": {"members": ["nesrine"]}},
+        }
+        cfg = {
+            "from_sharer": "Lukas",
+            "sharer_key": "lukas",
+            "space_key": "family",
+        }
+        with patch("share_eddy.get_registry", return_value=registry):
+            lines = shared_eddy_context_lines(cfg, speaker_display="Nesrine")
+        joined = "\n".join(lines)
+        self.assertIn("is **not** a **Family** member", joined)
+        self.assertIn("their own river", joined)
+
+
 class ShareNotifyPolicyTests(unittest.TestCase):
     def test_should_notify_received_only_recipient(self) -> None:
         from share_eddy import should_notify_sharer_on_first_peer_reply

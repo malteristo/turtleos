@@ -244,19 +244,78 @@ def received_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
     ]
 
 
-def shared_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
-    """Runtime scaffolding for space-tagged shared eddies."""
+def sharer_is_space_member(cfg: dict[str, Any]) -> bool:
+    """True when share_creator's mage key is in the space registry members list."""
+    space_key = cfg.get("space_key")
+    sharer_key = cfg.get("sharer_key")
+    if not space_key or not sharer_key:
+        return False
+    space = get_registry().get("spaces", {}).get(space_key, {})
+    return sharer_key in (space.get("members") or [])
+
+
+def space_member_addresses(space_key: str) -> list[str]:
+    """Display names for registry space members."""
+    space = get_registry().get("spaces", {}).get(space_key, {})
+    labels: list[str] = []
+    for member_key in space.get("members") or []:
+        mage = get_registry().get("mages", {}).get(member_key, {})
+        labels.append(mage.get("address", member_key.replace("_", " ").title()))
+    return labels
+
+
+def shared_eddy_context_lines(
+    cfg: dict[str, Any],
+    *,
+    speaker_display: str | None = None,
+    speaker_mage_key: str | None = None,
+) -> list[str]:
+    """Runtime scaffolding for space-tagged shared eddies (visibility + conduct)."""
     sharer = (cfg.get("from_sharer") or "another practitioner").strip()
-    space_label = (cfg.get("space_key") or "this space").replace("_", " ").title()
-    return [
-        f"- **Shared eddy:** **{sharer}** shared a conversation with **{space_label}**. "
-        f"**{sharer} is not in this thread** unless they open it themselves.",
-        f"- **Shared history:** Turns labeled `[{sharer}]` are from the original eddy; "
-        "other messages are from space members who joined.",
-        "- **Conduct:** Facilitate the shared topic for whoever is present. Do not welcome "
-        f"**{sharer}** as if they are here — they may read later. Turtle-only opening "
-        "content does not count as a member reply.",
+    space_key = cfg.get("space_key") or "this space"
+    space_label = str(space_key).replace("_", " ").title()
+    member_labels = space_member_addresses(str(space_key)) if cfg.get("space_key") else []
+    sharer_in_space = sharer_is_space_member(cfg)
+
+    lines = [
+        f"- **Shared eddy:** **{sharer}** shared a private conversation into **{space_label}**. "
+        "**You are Turtle** — you carried the transcript; **you did not initiate the share.**",
     ]
+    if member_labels:
+        lines.append(f"- **Space members (registry):** {', '.join(member_labels)}")
+
+    if sharer_in_space:
+        lines.append(
+            f"- **Sharer visibility:** **{sharer}** is a **{space_label}** member — they can see "
+            f"the parent channel and may open this thread. Replies here (e.g. \"thanks for sharing\") "
+            f"may be meant for **{sharer}**, not for you."
+        )
+    else:
+        lines.append(
+            f"- **Sharer visibility:** **{sharer}** is **not** a **{space_label}** member — they "
+            "were not auto-added. They learn of conversation via a notify act in **their own river** "
+            "when a space member first replies; they do not watch this channel by default."
+        )
+
+    if speaker_display:
+        speaker_line = f"- **Speaking now:** **{speaker_display}**"
+        if speaker_mage_key:
+            speaker_line += f" ({speaker_mage_key})"
+        lines.append(speaker_line)
+
+    lines.extend(
+        [
+            f"- **Shared history:** Turns labeled `[{sharer}]` are from the original eddy; "
+            "other messages are from space members in this thread.",
+            "- **Conduct:** Facilitate for whoever is present. Do not welcome "
+            f"**{sharer}** as if they are here unless they have joined. "
+            f"When someone thanks for sharing, that thanks is to **{sharer}** — do **not** reply "
+            "\"you're welcome\" as if you shared; acknowledge warmly without taking credit.",
+            "- **Boundaries:** Messages in this thread are visible to space members in Discord. "
+            "Do not treat this as a private 1:1 with the speaker alone.",
+        ]
+    )
+    return lines
 
 
 def is_placeholder_eddy_title(title: str) -> bool:

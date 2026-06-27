@@ -305,13 +305,24 @@ def _build_native_runtime_env(message, cfg, history: list[dict] | None = None):
         if cfg and cfg.get("origin") == "received":
             lines.extend(received_eddy_context_lines(cfg))
         elif cfg and cfg.get("origin") == "shared":
-            lines.extend(shared_eddy_context_lines(cfg))
+            speaker_key, _ = _resolve_mage_from_author(message.author)
+            lines.extend(
+                shared_eddy_context_lines(
+                    cfg,
+                    speaker_display=message.author.display_name,
+                    speaker_mage_key=speaker_key,
+                )
+            )
     if (cfg or {}).get("blank_eddy") or (cfg or {}).get("awaiting_title"):
         lines.append(
             "- **Entry:** Blank eddy — the practitioner's first message is what they brought; "
             "engage it directly (not a UI test unless they clearly mean Discord)."
         )
-    lines.append(f"- **Practitioner:** {get_mage_name()}")
+    if cfg and cfg.get("origin") == "shared":
+        space_label = (cfg.get("space_key") or get_mage_name() or "space").replace("_", " ").title()
+        lines.append(f"- **Space:** {space_label} (multi-member shared river)")
+    else:
+        lines.append(f"- **Practitioner:** {get_mage_name()}")
     lines.append(f"- **Model:** {TURTLE_MODEL} (local Turtle)")
     flow_id = (cfg or {}).get("context_type")
     if flow_id:

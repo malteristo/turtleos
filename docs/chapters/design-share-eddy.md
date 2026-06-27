@@ -215,6 +215,7 @@ channels:
 
 - [x] **3a — S2 core:** Spaces section in picker (`share_policy`); space parent digest + shared eddy at confirm; member `@`+act; sharer not auto-added
 - [x] **3b — S3:** Sharer notify on first peer reply in space shared eddy
+- [x] **3e — Visibility scaffolding:** Speaker + member/sharer visibility in native shared-eddy runtime
 - [ ] **3c — S4:** Re-share transparency acts
 - [ ] **3d — S6:** Dissolve creator-only enforcement
 
