@@ -36,7 +36,8 @@ def check_module() -> list[str]:
         "materialize_space_shared_eddy",
         "should_notify_sharer_on_first_peer_reply",
         "shared_eddy_response_decision",
-        "maybe_skip_shared_eddy_dialogue",
+        "post_reshare_transparency_act",
+        "build_reshare_transparency_embed",
         "cmd_share",
         "ShareContinueView",
     ):

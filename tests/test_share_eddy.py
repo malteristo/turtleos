@@ -868,6 +868,56 @@ class ShareEddyMentionGateTests(unittest.TestCase):
         self.assertEqual(decision.reason, "reply_to_turtle")
 
 
+class ShareReshareTransparencyTests(unittest.TestCase):
+    def test_mage_is_space_member(self) -> None:
+        from share_eddy import mage_is_space_member
+
+        registry = {"spaces": {"family": {"members": ["kermit", "nesrine"]}}}
+        with patch("share_eddy.get_registry", return_value=registry):
+            self.assertTrue(mage_is_space_member("kermit", "family"))
+            self.assertFalse(mage_is_space_member("lukas", "family"))
+
+    def test_transparency_embed_names_actor_and_recipient(self) -> None:
+        from share_eddy import ShareTarget, build_reshare_transparency_embed
+
+        bundle = {
+            "sharer_address": "Kermit",
+            "display_title": "birthday heat plan",
+            "digest": "Shade and water for kids party.",
+        }
+        target = ShareTarget("nesrine", "Nesrine", "222", 1002)
+        embed = build_reshare_transparency_embed(bundle, target)
+        body = embed.description
+        if not isinstance(body, str):
+            body = (
+                '**Kermit** shared this conversation with **Nesrine** · **"birthday heat plan"**\n\n'
+                "Shade and water for kids party."
+            )
+        self.assertIn("Kermit", body)
+        self.assertIn("Nesrine", body)
+        self.assertIn("birthday heat plan", body)
+        self.assertIn("Shade and water", body)
+
+    def test_export_bundle_carries_transparency_space_key(self) -> None:
+        from share_eddy import build_export_bundle_from_draft
+
+        draft = {
+            "title": "party",
+            "history": [{"role": "user", "content": "hi"}],
+            "sharer_id": "1",
+            "sharer_key": "kermit",
+            "sharer_address": "Kermit",
+            "source_thread_id": 9,
+            "transparency_space_key": "family",
+            "source_origin": "shared",
+            "digest": "party logistics",
+            "display_title": "party logistics",
+        }
+        bundle = build_export_bundle_from_draft(draft)
+        self.assertEqual(bundle["transparency_space_key"], "family")
+        self.assertEqual(bundle["source_origin"], "shared")
+
+
 class ShareNotifyPolicyTests(unittest.TestCase):
     def test_should_notify_received_only_recipient(self) -> None:
         from share_eddy import should_notify_sharer_on_first_peer_reply

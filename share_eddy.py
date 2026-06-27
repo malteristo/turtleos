@@ -244,6 +244,74 @@ def received_eddy_context_lines(cfg: dict[str, Any]) -> list[str]:
     ]
 
 
+def mage_is_space_member(mage_key: str, space_key: str) -> bool:
+    space = get_registry().get("spaces", {}).get(space_key, {})
+    return mage_key in (space.get("members") or [])
+
+
+def shared_eddy_source_for_thread(
+    thread_id: int,
+    parent_id: int | None,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Return share metadata when thread is a space-tagged shared eddy."""
+    from commands import thread_configs
+
+    merged = resolve_eddy_thread_cfg(
+        thread_id,
+        parent_id,
+        cfg if cfg is not None else thread_configs.get(thread_id),
+    )
+    if not merged or merged.get("origin") != "shared":
+        return None
+    space_key = merged.get("space_key")
+    if not space_key:
+        return None
+    return merged
+
+
+def build_reshare_transparency_embed(
+    bundle: dict[str, Any],
+    target: ShareTarget,
+) -> discord.Embed:
+    label = share_label(bundle)
+    actor = bundle.get("sharer_address", "Someone")
+    digest = (bundle.get("digest") or "").strip()
+    body = f"**{actor}** shared this conversation with **{target.address}** · **“{label}”**"
+    if digest:
+        body += f"\n\n{digest}"
+    return discord.Embed(
+        title="Re-shared to practitioner",
+        description=body[:4096],
+        color=0x95A5A6,
+    )
+
+
+async def post_reshare_transparency_act(
+    bundle: dict[str, Any],
+    target: ShareTarget,
+    space_key: str,
+    *,
+    client: discord.Client,
+) -> discord.Message | None:
+    """Transparency River act in space parent when re-sharing to a practitioner (S4 / Slice 3c)."""
+    from bar_anchor import channel_for_client
+    from river_handler import _river_client_for_channel
+
+    channel_id = shared_river_channel_for_space(space_key)
+    if not channel_id:
+        return None
+
+    space_channel = client.get_channel(channel_id)
+    if space_channel is None:
+        space_channel = await client.fetch_channel(channel_id)
+
+    act_client = _river_client_for_channel(space_channel) or client
+    ch = await channel_for_client(space_channel, act_client)
+    embed = build_reshare_transparency_embed(bundle, target)
+    return await ch.send(embed=embed)
+
+
 def sharer_is_space_member(cfg: dict[str, Any]) -> bool:
     """True when share_creator's mage key is in the space registry members list."""
     space_key = cfg.get("space_key")
@@ -818,6 +886,10 @@ def build_export_bundle_from_draft(draft: dict[str, Any]) -> dict[str, Any]:
         bundle["display_title"] = draft["display_title"][:100]
     if draft.get("digest"):
         bundle["digest"] = draft["digest"][:500]
+    if draft.get("transparency_space_key"):
+        bundle["transparency_space_key"] = draft["transparency_space_key"]
+    if draft.get("source_origin"):
+        bundle["source_origin"] = draft["source_origin"]
     return bundle
 
 
@@ -838,6 +910,12 @@ def build_preview_embed(draft: dict[str, Any], target: ShareTarget | SpaceShareT
             "They get this digest in their river and can open a **received eddy** when ready. "
             "Your original eddy stays unchanged."
         )
+        if draft.get("transparency_space_key"):
+            space_label = str(draft["transparency_space_key"]).replace("_", " ").title()
+            body += (
+                f"\n\nA **transparency act** will post in **{space_label}** naming you and "
+                f"**{target.address}** (digest only — not their private continuation)."
+            )
     return discord.Embed(title="Confirm share", description=body[:4096], color=0xF1C40F)
 
 
@@ -1042,6 +1120,16 @@ async def deliver_practitioner_share(
         f"📤 Shared to {target.address}: \"{label}\"",
         {"share_id": bundle["share_id"], "target": target.mage_key},
     )
+
+    space_key = bundle.get("transparency_space_key")
+    if space_key:
+        await post_reshare_transparency_act(
+            bundle,
+            target,
+            space_key,
+            client=client,
+        )
+
     return msg
 
 
@@ -1874,7 +1962,15 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         return
 
     set_practice_context_for_channel(parent_id)
-    from mage import get_mage_address, get_runtime_dir
+    from mage import _resolve_mage_from_author, get_mage_address, get_runtime_dir
+
+    author_key, _ = _resolve_mage_from_author(message.author)
+    sender_key = author_key or get_mage_key()
+    if author_key:
+        mage = get_registry().get("mages", {}).get(author_key, {})
+        sharer_address = mage.get("address", author_key.replace("_", " ").title())
+    else:
+        sharer_address = get_mage_address()
 
     history = reload_history(message.channel.id)
     if len(history) < 2:
@@ -1884,9 +1980,26 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         )
         return
 
-    sender_key = get_mage_key()
+    from commands import thread_configs
+
+    shared_source = shared_eddy_source_for_thread(
+        message.channel.id,
+        parent_id,
+        thread_configs.get(message.channel.id),
+    )
+    transparency_space_key: str | None = None
+    if shared_source:
+        space_key = shared_source.get("space_key")
+        if not author_key or not space_key or not mage_is_space_member(author_key, space_key):
+            await message.reply(
+                "Only space members can re-share from a shared family eddy.",
+                mention_author=False,
+            )
+            return
+        transparency_space_key = str(space_key)
+
     targets = list_practitioner_targets(sender_key, message.author.id)
-    space_targets = list_space_targets(sender_key)
+    space_targets = [] if transparency_space_key else list_space_targets(sender_key)
     if not targets and not space_targets:
         await message.reply(
             "No practitioners or spaces are registered to share with yet.",
@@ -1903,8 +2016,11 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         "source_thread_id": message.channel.id,
         "sharer_id": str(message.author.id),
         "sharer_key": sender_key,
-        "sharer_address": get_mage_address(),
+        "sharer_address": sharer_address,
     }
+    if transparency_space_key:
+        draft["transparency_space_key"] = transparency_space_key
+        draft["source_origin"] = "shared"
     write_pending_draft(get_runtime_dir(), message.author.id, message.channel.id, draft)
 
     try:
@@ -1933,6 +2049,13 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         + "\n\nPick who should receive a digest. Practitioners get a **received eddy**; "
         "spaces get a **shared eddy** in the parent river. Your thread here stays unchanged."
     )
+    if transparency_space_key:
+        space_label = transparency_space_key.replace("_", " ").title()
+        body = (
+            f"**Practitioners**\n{', '.join(t.address for t in targets[:6]) if targets else '(none)'}\n\n"
+            f"Re-share from this **{space_label}** eddy to a practitioner's private river. "
+            f"A transparency act will post in **{space_label}** when you confirm."
+        )
     embed = discord.Embed(
         title="Share eddy",
         description=body,

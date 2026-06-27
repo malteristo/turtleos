@@ -761,6 +761,7 @@ A node MAY implement **Share eddy** — sender-initiated export of an eddy conve
 - Space **members** MUST be notified at creation (`@` + River act). Sharer MUST NOT be auto-joined to the shared eddy.
 - When any space member sends the **first human message** in that shared eddy, the original sharer MUST be notified (`@` + River act in sharer's river). Turtle-only opening content MUST NOT trigger this notification.
 - In shared eddies, Turtle MUST use **mention-gated** response policy (default): reply only when `@`-mentioned, replied to, or explicitly invoked; peer-to-peer messages (e.g. thanks to sharer, `@` another member) MUST be recorded as witness history without a Turtle reply.
+- Re-share from a **space-tagged** shared eddy to a **practitioner** MUST post a **transparency River act** in the space parent channel naming who shared, with whom, and digest/title. Share from a private eddy to a practitioner MUST NOT post to unrelated spaces.
 
 #### 15.6.4 Picker and confirmation
 
