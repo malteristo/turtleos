@@ -314,6 +314,37 @@ async def post_reshare_transparency_act(
     return await ch.send(embed=embed)
 
 
+def mage_key_for_discord_id(discord_id: str | int) -> str | None:
+    """Registry mage key for a Discord user id, if registered."""
+    aid = str(discord_id)
+    for mage_key, mage in get_registry().get("mages", {}).items():
+        if str(mage.get("discord_id", "")) == aid:
+            return mage_key
+    return None
+
+
+def share_dissolve_denial_message(cfg: dict[str, Any]) -> str:
+    """User-facing reason when dissolve is reserved for the share creator."""
+    sharer = (cfg.get("from_sharer") or "the sharer").strip()
+    origin = cfg.get("origin")
+    if origin == "received":
+        return (
+            f"Only **{sharer}** can dissolve this received eddy — they shared it with you. "
+            "You can still checkpoint or release anytime."
+        )
+    space_label = (cfg.get("space_key") or "this space").replace("_", " ").title()
+    if sharer_is_space_member(cfg):
+        return (
+            f"Only **{sharer}** can dissolve this shared eddy — they shared it into **{space_label}**. "
+            "You can still checkpoint or release anytime."
+        )
+    return (
+        f"Only **{sharer}** can dissolve this shared eddy by default — they shared into **{space_label}** "
+        f"without being a **{space_label}** member (they may open it from the notify in their own river). "
+        "Space members can dissolve when the sharer is not in this space."
+    )
+
+
 def sharer_is_space_member(cfg: dict[str, Any]) -> bool:
     """True when share_creator's mage key is in the space registry members list."""
     space_key = cfg.get("space_key")
@@ -387,8 +418,9 @@ def shared_eddy_context_lines(
             "or explicitly invoked (e.g. \"hey Turtle\"). Peer-to-peer lines (thanks to the sharer, "
             "@another member) are witness-only; do not reply to those.",
             "- **Dissolve:** Only **"
-            f"{sharer}** (who shared into this space) may dissolve this shared eddy; other members "
-            "may checkpoint/release per normal eddy law.",
+            f"{sharer}** (who shared into this space) may dissolve when they are a **{space_label}** "
+            "member; if they shared from outside the space, any **space member** may dissolve instead. "
+            "Others may checkpoint/release per normal eddy law.",
         ]
     )
     return lines
@@ -518,15 +550,19 @@ def check_share_dissolve_authority(
         return ShareDissolveDecision(True)
     if str(actor_discord_id) == str(creator):
         return ShareDissolveDecision(True)
+    if merged.get("origin") == "shared":
+        space_key = merged.get("space_key")
+        actor_key = mage_key_for_discord_id(actor_discord_id)
+        if (
+            space_key
+            and actor_key
+            and not sharer_is_space_member(merged)
+            and mage_is_space_member(actor_key, str(space_key))
+        ):
+            return ShareDissolveDecision(True)
     if merged.get("origin") == "received":
-        return ShareDissolveDecision(
-            False,
-            "Only the practitioner who shared this conversation can dissolve the received eddy.",
-        )
-    return ShareDissolveDecision(
-        False,
-        "Only the practitioner who shared into this space can dissolve the shared eddy.",
-    )
+        return ShareDissolveDecision(False, share_dissolve_denial_message(merged))
+    return ShareDissolveDecision(False, share_dissolve_denial_message(merged))
 
 
 async def append_shared_eddy_witness_turn(message: discord.Message, content: str) -> None:

@@ -779,6 +779,7 @@ A node MAY implement **Share eddy** — sender-initiated export of an eddy conve
 #### 15.6.6 Dissolve authority
 
 - Only the practitioner who created the share (`share_creator`) MAY dissolve the shared or received eddy created by that share (v1).
+- When the share creator is **not** a member of the target space, any **space member** MAY dissolve the shared eddy as a fallback (guest-sharer hygiene).
 
 #### 15.6.7 Operator boundaries
 

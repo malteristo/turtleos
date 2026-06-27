@@ -919,33 +919,58 @@ class ShareReshareTransparencyTests(unittest.TestCase):
 
 
 class ShareDissolveAuthorityTests(unittest.TestCase):
-    def test_non_creator_cannot_dissolve_shared_eddy(self) -> None:
+    FAMILY_REGISTRY = {
+        "mages": {
+            "kermit": {"discord_id": "111", "address": "Kermit"},
+            "nesrine": {"discord_id": "222", "address": "Nesrine"},
+            "lukas": {"discord_id": "333", "address": "Lukas"},
+        },
+        "spaces": {"family": {"members": ["kermit", "nesrine"]}},
+    }
+
+    def test_non_creator_cannot_dissolve_member_sharer_shared_eddy(self) -> None:
         from share_eddy import check_share_dissolve_authority
 
         cfg = {
             "origin": "shared",
             "share_creator": "111",
+            "sharer_key": "kermit",
             "from_sharer": "Kermit",
             "space_key": "family",
         }
-        decision = check_share_dissolve_authority(888, 9001, "222", cfg)
+        with patch("share_eddy.get_registry", return_value=self.FAMILY_REGISTRY):
+            decision = check_share_dissolve_authority(888, 9001, "222", cfg)
         self.assertFalse(decision.allowed)
-        self.assertIn("shared", decision.reason or "")
+        self.assertIn("Kermit", decision.reason or "")
+
+    def test_space_member_can_dissolve_guest_sharer_shared_eddy(self) -> None:
+        from share_eddy import check_share_dissolve_authority
+
+        cfg = {
+            "origin": "shared",
+            "share_creator": "333",
+            "sharer_key": "lukas",
+            "from_sharer": "Lukas",
+            "space_key": "family",
+        }
+        with patch("share_eddy.get_registry", return_value=self.FAMILY_REGISTRY):
+            decision = check_share_dissolve_authority(888, 9001, "222", cfg)
+        self.assertTrue(decision.allowed)
 
     def test_creator_can_dissolve_shared_eddy(self) -> None:
         from share_eddy import check_share_dissolve_authority
 
-        cfg = {"origin": "shared", "share_creator": "111"}
+        cfg = {"origin": "shared", "share_creator": "111", "sharer_key": "kermit", "space_key": "family"}
         decision = check_share_dissolve_authority(888, 9001, "111", cfg)
         self.assertTrue(decision.allowed)
 
     def test_non_creator_cannot_dissolve_received_eddy(self) -> None:
         from share_eddy import check_share_dissolve_authority
 
-        cfg = {"origin": "received", "share_creator": "111"}
+        cfg = {"origin": "received", "share_creator": "111", "from_sharer": "Kermit"}
         decision = check_share_dissolve_authority(777, 1002, "222", cfg)
         self.assertFalse(decision.allowed)
-        self.assertIn("received", decision.reason or "")
+        self.assertIn("Kermit", decision.reason or "")
 
     def test_regular_eddy_allows_anyone_with_practice_access(self) -> None:
         from share_eddy import check_share_dissolve_authority
