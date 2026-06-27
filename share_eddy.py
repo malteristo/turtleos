@@ -313,9 +313,151 @@ def shared_eddy_context_lines(
             "\"you're welcome\" as if you shared; acknowledge warmly without taking credit.",
             "- **Boundaries:** Messages in this thread are visible to space members in Discord. "
             "Do not treat this as a private 1:1 with the speaker alone.",
+            "- **Response policy:** Mention-gated — you only speak when @mentioned, replied to, "
+            "or explicitly invoked (e.g. \"hey Turtle\"). Peer-to-peer lines (thanks to the sharer, "
+            "@another member) are witness-only; do not reply to those.",
         ]
     )
     return lines
+
+
+@dataclass(frozen=True)
+class SharedEddyResponseDecision:
+    respond: bool
+    reason: str
+
+
+def _message_guild(message: discord.Message):
+    channel = message.channel
+    guild = getattr(channel, "guild", None)
+    if guild is not None:
+        return guild
+    parent = getattr(channel, "parent", None)
+    return getattr(parent, "guild", None) if parent is not None else None
+
+
+def _turtle_user_id_for_message(message: discord.Message) -> int | None:
+    from eddy_spawn import resolve_turtle_bot_user_id
+
+    return resolve_turtle_bot_user_id(_message_guild(message))
+
+
+def message_mentions_turtle(message: discord.Message) -> bool:
+    turtle_id = _turtle_user_id_for_message(message)
+    if not turtle_id:
+        return False
+    return any(getattr(user, "id", None) == turtle_id for user in (message.mentions or []))
+
+
+def message_mentions_other_humans(message: discord.Message) -> bool:
+    """True when @mentions include a non-Turtle user (peer-directed)."""
+    turtle_id = _turtle_user_id_for_message(message)
+    for user in message.mentions or []:
+        uid = getattr(user, "id", None)
+        if turtle_id and uid == turtle_id:
+            continue
+        if getattr(user, "bot", False):
+            continue
+        return True
+    return False
+
+
+def message_is_reply_to_turtle(message: discord.Message) -> bool:
+    from eddy_spawn import is_turtle_bot_message
+
+    ref = getattr(message, "reference", None)
+    if not ref:
+        return False
+    resolved = getattr(ref, "resolved", None) or getattr(ref, "cached_message", None)
+    if resolved is None:
+        return False
+    return is_turtle_bot_message(resolved)
+
+
+_EXPLICIT_TURTLE_INVOKE_RE = re.compile(
+    r"(?i)(?:^|[\s,.:;!\?])(?:hey\s+)?turtle(?:[\s,.:;!\?]|$)"
+)
+_PEER_THANKS_RE = re.compile(
+    r"(?i)\b(thanks|thank you|danke)\b.{0,30}\b(sharing|teilen|geteilt)\b"
+)
+
+
+def content_explicitly_invokes_turtle(content: str) -> bool:
+    text = (content or "").strip()
+    if not text:
+        return False
+    return bool(_EXPLICIT_TURTLE_INVOKE_RE.search(f" {text} "))
+
+
+def content_looks_like_peer_thanks(content: str) -> bool:
+    text = (content or "").strip()
+    if not text:
+        return False
+    if _PEER_THANKS_RE.search(text):
+        return True
+    if re.search(r"(?i)^thanks\b", text) and "turtle" not in text.lower():
+        return True
+    return False
+
+
+def shared_eddy_response_decision(
+    message: discord.Message,
+    content: str,
+) -> SharedEddyResponseDecision:
+    """Mention-gated response policy for shared eddies (Slice 3f)."""
+    if message_mentions_turtle(message):
+        return SharedEddyResponseDecision(True, "mention_turtle")
+    if message_is_reply_to_turtle(message):
+        return SharedEddyResponseDecision(True, "reply_to_turtle")
+    if content_explicitly_invokes_turtle(content):
+        return SharedEddyResponseDecision(True, "explicit_invoke")
+    if message_mentions_other_humans(message):
+        return SharedEddyResponseDecision(False, "mention_peer")
+    if content_looks_like_peer_thanks(content):
+        return SharedEddyResponseDecision(False, "peer_thanks")
+    return SharedEddyResponseDecision(False, "mention_gated_default")
+
+
+async def append_shared_eddy_witness_turn(message: discord.Message, content: str) -> None:
+    """Record a peer message in history without generating a Turtle reply."""
+    from helpers import get_history, reload_history, sync_history
+    from state import MAX_DIALOGUE_HISTORY
+
+    channel_id = message.channel.id
+    history = get_history(channel_id)
+    if not history and isinstance(message.channel, discord.Thread):
+        reload_history(channel_id)
+        history = get_history(channel_id)
+
+    user_entry = f"[{message.author.display_name}]: {(content or '').strip()}"
+    history.append({"role": "user", "content": user_entry})
+    if len(history) > MAX_DIALOGUE_HISTORY:
+        history.pop(0)
+    sync_history(channel_id)
+
+
+async def maybe_skip_shared_eddy_dialogue(
+    message: discord.Message,
+    content: str,
+) -> SharedEddyResponseDecision | None:
+    """Return a pass decision when Turtle should stay silent; None to continue dialogue."""
+    if not isinstance(message.channel, discord.Thread):
+        return None
+    from commands import thread_configs
+
+    parent_id = message.channel.parent_id
+    cfg = resolve_eddy_thread_cfg(
+        message.channel.id,
+        parent_id,
+        thread_configs.get(message.channel.id),
+    )
+    if not cfg or cfg.get("origin") != "shared":
+        return None
+    decision = shared_eddy_response_decision(message, content)
+    if decision.respond:
+        return None
+    await append_shared_eddy_witness_turn(message, content)
+    return decision
 
 
 def is_placeholder_eddy_title(title: str) -> bool:

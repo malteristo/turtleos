@@ -610,8 +610,22 @@ async def handle_dialogue(message):
     except Exception as exc:
         print(f"Share notify hook failed: {type(exc).__name__}: {exc}")
 
-    channel_id = message.channel.id
     visible_content, forwarded_context = _visible_message_content(message)
+
+    try:
+        from share_eddy import maybe_skip_shared_eddy_dialogue
+
+        skip = await maybe_skip_shared_eddy_dialogue(message, visible_content)
+        if skip is not None:
+            print(
+                f"Shared eddy witness ({skip.reason}) "
+                f"[{message.author.display_name}]: {visible_content[:80]}"
+            )
+            return
+    except Exception as exc:
+        print(f"Shared eddy gate failed: {type(exc).__name__}: {exc}")
+
+    channel_id = message.channel.id
     attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (
         await _gather_dialogue_attachments(message)
     )

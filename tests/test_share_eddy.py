@@ -782,6 +782,92 @@ class ShareSharedEddyContextTests(unittest.TestCase):
         self.assertIn("their own river", joined)
 
 
+class ShareEddyMentionGateTests(unittest.TestCase):
+    TURTLE_ID = 999888777
+
+    def _message(
+        self,
+        content: str,
+        *,
+        mentions=None,
+        reply_author_id: int | None = None,
+    ):
+        message = MagicMock()
+        message.content = content
+        message.mentions = mentions or []
+        message.channel = MagicMock()
+        message.channel.parent = MagicMock()
+        message.channel.parent.guild = MagicMock()
+        message.author.display_name = "Nesrine"
+        if reply_author_id is not None:
+            ref_msg = MagicMock()
+            ref_msg.author.id = reply_author_id
+            ref_msg.author.bot = True
+            message.reference = MagicMock(resolved=ref_msg, cached_message=None)
+        else:
+            message.reference = None
+        return message
+
+    def test_respond_on_turtle_mention(self) -> None:
+        from share_eddy import shared_eddy_response_decision
+
+        turtle = MagicMock(id=self.TURTLE_ID, bot=True)
+        msg = self._message("what do you think?", mentions=[turtle])
+        with patch("share_eddy._turtle_user_id_for_message", return_value=self.TURTLE_ID):
+            decision = shared_eddy_response_decision(msg, msg.content)
+        self.assertTrue(decision.respond)
+        self.assertEqual(decision.reason, "mention_turtle")
+
+    def test_pass_on_peer_mention(self) -> None:
+        from share_eddy import shared_eddy_response_decision
+
+        kermit = MagicMock(id=111, bot=False)
+        msg = self._message("@kermit thanks for sharing!", mentions=[kermit])
+        with patch("share_eddy._turtle_user_id_for_message", return_value=self.TURTLE_ID):
+            decision = shared_eddy_response_decision(msg, msg.content)
+        self.assertFalse(decision.respond)
+        self.assertEqual(decision.reason, "mention_peer")
+
+    def test_pass_on_thanks_for_sharing(self) -> None:
+        from share_eddy import shared_eddy_response_decision
+
+        msg = self._message("thanks for sharing!")
+        with patch("share_eddy._turtle_user_id_for_message", return_value=self.TURTLE_ID):
+            decision = shared_eddy_response_decision(msg, msg.content)
+        self.assertFalse(decision.respond)
+        self.assertEqual(decision.reason, "peer_thanks")
+
+    def test_respond_on_explicit_hey_turtle(self) -> None:
+        from share_eddy import shared_eddy_response_decision
+
+        msg = self._message("hey Turtle, what do you think about the heat plan?")
+        with patch("share_eddy._turtle_user_id_for_message", return_value=self.TURTLE_ID):
+            decision = shared_eddy_response_decision(msg, msg.content)
+        self.assertTrue(decision.respond)
+        self.assertEqual(decision.reason, "explicit_invoke")
+
+    def test_pass_on_ambiguous_question(self) -> None:
+        from share_eddy import shared_eddy_response_decision
+
+        msg = self._message("what do you think about the heat plan?")
+        with patch("share_eddy._turtle_user_id_for_message", return_value=self.TURTLE_ID):
+            decision = shared_eddy_response_decision(msg, msg.content)
+        self.assertFalse(decision.respond)
+        self.assertEqual(decision.reason, "mention_gated_default")
+
+    def test_respond_on_reply_to_turtle(self) -> None:
+        from share_eddy import shared_eddy_response_decision
+
+        msg = self._message("sounds good", reply_author_id=self.TURTLE_ID)
+        with patch("share_eddy._turtle_user_id_for_message", return_value=self.TURTLE_ID), patch(
+            "eddy_spawn.is_turtle_bot_message",
+            return_value=True,
+        ):
+            decision = shared_eddy_response_decision(msg, msg.content)
+        self.assertTrue(decision.respond)
+        self.assertEqual(decision.reason, "reply_to_turtle")
+
+
 class ShareNotifyPolicyTests(unittest.TestCase):
     def test_should_notify_received_only_recipient(self) -> None:
         from share_eddy import should_notify_sharer_on_first_peer_reply
