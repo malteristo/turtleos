@@ -301,9 +301,24 @@ def build_shared_space_overwrites(
 
 def seed_space_workshop(space_key: str) -> str:
     """Minimal practice root for a shared space (not full practitioner onboarding)."""
+    import shutil
+
     workshop = os.path.expanduser(f"~/workshops/{space_key}")
     for sub in ("state", "state/notes", "flows", "sessions", "proposals"):
         os.makedirs(os.path.join(workshop, sub), exist_ok=True)
+
+    flow_src = os.path.join(REPO_ROOT, "template", "flows", "shared-river-orientation.md")
+    flow_dest = os.path.join(workshop, "flows", "shared-river-orientation.md")
+    if os.path.isfile(flow_src) and not os.path.exists(flow_dest):
+        shutil.copy2(flow_src, flow_dest)
+
+    canon_src = os.path.join(
+        REPO_ROOT, "template", "flows", "shared-river-orientation-canonical.stub.md"
+    )
+    canon_dest = os.path.join(workshop, "state", "notes", "shared-river-orientation-canonical.md")
+    if os.path.isfile(canon_src) and not os.path.exists(canon_dest):
+        shutil.copy2(canon_src, canon_dest)
+
     return workshop
 
 

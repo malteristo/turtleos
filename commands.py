@@ -351,9 +351,34 @@ async def cmd_help(message):
 
 async def cmd_flows(message, args):
     """List installed flows — in-eddy flow library is the primary picker."""
-    from flow_runner import list_resolvable_flow_ids
+    from flow_runner import list_resolvable_flow_ids, load_flow_spec
 
     if isinstance(message.channel, discord.Thread):
+        if args:
+            flow_id = args[0].strip()
+            from eddy_flow_library import load_flow_in_eddy
+
+            if not load_flow_spec(flow_id):
+                await message.reply(
+                    f"Flow `{flow_id}` not found. Run `!flows` to see installed flows.",
+                    mention_author=False,
+                )
+                return
+            spec = load_flow_spec(flow_id)
+            ok = await load_flow_in_eddy(message.channel, flow_id, client)
+            if not ok:
+                await message.reply(
+                    f"Could not load `{flow_id}` in this eddy.",
+                    mention_author=False,
+                )
+                return
+            title = spec.title if spec else flow_id
+            await message.reply(
+                f"Loaded **{title}** (`{flow_id}`) in this eddy.",
+                mention_author=False,
+            )
+            return
+
         flows = list_resolvable_flow_ids()
         if not flows:
             await message.reply(
