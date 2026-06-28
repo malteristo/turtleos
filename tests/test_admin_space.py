@@ -46,6 +46,14 @@ class AdminSpaceParsingTests(unittest.TestCase):
         self.assertEqual(opts.default_context, "family")
         self.assertEqual(opts.channel_name, "lukas-play")
 
+    def test_parse_space_create_args_from_admin_argv(self) -> None:
+        """argv after cmd_admin subcmd slice: ['create', key, ...]."""
+        opts = parse_space_create_args(
+            ["create", "lukas_play", "--policy", "all_practitioners"]
+        )
+        self.assertEqual(opts.space_key, "lukas_play")
+        self.assertEqual(opts.share_policy, "all_practitioners")
+
     def test_parse_space_close_args(self) -> None:
         opts = parse_space_close_args(["close", "lukas_play", "--confirm"])
         self.assertEqual(opts.space_key, "lukas_play")

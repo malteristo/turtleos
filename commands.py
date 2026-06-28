@@ -929,7 +929,7 @@ async def cmd_admin(message, args):
 
         if space_sub == "create":
             try:
-                options = parse_space_create_args(args)
+                options = parse_space_create_args(args[1:])
                 registry = get_registry()
                 member_keys = resolve_member_keys(
                     guild,
@@ -973,7 +973,7 @@ async def cmd_admin(message, args):
 
         elif space_sub == "close":
             try:
-                options = parse_space_close_args(args)
+                options = parse_space_close_args(args[1:])
                 summary = await close_shared_space(guild, options, discord_client=client)
             except ValueError as exc:
                 await message.reply(str(exc), mention_author=False)
