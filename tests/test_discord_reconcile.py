@@ -181,32 +181,34 @@ class TestHandleThreadUpdate(unittest.IsolatedAsyncioTestCase):
 
 
 class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
-    async def test_light_archive_posts_to_parent_id(self) -> None:
+    async def test_close_delegates_action_first(self) -> None:
         from sessions import post_eddy_lifecycle_feedback
 
-        with patch("helpers.deliver_channel_embed", new_callable=AsyncMock) as deliver:
+        with patch("sessions.post_lifecycle_act", new_callable=AsyncMock) as act:
             await post_eddy_lifecycle_feedback(
                 1479428854513664030,
-                thread_name="family-planning",
-                mode="light_archive",
-                via_discord_ui=True,
-            )
-        deliver.assert_awaited_once_with(1479428854513664030, unittest.mock.ANY, silent=False)
-
-    async def test_dissolve_posts_with_link(self) -> None:
-        from sessions import post_eddy_lifecycle_feedback
-
-        with patch("helpers.deliver_channel_embed", new_callable=AsyncMock) as deliver:
-            await post_eddy_lifecycle_feedback(
-                1479428854513664030,
-                thread_name="deep-thread",
+                thread_name="what makes jokes work",
                 mode="dissolve",
                 via_discord_ui=True,
-                entry_count=2,
-                jump_url="https://discord.com/channels/1/2/3",
+                entry_count=1,
             )
-        self.assertEqual(deliver.await_args.args[0], 1479428854513664030)
-        self.assertFalse(deliver.await_args.kwargs["silent"])
+        act.assert_awaited_once()
+        kwargs = act.await_args.kwargs
+        self.assertEqual(kwargs["action"], "Closed eddy")
+        self.assertEqual(kwargs["thread_name"], "what makes jokes work")
+        self.assertIn("1 entries", kwargs["detail"])
+
+    async def test_lifecycle_act_delivers(self) -> None:
+        from sessions import post_lifecycle_act
+
+        with patch("helpers.deliver_channel_embed", new_callable=AsyncMock) as deliver:
+            await post_lifecycle_act(
+                1479428854513664030,
+                action="Opened eddy",
+                thread_name="new eddy",
+                emoji="🌀",
+            )
+        deliver.assert_awaited_once_with(1479428854513664030, unittest.mock.ANY, silent=False)
 
 
 if __name__ == "__main__":

@@ -342,6 +342,13 @@ def mark_dissolved(thread_id: int):
         save_registry(registry, force=True)
 
 
+def is_dissolved(thread_id: int | str) -> bool:
+    """True when registry marks this eddy as dissolved (closed)."""
+    registry = load_registry()
+    entry = registry["threads"].get(str(thread_id))
+    return bool(entry and entry.get("harvest_status") == "dissolved")
+
+
 def remove_thread(thread_id: int):
     registry = load_registry()
     tid = str(thread_id)

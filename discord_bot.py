@@ -1355,6 +1355,15 @@ async def on_ready():
 
             active = dialogue.threads
             for t in active:
+                from thread_registry import is_dissolved
+
+                if is_dissolved(t.id) and not t.archived:
+                    try:
+                        await t.edit(archived=True)
+                        print(f"Re-archived dissolved thread still active: {t.name} (id: {t.id})")
+                    except Exception as e:
+                        print(f"Failed to re-archive dissolved thread {t.name}: {e}")
+                    continue
                 if should_defer_turtle_join(t):
                     print(f"Skipped rejoin (native eddy): {t.name} (id: {t.id})")
                     continue
@@ -1370,6 +1379,11 @@ async def on_ready():
                 archived_threads.append(t)
             for t in archived_threads:
                 if should_defer_turtle_join(t):
+                    continue
+                from thread_registry import is_dissolved
+
+                if is_dissolved(t.id):
+                    print(f"Skipped dissolved archived thread: {t.name} (id: {t.id})")
                     continue
                 try:
                     await t.edit(archived=False)

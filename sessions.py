@@ -428,6 +428,50 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
 
 
+async def post_lifecycle_act(
+    parent_channel_id: int | None,
+    *,
+    action: str,
+    thread_name: str,
+    detail: str | None = None,
+    via_discord_ui: bool = False,
+    jump_url: str | None = None,
+    emoji: str = "🍃",
+    color: int = 0x57F287,
+) -> None:
+    """Post a visible river act describing what just happened (close, open, …)."""
+    import discord
+
+    if not parent_channel_id:
+        print(f"Lifecycle act skipped — no parent channel for {thread_name!r}")
+        return
+
+    description = f"**{thread_name}**"
+    if detail:
+        description += f" — {detail}"
+
+    footer = local_now().strftime("%H:%M")
+    if via_discord_ui:
+        footer += " · Discord"
+
+    embed = discord.Embed(
+        title=f"{emoji} {action}",
+        description=description,
+        color=color,
+    )
+    embed.set_footer(text=footer)
+    if jump_url:
+        embed.url = jump_url
+
+    try:
+        from helpers import deliver_channel_embed
+
+        await deliver_channel_embed(parent_channel_id, embed, silent=False)
+        print(f"Lifecycle act posted to {parent_channel_id}: {action} — {thread_name}")
+    except Exception as exc:
+        print(f"Lifecycle act failed for {parent_channel_id}: {type(exc).__name__}: {exc}")
+
+
 async def post_eddy_lifecycle_feedback(
     parent_channel_id: int | None,
     *,
@@ -437,37 +481,22 @@ async def post_eddy_lifecycle_feedback(
     entry_count: int = 0,
     jump_url: str | None = None,
 ) -> None:
-    """Post a visible river act when an eddy closes (Discord UI or command)."""
-    import discord
-
-    if not parent_channel_id:
-        print(f"Lifecycle feedback skipped — no parent channel for {thread_name!r}")
-        return
-
-    source = "Discord" if via_discord_ui else "command"
+    """Post river feedback when an eddy closes."""
     if mode == "light_archive":
-        body = "Archived — nothing captured to boom."
+        detail = "archived (nothing captured to boom)"
     elif entry_count:
-        body = f"Dissolved — {entry_count} entries captured to boom."
+        detail = f"dissolved ({entry_count} entries captured to boom)"
     else:
-        body = "Dissolved."
+        detail = "dissolved"
 
-    embed = discord.Embed(
-        title=f"🍃 {thread_name}",
-        description=body,
-        color=0x57F287,
+    await post_lifecycle_act(
+        parent_channel_id,
+        action="Closed eddy",
+        thread_name=thread_name,
+        detail=detail,
+        via_discord_ui=via_discord_ui,
+        jump_url=jump_url,
     )
-    embed.set_footer(text=f"Closed via {source} · {local_now().strftime('%H:%M')}")
-    if jump_url:
-        embed.url = jump_url
-
-    try:
-        from helpers import deliver_channel_embed
-
-        await deliver_channel_embed(parent_channel_id, embed, silent=False)
-        print(f"Lifecycle feedback posted to {parent_channel_id}: {thread_name} ({mode})")
-    except Exception as exc:
-        print(f"Lifecycle feedback failed for {parent_channel_id}: {type(exc).__name__}: {exc}")
 
 
 async def light_archive_eddy(
