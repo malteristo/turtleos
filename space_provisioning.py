@@ -394,6 +394,24 @@ def mark_space_archived(registry: dict[str, Any], channel_id_str: str) -> None:
     save_registry(registry)
 
 
+def mark_channel_orphaned(
+    registry: dict[str, Any],
+    channel_id_str: str,
+    *,
+    reason: str = "discord_deleted",
+) -> bool:
+    """Registry-bound channel removed in Discord — keep workshop, flag orphan."""
+    entry = registry.get("channels", {}).get(channel_id_str)
+    if not isinstance(entry, dict):
+        return False
+    entry["archived"] = True
+    entry["orphaned"] = True
+    entry["orphan_reason"] = reason
+    entry["orphaned_at"] = datetime.now(timezone.utc).isoformat()
+    save_registry(registry)
+    return True
+
+
 async def create_shared_space(
     guild: discord.Guild,
     options: SpaceCreateOptions,

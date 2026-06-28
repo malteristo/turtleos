@@ -1592,6 +1592,30 @@ async def on_thread_update(before, after):
 
 
 @client.event
+async def on_thread_delete(thread):
+    from discord_reconcile import handle_thread_delete
+
+    try:
+        outcome = await handle_thread_delete(thread, discord_client=client)
+        if outcome.get("thread_deleted"):
+            print(f"Native thread delete reconciled: {thread.name} ({thread.id})")
+    except Exception as exc:
+        print(f"Native thread delete reconcile failed for {thread.id}: {exc}")
+
+
+@client.event
+async def on_guild_channel_delete(channel):
+    from discord_reconcile import handle_guild_channel_delete
+
+    try:
+        outcome = await handle_guild_channel_delete(channel, discord_client=client)
+        if outcome.get("channel_orphaned"):
+            print(f"Native channel delete reconciled: {getattr(channel, 'name', channel.id)}")
+    except Exception as exc:
+        print(f"Native channel delete reconcile failed for {channel.id}: {exc}")
+
+
+@client.event
 async def on_member_join(member):
     if member.bot:
         return

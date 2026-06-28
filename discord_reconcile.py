@@ -116,6 +116,99 @@ async def handle_thread_update(before: discord.Thread, after: discord.Thread, *,
         print(f"Thread locked via Discord UI: {after.name} ({after.id})")
 
 
+def _cleanup_eddy_memory(thread_id: int) -> None:
+    """Drop in-memory harness state for an eddy (thread delete path)."""
+    from helpers import clear_history
+    from state import active_sessions, thread_configs, threads_flagged_for_release
+
+    thread_configs.pop(thread_id, None)
+    threads_flagged_for_release.pop(thread_id, None)
+    clear_history(thread_id)
+    active_sessions.pop(thread_id, None)
+
+
+async def handle_thread_delete(thread: discord.Thread, *, discord_client) -> dict[str, Any]:
+    """S2: native thread delete → registry + memory cleanup; activity log on parent."""
+    parent_id = thread.parent_id or 0
+    if not is_registered_parent_channel(parent_id):
+        return {"skipped": "unregistered_parent", "thread_id": thread.id}
+
+    entry = _registry_entry(thread.id)
+    if not entry:
+        _cleanup_eddy_memory(thread.id)
+        return {"skipped": "not_in_registry", "thread_id": thread.id}
+
+    from helpers import log_activity, reload_history
+    from thread_registry import remove_thread
+
+    history_len = len(reload_history(thread.id))
+    thread_name = thread.name
+    was_dissolved = entry.get("harvest_status") == "dissolved"
+
+    _cleanup_eddy_memory(thread.id)
+    remove_thread(thread.id)
+
+    detail = f"**{thread_name}** removed in Discord"
+    if history_len and not was_dissolved:
+        detail += f" ({history_len} cached messages — Close preferred over Delete for essence capture)"
+    try:
+        parent = discord_client.get_channel(parent_id)
+        if parent is None:
+            parent = await discord_client.fetch_channel(parent_id)
+        await log_activity(f"Deleted eddy: {detail}", "\U0001f5d1\ufe0f", channel=parent)
+    except Exception as exc:
+        print(f"log_activity for thread delete failed: {exc}")
+
+    return {
+        "thread_deleted": True,
+        "thread_id": thread.id,
+        "parent_channel_id": parent_id,
+        "history_len": history_len,
+    }
+
+
+async def handle_guild_channel_delete(channel: discord.abc.GuildChannel, *, discord_client) -> dict[str, Any]:
+    """S2: native channel/category delete → orphan registry entry + ops notice."""
+    from mage import get_registry, reload_mage_registry
+    from space_provisioning import mark_channel_orphaned
+
+    ch_id_str = str(channel.id)
+    registry = get_registry()
+    entry = registry.get("channels", {}).get(ch_id_str)
+    if not isinstance(entry, dict):
+        return {"skipped": "unregistered_channel", "channel_id": channel.id}
+
+    ch_type = entry.get("type", "unknown")
+    mage_key = entry.get("mage", "?")
+    ch_name = getattr(channel, "name", ch_id_str)
+
+    if entry.get("orphaned"):
+        return {"skipped": "already_orphaned", "channel_id": channel.id}
+
+    mark_channel_orphaned(registry, ch_id_str, reason="discord_deleted")
+    reload_mage_registry()
+
+    from helpers import log_activity
+
+    label = f"#{ch_name}" if hasattr(channel, "name") else ch_name
+    msg = (
+        f"Discord deleted registered channel {label} (`{ch_id_str}`) "
+        f"type `{ch_type}` mage `{mage_key}` — registry marked orphaned; workshop kept"
+    )
+    try:
+        await log_activity(msg, "\u26a0\ufe0f")
+    except Exception as exc:
+        print(f"log_activity for channel delete failed: {exc}")
+
+    print(f"Channel delete reconciled: {label} ({ch_id_str})")
+    return {
+        "channel_orphaned": True,
+        "channel_id": channel.id,
+        "channel_type": ch_type,
+        "mage": mage_key,
+    }
+
+
 async def ensure_dissolved_threads_archived(discord_client, parent_channel_id: int) -> None:
     """Re-archive dissolved eddies that resurfaced (e.g. after bot restart unarchive)."""
     from thread_registry import load_registry

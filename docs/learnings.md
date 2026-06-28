@@ -9,6 +9,12 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-06-28 — Native close startup unarchive anti-pattern
+
+**Never unarchive dissolved threads on startup.** Practitioner "Close Thread" is a commitment — `on_ready` paths that call `edit(archived=False)` on every registry thread resurrect sidebar ghosts and break trust. Fix: skip unarchive when `thread_registry.is_dissolved()`; re-archive dissolved entries via `ensure_dissolved_threads_archived`. See `discord_reconcile.py` + Mini `7abf2f2`.
+
+**S2 delete reconciliation:** Native thread delete → `remove_thread` + in-memory cleanup + parent ops log (Close ≠ Delete for essence). Native channel delete → `mark_channel_orphaned` on registry binding; workshop dirs kept.
+
 ### 2026-06-25 — Share eddy Slice 1 + flow library on-demand
 
 **Share eddy:** Practitioner path shipped (`!share` → synthesize → preview/edit → confirm → recipient `@` + Continue → received eddy). Split-bot interaction bugs: defer/edit paths, modal must use `response.edit_message`, history filter for failed share acts. Dogfood chapter: `docs/chapters/2026-06-25-share-eddy-slice1-dogfood.md`.

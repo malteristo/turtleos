@@ -180,6 +180,77 @@ class TestHandleThreadUpdate(unittest.IsolatedAsyncioTestCase):
         archive.assert_awaited_once()
 
 
+class TestHandleThreadDelete(unittest.IsolatedAsyncioTestCase):
+    async def test_skips_unregistered_parent(self) -> None:
+        from discord_reconcile import handle_thread_delete
+
+        thread = _thread()
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=False):
+            result = await handle_thread_delete(thread, discord_client=MagicMock())
+        self.assertEqual(result["skipped"], "unregistered_parent")
+
+    async def test_cleans_registry_and_memory(self) -> None:
+        from discord_reconcile import handle_thread_delete
+
+        thread = _thread()
+        parent = MagicMock()
+        client = MagicMock()
+        client.get_channel.return_value = parent
+
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+            "discord_reconcile._registry_entry",
+            return_value={"harvest_status": "pending", "message_count": 3},
+        ), patch("discord_reconcile._cleanup_eddy_memory") as cleanup, patch(
+            "helpers.reload_history",
+            return_value=[{"role": "user", "content": "x"}],
+        ), patch("thread_registry.remove_thread") as remove, patch(
+            "helpers.log_activity",
+            new_callable=AsyncMock,
+        ) as log:
+            result = await handle_thread_delete(thread, discord_client=client)
+
+        cleanup.assert_called_once_with(9001)
+        remove.assert_called_once_with(9001)
+        self.assertTrue(result["thread_deleted"])
+        log.assert_awaited_once()
+
+
+class TestHandleGuildChannelDelete(unittest.IsolatedAsyncioTestCase):
+    async def test_skips_unregistered_channel(self) -> None:
+        from discord_reconcile import handle_guild_channel_delete
+
+        channel = MagicMock()
+        channel.id = 555
+        with patch("mage.get_registry", return_value={"channels": {}}):
+            result = await handle_guild_channel_delete(channel, discord_client=MagicMock())
+        self.assertEqual(result["skipped"], "unregistered_channel")
+
+    async def test_marks_orphan_and_logs(self) -> None:
+        from discord_reconcile import handle_guild_channel_delete
+
+        channel = MagicMock()
+        channel.id = 555
+        channel.name = "lukas-play"
+        registry = {
+            "channels": {
+                "555": {"type": "shared-river", "mage": "lukas_play"},
+            }
+        }
+
+        with patch("mage.get_registry", return_value=registry), patch(
+            "space_provisioning.mark_channel_orphaned",
+            return_value=True,
+        ) as mark, patch("mage.reload_mage_registry"), patch(
+            "helpers.log_activity",
+            new_callable=AsyncMock,
+        ) as log:
+            result = await handle_guild_channel_delete(channel, discord_client=MagicMock())
+
+        mark.assert_called_once()
+        self.assertTrue(result["channel_orphaned"])
+        log.assert_awaited_once()
+
+
 class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
     async def test_close_delegates_action_first(self) -> None:
         from sessions import post_eddy_lifecycle_feedback
