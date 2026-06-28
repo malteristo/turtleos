@@ -62,7 +62,7 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
 
         before = _thread(archived=False)
         after = _thread(archived=True)
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=False):
+        with patch("mage.is_registered_parent_channel", return_value=False):
             result = await handle_thread_archive_transition(before, after, discord_client=MagicMock())
         self.assertIsNone(result)
 
@@ -71,8 +71,8 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
 
         before = _thread(archived=False)
         after = _thread(archived=True)
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
-            "discord_reconcile._registry_entry",
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "runtime.adapters.lifecycle._registry_entry",
             return_value={"harvest_status": "dissolved", "message_count": 5},
         ):
             result = await handle_thread_archive_transition(before, after, discord_client=MagicMock())
@@ -87,11 +87,11 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
         history = [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]
         mock_result = DissolveResult(thread_name="test-eddy", entry_count=1)
 
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
-            "discord_reconcile._registry_entry",
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "runtime.adapters.lifecycle._registry_entry",
             return_value={"harvest_status": "pending", "message_count": 2},
         ), patch(
-            "discord_reconcile._load_history_for_thread",
+            "runtime.adapters.lifecycle._load_history_for_thread",
             new_callable=AsyncMock,
             return_value=history,
         ), patch(
@@ -111,11 +111,11 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
         before = _thread(archived=False)
         after = _thread(archived=True)
 
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
-            "discord_reconcile._registry_entry",
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "runtime.adapters.lifecycle._registry_entry",
             return_value=None,
         ), patch(
-            "discord_reconcile._load_history_for_thread",
+            "runtime.adapters.lifecycle._load_history_for_thread",
             new_callable=AsyncMock,
             return_value=[{"role": "user", "content": "hi"}],
         ), patch("sessions.light_archive_eddy", new_callable=AsyncMock) as light:
@@ -136,11 +136,11 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
         before = _thread(archived=False)
         after = _thread(archived=True)
 
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
-            "discord_reconcile._registry_entry",
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "runtime.adapters.lifecycle._registry_entry",
             return_value={"harvest_status": "pending", "message_count": 1},
         ), patch(
-            "discord_reconcile._load_history_for_thread",
+            "runtime.adapters.lifecycle._load_history_for_thread",
             new_callable=AsyncMock,
             return_value=[{"role": "user", "content": "solo"}],
         ), patch("sessions.light_archive_eddy", new_callable=AsyncMock) as light:
@@ -185,7 +185,7 @@ class TestHandleThreadDelete(unittest.IsolatedAsyncioTestCase):
         from discord_reconcile import handle_thread_delete
 
         thread = _thread()
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=False):
+        with patch("mage.is_registered_parent_channel", return_value=False):
             result = await handle_thread_delete(thread, discord_client=MagicMock())
         self.assertEqual(result["skipped"], "unregistered_parent")
 
@@ -197,10 +197,10 @@ class TestHandleThreadDelete(unittest.IsolatedAsyncioTestCase):
         client = MagicMock()
         client.get_channel.return_value = parent
 
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
-            "discord_reconcile._registry_entry",
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "runtime.adapters.lifecycle._registry_entry",
             return_value={"harvest_status": "pending", "message_count": 3},
-        ), patch("discord_reconcile._cleanup_eddy_memory") as cleanup, patch(
+        ), patch("runtime.adapters.lifecycle.cleanup_eddy_memory") as cleanup, patch(
             "helpers.reload_history",
             return_value=[{"role": "user", "content": "x"}],
         ), patch("thread_registry.remove_thread") as remove, patch(
@@ -220,7 +220,7 @@ class TestHandleThreadOpen(unittest.IsolatedAsyncioTestCase):
         from discord_reconcile import handle_thread_open
 
         thread = _thread(parent_id=999)
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=False):
+        with patch("mage.is_registered_parent_channel", return_value=False):
             result = await handle_thread_open(thread, discord_client=MagicMock())
         self.assertIsNone(result)
 
@@ -228,7 +228,7 @@ class TestHandleThreadOpen(unittest.IsolatedAsyncioTestCase):
         from discord_reconcile import handle_thread_open
 
         thread = _thread(name="vortex")
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True):
+        with patch("mage.is_registered_parent_channel", return_value=True):
             result = await handle_thread_open(thread, discord_client=MagicMock())
         self.assertEqual(result, {"skipped": "system_eddy", "thread_id": 9001})
 
@@ -236,7 +236,7 @@ class TestHandleThreadOpen(unittest.IsolatedAsyncioTestCase):
         from discord_reconcile import handle_thread_open
 
         thread = _thread(name="jokes")
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
             "sessions.post_eddy_opened_feedback",
             new_callable=AsyncMock,
         ) as opened:
@@ -256,7 +256,7 @@ class TestHandleThreadOpen(unittest.IsolatedAsyncioTestCase):
 
         thread = _thread(name="flow-eddy")
         pending = {"context_type": "quest"}
-        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
             "sessions.post_eddy_opened_feedback",
             new_callable=AsyncMock,
         ) as opened:
@@ -278,7 +278,7 @@ class TestHandleGuildChannelDelete(unittest.IsolatedAsyncioTestCase):
 
         channel = MagicMock()
         channel.id = 555
-        with patch("mage.get_registry", return_value={"channels": {}}):
+        with patch("runtime.adapters.structural.get_registry", return_value={"channels": {}}):
             result = await handle_guild_channel_delete(channel, discord_client=MagicMock())
         self.assertEqual(result["skipped"], "unregistered_channel")
 
@@ -294,7 +294,7 @@ class TestHandleGuildChannelDelete(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        with patch("mage.get_registry", return_value=registry), patch(
+        with patch("runtime.adapters.structural.get_registry", return_value=registry), patch(
             "space_provisioning.mark_channel_orphaned",
             return_value=True,
         ) as mark, patch("mage.reload_mage_registry"), patch(
@@ -394,7 +394,7 @@ class TestHandleGuildChannelCreate(unittest.IsolatedAsyncioTestCase):
         from discord_reconcile import handle_guild_channel_create
 
         ch = self._text_channel()
-        with patch("discord_reconcile.get_registry", return_value={"channels": {"555": {"type": "river"}}}):
+        with patch("runtime.adapters.structural.get_registry", return_value={"channels": {"555": {"type": "river"}}}):
             result = await handle_guild_channel_create(ch, discord_client=MagicMock())
         self.assertEqual(result["skipped"], "already_registered")
 
@@ -403,7 +403,7 @@ class TestHandleGuildChannelCreate(unittest.IsolatedAsyncioTestCase):
 
         ch = self._text_channel(ch_id=777)
         expect_channel_registry_binding(777)
-        with patch("discord_reconcile.get_registry", return_value={"channels": {}}):
+        with patch("runtime.adapters.structural.get_registry", return_value={"channels": {}}):
             result = await handle_guild_channel_create(ch, discord_client=MagicMock())
         self.assertEqual(result["skipped"], "blessed_path_pending")
 
@@ -411,7 +411,7 @@ class TestHandleGuildChannelCreate(unittest.IsolatedAsyncioTestCase):
         from discord_reconcile import handle_guild_channel_create
 
         ch = self._text_channel(name="lukas-play")
-        with patch("discord_reconcile.get_registry", return_value={"channels": {}}), patch(
+        with patch("runtime.adapters.structural.get_registry", return_value={"channels": {}}), patch(
             "helpers.log_activity",
             new_callable=AsyncMock,
         ) as log:
@@ -439,7 +439,7 @@ class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
 
         before = self._channel()
         after = self._channel(name="renamed")
-        with patch("discord_reconcile.get_registry", return_value={"channels": {}}):
+        with patch("runtime.adapters.structural.get_registry", return_value={"channels": {}}):
             result = await handle_guild_channel_update(before, after, discord_client=MagicMock())
         self.assertEqual(result["skipped"], "unregistered")
 
@@ -455,7 +455,7 @@ class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
             "spaces": {"family": {"members": ["kermit"]}},
             "mages": {"kermit": {"discord_id": "42"}},
         }
-        with patch("discord_reconcile.get_registry", return_value=registry), patch(
+        with patch("runtime.adapters.structural.get_registry", return_value=registry), patch(
             "river_keys.save_registry",
         ) as save, patch("helpers.log_activity", new_callable=AsyncMock) as log:
             result = await handle_guild_channel_update(before, after, discord_client=MagicMock())
@@ -500,7 +500,7 @@ class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
             "spaces": {"family": {"members": ["kermit"]}},
             "mages": {"kermit": {"discord_id": "42"}},
         }
-        with patch("discord_reconcile.get_registry", return_value=registry), patch(
+        with patch("runtime.adapters.structural.get_registry", return_value=registry), patch(
             "helpers.log_activity",
             new_callable=AsyncMock,
         ) as log:

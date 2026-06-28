@@ -69,11 +69,28 @@ on_guild_channel_* (S2–S3)       ──► discord_reconcile
 
 ---
 
+## S4 — Adapter extraction (implemented)
+
+**Modules:**
+- `runtime/adapters/lifecycle.py` — `close_eddy(source=…)`, `close_eddy_from_archive_transition`, `open_eddy`, `reconcile_thread_delete`
+- `runtime/adapters/structural.py` — `reconcile_channel_create/update/delete`, `expect_channel_registry_binding`
+
+**`discord_reconcile.py`** — thin facade; Gateway handlers delegate to adapters.
+
+**Entry points:**
+| Source | Adapter |
+|--------|---------|
+| `!dissolve` / lifecycle bar | `close_eddy(source="command" \| "lifecycle_bar")` |
+| Native Close Thread | `close_eddy_from_archive_transition` (policy C) |
+| `!admin space close --dissolve-eddies` | `close_eddy(source="admin")` |
+| Channel create/update/delete | `reconcile_channel_*` |
+
+---
+
 ## Slices remaining
 
 | Slice | Scope |
 |-------|-------|
-| S4 | Extract shared adapters; dedupe command/event entry points |
 | S5 | Spec ripple + `docs/ux/journeys.md` |
 
 ---

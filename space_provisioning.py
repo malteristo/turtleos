@@ -546,12 +546,18 @@ async def close_shared_space(
             raise ValueError(f"Could not archive channel: {exc}") from exc
 
         if options.dissolve_eddies:
-            from sessions import dissolve_eddy
+            from runtime.adapters.lifecycle import close_eddy
 
             threads = list(channel.threads)
             for thread in threads:
                 if not thread.archived:
-                    await dissolve_eddy(thread.id, discord_client=discord_client)
+                    await close_eddy(
+                        thread.id,
+                        None,
+                        source="admin",
+                        discord_client=discord_client,
+                        parent_channel_id=channel.id,
+                    )
 
     mark_space_archived(registry, ch_id_str)
     reload_mage_registry()

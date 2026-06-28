@@ -315,9 +315,15 @@ class EddyDissolutionView(discord.ui.View):
             await interaction.followup.send(auth.reason or "You cannot dissolve this eddy.", ephemeral=True)
             return
 
-        from sessions import dissolve_eddy
+        from runtime.adapters.lifecycle import close_eddy
 
-        result = await dissolve_eddy(self.thread_id, history)
+        result = await close_eddy(
+            self.thread_id,
+            history,
+            source="command",
+            discord_client=interaction.client,
+            parent_channel_id=thread.parent_id if thread.parent else None,
+        )
         if not result:
             await interaction.followup.send("Could not archive thread.", ephemeral=True)
             return

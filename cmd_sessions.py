@@ -120,9 +120,16 @@ async def cmd_dissolve(message, args):
     if not from_lifecycle_bar:
         await message.reply("Dissolving eddy…", mention_author=False)
 
-    from sessions import dissolve_eddy
+    from runtime.adapters.lifecycle import close_eddy
 
-    result = await dissolve_eddy(channel_id, history, discord_client=discord_client)
+    source = "lifecycle_bar" if from_lifecycle_bar else "command"
+    result = await close_eddy(
+        channel_id,
+        history,
+        source=source,
+        discord_client=discord_client,
+        parent_channel_id=message.channel.parent_id,
+    )
     if not result:
         await message.reply("Could not dissolve — thread not found.", mention_author=False)
         return
