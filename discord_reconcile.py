@@ -114,3 +114,34 @@ async def handle_thread_update(before: discord.Thread, after: discord.Thread, *,
 
     if not before.locked and after.locked:
         print(f"Thread locked via Discord UI: {after.name} ({after.id})")
+
+
+async def ensure_dissolved_threads_archived(discord_client, parent_channel_id: int) -> None:
+    """Re-archive dissolved eddies that resurfaced (e.g. after bot restart unarchive)."""
+    from thread_registry import load_registry
+
+    registry = load_registry()
+    for tid, info in registry["threads"].items():
+        if info.get("harvest_status") != "dissolved":
+            continue
+        try:
+            thread_id = int(tid)
+        except (TypeError, ValueError):
+            continue
+        thread = discord_client.get_channel(thread_id)
+        if thread is None:
+            try:
+                thread = await discord_client.fetch_channel(thread_id)
+            except (discord.NotFound, discord.HTTPException):
+                continue
+        if not isinstance(thread, discord.Thread):
+            continue
+        if thread.parent_id != parent_channel_id:
+            continue
+        if thread.archived:
+            continue
+        try:
+            await thread.edit(archived=True)
+            print(f"Re-archived dissolved thread: {thread.name} ({thread_id})")
+        except Exception as exc:
+            print(f"Re-archive failed for {thread_id}: {exc}")

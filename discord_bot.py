@@ -1351,7 +1351,10 @@ async def on_ready():
 
     if dialogue:
         try:
+            from discord_reconcile import ensure_dissolved_threads_archived
             from eddy_spawn import should_defer_turtle_join
+
+            await ensure_dissolved_threads_archived(client, dialogue.id)
 
             active = dialogue.threads
             for t in active:
