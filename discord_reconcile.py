@@ -75,7 +75,12 @@ async def handle_thread_archive_transition(
 
     from sessions import light_archive_eddy
 
-    await light_archive_eddy(after.id, discord_client=discord_client)
+    await light_archive_eddy(
+        after.id,
+        discord_client=discord_client,
+        via_discord_ui=True,
+        thread_name=after.name,
+    )
     return {"light_archive": True, "thread_id": after.id}
 
 

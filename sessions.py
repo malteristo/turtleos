@@ -428,18 +428,64 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
 
 
-async def light_archive_eddy(channel_id: int, *, discord_client=None) -> None:
+async def post_eddy_lifecycle_feedback(
+    parent_channel,
+    *,
+    thread_name: str,
+    mode: str,
+    via_discord_ui: bool = False,
+    entry_count: int = 0,
+) -> None:
+    """Post a visible river act when an eddy closes (Discord UI or command)."""
+    source = " via Discord" if via_discord_ui else ""
+    if mode == "light_archive":
+        text = f"**{thread_name}** closed{source} — eddy archived (nothing captured)"
+    elif entry_count:
+        text = f"**{thread_name}** dissolved{source} — {entry_count} entries captured to boom"
+    else:
+        text = f"**{thread_name}** dissolved{source}"
+    await log_activity(text, "🍃", channel=parent_channel)
+
+
+async def light_archive_eddy(
+    channel_id: int,
+    *,
+    discord_client=None,
+    via_discord_ui: bool = False,
+    thread_name: str | None = None,
+) -> None:
     """Registry + in-memory cleanup only — no essence/chronicle (native close policy C)."""
+    import discord
     from thread_registry import mark_dissolved
     from state import threads_flagged_for_release
     from helpers import clear_history
+
+    dc = discord_client or client
+    thread = dc.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            thread = None
+
+    resolved_name = thread_name or (getattr(thread, "name", None) if thread else None) or "eddy"
+    parent = getattr(thread, "parent", None) if thread else None
 
     thread_configs.pop(channel_id, None)
     threads_flagged_for_release.pop(channel_id, None)
     mark_dissolved(channel_id)
     clear_history(channel_id)
     active_sessions.pop(channel_id, None)
-    print(f"Light archived eddy: {channel_id}")
+
+    if parent:
+        await post_eddy_lifecycle_feedback(
+            parent,
+            thread_name=resolved_name,
+            mode="light_archive",
+            via_discord_ui=via_discord_ui,
+        )
+
+    print(f"Light archived eddy: {resolved_name} ({channel_id})")
 
 
 async def dissolve_eddy(
@@ -536,10 +582,13 @@ async def dissolve_eddy(
 
     parent = thread.parent
     if parent:
-        summary = f"🍃 **{thread_name}** dissolved"
-        if entry_count:
-            summary += f" — {entry_count} entries captured to boom"
-        await parent.send(summary, silent=True)
+        await post_eddy_lifecycle_feedback(
+            parent,
+            thread_name=thread_name,
+            mode="dissolve",
+            via_discord_ui=native_close,
+            entry_count=entry_count,
+        )
 
     if not thread.archived:
         try:

@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+try:
+    import discord
+except ImportError:
+    sys.modules.setdefault("discord", MagicMock())
+    sys.modules.setdefault("discord.ext", MagicMock())
+    sys.modules.setdefault("discord.ext.tasks", MagicMock())
+    import discord
 
 
 class _FakeThread:
@@ -112,7 +121,12 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
             result = await handle_thread_archive_transition(before, after, discord_client=MagicMock())
 
         self.assertTrue(result["light_archive"])
-        light.assert_awaited_once_with(9001, discord_client=light.await_args.kwargs["discord_client"])
+        light.assert_awaited_once_with(
+            9001,
+            discord_client=light.await_args.kwargs["discord_client"],
+            via_discord_ui=True,
+            thread_name="test-eddy",
+        )
 
     async def test_light_archive_when_few_messages(self) -> None:
         from discord_reconcile import handle_thread_archive_transition
@@ -162,6 +176,43 @@ class TestHandleThreadUpdate(unittest.IsolatedAsyncioTestCase):
             await handle_thread_update(before, after, discord_client=MagicMock())
 
         archive.assert_awaited_once()
+
+
+class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
+    async def test_light_archive_discord_ui_copy(self) -> None:
+        from sessions import post_eddy_lifecycle_feedback
+
+        parent = MagicMock()
+        with patch("sessions.log_activity", new_callable=AsyncMock) as log:
+            await post_eddy_lifecycle_feedback(
+                parent,
+                thread_name="family-planning",
+                mode="light_archive",
+                via_discord_ui=True,
+            )
+        log.assert_awaited_once_with(
+            "**family-planning** closed via Discord — eddy archived (nothing captured)",
+            "🍃",
+            channel=parent,
+        )
+
+    async def test_dissolve_with_capture(self) -> None:
+        from sessions import post_eddy_lifecycle_feedback
+
+        parent = MagicMock()
+        with patch("sessions.log_activity", new_callable=AsyncMock) as log:
+            await post_eddy_lifecycle_feedback(
+                parent,
+                thread_name="deep-thread",
+                mode="dissolve",
+                via_discord_ui=True,
+                entry_count=2,
+            )
+        log.assert_awaited_once_with(
+            "**deep-thread** dissolved via Discord — 2 entries captured to boom",
+            "🍃",
+            channel=parent,
+        )
 
 
 if __name__ == "__main__":
