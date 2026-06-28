@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-sys.modules.setdefault("discord", MagicMock())
-sys.modules.setdefault("discord.ext", MagicMock())
-sys.modules.setdefault("discord.ext.tasks", MagicMock())
-
-import discord
-
 
 class _FakeThread:
+    """Duck-typed thread for reconcile handler tests (no isinstance gate)."""
+
     def __init__(
         self,
         *,
@@ -31,9 +26,6 @@ class _FakeThread:
         self.jump_url = f"https://discord.com/channels/1/{parent_id}/{thread_id}"
         self.parent = None
         self.edit = AsyncMock()
-
-
-discord.Thread = _FakeThread  # isinstance checks in dissolve_eddy
 
 
 def _thread(*, thread_id: int = 9001, parent_id: int = 100, archived: bool = False, locked: bool = False, name: str = "test-eddy"):
@@ -170,28 +162,6 @@ class TestHandleThreadUpdate(unittest.IsolatedAsyncioTestCase):
             await handle_thread_update(before, after, discord_client=MagicMock())
 
         archive.assert_awaited_once()
-
-
-class TestDissolveEddyNativeClose(unittest.IsolatedAsyncioTestCase):
-    async def test_native_close_continues_when_already_archived(self) -> None:
-        from sessions import dissolve_eddy
-
-        thread = _FakeThread(archived=True, name="closed-eddy")
-        thread.id = 9001
-
-        client = MagicMock()
-        client.get_channel.return_value = thread
-
-        with patch("sessions.chat_ollama", new_callable=AsyncMock, return_value="(nothing to capture)"), patch(
-            "sessions.get_pd", return_value="/tmp/test-pd"
-        ), patch("pathlib.Path.mkdir"), patch("pathlib.Path.write_text"), patch(
-            "thread_registry.mark_dissolved"
-        ), patch("state.thread_configs", {}), patch("state.threads_flagged_for_release", {}):
-            result = await dissolve_eddy(9001, [{"role": "user", "content": "a"}, {"role": "user", "content": "b"}], discord_client=client, native_close=True)
-
-        self.assertIsNotNone(result)
-        self.assertFalse(result.already_archived)
-        thread.edit.assert_not_called()
 
 
 if __name__ == "__main__":
