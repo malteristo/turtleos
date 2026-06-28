@@ -411,6 +411,8 @@ def _iter_river_channels(client) -> list:
     reg = get_registry()
     for ch_id_str, entry in reg.get("channels", {}).items():
         ch_type = entry.get("type") if isinstance(entry, dict) else None
+        if isinstance(entry, dict) and entry.get("archived"):
+            continue
         if ch_type in ("river", "hosted-river", "shared-river"):
             try:
                 ch_id = int(ch_id_str)

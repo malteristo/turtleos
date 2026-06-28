@@ -112,7 +112,7 @@ For instance operators (`mage_type: mage`). Not shown to hosted practitioners.
 | Command | Handler | Purpose |
 |---------|---------|---------|
 | `!diagnose` | `cmd_diagnose` | Full stack health (canary view) |
-| `!admin …` | `cmd_admin` | Operator tools incl. `river-key` (§15.4) |
+| `!admin …` | `cmd_admin` | Operator tools incl. `river-key`, `space` (§15.4) |
 
 **Retired from product inventory:** `!signals`, `!drip` — Magic-era outfacing; future public extension will be designed natively for turtleOS, not ported from Magic signal drip.
 

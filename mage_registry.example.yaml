@@ -44,6 +44,10 @@ spaces:
       - nesrine
     share_policy: members_only
 
+# Provision shared-river spaces via !admin space create (see docs/chapters/design-admin-space-provisioning.md)
+# Example after: !admin space create lukas_play --members @you @guest --policy all_practitioners
+#   spaces.lukas_play + channels.<id> type shared-river + ~/workshops/lukas_play/
+
 channels:
   "YOUR_DIALOGUE_CHANNEL_ID":
     mage: default

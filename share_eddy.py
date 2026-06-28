@@ -100,6 +100,8 @@ def shared_river_channel_for_space(space_key: str) -> int | None:
             continue
         if entry.get("type") != "shared-river":
             continue
+        if entry.get("archived"):
+            continue
         if entry.get("mage") != space_key:
             continue
         try:

@@ -730,6 +730,8 @@ Wrong keys MUST receive a clear rejection. Already-claimed rivers MUST NOT accep
 
 Provisioning command surface: `!admin river-key` (operator implementation).
 
+**Shared-river spaces:** An operator MAY provision a multi-member shared practice space with `!admin space create` — Discord channel, registry `spaces.*` entry, `shared-river` channel bind, minimal workshop seed, and permission sync. Close with `!admin space close --confirm` (archive; registry `archived: true`). Design chapter: `docs/chapters/design-admin-space-provisioning.md`.
+
 ### 15.5 Cross-practitioner boundaries
 
 Cross-practitioner content boundaries: pattern observations in operator proposals are allowed; quoting another practitioner's conversation is not.

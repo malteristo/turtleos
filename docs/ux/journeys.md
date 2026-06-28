@@ -110,6 +110,26 @@ Operator river stays separate; hosted content must not appear in operator propos
 
 ---
 
+## Shared-river space
+
+Operator provisions a multi-member practice space with `!admin space create`.
+
+```
+!admin space create lukas_play --members @kermit @lukas --policy all_practitioners
+  → Discord #lukas-play (members-only view by default)
+  → registry spaces.lukas_play + channels.* type shared-river
+  → ~/workshops/lukas_play/ seeded
+  → permission sync + eddy bar at bottom
+Members open eddies from bar → shared conduct per default_context
+Guest practitioners may share TO space when share_policy allows (without Discord channel membership)
+```
+
+Close when done: `!admin space close lukas_play --confirm` — channel locked/archived; registry marked inactive.
+
+→ `docs/chapters/design-admin-space-provisioning.md` · `docs/chapters/design-family-shared-river.md`
+
+---
+
 ## Drop text in river (no eddy yet)
 
 ```

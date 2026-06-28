@@ -310,7 +310,7 @@ def _help_embed_fields() -> list[tuple[str, str]]:
 
     operator_cmds = [
         ("`!diagnose`", "Full stack health (canary view)"),
-        ("`!admin …`", "Operator tools incl. `river-key` (§15.4)"),
+        ("`!admin …`", "Operator tools incl. `river-key`, `space` (§15.4)"),
     ]
     fields.append(("Operator", _help_lines(operator_cmds)))
     fields.append((
@@ -647,7 +647,8 @@ async def cmd_admin(message, args):
             "- `!admin members` — server membership\n"
             "- `!admin audit` — permission health check\n"
             "- `!admin onboard <username> [de|en]` — create hosted river + practitioner workshop\n"
-            "- `!admin river-key <name> <emoji> [de|en]` — invite-to-claim room + river key\n",
+            "- `!admin river-key <name> <emoji> [de|en]` — invite-to-claim room + river key\n"
+            "- `!admin space` — shared-river space provisioning (create / close / list / sync)\n",
             mention_author=False
         )
         return
@@ -892,6 +893,159 @@ async def cmd_admin(message, args):
             "\U0001f511",
             channel=message.channel,
         )
+
+    elif subcmd == "space":
+        from river_keys import _primary_operator_ids
+        from space_provisioning import (
+            close_shared_space,
+            create_shared_space,
+            find_shared_river_channel,
+            list_active_spaces,
+            parse_space_close_args,
+            parse_space_create_args,
+            resolve_member_keys,
+        )
+        from mage import ensure_space_channel_access
+
+        if message.author.id not in _primary_operator_ids():
+            await message.reply("Space provisioning requires the primary operator.", mention_author=False)
+            return
+        if len(args) < 2:
+            await message.reply(
+                "**Space commands:**\n"
+                "- `!admin space create <space-key> [--members @user ...] [--open] [--policy all_practitioners|members_only] [--context family|shared] [--channel name]`\n"
+                "- `!admin space close <space-key> [--confirm] [--dissolve-eddies]`\n"
+                "- `!admin space list` — active shared spaces\n"
+                "- `!admin space sync <space-key>` — repair Discord permissions from registry\n",
+                mention_author=False,
+            )
+            return
+
+        space_sub = args[1].lower()
+        guild = message.guild
+        if not guild:
+            await message.reply("Space commands must run on the server.", mention_author=False)
+            return
+
+        if space_sub == "create":
+            try:
+                options = parse_space_create_args(args)
+                registry = get_registry()
+                member_keys = resolve_member_keys(
+                    guild,
+                    registry,
+                    member_tokens=options.member_tokens,
+                    message_mentions=list(message.mentions),
+                    operator_id=message.author.id,
+                )
+                channel, workshop = await create_shared_space(
+                    guild,
+                    options,
+                    member_keys=member_keys,
+                )
+                from river_handler import ensure_bar_at_bottom
+
+                await ensure_bar_at_bottom(channel, client)
+            except ValueError as exc:
+                await message.reply(str(exc), mention_author=False)
+                return
+            except discord.HTTPException as exc:
+                await message.reply(f"Could not create shared space: {exc}", mention_author=False)
+                return
+
+            visibility = "open (view-only for @everyone)" if options.open_to_everyone else "members only"
+            await message.reply(
+                f"**Shared space `{options.space_key}` created:**\n"
+                f"- Channel: #{channel.name}\n"
+                f"- Members: {', '.join(f'`{k}`' for k in member_keys)}\n"
+                f"- Share policy: `{options.share_policy}`\n"
+                f"- Discord visibility: {visibility}\n"
+                f"- Workshop: `{workshop}`\n"
+                f"- Context: `{options.default_context or 'none'}`\n\n"
+                f"Optional: open an eddy and run `!flow shared-river-orientation` when ready.",
+                mention_author=False,
+            )
+            await log_activity(
+                f"Created shared space **{options.space_key}** — #{channel.name}",
+                "\U0001f3db\ufe0f",
+                channel=message.channel,
+            )
+
+        elif space_sub == "close":
+            try:
+                options = parse_space_close_args(args)
+                summary = await close_shared_space(guild, options, discord_client=client)
+            except ValueError as exc:
+                await message.reply(str(exc), mention_author=False)
+                return
+
+            if not options.confirm:
+                await message.reply(
+                    f"**Close `{summary['space_key']}`?**\n"
+                    f"- Channel: `#{summary['channel_name']}` (`{summary['channel_id']}`)\n"
+                    f"- Members: {', '.join(f'`{m}`' for m in summary['members']) or '(none)'}\n"
+                    f"- Share policy: `{summary['share_policy']}`\n"
+                    f"- Open threads: {summary['open_threads']}\n\n"
+                    f"Re-run with `--confirm` to archive (workshop kept by default).",
+                    mention_author=False,
+                )
+                return
+
+            await message.reply(
+                f"**Archived shared space `{summary['space_key']}`**\n"
+                f"- Channel: `#{summary['channel_name']}` locked (moved to Archived if category exists)\n"
+                f"- Registry: marked archived; river harness will skip this channel\n",
+                mention_author=False,
+            )
+            await log_activity(
+                f"Archived shared space **{summary['space_key']}** — #{summary['channel_name']}",
+                "\U0001f4e6",
+                channel=message.channel,
+            )
+
+        elif space_sub == "list":
+            rows = list_active_spaces(get_registry())
+            if not rows:
+                await message.reply("No active shared-river spaces in registry.", mention_author=False)
+                return
+            lines = ["**Active shared spaces:**"]
+            for row in rows:
+                ch = guild.get_channel(int(row["channel_id"]))
+                ch_label = f"#{ch.name}" if ch else f"id:{row['channel_id']}"
+                members = ", ".join(f"`{m}`" for m in row["members"]) or "(none)"
+                lines.append(
+                    f"- `{row['space_key']}` → {ch_label} · members: {members} · policy: `{row['share_policy']}`"
+                )
+            await message.reply("\n".join(lines), mention_author=False)
+
+        elif space_sub == "sync" and len(args) > 2:
+            from space_provisioning import normalize_space_key
+
+            try:
+                space_key = normalize_space_key(args[2])
+            except ValueError as exc:
+                await message.reply(str(exc), mention_author=False)
+                return
+            binding = find_shared_river_channel(get_registry(), space_key)
+            if not binding:
+                await message.reply(f"No active shared-river space `{space_key}`.", mention_author=False)
+                return
+            ch_id_str, _entry = binding
+            channel = guild.get_channel(int(ch_id_str))
+            if channel is None:
+                await message.reply(f"Channel `{ch_id_str}` not found on server.", mention_author=False)
+                return
+            changed = await ensure_space_channel_access(channel, guild=guild)
+            await message.reply(
+                f"Synced **`{space_key}`** — permissions {'updated' if changed else 'already aligned'}.",
+                mention_author=False,
+            )
+
+        else:
+            await message.reply(
+                f"Unknown space command: `{space_sub}`. Try `!admin space` for help.",
+                mention_author=False,
+            )
 
     else:
         await message.reply(f"Unknown admin command: `{subcmd}`. Try `!admin` for help.", mention_author=False)

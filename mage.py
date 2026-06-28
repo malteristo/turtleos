@@ -135,6 +135,8 @@ def uses_native_eddy(channel_id) -> bool:
 
 def _channel_is_river(ch_id: int) -> bool:
     """True when channel id is a parent river, hosted-river, or shared-river surface."""
+    if is_channel_archived(ch_id):
+        return False
     if str(ch_id) not in _MAGE_REGISTRY.get("channels", {}):
         dialogue = get_channel("dialogue")
         if not dialogue or ch_id != dialogue.id:
@@ -197,10 +199,20 @@ def _get_channel_mage(channel_id):
     return entry
 
 
+def _get_channel_entry(channel_id) -> dict | None:
+    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
+    return entry if isinstance(entry, dict) else None
+
+
+def is_channel_archived(channel_id) -> bool:
+    entry = _get_channel_entry(channel_id)
+    return bool(entry and entry.get("archived"))
+
+
 def _get_channel_type(channel_id):
     """Get channel type (river, hosted-river, shared-river, shared). Returns None for legacy format."""
-    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
-    if isinstance(entry, dict):
+    entry = _get_channel_entry(channel_id)
+    if entry:
         return entry.get("type")
     return None
 
@@ -529,6 +541,8 @@ async def sync_shared_river_channel_access(client) -> None:
         if not isinstance(entry, dict):
             continue
         if entry.get("type") != "shared-river":
+            continue
+        if entry.get("archived"):
             continue
         try:
             ch_id = int(ch_id_str)
