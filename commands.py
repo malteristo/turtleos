@@ -804,6 +804,9 @@ async def cmd_admin(message, args):
             channel_name, category=category, overwrites=overwrites,
             topic=f"Private practice space for {target_member.display_name}"
         )
+        from discord_reconcile import expect_channel_registry_binding
+
+        expect_channel_registry_binding(new_ch.id)
 
         import yaml
         registry_path = os.path.expanduser("~/turtleos/mage_registry.yaml")

@@ -17,6 +17,10 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Opened eddy acts:** `on_thread_create` → `handle_thread_open` posts green 🌀 embed on parent river (symmetric to Closed eddy). `via_discord_ui=True` when no river `pending`; bar/`!thread` spawns pass pending so footer omits "Discord". System eddies (`vortex`, `boom`, …) skipped. Retired redundant `🌀 Thread created` parent message from `cmd_threads.py` — opened act replaces it.
 
+**Deploy pitfall (2026-06-28):** `git pull` alone does not reload Python — verify `ps -p $(pgrep -f discord_bot.py) -o lstart=` is *after* the pull before dogfood. First kickstart after Opened eddy deploy left a 09:54 process running 10:06 code on disk; second kickstart at 10:11 fixed it. Always confirm restart, not assume.
+
+**S3 channel create/update:** `on_guild_channel_create` posts dialogue ops notice for unregistered text channels with binding hints (no auto-bind). `on_guild_channel_update` logs rename + permission drift for registry-bound channels; syncs `discord_name`. Blessed creates use `expect_channel_registry_binding()` to skip duplicate notices.
+
 ### 2026-06-25 — Share eddy Slice 1 + flow library on-demand
 
 **Share eddy:** Practitioner path shipped (`!share` → synthesize → preview/edit → confirm → recipient `@` + Continue → received eddy). Split-bot interaction bugs: defer/edit paths, modal must use `response.edit_message`, history filter for failed share acts. Dogfood chapter: `docs/chapters/2026-06-25-share-eddy-slice1-dogfood.md`.

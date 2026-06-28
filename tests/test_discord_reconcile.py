@@ -355,5 +355,161 @@ class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
         deliver.assert_awaited_once_with(1479428854513664030, unittest.mock.ANY, silent=False)
 
 
+class TestChannelBindingHint(unittest.TestCase):
+    def test_practice_dialogue_hint(self) -> None:
+        from discord_reconcile import _channel_binding_hint
+
+        ch = MagicMock()
+        ch.name = "lukas-dialogue"
+        cat = MagicMock()
+        cat.name = "Practice"
+        ch.category = cat
+        hint = _channel_binding_hint(ch)
+        self.assertIn("Practice category", hint)
+        self.assertIn("hosted river", hint)
+
+    def test_generic_hint(self) -> None:
+        from discord_reconcile import _channel_binding_hint
+
+        ch = MagicMock()
+        ch.name = "random-chat"
+        ch.category = None
+        hint = _channel_binding_hint(ch)
+        self.assertIn("ignore if Discord-only", hint)
+
+
+class TestHandleGuildChannelCreate(unittest.IsolatedAsyncioTestCase):
+    def _text_channel(self, *, ch_id: int = 555, name: str = "new-room") -> MagicMock:
+        ch = MagicMock()
+        ch.id = ch_id
+        ch.name = name
+        cat = MagicMock()
+        cat.name = "Practice"
+        ch.category = cat
+        ch.overwrites = {}
+        ch.type = getattr(getattr(discord, "ChannelType", None), "text", 0)
+        return ch
+
+    async def test_skips_registered(self) -> None:
+        from discord_reconcile import handle_guild_channel_create
+
+        ch = self._text_channel()
+        with patch("discord_reconcile.get_registry", return_value={"channels": {"555": {"type": "river"}}}):
+            result = await handle_guild_channel_create(ch, discord_client=MagicMock())
+        self.assertEqual(result["skipped"], "already_registered")
+
+    async def test_skips_blessed_pending(self) -> None:
+        from discord_reconcile import expect_channel_registry_binding, handle_guild_channel_create
+
+        ch = self._text_channel(ch_id=777)
+        expect_channel_registry_binding(777)
+        with patch("discord_reconcile.get_registry", return_value={"channels": {}}):
+            result = await handle_guild_channel_create(ch, discord_client=MagicMock())
+        self.assertEqual(result["skipped"], "blessed_path_pending")
+
+    async def test_posts_notice_for_unregistered(self) -> None:
+        from discord_reconcile import handle_guild_channel_create
+
+        ch = self._text_channel(name="lukas-play")
+        with patch("discord_reconcile.get_registry", return_value={"channels": {}}), patch(
+            "helpers.log_activity",
+            new_callable=AsyncMock,
+        ) as log:
+            result = await handle_guild_channel_create(ch, discord_client=MagicMock())
+
+        self.assertTrue(result["notice_posted"])
+        log.assert_awaited_once()
+        self.assertIn("lukas-play", log.await_args.args[0])
+
+
+class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
+    def _channel(self, *, ch_id: int = 555, name: str = "family") -> MagicMock:
+        ch = MagicMock()
+        ch.id = ch_id
+        ch.name = name
+        ch.category_id = 1
+        ch.guild = MagicMock()
+        ch.guild.default_role = MagicMock(id=1)
+        ch.overwrites = {}
+        ch.type = getattr(getattr(discord, "ChannelType", None), "text", 0)
+        return ch
+
+    async def test_skips_unregistered(self) -> None:
+        from discord_reconcile import handle_guild_channel_update
+
+        before = self._channel()
+        after = self._channel(name="renamed")
+        with patch("discord_reconcile.get_registry", return_value={"channels": {}}):
+            result = await handle_guild_channel_update(before, after, discord_client=MagicMock())
+        self.assertEqual(result["skipped"], "unregistered")
+
+    async def test_logs_rename_and_syncs_name(self) -> None:
+        from discord_reconcile import handle_guild_channel_update
+
+        before = self._channel(name="old-name")
+        after = self._channel(name="new-name")
+        registry = {
+            "channels": {
+                "555": {"type": "shared-river", "mage": "family"},
+            },
+            "spaces": {"family": {"members": ["kermit"]}},
+            "mages": {"kermit": {"discord_id": "42"}},
+        }
+        with patch("discord_reconcile.get_registry", return_value=registry), patch(
+            "river_keys.save_registry",
+        ) as save, patch("helpers.log_activity", new_callable=AsyncMock) as log:
+            result = await handle_guild_channel_update(before, after, discord_client=MagicMock())
+
+        self.assertTrue(result["channel_updated"])
+        self.assertTrue(result["renamed"])
+        save.assert_called_once()
+        log.assert_awaited_once()
+        self.assertIn("renamed", log.await_args.args[0])
+
+    async def test_flags_permission_drift(self) -> None:
+        from discord_reconcile import handle_guild_channel_update
+
+        everyone = MagicMock(id=1)
+        guild = MagicMock()
+        guild.default_role = everyone
+        member = MagicMock(id=42)
+        guild.get_member.return_value = member
+
+        deny_none = MagicMock()
+        deny_none.pair.return_value = (MagicMock(view_channel=True), MagicMock(view_channel=False))
+        deny_none.view_channel = True
+
+        before = MagicMock()
+        before.id = 555
+        before.name = "family"
+        before.category_id = 1
+        before.guild = guild
+        before.overwrites = {everyone: deny_none}
+        before.type = getattr(getattr(discord, "ChannelType", None), "text", 0)
+
+        after = MagicMock()
+        after.id = 555
+        after.name = "family"
+        after.category_id = 1
+        after.guild = guild
+        after.overwrites = {}
+        after.type = getattr(getattr(discord, "ChannelType", None), "text", 0)  # @everyone no longer explicitly denied
+
+        registry = {
+            "channels": {"555": {"type": "shared-river", "mage": "family"}},
+            "spaces": {"family": {"members": ["kermit"]}},
+            "mages": {"kermit": {"discord_id": "42"}},
+        }
+        with patch("discord_reconcile.get_registry", return_value=registry), patch(
+            "helpers.log_activity",
+            new_callable=AsyncMock,
+        ) as log:
+            result = await handle_guild_channel_update(before, after, discord_client=MagicMock())
+
+        self.assertTrue(result["channel_updated"])
+        self.assertTrue(any("permission drift" in c for c in result["changes"]))
+        log.assert_awaited_once()
+
+
 if __name__ == "__main__":
     unittest.main()

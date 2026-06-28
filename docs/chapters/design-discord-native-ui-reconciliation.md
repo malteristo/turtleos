@@ -61,12 +61,18 @@ on_guild_channel_* (S2–S3)       ──► discord_reconcile
 
 ---
 
+## S3 — Channel create/update (implemented)
+
+**Create (`on_guild_channel_create`):** Unregistered text/forum channels → ops notice in dialogue with binding hints (Practice category, `*-dialogue`, `river-*`, play sandbox). No auto-register. Blessed paths (`!admin onboard`, `!admin space create`, `!admin river-key`) call `expect_channel_registry_binding()` to suppress duplicate notices.
+
+**Update (`on_guild_channel_update`):** Registered channels → log rename (sync `discord_name` in registry), category moves, permission drift (hosted/shared heuristics aligned with `!admin audit`). Orphaned entries skipped.
+
+---
+
 ## Slices remaining
 
 | Slice | Scope |
 |-------|-------|
-| S2 | `on_thread_delete`, `on_guild_channel_delete` |
-| S3 | `on_guild_channel_create/update` — unregistered channel notices |
 | S4 | Extract shared adapters; dedupe command/event entry points |
 | S5 | Spec ripple + `docs/ux/journeys.md` |
 

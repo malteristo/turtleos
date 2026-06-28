@@ -451,7 +451,10 @@ async def create_shared_space(
     if category:
         create_kwargs["category"] = category
 
+    from discord_reconcile import expect_channel_registry_binding
+
     channel = await guild.create_text_channel(**create_kwargs)
+    expect_channel_registry_binding(channel.id)
     try:
         workshop = seed_space_workshop(options.space_key)
         write_space_registry(

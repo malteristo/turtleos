@@ -406,6 +406,9 @@ async def provision_unclaimed_river(
         create_kwargs["category"] = category
 
     channel = await guild.create_text_channel(**create_kwargs)
+    from discord_reconcile import expect_channel_registry_binding
+
+    expect_channel_registry_binding(channel.id)
 
     registry.setdefault("channels", {})[str(channel.id)] = {
         "mage": mage_key,

@@ -1622,6 +1622,30 @@ async def on_guild_channel_delete(channel):
 
 
 @client.event
+async def on_guild_channel_create(channel):
+    from discord_reconcile import handle_guild_channel_create
+
+    try:
+        outcome = await handle_guild_channel_create(channel, discord_client=client)
+        if outcome.get("notice_posted"):
+            print(f"Unregistered channel notice posted: {getattr(channel, 'name', channel.id)}")
+    except Exception as exc:
+        print(f"Native channel create reconcile failed for {channel.id}: {exc}")
+
+
+@client.event
+async def on_guild_channel_update(before, after):
+    from discord_reconcile import handle_guild_channel_update
+
+    try:
+        outcome = await handle_guild_channel_update(before, after, discord_client=client)
+        if outcome.get("channel_updated"):
+            print(f"Native channel update reconciled: {getattr(after, 'name', after.id)}")
+    except Exception as exc:
+        print(f"Native channel update reconcile failed for {after.id}: {exc}")
+
+
+@client.event
 async def on_member_join(member):
     if member.bot:
         return
