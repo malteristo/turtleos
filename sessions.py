@@ -428,11 +428,26 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
 
 
+async def light_archive_eddy(channel_id: int, *, discord_client=None) -> None:
+    """Registry + in-memory cleanup only — no essence/chronicle (native close policy C)."""
+    from thread_registry import mark_dissolved
+    from state import threads_flagged_for_release
+    from helpers import clear_history
+
+    thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
+    mark_dissolved(channel_id)
+    clear_history(channel_id)
+    active_sessions.pop(channel_id, None)
+    print(f"Light archived eddy: {channel_id}")
+
+
 async def dissolve_eddy(
     channel_id: int,
     history: list[dict] | None = None,
     *,
     discord_client=None,
+    native_close: bool = False,
 ) -> DissolveResult | None:
     """Archive an eddy — essence capture, file archive, chronicle, parent act."""
     import discord
@@ -449,7 +464,7 @@ async def dissolve_eddy(
     if not isinstance(thread, discord.Thread):
         return None
 
-    if thread.archived:
+    if thread.archived and not native_close:
         return DissolveResult(
             thread_name=thread.name,
             jump_url=thread.jump_url,
@@ -526,10 +541,11 @@ async def dissolve_eddy(
             summary += f" — {entry_count} entries captured to boom"
         await parent.send(summary, silent=True)
 
-    try:
-        await thread.edit(archived=True)
-    except Exception:
-        pass
+    if not thread.archived:
+        try:
+            await thread.edit(archived=True)
+        except Exception:
+            pass
 
     print(f"Dissolved eddy: {thread_name} ({entry_count} boom entries)")
     return DissolveResult(

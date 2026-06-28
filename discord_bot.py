@@ -1569,14 +1569,9 @@ async def on_thread_create(thread):
 
 @client.event
 async def on_thread_update(before, after):
-    if is_registered_parent_channel(after.parent_id if after.parent_id else 0):
-        from thread_registry import update_thread_name
-        if before.name != after.name:
-            try:
-                update_thread_name(after.id, after.name)
-                print(f"Thread renamed: {before.name} -> {after.name}")
-            except Exception as e:
-                print(f"Thread rename registry update failed: {e}")
+    from discord_reconcile import handle_thread_update
+
+    await handle_thread_update(before, after, discord_client=client)
 
 
 @client.event
