@@ -67,6 +67,7 @@ async def handle_thread_archive_transition(
             history,
             discord_client=discord_client,
             native_close=True,
+            parent_channel_id=parent_id,
         )
         if result:
             clear_history(after.id)
@@ -80,6 +81,7 @@ async def handle_thread_archive_transition(
         discord_client=discord_client,
         via_discord_ui=True,
         thread_name=after.name,
+        parent_channel_id=parent_id,
     )
     return {"light_archive": True, "thread_id": after.id}
 

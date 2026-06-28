@@ -42,29 +42,36 @@ def local_now():
 
 # ─── Activity Logging ───────────────────────────────────────────
 
-async def _deliver_channel_embed(channel, embed) -> None:
+async def deliver_channel_embed(channel_or_id, embed, *, silent: bool = True) -> None:
     """Send embed on a channel via the correct bot identity (River bot in split mode)."""
     from mage import river_bot_enabled
     from river_state import river_bot_token
 
-    channel_id = getattr(channel, "id", None)
+    channel_id = channel_or_id if isinstance(channel_or_id, int) else getattr(channel_or_id, "id", None)
     if channel_id is None:
-        return
+        raise ValueError("deliver_channel_embed requires a channel id")
 
     if river_bot_enabled():
         token = river_bot_token()
         if token:
             intents = discord.Intents.default()
-            client = discord.Client(intents=intents)
+            ephemeral = discord.Client(intents=intents)
             try:
-                await client.login(token)
-                ch = await client.fetch_channel(channel_id)
-                await ch.send(embed=embed, silent=True)
+                await ephemeral.login(token)
+                ch = await ephemeral.fetch_channel(channel_id)
+                await ch.send(embed=embed, silent=silent)
                 return
             finally:
-                await client.close()
+                await ephemeral.close()
 
-    await channel.send(embed=embed, silent=True)
+    target = channel_or_id if not isinstance(channel_or_id, int) else client.get_channel(channel_id)
+    if target is None:
+        target = await client.fetch_channel(channel_id)
+    await target.send(embed=embed, silent=silent)
+
+
+async def _deliver_channel_embed(channel, embed) -> None:
+    await deliver_channel_embed(channel, embed, silent=True)
 
 
 async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):

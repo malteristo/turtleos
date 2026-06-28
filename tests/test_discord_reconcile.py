@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import unittest.mock
 from unittest.mock import AsyncMock, MagicMock, patch
 
 try:
@@ -126,6 +127,7 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
             discord_client=light.await_args.kwargs["discord_client"],
             via_discord_ui=True,
             thread_name="test-eddy",
+            parent_channel_id=100,
         )
 
     async def test_light_archive_when_few_messages(self) -> None:
@@ -179,40 +181,32 @@ class TestHandleThreadUpdate(unittest.IsolatedAsyncioTestCase):
 
 
 class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
-    async def test_light_archive_discord_ui_copy(self) -> None:
+    async def test_light_archive_posts_to_parent_id(self) -> None:
         from sessions import post_eddy_lifecycle_feedback
 
-        parent = MagicMock()
-        with patch("sessions.log_activity", new_callable=AsyncMock) as log:
+        with patch("helpers.deliver_channel_embed", new_callable=AsyncMock) as deliver:
             await post_eddy_lifecycle_feedback(
-                parent,
+                1479428854513664030,
                 thread_name="family-planning",
                 mode="light_archive",
                 via_discord_ui=True,
             )
-        log.assert_awaited_once_with(
-            "**family-planning** closed via Discord — eddy archived (nothing captured)",
-            "🍃",
-            channel=parent,
-        )
+        deliver.assert_awaited_once_with(1479428854513664030, unittest.mock.ANY, silent=False)
 
-    async def test_dissolve_with_capture(self) -> None:
+    async def test_dissolve_posts_with_link(self) -> None:
         from sessions import post_eddy_lifecycle_feedback
 
-        parent = MagicMock()
-        with patch("sessions.log_activity", new_callable=AsyncMock) as log:
+        with patch("helpers.deliver_channel_embed", new_callable=AsyncMock) as deliver:
             await post_eddy_lifecycle_feedback(
-                parent,
+                1479428854513664030,
                 thread_name="deep-thread",
                 mode="dissolve",
                 via_discord_ui=True,
                 entry_count=2,
+                jump_url="https://discord.com/channels/1/2/3",
             )
-        log.assert_awaited_once_with(
-            "**deep-thread** dissolved via Discord — 2 entries captured to boom",
-            "🍃",
-            channel=parent,
-        )
+        self.assertEqual(deliver.await_args.args[0], 1479428854513664030)
+        self.assertFalse(deliver.await_args.kwargs["silent"])
 
 
 if __name__ == "__main__":

@@ -429,22 +429,45 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
 
 
 async def post_eddy_lifecycle_feedback(
-    parent_channel,
+    parent_channel_id: int | None,
     *,
     thread_name: str,
     mode: str,
     via_discord_ui: bool = False,
     entry_count: int = 0,
+    jump_url: str | None = None,
 ) -> None:
     """Post a visible river act when an eddy closes (Discord UI or command)."""
-    source = " via Discord" if via_discord_ui else ""
+    import discord
+
+    if not parent_channel_id:
+        print(f"Lifecycle feedback skipped — no parent channel for {thread_name!r}")
+        return
+
+    source = "Discord" if via_discord_ui else "command"
     if mode == "light_archive":
-        text = f"**{thread_name}** closed{source} — eddy archived (nothing captured)"
+        body = "Archived — nothing captured to boom."
     elif entry_count:
-        text = f"**{thread_name}** dissolved{source} — {entry_count} entries captured to boom"
+        body = f"Dissolved — {entry_count} entries captured to boom."
     else:
-        text = f"**{thread_name}** dissolved{source}"
-    await log_activity(text, "🍃", channel=parent_channel)
+        body = "Dissolved."
+
+    embed = discord.Embed(
+        title=f"🍃 {thread_name}",
+        description=body,
+        color=0x57F287,
+    )
+    embed.set_footer(text=f"Closed via {source} · {local_now().strftime('%H:%M')}")
+    if jump_url:
+        embed.url = jump_url
+
+    try:
+        from helpers import deliver_channel_embed
+
+        await deliver_channel_embed(parent_channel_id, embed, silent=False)
+        print(f"Lifecycle feedback posted to {parent_channel_id}: {thread_name} ({mode})")
+    except Exception as exc:
+        print(f"Lifecycle feedback failed for {parent_channel_id}: {type(exc).__name__}: {exc}")
 
 
 async def light_archive_eddy(
@@ -453,6 +476,7 @@ async def light_archive_eddy(
     discord_client=None,
     via_discord_ui: bool = False,
     thread_name: str | None = None,
+    parent_channel_id: int | None = None,
 ) -> None:
     """Registry + in-memory cleanup only — no essence/chronicle (native close policy C)."""
     import discord
@@ -469,7 +493,7 @@ async def light_archive_eddy(
             thread = None
 
     resolved_name = thread_name or (getattr(thread, "name", None) if thread else None) or "eddy"
-    parent = getattr(thread, "parent", None) if thread else None
+    parent_id = parent_channel_id or (getattr(thread, "parent_id", None) if thread else None)
 
     thread_configs.pop(channel_id, None)
     threads_flagged_for_release.pop(channel_id, None)
@@ -477,9 +501,9 @@ async def light_archive_eddy(
     clear_history(channel_id)
     active_sessions.pop(channel_id, None)
 
-    if parent:
+    if parent_id:
         await post_eddy_lifecycle_feedback(
-            parent,
+            parent_id,
             thread_name=resolved_name,
             mode="light_archive",
             via_discord_ui=via_discord_ui,
@@ -494,6 +518,7 @@ async def dissolve_eddy(
     *,
     discord_client=None,
     native_close: bool = False,
+    parent_channel_id: int | None = None,
 ) -> DissolveResult | None:
     """Archive an eddy — essence capture, file archive, chronicle, parent act."""
     import discord
@@ -580,14 +605,15 @@ async def dissolve_eddy(
     threads_flagged_for_release.pop(channel_id, None)
     mark_dissolved(channel_id)
 
-    parent = thread.parent
-    if parent:
+    parent_id = parent_channel_id or getattr(thread, "parent_id", None)
+    if parent_id:
         await post_eddy_lifecycle_feedback(
-            parent,
+            parent_id,
             thread_name=thread_name,
             mode="dissolve",
             via_discord_ui=native_close,
             entry_count=entry_count,
+            jump_url=jump_url,
         )
 
     if not thread.archived:
