@@ -155,6 +155,38 @@ class AdminSpaceMemberResolutionTests(unittest.TestCase):
         )
         self.assertEqual(keys, ["lukas"])
 
+    def test_resolve_members_from_registry_keys(self) -> None:
+        guild = MagicMock()
+        guild.members = []
+
+        keys = resolve_member_keys(
+            guild,
+            self.REGISTRY,
+            member_tokens=["kermit", "lukas"],
+            message_mentions=[],
+            operator_id=1,
+        )
+        self.assertEqual(keys, ["kermit", "lukas"])
+
+    def test_resolve_at_tokens_via_message_mentions(self) -> None:
+        guild = MagicMock()
+        guild.members = []
+        kermit = MagicMock()
+        kermit.id = 1
+        kermit.display_name = "Kermit"
+        lukas = MagicMock()
+        lukas.id = 3
+        lukas.display_name = "Lukas"
+
+        keys = resolve_member_keys(
+            guild,
+            self.REGISTRY,
+            member_tokens=["@kermit", "@lukas"],
+            message_mentions=[kermit, lukas],
+            operator_id=1,
+        )
+        self.assertEqual(keys, ["kermit", "lukas"])
+
     def test_unregistered_member_rejected(self) -> None:
         guild = MagicMock()
         member = MagicMock()

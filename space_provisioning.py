@@ -176,7 +176,7 @@ def resolve_member_keys(
         match = MENTION_RE.match(token)
         if match:
             uid = match.group(1)
-            member = guild.get_member(int(uid)) or mention_by_id.get(uid)
+            member = mention_by_id.get(uid) or guild.get_member(int(uid))
             if not member:
                 raise ValueError(f"Mention `{token}` is not a server member.")
             key = mage_key_for_discord_id(registry, member.id)
@@ -188,8 +188,19 @@ def resolve_member_keys(
             add_key(key)
             continue
 
+        mage_key_candidate = token.lower().lstrip("@")
+        if mage_key_candidate in registry.get("mages", {}):
+            mage = registry["mages"][mage_key_candidate]
+            if mage.get("discord_id"):
+                add_key(mage_key_candidate)
+                continue
+
+        # Discord @-autocomplete mentions arrive in message.mentions, not always as <@id> tokens.
+        if token.startswith("@"):
+            continue
+
         target_member = None
-        lowered = token.lower().lstrip("@")
+        lowered = token.lower()
         for m in guild.members:
             if m.name.lower() == lowered or m.display_name.lower() == lowered:
                 target_member = m
@@ -206,8 +217,12 @@ def resolve_member_keys(
 
     for member in message_mentions:
         key = mage_key_for_discord_id(registry, member.id)
-        if key:
-            add_key(key)
+        if not key:
+            raise ValueError(
+                f"**{member.display_name}** is not a registered practitioner. "
+                f"Run `!admin onboard` or `!admin river-key` first."
+            )
+        add_key(key)
 
     if not resolved:
         op_key = mage_key_for_discord_id(registry, operator_id)
