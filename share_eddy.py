@@ -816,6 +816,21 @@ def pending_path(runtime_dir: str, author_id: int, thread_id: int) -> Path:
     return _share_dir(runtime_dir, "pending") / f"{author_id}_{thread_id}.json"
 
 
+def resolve_share_runtime_dir(*, parent_channel_id: int | None) -> str:
+    """Practice runtime for share drafts — must match the sharer's hosted river parent."""
+    from mage import get_runtime_dir, set_practice_context_for_channel
+
+    if parent_channel_id:
+        set_practice_context_for_channel(parent_channel_id)
+    return get_runtime_dir()
+
+
+def resolve_share_runtime_dir_from_interaction(interaction: discord.Interaction) -> str:
+    channel = interaction.channel
+    parent_id = channel.parent_id if isinstance(channel, discord.Thread) else None
+    return resolve_share_runtime_dir(parent_channel_id=parent_id)
+
+
 def received_thread_path(runtime_dir: str, thread_id: int) -> Path:
     return _share_dir(runtime_dir, "received") / f"{thread_id}.json"
 
@@ -1546,6 +1561,7 @@ class ShareTargetSelect(discord.ui.Select):
         *,
         thread_id: int,
         author_id: int,
+        parent_channel_id: int,
         targets: list[ShareTarget],
     ):
         options = [
@@ -1565,6 +1581,7 @@ class ShareTargetSelect(discord.ui.Select):
         )
         self._thread_id = thread_id
         self._author_id = author_id
+        self._parent_channel_id = parent_channel_id
         self._targets = {t.mage_key: t for t in targets}
 
     async def callback(self, interaction: discord.Interaction):
@@ -1579,9 +1596,8 @@ class ShareTargetSelect(discord.ui.Select):
             await interaction.response.send_message("Unknown recipient.", ephemeral=True)
             return
 
-        from mage import get_runtime_dir
-
-        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        runtime_dir = resolve_share_runtime_dir(parent_channel_id=self._parent_channel_id)
+        draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
                 "Share session expired — run `!share` again.",
@@ -1594,7 +1610,7 @@ class ShareTargetSelect(discord.ui.Select):
         draft["target_channel_id"] = target.channel_id
         draft["target_kind"] = "practitioner"
         draft["parent_id"] = interaction.channel.parent_id
-        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+        write_pending_draft(runtime_dir, self._author_id, self._thread_id, draft)
 
         await interaction.response.defer()
         try:
@@ -1617,9 +1633,11 @@ class ShareTargetSelect(discord.ui.Select):
 
         draft["display_title"] = bundle["display_title"]
         draft["digest"] = bundle["digest"]
-        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+        write_pending_draft(runtime_dir, self._author_id, self._thread_id, draft)
 
-        preview = SharePreviewView(self._thread_id, self._author_id, target)
+        preview = SharePreviewView(
+            self._thread_id, self._author_id, target, parent_channel_id=self._parent_channel_id
+        )
         embed = build_preview_embed(draft, target)
         try:
             if interaction.message:
@@ -1646,6 +1664,7 @@ class ShareSpaceSelect(discord.ui.Select):
         *,
         thread_id: int,
         author_id: int,
+        parent_channel_id: int,
         targets: list[SpaceShareTarget],
     ):
         options = [
@@ -1665,6 +1684,7 @@ class ShareSpaceSelect(discord.ui.Select):
         )
         self._thread_id = thread_id
         self._author_id = author_id
+        self._parent_channel_id = parent_channel_id
         self._targets = {t.space_key: t for t in targets}
 
     async def callback(self, interaction: discord.Interaction):
@@ -1679,9 +1699,8 @@ class ShareSpaceSelect(discord.ui.Select):
             await interaction.response.send_message("Unknown space.", ephemeral=True)
             return
 
-        from mage import get_runtime_dir
-
-        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        runtime_dir = resolve_share_runtime_dir(parent_channel_id=self._parent_channel_id)
+        draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
                 "Share session expired — run `!share` again.",
@@ -1693,7 +1712,7 @@ class ShareSpaceSelect(discord.ui.Select):
         draft["target_channel_id"] = target.channel_id
         draft["target_kind"] = "space"
         draft["parent_id"] = interaction.channel.parent_id
-        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+        write_pending_draft(runtime_dir, self._author_id, self._thread_id, draft)
 
         await interaction.response.defer()
         try:
@@ -1716,9 +1735,11 @@ class ShareSpaceSelect(discord.ui.Select):
 
         draft["display_title"] = bundle["display_title"]
         draft["digest"] = bundle["digest"]
-        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+        write_pending_draft(runtime_dir, self._author_id, self._thread_id, draft)
 
-        preview = SharePreviewView(self._thread_id, self._author_id, target)
+        preview = SharePreviewView(
+            self._thread_id, self._author_id, target, parent_channel_id=self._parent_channel_id
+        )
         embed = build_preview_embed(draft, target)
         try:
             if interaction.message:
@@ -1749,11 +1770,14 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
         target: ShareTarget | SpaceShareTarget,
         display_title: str,
         digest: str,
+        *,
+        parent_channel_id: int,
     ):
         super().__init__()
         self._thread_id = thread_id
         self._author_id = author_id
         self._target = target
+        self._parent_channel_id = parent_channel_id
         self.title_input = discord.ui.TextInput(
             label="Title",
             default=display_title[:100],
@@ -1771,9 +1795,8 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
         self.add_item(self.digest_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        from mage import get_runtime_dir
-
-        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        runtime_dir = resolve_share_runtime_dir(parent_channel_id=self._parent_channel_id)
+        draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
                 "Share session expired — run `!share` again.",
@@ -1783,9 +1806,14 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
 
         draft["display_title"] = self.title_input.value.strip()[:100]
         draft["digest"] = self.digest_input.value.strip()[:500]
-        write_pending_draft(get_runtime_dir(), self._author_id, self._thread_id, draft)
+        write_pending_draft(runtime_dir, self._author_id, self._thread_id, draft)
 
-        preview = SharePreviewView(self._thread_id, self._author_id, self._target)
+        preview = SharePreviewView(
+            self._thread_id,
+            self._author_id,
+            self._target,
+            parent_channel_id=self._parent_channel_id,
+        )
         embed = build_preview_embed(draft, self._target)
         try:
             await interaction.response.edit_message(embed=embed, view=preview)
@@ -1813,11 +1841,14 @@ class SharePreviewView(discord.ui.View):
         thread_id: int,
         author_id: int,
         target: ShareTarget | SpaceShareTarget,
+        *,
+        parent_channel_id: int,
     ):
         super().__init__(timeout=600)
         self._thread_id = thread_id
         self._author_id = author_id
         self._target = target
+        self._parent_channel_id = parent_channel_id
         target_token = (
             f"s:{target.space_key}"
             if isinstance(target, SpaceShareTarget)
@@ -1851,9 +1882,9 @@ class SharePreviewView(discord.ui.View):
         if interaction.user.id != self._author_id:
             await interaction.response.send_message("Not your share.", ephemeral=True)
             return
-        from mage import get_runtime_dir
 
-        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        runtime_dir = resolve_share_runtime_dir(parent_channel_id=self._parent_channel_id)
+        draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
                 "Share session expired — run `!share` again.",
@@ -1866,6 +1897,7 @@ class SharePreviewView(discord.ui.View):
             self._target,
             draft.get("display_title") or draft.get("title", ""),
             draft.get("digest") or "",
+            parent_channel_id=self._parent_channel_id,
         )
         await interaction.response.send_modal(modal)
 
@@ -1873,9 +1905,9 @@ class SharePreviewView(discord.ui.View):
         if interaction.user.id != self._author_id:
             await interaction.response.send_message("Not your share.", ephemeral=True)
             return
-        from mage import get_runtime_dir
 
-        clear_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        runtime_dir = resolve_share_runtime_dir(parent_channel_id=self._parent_channel_id)
+        clear_pending_draft(runtime_dir, self._author_id, self._thread_id)
         await interaction.response.edit_message(
             content="Share cancelled.",
             embed=None,
@@ -1886,9 +1918,9 @@ class SharePreviewView(discord.ui.View):
         if interaction.user.id != self._author_id:
             await interaction.response.send_message("Not your share.", ephemeral=True)
             return
-        from mage import get_runtime_dir
 
-        draft = load_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        runtime_dir = resolve_share_runtime_dir(parent_channel_id=self._parent_channel_id)
+        draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
                 "Share session expired — run `!share` again.",
@@ -1910,7 +1942,7 @@ class SharePreviewView(discord.ui.View):
             )
             return
 
-        clear_pending_draft(get_runtime_dir(), self._author_id, self._thread_id)
+        clear_pending_draft(runtime_dir, self._author_id, self._thread_id)
         for child in self.children:
             child.disabled = True
         label = share_label(bundle)
@@ -1947,19 +1979,26 @@ class SharePickerView(discord.ui.View):
         *,
         thread_id: int,
         author_id: int,
+        parent_channel_id: int,
         targets: list[ShareTarget],
         space_targets: list[SpaceShareTarget] | None = None,
     ):
         super().__init__(timeout=600)
         if targets:
             self.add_item(
-                ShareTargetSelect(thread_id=thread_id, author_id=author_id, targets=targets)
+                ShareTargetSelect(
+                    thread_id=thread_id,
+                    author_id=author_id,
+                    parent_channel_id=parent_channel_id,
+                    targets=targets,
+                )
             )
         if space_targets:
             self.add_item(
                 ShareSpaceSelect(
                     thread_id=thread_id,
                     author_id=author_id,
+                    parent_channel_id=parent_channel_id,
                     targets=space_targets,
                 )
             )
@@ -2115,6 +2154,7 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
     view = SharePickerView(
         thread_id=message.channel.id,
         author_id=message.author.id,
+        parent_channel_id=parent_id,
         targets=targets,
         space_targets=space_targets,
     )

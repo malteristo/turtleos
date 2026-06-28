@@ -1013,5 +1013,25 @@ class ShareNotifyPolicyTests(unittest.TestCase):
             self.assertFalse(should_notify_sharer_on_first_peer_reply(cfg, "999"))
 
 
+class ShareRuntimeDirTests(unittest.TestCase):
+    def test_pending_draft_roundtrip_uses_parent_runtime(self) -> None:
+        from share_eddy import (
+            load_pending_draft,
+            resolve_share_runtime_dir,
+            write_pending_draft,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("mage.set_practice_context_for_channel") as set_ctx, patch(
+                "mage.get_runtime_dir", return_value=tmp
+            ):
+                runtime = resolve_share_runtime_dir(parent_channel_id=999001)
+                self.assertEqual(runtime, tmp)
+                set_ctx.assert_called_once_with(999001)
+                write_pending_draft(runtime, 222, 333, {"share_id": "abc"})
+                draft = load_pending_draft(runtime, 222, 333)
+                self.assertEqual(draft["share_id"], "abc")
+
+
 if __name__ == "__main__":
     unittest.main()
