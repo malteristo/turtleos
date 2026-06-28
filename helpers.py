@@ -42,6 +42,31 @@ def local_now():
 
 # ─── Activity Logging ───────────────────────────────────────────
 
+async def _deliver_channel_embed(channel, embed) -> None:
+    """Send embed on a channel via the correct bot identity (River bot in split mode)."""
+    from mage import river_bot_enabled
+    from river_state import river_bot_token
+
+    channel_id = getattr(channel, "id", None)
+    if channel_id is None:
+        return
+
+    if river_bot_enabled():
+        token = river_bot_token()
+        if token:
+            intents = discord.Intents.default()
+            client = discord.Client(intents=intents)
+            try:
+                await client.login(token)
+                ch = await client.fetch_channel(channel_id)
+                await ch.send(embed=embed, silent=True)
+                return
+            finally:
+                await client.close()
+
+    await channel.send(embed=embed, silent=True)
+
+
 async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
     """Post a silent ops embed. Does not re-anchor bars — callers own that.
 
@@ -56,18 +81,9 @@ async def log_activity(text: str, emoji: str = "\u2699\ufe0f", channel=None):
         color=OPS_EMBED_COLOR,
     )
     try:
-        from mage import river_bot_enabled
-        from bar_anchor import channel_for_client
-        from river_handler import _river_client_for_channel
-
-        send_channel = target
-        if river_bot_enabled():
-            act_client = _river_client_for_channel(target)
-            if act_client:
-                send_channel = await channel_for_client(target, act_client)
-        await send_channel.send(embed=embed, silent=True)
-    except Exception:
-        pass
+        await _deliver_channel_embed(target, embed)
+    except Exception as exc:
+        print(f"log_activity failed for channel {getattr(target, 'id', '?')}: {exc}")
 
 
 # ─── History Management ─────────────────────────────────────────
