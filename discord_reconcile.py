@@ -16,6 +16,43 @@ from mage import is_registered_parent_channel
 _FULL_DISSOLVE_MESSAGE_THRESHOLD = 2
 
 
+def _is_system_eddy_name(name: str) -> bool:
+    from eddy_spawn import SYSTEM_EDDY_NAMES
+
+    normalized = (name or "").strip().lower()
+    return normalized in {n.lower() for n in SYSTEM_EDDY_NAMES}
+
+
+async def handle_thread_open(
+    thread: discord.Thread,
+    *,
+    discord_client,
+    pending: dict | None = None,
+) -> dict[str, Any] | None:
+    """Post action-first Opened eddy act on parent river (S1 sibling slice)."""
+    parent_id = thread.parent_id or 0
+    if not is_registered_parent_channel(parent_id):
+        return None
+    if _is_system_eddy_name(thread.name):
+        return {"skipped": "system_eddy", "thread_id": thread.id}
+
+    from sessions import post_eddy_opened_feedback
+
+    via_discord_ui = pending is None
+    detail = None
+    if pending and pending.get("context_type"):
+        detail = f"flow `{pending['context_type']}`"
+
+    await post_eddy_opened_feedback(
+        parent_id,
+        thread_name=thread.name,
+        via_discord_ui=via_discord_ui,
+        jump_url=getattr(thread, "jump_url", None),
+        detail=detail,
+    )
+    return {"opened_act": True, "thread_id": thread.id, "via_discord_ui": via_discord_ui}
+
+
 def _registry_entry(thread_id: int) -> dict | None:
     from thread_registry import load_registry
 

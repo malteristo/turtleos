@@ -215,6 +215,63 @@ class TestHandleThreadDelete(unittest.IsolatedAsyncioTestCase):
         log.assert_awaited_once()
 
 
+class TestHandleThreadOpen(unittest.IsolatedAsyncioTestCase):
+    async def test_skips_unregistered_parent(self) -> None:
+        from discord_reconcile import handle_thread_open
+
+        thread = _thread(parent_id=999)
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=False):
+            result = await handle_thread_open(thread, discord_client=MagicMock())
+        self.assertIsNone(result)
+
+    async def test_skips_system_eddy(self) -> None:
+        from discord_reconcile import handle_thread_open
+
+        thread = _thread(name="vortex")
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=True):
+            result = await handle_thread_open(thread, discord_client=MagicMock())
+        self.assertEqual(result, {"skipped": "system_eddy", "thread_id": 9001})
+
+    async def test_native_open_via_discord_ui(self) -> None:
+        from discord_reconcile import handle_thread_open
+
+        thread = _thread(name="jokes")
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+            "sessions.post_eddy_opened_feedback",
+            new_callable=AsyncMock,
+        ) as opened:
+            result = await handle_thread_open(thread, discord_client=MagicMock(), pending=None)
+
+        opened.assert_awaited_once_with(
+            100,
+            thread_name="jokes",
+            via_discord_ui=True,
+            jump_url=thread.jump_url,
+            detail=None,
+        )
+        self.assertEqual(result, {"opened_act": True, "thread_id": 9001, "via_discord_ui": True})
+
+    async def test_river_spawn_not_via_discord_ui(self) -> None:
+        from discord_reconcile import handle_thread_open
+
+        thread = _thread(name="flow-eddy")
+        pending = {"context_type": "quest"}
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+            "sessions.post_eddy_opened_feedback",
+            new_callable=AsyncMock,
+        ) as opened:
+            result = await handle_thread_open(thread, discord_client=MagicMock(), pending=pending)
+
+        opened.assert_awaited_once_with(
+            100,
+            thread_name="flow-eddy",
+            via_discord_ui=False,
+            jump_url=thread.jump_url,
+            detail="flow `quest`",
+        )
+        self.assertFalse(result["via_discord_ui"])
+
+
 class TestHandleGuildChannelDelete(unittest.IsolatedAsyncioTestCase):
     async def test_skips_unregistered_channel(self) -> None:
         from discord_reconcile import handle_guild_channel_delete
@@ -268,6 +325,22 @@ class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["action"], "Closed eddy")
         self.assertEqual(kwargs["thread_name"], "what makes jokes work")
         self.assertIn("1 entries", kwargs["detail"])
+
+    async def test_open_delegates_action_first(self) -> None:
+        from sessions import post_eddy_opened_feedback
+
+        with patch("sessions.post_lifecycle_act", new_callable=AsyncMock) as act:
+            await post_eddy_opened_feedback(
+                1479428854513664030,
+                thread_name="new eddy",
+                via_discord_ui=False,
+                jump_url="https://discord.com/channels/1/2/3",
+            )
+        act.assert_awaited_once()
+        kwargs = act.await_args.kwargs
+        self.assertEqual(kwargs["action"], "Opened eddy")
+        self.assertEqual(kwargs["emoji"], "🌀")
+        self.assertEqual(kwargs["thread_name"], "new eddy")
 
     async def test_lifecycle_act_delivers(self) -> None:
         from sessions import post_lifecycle_act

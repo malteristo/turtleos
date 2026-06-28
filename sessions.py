@@ -499,6 +499,26 @@ async def post_eddy_lifecycle_feedback(
     )
 
 
+async def post_eddy_opened_feedback(
+    parent_channel_id: int | None,
+    *,
+    thread_name: str,
+    via_discord_ui: bool = False,
+    jump_url: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Post river feedback when an eddy opens (action-first, pairs with Closed eddy)."""
+    await post_lifecycle_act(
+        parent_channel_id,
+        action="Opened eddy",
+        thread_name=thread_name,
+        detail=detail,
+        via_discord_ui=via_discord_ui,
+        jump_url=jump_url,
+        emoji="🌀",
+    )
+
+
 async def light_archive_eddy(
     channel_id: int,
     *,

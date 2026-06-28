@@ -128,13 +128,7 @@ async def cmd_thread(message, args):
     config_line = build_config_line(thread.id)
     view = ThreadConfigView(current_type=eddy_type)
     await thread.send(config_line, view=view)
-    try:
-        await message.channel.send(
-            f"🌀 Thread created: **{topic}** — {thread.mention}",
-            silent=True,
-        )
-    except Exception as e:
-        print(f"Thread parent link failed: {e}")
+    # Parent river feedback: Opened eddy act posts from on_thread_create (discord_reconcile).
 
 
 async def cmd_thread_type(message, args):

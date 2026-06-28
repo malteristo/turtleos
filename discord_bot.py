@@ -1578,6 +1578,12 @@ async def on_thread_create(thread):
                 parent_channel=parent_name, created=created,
             )
             await _update_thread_state(thread, None, [])
+            try:
+                from discord_reconcile import handle_thread_open
+
+                await handle_thread_open(thread, discord_client=client, pending=pending)
+            except Exception as exc:
+                print(f"Opened eddy act failed for {thread.id}: {exc}")
             label = " (river→turtle, deferred)" if defer else (" (river→turtle)" if pending else "")
             print(f"{'Deferred' if defer else 'Joined'} + registered thread: {thread.name} (id: {thread.id}){label}")
         except Exception as e:
