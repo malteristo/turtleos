@@ -52,7 +52,7 @@ Implementation: `river_handler.py` (`StandingEddyBarView`).
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| `!dissolve` | `cmd_dissolve` | §9.2 — archive eddy + `🍃 dissolved` chronicle (distinct from `!release`) |
+| `!dissolve` | `cmd_dissolve` | §9.2 / §9.6 — archive eddy + `🍃 dissolved` chronicle (distinct from `!release`); native **Close Thread** uses same pipeline (policy C) |
 | `!flows` | `cmd_flows` | §5.6 — in-eddy flow picker (`!flow` alias); in parent river, redirects to open an eddy |
 | `!flow` | `cmd_flows` | Alias for `!flows` |
 | `!pin` | `cmd_pin` | §6 — pin message (reply or message id) |
@@ -166,7 +166,7 @@ Magic integration guidance lives in the Magic repo: `library/resonance/turtle/` 
 
 Do not conflate **release** (session resonance capture + clear dialogue) with **dissolve** (structural eddy lifecycle).
 
-**What “archived” means:** Discord `thread.edit(archived=True)` — the eddy moves to archived threads, stays readable, and is **not deleted**. A file copy may land in `thread-archive/` under practice root; parent river gets a `🍃 dissolved` act.
+**What “archived” means:** Discord `thread.edit(archived=True)` — the eddy moves to archived threads, stays readable, and is **not deleted**. A file copy may land in `thread-archive/` under practice root; parent river gets a `🍃 dissolved` act. **Close Thread** in Discord's UI triggers the same path (§9.6) — see [docs/ux/discord-native-ui.md](ux/discord-native-ui.md).
 
 ---
 

@@ -41,6 +41,7 @@
 | §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same | **Partial** | `test_sessions`, `shake_flow.py`; dogfood R4 **fail** split-bot | `docs/ux/eddy-lifecycle-bar.md`, acceptance ch. | **Integrate** — River capture must use Turtle dialogue history |
 | §8.4 | Release (checkpoint + clear) | `sessions.py`, `cmd_sessions.py` | same | **Partial** | `test_sessions`; dogfood R5 **fail** — embed over-claims note | same | **Integrate** — honest `CheckpointResult` in release embed |
 | §9.2 | No auto-dissolve eddies | `sessions.py`, lifecycle | same | **Aligned** | `test_eddy_lifecycle_bar` | §9.2 | **Keep** |
+| §9.6 | Discord native UI reconciliation | `discord_reconcile.py`, `runtime/adapters/lifecycle.py`, `runtime/adapters/structural.py` | same | **Aligned** (S1–S5) | `test_discord_reconcile`, `test_lifecycle_adapters` | `docs/ux/discord-native-ui.md`, design chapter | **Keep** |
 | §9.4 | Attachment preprocessing | `content_fetch.py`, pipeline | same | **Aligned** | `test_attachment_pipeline` | — | **Keep** |
 | §9.5 / §5.8 | **Turtle silent link-read** (conversation) | `link_read.py` | same | **Aligned** (Slice 1) | `test_link_read`, `shake_link_read.py` | chapter harness-split | **Keep** |
 | §9.5 / §5.8 | **River Save to library** (persistence) | `river_eddy_seneschal.py`, `commands.py` | same | **Aligned** (Slice 2) | `test_river_eddy_seneschal`, Mini dogfood | chapter harness-split | **Keep** |

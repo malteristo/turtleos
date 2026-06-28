@@ -66,6 +66,8 @@ Silent message (zero-width space), three buttons:
 | **Release** | `!release` | Yes | Checkpoint + clear history; thread stays open |
 | **Dissolve** | `!dissolve` | No — opens confirm | Archive thread + chronicle |
 
+**Native Close Thread:** Discord's thread menu **Close Thread** also archives — turtleOS runs policy C on the archive transition (same dissolve/light-archive semantics). See [discord-native-ui.md](discord-native-ui.md).
+
 Button labels are practitioner language, not command names. Help text may still document `!` aliases.
 
 ---

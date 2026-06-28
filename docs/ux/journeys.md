@@ -185,3 +185,24 @@ Practitioner: !release
 ```
 
 → [sessions.md](sessions.md)
+
+---
+
+## Close eddy via Discord UI
+
+Practitioners need not type `!dissolve` — **Close Thread** in Discord's thread menu is a first-class path.
+
+```
+Practitioner: right-click eddy → Close Thread
+  → Discord archives thread (sidebar)
+  → Gateway archive transition → turtleOS policy C
+  → if registered + ≥2 messages: full dissolve (essence → boom, chronicle, registry)
+  → else: light archive + river act ("nothing captured")
+  → idempotent if !dissolve or lifecycle bar already ran
+```
+
+**Prefer Close over Delete** for practice threads you want captured. Delete Thread is cleanup-only.
+
+Operators creating channels in Discord UI get an **ops notice** with hints (`!admin space create`, onboard) — turtleOS does not auto-bind.
+
+→ [discord-native-ui.md](discord-native-ui.md) · `docs/chapters/design-discord-native-ui-reconciliation.md`

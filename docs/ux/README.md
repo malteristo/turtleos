@@ -34,6 +34,7 @@ When implementation and these docs disagree, **implementation wins until someone
 | Flow library (target), legacy bar menu + intake | [flow-library-journeys.md](flow-library-journeys.md) · [flows-and-intake.md](flows-and-intake.md) |
 | URL → context (read vs distill) | [link-reading.md](link-reading.md) |
 | Checkpoint, release, idle capture | [sessions.md](sessions.md) |
+| Native Discord UI (Close Thread, channels) | [discord-native-ui.md](discord-native-ui.md) |
 | Practitioner walkthroughs | [journeys.md](journeys.md) |
 | First install & onboarding copy | [onboarding.md](onboarding.md) · [install-journey.md](install-journey.md) (draft) · [hosted-tester-program.md](hosted-tester-program.md) (draft) |
 | Flow library journeys (target) | [flow-library-journeys.md](flow-library-journeys.md) |

@@ -1,7 +1,7 @@
 # Design Chapter: Discord Native UI Reconciliation
 
 **Opened:** 2026-06-28  
-**Status:** S1 implemented — archive transition  
+**Status:** S1–S5 implemented  
 **Spec trace:** TURTLE_SPEC §5 (eddies / lifecycle), §9.2 (session law)  
 **Sanctioned proposal:** Magic `desk/proposals/2026-06-28-discord-native-ui-reconciliation.md`  
 **Sibling:** `design-admin-space-provisioning.md` (same adapter pattern for blessed commands)
@@ -87,17 +87,25 @@ on_guild_channel_* (S2–S3)       ──► discord_reconcile
 
 ---
 
-## Slices remaining
+---
 
-| Slice | Scope |
-|-------|-------|
-| S5 | Spec ripple + `docs/ux/journeys.md` |
+## S5 — Spec ripple + operator docs (implemented)
+
+**Practitioner doc:** [docs/ux/discord-native-ui.md](../ux/discord-native-ui.md) — three tiers, policy C, Close ≠ Delete, channel operator guidance.
+
+**Journey:** [docs/ux/journeys.md](../ux/journeys.md) — "Close eddy via Discord UI".
+
+**Spec:** TURTLE_SPEC §9.6 — native UI reconciliation law.
+
+**Traceability:** `docs/traceability-matrix.md` §9.6 row.
 
 ---
 
-## Acceptance (S1)
+## Acceptance (S1–S5)
 
-- [ ] Native close on registered eddy with ≥2 messages captures essence + chronicle
-- [ ] Native close on empty / unregistered thread → light archive only
-- [ ] `!dissolve` then archive event → no double dissolve
-- [ ] Rename via native UI still updates registry
+- [x] Native close on registered eddy with ≥2 messages captures essence + chronicle
+- [x] Native close on empty / unregistered thread → light archive only
+- [x] `!dissolve` then archive event → no double dissolve
+- [x] Rename via native UI still updates registry
+- [x] Blessed commands and Gateway events share adapter pipelines (S4)
+- [x] Practitioner guidance: use Discord UI; turtleOS catches up (S5)

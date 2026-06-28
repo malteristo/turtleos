@@ -15,7 +15,9 @@ Regular eddies: session notes today; **sediment** (cross-eddy resonance) deferre
 
 **Implementation:** `sessions.py` (`checkpoint_session`, `CheckpointResult`); `commands.py` (`cmd_checkpoint`, `cmd_release`, `cmd_dissolve`); chronicle via `_append_resonance_chronicle`.
 
-**Accessible path (planned):** in-thread lifecycle bar — [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md). Same handlers as `!checkpoint` / `!release` / `!dissolve`.
+**Accessible path:** in-thread lifecycle bar — [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md). Same handlers as `!checkpoint` / `!release` / `!dissolve`.
+
+**Native Discord UI:** **Close Thread** in the thread menu runs the same dissolve pipeline (policy C) — see [discord-native-ui.md](discord-native-ui.md). Prefer Close over Delete for substantive eddies.
 
 **Spec:** TURTLE_SPEC §8.4
 

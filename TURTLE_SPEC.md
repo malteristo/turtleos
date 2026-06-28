@@ -485,6 +485,22 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 
 **Split-bot harness (§5.8):** Auto-read and incidental Read/Skip run in the **Turtle process** before the informed reply. **Save to library** (`!fetch` button or typed command) runs in the **River process** after Turtle replies — optional persistence, not a dialogue prerequisite. River polls thread history for Turtle prose when scheduling save offers; skip reasons (cached in `link-resonance/`, already offered, recent `!fetch` act) MUST be logged distinctly for operator debug.
 
+### 9.6. Discord Native UI Reconciliation
+
+Practitioners SHOULD use Discord's native context menus and channel controls. turtleOS reconciles **Gateway state changes** — not menu clicks — into practice state via shared adapters (`runtime/adapters/lifecycle.py`, `runtime/adapters/structural.py`; facade `discord_reconcile.py`).
+
+**Three tiers:** (1) user-local prefs — ignore; (2) structural channel/thread topology — registry sync and ops notices; (3) semantic eddy lifecycle — same pipelines as blessed commands.
+
+**Close Thread (policy C):** On archive transition for a registered parent channel: if thread is in `thread_registry` and message count ≥ 2 → full `dissolve_eddy(..., native_close=True)`; otherwise → light archive. Idempotent when `harvest_status == dissolved`.
+
+**Close ≠ Delete:** Delete thread/channel handlers perform cleanup and orphan marking; essence capture requires prior close or cached history. Practitioners SHOULD prefer **Close Thread** over **Delete Thread** for substantive eddies.
+
+**Channel create (unregistered):** Activity notice with binding hints; no auto-register. Blessed provisioning calls `expect_channel_registry_binding()` to suppress duplicate notices.
+
+**Channel delete (registry-bound):** Mark orphaned; preserve workshop; log to ops.
+
+**Operator docs:** [docs/ux/discord-native-ui.md](docs/ux/discord-native-ui.md) · design chapter `docs/chapters/design-discord-native-ui-reconciliation.md`.
+
 ---
 
 ## 10. Flows and the Execution Layer
@@ -913,7 +929,6 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 | 2026-06-23 | In-eddy flow library — bar = `new eddy` only; Turtle bootstrap intake; Shelter archived; user-facing **flows** / **flow library** |
 | 2026-06-25 | §15.6 Share eddy Slice 1 (practitioner target, `!share`); flow library on-demand (`!flows` / `!flow`); standing bottom flow bar retired — see `docs/chapters/2026-06-25-share-eddy-slice1-dogfood.md` |
 | 2026-06-20 | §9.5 — Discord permalink read-for-dialogue (`discord_ref_read.py`): visible trace, thread history, long-thread summary; distinct from external URL read and `!fetch` |
-
----
+| 2026-06-28 | §9.6 — Discord native UI reconciliation (policy C close, channel structural sync, shared lifecycle/structural adapters); practitioner doc `docs/ux/discord-native-ui.md` |
 
 *End of TURTLE_SPEC*
