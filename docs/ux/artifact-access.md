@@ -37,7 +37,7 @@ Hosted practitioners with portable surface files also see shelves backed by `boo
 
 ## How you open it
 
-**Today:** `!artifacts` for shelves; `!read`, `!ls`, `!search`, `!export` scoped to the same allowlist. After checkpoint, a one-line hint points to Sessions. **Artifacts** appears on the lifecycle bar once you have saved material (legacy attunement) or after your first checkpoint.
+**Today:** `!read` with `PRACTICE_WEB_BASE` set opens artifacts in **Discord's in-app browser** (tap the embed title) instead of dumping markdown in chat. Same allowlist as `!artifacts`.
 
 **Read-only web:** When `PRACTICE_WEB_BASE` is set (Tailscale/local), long artifacts open at `{PRACTICE_WEB_BASE}/{mage_key}/{path}` — same allowlist as Discord.
 

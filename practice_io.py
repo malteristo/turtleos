@@ -59,13 +59,18 @@ def truncate(text, limit=2000):
 
 def obsidian_link(filename):
     """Generate a tappable link for a practice file.
-    Prefers web link (works on any phone) with obsidian:// fallback."""
+    Prefers web link (works in Discord's in-app browser) with obsidian:// fallback."""
     name = filename.replace(".md", "")
     mage_key = get_mage_key()
     if PRACTICE_WEB_BASE:
-        web_url = f"{PRACTICE_WEB_BASE}/{mage_key}/{quote(filename)}"
+        web_url = f"{PRACTICE_WEB_BASE.rstrip('/')}/{mage_key}/{quote(filename)}"
         return web_url
     return f"[{filename}](obsidian://open?vault={quote(OBSIDIAN_VAULT)}&file={quote(name)})"
+
+
+def artifact_display_name(filename: str) -> str:
+    base = filename.replace("\\", "/").rstrip("/").split("/")[-1]
+    return base.replace(".md", "").replace("-", " ").replace("_", " ")
 
 
 def summarize_bright(text, limit=1500):

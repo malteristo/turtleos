@@ -19,8 +19,23 @@ from artifact_viewer import (
 )
 from helpers import split_message
 from mage import get_mage_type, get_pd
-from practice_io import is_readable, obsidian_link, read_safe
+from practice_io import artifact_display_name, is_readable, obsidian_link, read_safe
+from state import PRACTICE_WEB_BASE
 from tos_tools import execute_tos_tool
+
+
+def _read_embed(filename: str, content: str, url: str) -> discord.Embed:
+    title = artifact_display_name(filename)
+    lines = content.count("\n") + 1
+    embed = discord.Embed(
+        title=title,
+        url=url,
+        description="Tap the title to open in Discord's browser.",
+        color=0x5865F2,
+    )
+    embed.add_field(name="Artifact", value=f"`{filename}`", inline=False)
+    embed.set_footer(text=f"{lines} lines · {len(content)} chars")
+    return embed
 
 
 async def cmd_read(message, args):
@@ -58,6 +73,10 @@ async def cmd_read(message, args):
         return
 
     link = obsidian_link(filename)
+    if PRACTICE_WEB_BASE:
+        await message.reply(embed=_read_embed(filename, content, link), mention_author=False)
+        return
+
     if len(content) <= 1800:
         await message.reply(f"{link}\n```md\n{content}\n```", mention_author=False)
     elif len(content) <= 6000:

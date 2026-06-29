@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #1a1a2e; color: #e0e0e0;
+    padding: 1.5rem; max-width: 720px; margin: 0 auto;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.4rem; color: #e2b714; margin-bottom: 0.3rem; }
+  h2 { font-size: 1.2rem; color: #c9a832; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #333; padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; color: #b0b0b0; margin: 1.2rem 0 0.4rem; }
+  p { margin: 0.6rem 0; }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  strong { color: #f0f0f0; }
+  em { color: #a0c4ff; }
+  code { background: #2a2a4a; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #2a2a4a; padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.8rem 0; }
+  pre code { padding: 0; background: none; }
+  blockquote { border-left: 3px solid #e2b714; padding-left: 1rem; color: #b0b0b0; margin: 0.8rem 0; }
+  a { color: #7eb8da; }
+  hr { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
+  .meta { color: #888; font-size: 0.85rem; margin-bottom: 1rem; }
+  .err { color: #ff6b6b; text-align: center; margin-top: 3rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; }
+  th, td { border: 1px solid #444; padding: 0.5rem; text-align: left; }
+  th { background: #2a2a4a; color: #e2b714; }
+</style>
+</head>
+<body>
+<div id="content"><p style="color:#888">Loading…</p></div>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(async () => {
+  const path = location.pathname;
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length < 2) {
+    document.getElementById("content").innerHTML = "<p class=err>Usage: /mage/path/to/file.md</p>";
+    return;
+  }
+  const mage = parts[0];
+  const file = parts.slice(1).join("/");
+  const displayName = file.replace(/\.md$/, "").split("/").pop();
+  try {
+    const res = await fetch("/read/" + encodeURIComponent(mage) + "/" + file.split("/").map(encodeURIComponent).join("/"));
+    if (!res.ok) throw new Error("Not found");
+    const md = await res.text();
+    document.title = displayName + " — Practice";
+    document.getElementById("content").innerHTML =
+      "<div class=meta>" + mage + " / " + file + "</div>" +
+      marked.parse(md);
+  } catch (e) {
+    document.getElementById("content").innerHTML =
+      "<p class=err>Could not load: " + mage + "/" + file + "</p>";
+  }
+})();
+</script>
+</body>
+</html>

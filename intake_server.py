@@ -509,7 +509,10 @@ async def handle_artifact_read(request):
         body=content,
         content_type="text/markdown",
         charset="utf-8",
-        headers={"Cache-Control": "no-store"},
+        headers={
+            "Cache-Control": "no-store",
+            "Access-Control-Allow-Origin": "*",
+        },
     )
 
 

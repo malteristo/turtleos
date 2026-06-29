@@ -1,0 +1,24 @@
+# Practice artifact browser (Discord in-app web view)
+# Merge into /Users/turtle/caddy/Caddyfile under :8080 { ... }
+#
+# Serves static/practice_viewer from turtleos repo; fetches markdown via
+# allowlisted GET /read/{mage}/{path} on intake (port 8742).
+
+:8080 {
+    handle /read/* {
+        reverse_proxy localhost:8742
+    }
+
+    handle /files/* {
+        root * /Users/turtle/workshops
+        uri strip_prefix /files
+        file_server
+        header Access-Control-Allow-Origin *
+    }
+
+    handle {
+        root * /Users/turtle/turtleos/static/practice_viewer
+        try_files {path} /index.html
+        file_server
+    }
+}
