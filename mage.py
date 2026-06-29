@@ -407,6 +407,35 @@ def set_practice_context_for_channel(channel_id):
     return pd
 
 
+def set_practice_context_for_mage_key(mage_key: str) -> bool:
+    """Set practice context from a registry mage/space key (no Discord channel).
+
+    Used by allowlisted HTTP artifact reads where the URL carries the mage key.
+    """
+    mage = _MAGE_REGISTRY.get("mages", {}).get(mage_key)
+    if mage:
+        pd = os.path.expanduser(mage.get("practice_dir") or _default_runtime_dir_for_key(mage_key))
+        rd = os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(mage_key))
+        wr = mage.get("workshop_root")
+        _practice_dir_ctx.set(pd)
+        _runtime_dir_ctx.set(rd)
+        _mage_name_ctx.set(mage.get("address", mage_key.capitalize()))
+        _mage_key_ctx.set(mage_key)
+        _workshop_root_ctx.set(os.path.expanduser(wr) if wr else None)
+        return True
+    space = _MAGE_REGISTRY.get("spaces", {}).get(mage_key)
+    if space:
+        pd = os.path.expanduser(space.get("practice_dir") or _default_runtime_dir_for_key(mage_key))
+        rd = os.path.expanduser(space.get("runtime_dir") or _default_runtime_dir_for_key(mage_key))
+        _practice_dir_ctx.set(pd)
+        _runtime_dir_ctx.set(rd)
+        _mage_name_ctx.set(mage_key.capitalize())
+        _mage_key_ctx.set(mage_key)
+        _workshop_root_ctx.set(None)
+        return True
+    return False
+
+
 # ─── Channel Checks ─────────────────────────────────────────────
 
 def is_practice_channel(message):

@@ -35,11 +35,11 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
             open(os.path.join(sessions, "note.md"), "w").write("# hi")
             request = MagicMock()
             request.match_info = {"mage_key": "kermit", "path": "sessions/note.md"}
-            with patch("mage.get_mage_key", return_value="kermit"), patch(
-                "artifact_viewer.get_pd", return_value=tmp
-            ), patch("artifact_viewer.get_runtime_dir", return_value=tmp), patch(
-                "artifact_viewer.get_mage_type", return_value="practitioner"
-            ):
+            with patch("mage.set_practice_context_for_mage_key", return_value=True), patch(
+                "mage.get_mage_type", return_value="practitioner"
+            ), patch("artifact_viewer.get_pd", return_value=tmp), patch(
+                "artifact_viewer.get_runtime_dir", return_value=tmp
+            ), patch("artifact_viewer.get_mage_type", return_value="practitioner"):
                 resp = await intake_server.handle_artifact_read(request)
             self.assertEqual(resp.status, 200)
             body = resp.body if isinstance(resp.body, (bytes, bytearray)) else resp.text
@@ -53,7 +53,7 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
             open(os.path.join(tmp, "proposals", "secret.md"), "w").write("nope")
             request = MagicMock()
             request.match_info = {"mage_key": "kermit", "path": "proposals/secret.md"}
-            with patch("mage.get_mage_key", return_value="kermit"), patch(
+            with patch("mage.set_practice_context_for_mage_key", return_value=True), patch(
                 "mage.get_mage_type", return_value="practitioner"
             ), patch("artifact_viewer.get_pd", return_value=tmp), patch(
                 "artifact_viewer.get_runtime_dir", return_value=tmp

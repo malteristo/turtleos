@@ -490,12 +490,12 @@ async def handle_artifact_read(request):
     from urllib.parse import unquote
 
     from artifact_viewer import is_artifact_readable, resolve_artifact_path
-    from mage import get_mage_key, get_mage_type
+    from mage import get_mage_type, set_practice_context_for_mage_key
     from practice_io import read_safe
 
     path_mage = request.match_info.get("mage_key", "")
     rel_path = unquote(request.match_info.get("path", "")).lstrip("/")
-    if not rel_path or path_mage != get_mage_key():
+    if not rel_path or not set_practice_context_for_mage_key(path_mage):
         raise web.HTTPNotFound()
     if not is_artifact_readable(rel_path, mage_type=get_mage_type()):
         raise web.HTTPForbidden(text="Artifact not available")
