@@ -1,6 +1,6 @@
 # Practice artifacts — curated shelves
 
-**Status:** v1 shipped (2026-06-29); **v1.1** — lifecycle bar Artifacts button, checkpoint hints, `!export`, read-only web `/read/…`.  
+**Status:** v1 + v1.1 shipped (2026-06-29); **§11.5.5** chat-vs-browser presentation law (2026-06-29).  
 **Canonical law:** [TURTLE_SPEC.md](../../TURTLE_SPEC.md) §11.5  
 **Chapter seed:** Magic `floor/drafts/file-access-on-turtleos-chapter-seed.md`
 
@@ -47,6 +47,26 @@ Layer 1 users who only chat may never open Artifacts. That is fine.
 
 ---
 
+## Chat vs browser
+
+**One sentence:** Chat holds the conversation and pointers; the browser holds the corpus.
+
+| What | Where |
+|------|--------|
+| Talking with Turtle in an eddy | **Chat** |
+| Ideas not saved yet | **Chat** |
+| Saved sessions, notes, archives, intake | **Browser** (tap `!read` embed or shelf link) |
+| Search results | **Chat** shows matching lines; open the full artifact in the browser |
+| "Checkpoint saved" | **Chat** confirmation + link — not the whole note pasted back |
+
+**When something becomes an artifact:** checkpoint, release, finishing a flow that writes, pasting into intake, saving a link to your library, or archiving an eddy. Until then, it lives in the conversation.
+
+**Turtle quoting your notes:** a line or two in chat, plus a link if you want the full artifact — not the entire document inline.
+
+**No web configured:** `!read` may show markdown in chat as a fallback. With `PRACTICE_WEB_BASE` set (Tailscale/LAN), prefer the browser.
+
+---
+
 ## What you can do
 
 | Action | Supported |
@@ -75,7 +95,7 @@ Sharing practice with someone else: use **`!share`** to open a shared eddy, not 
 
 - **Sovereignty:** Your artifacts live on your machine (or your hosted root). Export proves it.
 - **No sysadmin cosplay:** Paths like `thread-state/registry.yaml` are implementation details.
-- **One mental model:** Viewer, web read (future), and `!read`/`!ls` share the same allowlist once shipped.
+- **One mental model:** Viewer, web read, and `!read`/`!ls` share the same allowlist. **Chat vs browser:** dialogue in the eddy; corpus in the browser (§11.5.5).
 
 ---
 
@@ -88,7 +108,9 @@ Sharing practice with someone else: use **`!share`** to open a shared eddy, not 
 | Shelf pagination | Discord embeds + `split_message` |
 | Bar button | `eddy_lifecycle_bar.py` (legacy attunement lifecycle bar) |
 | Read-only web | `intake_server.py` → `GET /read/{mage_key}/{path}` |
+| Browser-first `!read` | `cmd_practice_io.py` when `PRACTICE_WEB_BASE` set |
 | Shakedown | `scripts/shake_artifacts.py` |
+| Search/citation caps (§11.5.5 target) | `cmd_practice_io.cmd_search`, Turtle harness — TBD |
 
 **Review checklist:** [review-checklist.md](review-checklist.md) — any UX-touching slice updates this doc and §11.5 together.
 
@@ -99,6 +121,7 @@ Sharing practice with someone else: use **`!share`** to open a shared eddy, not 
 - Full practice-root tree in Discord (`!ls` everywhere) as the **product** experience — power-user escape hatch only, narrowed over time.
 - Calling runtime paths "files" in practitioner copy — use **artifacts** for the allowlisted corpus only.
 - Practitioners browsing `proposals/` — host diagnostics, not practice.
-- Raw `chronicle/deep.jsonl` in viewer — use `surface.md` + jump links.
+- Dumping full artifact bodies into chat when `PRACTICE_WEB_BASE` is configured — use browser embed.
+- Full-file `!search` results in chat — snippets only (§11.5.5).
 
 See also [rejected.md](rejected.md).

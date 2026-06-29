@@ -618,6 +618,7 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 - **Write through Turtle.** View, browse, search, and export are viewer operations. Mutation of sovereignty artifacts remains through eddy dialogue and governed flow writes (§11.3) — not direct markdown editing in v1.
 - **Layer-aware discoverability.** Layer 1 (casual eddy) users MAY never open the viewer. Layer 2 (flow) users benefit from checkpoints and session artifacts. The viewer MUST NOT spam proactive offers; contextual hints after checkpoint/release are permitted (v1.1).
 - **Same allowlist everywhere.** `!read`, `!ls`, `!search`, optional read-only web (§11.4), and `!artifacts` MUST enforce the same path policy. **Shipped 2026-06-29:** browse commands narrowed to this allowlist; `!artifacts` is the product entry point.
+- **Chat holds conversation; browser holds corpus.** The eddy timeline is for dialogue and pointers. Persisted Tier-1 artifacts open in the Discord in-app browser (or read-only web) — not as full-body markdown dumps in chat. See §11.5.5.
 
 #### 11.5.1. Access tiers
 
@@ -636,8 +637,8 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 | Operation | v1 | Notes |
 |-----------|----|-------|
 | Browse shelves | Yes | Paginated Discord embeds or follow-up chunks (2000 char limit) |
-| View artifact | Yes | Truncation + "too long" guidance as today |
-| Search corpus | Yes | Scoped to Tier 1 allowlist |
+| View artifact | Yes | **Browser default** when `PRACTICE_WEB_BASE` set — tappable embed, not full body in chat (§11.5.5) |
+| Search corpus | Yes | Scoped to Tier 1 allowlist; **snippet lines in chat**, full artifact in browser |
 | Edit via Turtle in eddy | Yes | Primary write path |
 | Structured edit (flow intake) | Yes | Flow `writes:` paths |
 | Direct markdown edit | No | |
@@ -660,11 +661,72 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 
 **Layer 1 default:** The Artifacts bar button and proactive hints MUST remain hidden until the practitioner completes their first successful checkpoint **or** invokes `!artifacts` once — whichever comes first. Typed `!artifacts` is always available for practitioners who know to ask.
 
+#### 11.5.5. Chat vs browser (presentation law)
+
+**One sentence:** Chat holds the conversation and pointers; the browser holds the corpus.
+
+Analogous to IDE practice: canonical state lives in artifacts on disk; the eddy timeline is for live dialogue, operational confirmations, and short excerpts — not for replaying full sovereign documents.
+
+**Primary gate — persistence**
+
+| State | Default surface |
+|-------|-----------------|
+| Content exists only in the eddy (not yet written to disk) | **Chat** — Turtle prose, drafts, back-and-forth |
+| Content persisted as a Tier-1 allowlisted artifact | **Browser** — `!read`, shelf open, read-only web |
+| Operational / structural (acts, chronicle one-liners, checkpoint embeds) | **Chat** — short, non-corpus |
+
+Length MUST NOT override persistence: a long Turtle reply still belongs in chat until checkpoint, flow write, or intake makes it an artifact. Discord character limits are a degraded fallback, not product policy.
+
+**Decision tree (implementers)**
+
+1. Is it persisted as a Tier-1 allowlisted artifact? **No** → chat only. **Yes** → browser default; chat gets embed/link/metadata only.
+2. Is the practitioner explicitly reading corpus (`!read`, shelf item, export)? **Yes** → browser (export: `.md` attachment).
+3. Is Turtle composing in the current turn? **Yes** → chat (even if a subsequent checkpoint will persist it).
+4. Is this search, citation, or confirmation? **Snippets in chat**; full artifact via browser link.
+
+**Surface matrix**
+
+| Content | Surface | Notes |
+|---------|---------|-------|
+| Turtle ↔ practitioner dialogue | Chat | Eddy is the conversation |
+| Pre-checkpoint thread | Chat | Not an artifact yet |
+| Session / flow notes after checkpoint | Browser | Checkpoint hint in chat; not full note body |
+| `!read`, shelf open | Browser | Tappable embed when web base configured |
+| `!search` hits | Chat snippets + open link | Grep-style lines; never full file bodies |
+| `!artifacts` shelf menu | Chat | Navigation only |
+| Turtle citing an artifact | Chat quote (≤~3 lines) + browser link | Full note opens in browser on request |
+| Link-read / URL context | Chat (informed reply) | Excerpt in context; optional `!fetch` → artifact |
+| Intake long paste (after submit) | Browser | Lands in `box/intake/` |
+| Tier 3 paths | Hidden | Reject browse commands |
+
+**Write threshold (when content SHOULD become an artifact)**
+
+Write (checkpoint, flow `writes:`, intake, dissolve archive, practitioner "save this") when **any** of:
+
+- Governed path — flow front matter, intake completion, lifecycle commands
+- Practitioner intent — checkpoint, release, `!fetch` to library, intake submit
+- Corpus-shaped — session note, flow outcome, archive capture (not ephemeral banter)
+- Cross-eddy reuse — material the practitioner will want outside this thread
+
+Keep in chat when **any** of:
+
+- Ephemeral dialogue — questions, short answers, presence, iteration before save
+- Pointer not payload — reference + link, not full document paste
+- Operational — act digests, status, search hit lines
+
+**Fallbacks**
+
+- `PRACTICE_WEB_BASE` unset: `!read` MAY inline markdown in chat (degraded mode).
+- Operator-only: MAY expose `!read --inline` for debug; not product default for practitioners.
+
+**Implementation status (2026-06-29):** `!read` browser-first when web base set — **shipped**. `!search` snippet-only + Turtle citation caps — **target** (not fully enforced in harness yet).
+
 #### 11.5.4. Traceability
 
 - Practitioner UX: `docs/ux/artifact-access.md`
 - Browse commands: `cmd_practice_io.py`, `practice_io.is_readable` → `artifact_viewer.is_artifact_readable`
 - Viewer implementation: `artifact_viewer.py`, `cmd_artifacts` in `cmd_practice_io.py`, registered in `commands.py` / `cmd_dispatch.py`
+- Presentation law: §11.5.5; `cmd_practice_io.cmd_read` (browser embed), `static/practice_viewer/` + intake `GET /read/{mage_key}/{path}`
 
 ---
 
