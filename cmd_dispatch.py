@@ -21,9 +21,10 @@ COMMAND_ACT_FALLBACK = {
     "flows": "Flow menu opened.",
     "pin": "Message pinned in river channel.",
     "readiness": "Practice-readiness assessment posted.",
-    "read": "Practice file content displayed.",
-    "ls": "Practice directory listing displayed.",
-    "search": "Practice file search results displayed.",
+    "artifacts": "Practice artifact shelves displayed.",
+    "read": "Practice artifact content displayed.",
+    "ls": "Allowlisted practice directory listing displayed.",
+    "search": "Practice artifact search results displayed.",
 }
 
 _PRACTITIONER_COMMANDS = {
@@ -38,6 +39,7 @@ _PRACTITIONER_COMMANDS = {
     "rename",
     "fetch",
     "share",
+    "artifacts",
     "read",
     "ls",
     "search",

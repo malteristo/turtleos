@@ -606,6 +606,66 @@ state/
 - **Read:** Optional read-only web view (local HTTP / Tailscale) — implementation v1.1; not required for v1 core loop.
 - **Write:** Through Turtle in eddy conversation — not raw Discord editing of sovereignty files.
 
+### 11.5. Practice Artifacts (Curated Access)
+
+Practitioners accumulate **practice artifacts** (sessions, flow notes, archives) without seeing a filesystem. **Artifact access** is the curated product surface — shelves of practitioner-owned material — not a practice-root tree browser and not Forge/Magic desk sync.
+
+**Terminology:** A **practice artifact** is allowlisted practitioner material (markdown on disk or a rendered summary such as `chronicle/surface.md`). Implementation still uses files and paths; the product MUST refer to these as **artifacts** so practitioners do not confuse them with runtime, config, or host-only paths.
+
+**Principles:**
+
+- **Shelves, not paths.** The viewer presents named collections (Sessions, Notes, Archives, Saved links). It MUST NOT expose raw directory trees, runtime paths, or other practitioners' roots.
+- **Write through Turtle.** View, browse, search, and export are viewer operations. Mutation of sovereignty artifacts remains through eddy dialogue and governed flow writes (§11.3) — not direct markdown editing in v1.
+- **Layer-aware discoverability.** Layer 1 (casual eddy) users MAY never open the viewer. Layer 2 (flow) users benefit from checkpoints and session artifacts. The viewer MUST NOT spam proactive offers; contextual hints after checkpoint/release are permitted (v1.1).
+- **Same allowlist everywhere.** `!read`, `!ls`, `!search`, optional read-only web (§11.4), and `!artifacts` MUST enforce the same path policy. **Shipped 2026-06-29:** browse commands narrowed to this allowlist; `!artifacts` is the product entry point.
+
+#### 11.5.1. Access tiers
+
+| Tier | Paths / sources | Viewer presentation |
+|------|-----------------|---------------------|
+| **1 — Practitioner corpus** | `state/notes/*`; `sessions/`; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); hosted-only surface files (`boom.md`, `bright.md`, `compass.md`, `mirror.md`, `resonance.md`, `intentions/`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
+| **2 — Summary UI only** | Active eddy list from `thread-state/registry.yaml`; `!fetch` cache | "Active eddies", "Saved links" — no YAML or cache path browser |
+| **3 — Never** | `proposals/`; `thread-state/` innards; `dialogue/`; `signals/`; `share/*.json`; `native-runtime/`; logs; `~/turtleos/`; other practitioners' practice roots; operator craft/automation reports (unless operator role) | Hidden; `!read`/`!ls`/`!search` MUST reject |
+
+**`proposals/` policy (decided):** Hosted practitioners MUST NOT see proposals in the viewer or via browse commands. Proposals are Turtle↔host self-development signals, not practitioner-facing practice material. Operators on a native root MAY see an **operator-only** shelf (host tooling); v2 MAY add "note to host" without exposing proposal files to hosted users.
+
+**Shared spaces (`family`, hosted shared rivers):** Same tiers apply on the **space practice root**. Cross-member private files MUST NOT appear in another member's viewer.
+
+#### 11.5.2. Operations matrix (v1)
+
+| Operation | v1 | Notes |
+|-----------|----|-------|
+| Browse shelves | Yes | Paginated Discord embeds or follow-up chunks (2000 char limit) |
+| View artifact | Yes | Truncation + "too long" guidance as today |
+| Search corpus | Yes | Scoped to Tier 1 allowlist |
+| Edit via Turtle in eddy | Yes | Primary write path |
+| Structured edit (flow intake) | Yes | Flow `writes:` paths |
+| Direct markdown edit | No | |
+| Export | Yes | Tier 1 only; `.md` attachment default |
+| Share to another practitioner | No | Use `!share` eddy, not arbitrary artifact handoff |
+| Delete | No | Dissolve/archive lifecycle only |
+
+**Export (v1):** Discord `.md` attachment for Tier 1 artifacts. Full-folder export and cloud drive upload are host/operator tools, not practitioner viewer v1.
+
+**"Ask Turtle about this artifact" (v1.1):** MAY open a new eddy with artifact content injected as context; not required for v1 core.
+
+#### 11.5.3. Entry points
+
+| Entry | When | Required v1 |
+|-------|------|-------------|
+| `!artifacts [shelf]` | Practitioner typed; works from river or eddy | Yes |
+| Eddy lifecycle bar **Artifacts** | Available in eddy once practitioner has ≥1 Tier-1 artifact | v1.1 |
+| Post-checkpoint hint | "Saved to Sessions — `!artifacts sessions`" | v1.1 (optional, non-spam) |
+| Read-only web (§11.4) | Long artifacts; Tailscale/local HTTP | v1.1; same allowlist as viewer |
+
+**Layer 1 default:** The Artifacts bar button and proactive hints MUST remain hidden until the practitioner completes their first successful checkpoint **or** invokes `!artifacts` once — whichever comes first. Typed `!artifacts` is always available for practitioners who know to ask.
+
+#### 11.5.4. Traceability
+
+- Practitioner UX: `docs/ux/artifact-access.md`
+- Browse commands: `cmd_practice_io.py`, `practice_io.is_readable` → `artifact_viewer.is_artifact_readable`
+- Viewer implementation: `artifact_viewer.py`, `cmd_artifacts` in `cmd_practice_io.py`, registered in `commands.py` / `cmd_dispatch.py`
+
 ---
 
 ## 12. River Act Catalog

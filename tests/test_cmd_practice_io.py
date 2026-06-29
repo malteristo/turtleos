@@ -38,20 +38,28 @@ class TestCmdLs(unittest.IsolatedAsyncioTestCase):
         message = MagicMock()
         message.reply = AsyncMock()
         with tempfile.TemporaryDirectory() as tmp:
-            open(os.path.join(tmp, "notes.md"), "w").close()
+            open(os.path.join(tmp, "bright.md"), "w").close()
             with patch("cmd_practice_io.get_pd", return_value=tmp), patch(
+                "cmd_practice_io.get_mage_type", return_value="practitioner"
+            ), patch(
+                "cmd_practice_io.is_artifact_directory", return_value=True
+            ), patch(
+                "cmd_practice_io.is_artifact_readable", return_value=True
+            ), patch(
                 "cmd_practice_io.obsidian_link", side_effect=lambda p: f"[[{p}]]"
             ):
                 await cpio.cmd_ls(message, [])
         body = message.reply.await_args[0][0]
-        self.assertIn("notes.md", body)
+        self.assertIn("bright.md", body)
 
-    async def test_missing_directory(self) -> None:
+    async def test_denied_directory(self) -> None:
         message = MagicMock()
         message.reply = AsyncMock()
-        with patch("cmd_practice_io.get_pd", return_value="/practice"):
-            await cpio.cmd_ls(message, ["missing"])
-        self.assertIn("not found", message.reply.await_args[0][0])
+        with patch("cmd_practice_io.get_pd", return_value="/practice"), patch(
+            "cmd_practice_io.get_mage_type", return_value="practitioner"
+        ), patch("cmd_practice_io.is_artifact_directory", return_value=False):
+            await cpio.cmd_ls(message, ["proposals"])
+        self.assertIn("!artifacts", message.reply.await_args[0][0])
 
 
 class TestCmdSearch(unittest.IsolatedAsyncioTestCase):

@@ -90,7 +90,7 @@ from cmd_dispatch import (
 )
 from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_release
 from share_eddy import cmd_share
-from cmd_practice_io import cmd_ls, cmd_read, cmd_search
+from cmd_practice_io import cmd_artifacts, cmd_ls, cmd_read, cmd_search
 from cmd_threads import (
     ControlPanelView,
     EddyDissolutionView,
@@ -297,7 +297,8 @@ def _help_embed_fields() -> list[tuple[str, str]]:
         ("`!rename <title>`", "Exact eddy title (in thread)"),
         ("`!share`", "Send this eddy to another practitioner (digest + received eddy)"),
         ("`!fetch <url>`", "Distill URL to library (not auto link-read in chat)"),
-        ("`!read` / `!ls` / `!search`", "Browse files under practice root"),
+        ("`!artifacts`", "Curated practice artifact shelves"),
+        ("`!read` / `!ls` / `!search`", "Browse allowlisted practice artifacts"),
     ]
     fields.append(("Eddy core (v1)", _help_lines(eddy_core)))
 
@@ -1081,6 +1082,7 @@ async def cmd_admin(message, args):
 
 DIRECT_COMMANDS = {
     "status": lambda msg, args: cmd_status(msg),
+    "artifacts": lambda msg, args: cmd_artifacts(msg, args),
     "read": lambda msg, args: cmd_read(msg, args),
     "ls": lambda msg, args: cmd_ls(msg, args),
     "search": lambda msg, args: cmd_search(msg, args),

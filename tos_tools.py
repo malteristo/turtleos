@@ -30,6 +30,15 @@ WORKSHOP_ROOT_FILES = ("AGENTS.md", "MAGIC_SPEC.md", "CLAUDE.md", "README.md",
                        "ONBOARDING.md", "FAQ.md", "TROUBLESHOOTING.md")
 
 
+def _is_workshop_readable(filename: str) -> bool:
+    wr = get_workshop_root()
+    if not wr:
+        return False
+    if any(filename.startswith(p) for p in WORKSHOP_PREFIXES):
+        return True
+    return filename in WORKSHOP_ROOT_FILES
+
+
 def _resolve_read_path(filename):
     """Resolve a filename to its absolute path for reading.
     Workshop-level paths (library/, system/, root .md files) resolve against
@@ -62,10 +71,10 @@ TOS_TOOLS = [
         "function": {
             "name": "read_practice_file",
             "description": (
-                "Read any .md file in the practice directory or workshop. "
-                "Practice files: boom.md, bright.md, compass.md, sessions/, intentions/, proposals/. "
-                "Workshop files (read-only): library/ (resonance bundles, lore), system/ (tomes, flows, spells), "
-                "AGENTS.md, MAGIC_SPEC.md, CLAUDE.md. Use natural paths like 'library/resonance/turtle/README.md'"
+                "Read an allowlisted practice artifact or workshop lore file. "
+                "Practice artifacts: sessions/, state/notes/, thread-archive/, chronicle/surface.md, "
+                "intentions/, box/intake/, surface files (boom.md, bright.md, …). "
+                "Workshop files (read-only, operator/Turtle tools): library/, system/, AGENTS.md, …"
             ),
             "parameters": {
                 "type": "object",
@@ -276,7 +285,7 @@ TOS_TOOLS = [
 def _execute_tos_tool_raw(name, arguments):
     if name == "read_practice_file":
         filename = arguments.get("filename", "")
-        if not is_readable(filename):
+        if not (_is_workshop_readable(filename) or is_readable(filename)):
             return f"Cannot read {filename} — not a readable practice file"
         section = arguments.get("section", "")
         path, is_workshop = _resolve_read_path(filename)
@@ -308,7 +317,9 @@ def _execute_tos_tool_raw(name, arguments):
                 for f in files:
                     if f.endswith(".md"):
                         rel = os.path.relpath(os.path.join(root, f), rel_root)
-                        search_files.append(rel)
+                        rel = rel.replace("\\", "/")
+                        if _is_workshop_readable(rel) or is_readable(rel):
+                            search_files.append(rel)
         for filepath in sorted(search_files):
             content = read_safe(os.path.join(rel_root, filepath))
             for i, line in enumerate(content.split("\n"), 1):
@@ -338,6 +349,8 @@ def _execute_tos_tool_raw(name, arguments):
             elif item.endswith(".md"):
                 size = os.path.getsize(full)
                 filepath = f"{directory}/{item}" if directory else item
+                if not is_readable(filepath):
+                    continue
                 entries.append(f"  {filepath} ({size} bytes)")
         return "\n".join(entries) if entries else "(empty)"
 

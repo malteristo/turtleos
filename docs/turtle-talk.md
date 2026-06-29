@@ -94,9 +94,10 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 
 | Command | Handler | Purpose |
 |---------|---------|---------|
-| `!read <path>` | `cmd_read` | View file under **practice root** |
-| `!ls [dir]` | `cmd_ls` | Browse practice tree |
-| `!search <query>` | `cmd_search` | Search practice files |
+| `!artifacts [shelf]` | `cmd_artifacts` | Curated practice artifact shelves (§11.5) |
+| `!read <path>` | `cmd_read` | View allowlisted practice artifact |
+| `!ls [dir]` | `cmd_ls` | Browse allowlisted practice paths |
+| `!search <query>` | `cmd_search` | Search allowlisted practice artifacts |
 | `!fetch <url>` | `cmd_fetch` | Distill URL to library cache |
 | `!rename <title>` | `cmd_rename` | Exact eddy title (in thread) |
 | `!share` | `cmd_share` | §15.6 — send eddy to another practitioner (digest + received eddy) |

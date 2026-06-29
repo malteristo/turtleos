@@ -34,6 +34,7 @@ When implementation and these docs disagree, **implementation wins until someone
 | Flow library (target), legacy bar menu + intake | [flow-library-journeys.md](flow-library-journeys.md) · [flows-and-intake.md](flows-and-intake.md) |
 | URL → context (read vs distill) | [link-reading.md](link-reading.md) |
 | Checkpoint, release, idle capture | [sessions.md](sessions.md) |
+| Curated artifact shelves (`!artifacts`, export) | [artifact-access.md](artifact-access.md) |
 | Native Discord UI (Close Thread, channels) | [discord-native-ui.md](discord-native-ui.md) |
 | Practitioner walkthroughs | [journeys.md](journeys.md) |
 | First install & onboarding copy | [onboarding.md](onboarding.md) · [install-journey.md](install-journey.md) (draft) · [hosted-tester-program.md](hosted-tester-program.md) (draft) |
@@ -53,6 +54,7 @@ When implementation and these docs disagree, **implementation wins until someone
 | Flow entry | §5.4, §7.2 — orientation; intake | [flows-and-intake.md](flows-and-intake.md) |
 | Link reading | §9.5, Law of Visible Link Read | [link-reading.md](link-reading.md) |
 | Checkpoint / release | §8.4, §17 | [sessions.md](sessions.md), [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md) |
+| File viewer / browse allowlist | §11.5 | [artifact-access.md](artifact-access.md) |
 | Native system lines | §7.7 | [eddy-entry.md](eddy-entry.md) |
 | Rejected UX | §7.7 (partial) | [rejected.md](rejected.md) |
 
@@ -100,6 +102,7 @@ When dogfooding surfaces new friction, update **the relevant UX doc first**, the
 | 2026-06-20 | **Onboarding (target)** — generic Layer 1 personal AI; flows optional; [onboarding.md](onboarding.md) |
 | 2026-06-20 | **Flow library journeys (target)** — in-eddy picker, Turtle bootstrap; [flow-library-journeys.md](flow-library-journeys.md) |
 | 2026-06-23 | **Flow library shipped** — bar = `new eddy` only; in-eddy library + bootstrap; Shelter archived; spec drift (TURTLE_SPEC §5–10) |
+| 2026-06-29 | **Artifact access (spec)** — TURTLE_SPEC §11.5 + [artifact-access.md](artifact-access.md); product term **artifacts** (not generic files); `!artifacts` + allowlist implementation deferred |
 
 ---
 

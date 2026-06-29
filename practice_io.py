@@ -135,10 +135,10 @@ def load_intentions_list():
 # ─── File Access Checks ─────────────────────────────────────────
 
 def is_readable(filename):
-    """Any .md file within the practice directory is readable."""
-    if ".." in filename or filename.startswith("/"):
-        return False
-    return filename.endswith(".md")
+    """True if filename is an allowlisted practice artifact (TURTLE_SPEC §11.5.1)."""
+    from artifact_viewer import is_artifact_readable
+
+    return is_artifact_readable(filename)
 
 
 def is_writable(filename):
