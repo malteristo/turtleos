@@ -6,6 +6,7 @@ import os
 
 import discord
 
+from artifact_viewer import checkpoint_artifact_hint, mark_artifacts_ui_unlocked
 from helpers import clear_history, get_history, reload_history
 from mage import get_mage_name, get_pd, is_practice_channel
 from practice_io import count_items, read_safe
@@ -33,6 +34,8 @@ async def cmd_checkpoint(message):
         )
         return
 
+    mark_artifacts_ui_unlocked("checkpoint")
+
     lines: list[str] = []
     if result.flow_writes:
         lines.append(f"**Flow:** `{result.flow_writes[0]}`")
@@ -46,7 +49,14 @@ async def cmd_checkpoint(message):
         description="\n".join(lines),
         color=0x5865F2,
     )
-    embed.set_footer(text="History kept — continue when ready, or !release to close.")
+    hint = checkpoint_artifact_hint(
+        session_note=result.session_note,
+        flow_write=result.flow_writes[0] if result.flow_writes else None,
+    )
+    footer = "History kept — continue when ready, or !release to close."
+    if hint:
+        footer = f"{hint} · {footer}"
+    embed.set_footer(text=footer)
     await message.reply(embed=embed, mention_author=False)
 
 
@@ -65,6 +75,9 @@ async def cmd_release(message):
     clear_history(channel_id)
     active_sessions.pop(channel_id, None)
 
+    if result.captured_anything:
+        mark_artifacts_ui_unlocked("checkpoint")
+
     embed = discord.Embed(title="Session Released", color=0x2ECC71)
     lines: list[str] = ["Conversation history cleared."]
     if result.flow_writes:
@@ -76,6 +89,12 @@ async def cmd_release(message):
     if not result.captured_anything:
         lines.insert(0, "No new resonance captured this release.")
     embed.description = "\n".join(lines) + f"\n\nRest well, {get_mage_name()}."
+    hint = checkpoint_artifact_hint(
+        session_note=result.session_note,
+        flow_write=result.flow_writes[0] if result.flow_writes else None,
+    )
+    if hint:
+        embed.add_field(name="Artifacts", value=hint, inline=False)
 
     boom = read_safe(os.path.join(get_pd(), "boom.md"))
     boom_count = count_items(boom)

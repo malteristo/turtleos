@@ -1,6 +1,6 @@
 # Practice artifacts — curated shelves
 
-**Status:** Shipped v1 (2026-06-29) — `!artifacts` + allowlisted `!read` / `!ls` / `!search`.  
+**Status:** v1 shipped (2026-06-29); **v1.1** — lifecycle bar Artifacts button, checkpoint hints, `!export`, read-only web `/read/…`.  
 **Canonical law:** [TURTLE_SPEC.md](../../TURTLE_SPEC.md) §11.5  
 **Chapter seed:** Magic `floor/drafts/file-access-on-turtleos-chapter-seed.md`
 
@@ -37,9 +37,9 @@ Hosted practitioners with portable surface files also see shelves backed by `boo
 
 ## How you open it
 
-**Today:** `!artifacts` for shelves; `!read`, `!ls`, `!search` scoped to the same allowlist.
+**Today:** `!artifacts` for shelves; `!read`, `!ls`, `!search`, `!export` scoped to the same allowlist. After checkpoint, a one-line hint points to Sessions. **Artifacts** appears on the lifecycle bar once you have saved material (legacy attunement) or after your first checkpoint.
 
-**Target v1.1:** **Artifacts** on the eddy lifecycle bar (after you have something saved, or after your first checkpoint).
+**Read-only web:** When `PRACTICE_WEB_BASE` is set (Tailscale/local), long artifacts open at `{PRACTICE_WEB_BASE}/{mage_key}/{path}` — same allowlist as Discord.
 
 We do **not** pop up browsers unprompted. After checkpoint, a single line like "Saved to Sessions — try `!artifacts`" is enough.
 
@@ -54,7 +54,7 @@ Layer 1 users who only chat may never open Artifacts. That is fine.
 | Browse and read | Yes |
 | Search your corpus | Yes |
 | Change content | Ask Turtle in the eddy (or complete a flow) — not edit markdown directly |
-| Export an artifact | Yes — `.md` attachment in Discord (v1) |
+| Export an artifact | Yes — `!export <path>` (`.md` attachment) |
 | Delete artifacts | No — use dissolve/archive on eddies |
 
 Sharing practice with someone else: use **`!share`** to open a shared eddy, not "send this artifact."
@@ -86,8 +86,9 @@ Sharing practice with someone else: use **`!share`** to open a shared eddy, not 
 | Allowlist enforcement | `practice_io.is_readable`, `artifact_viewer.py` |
 | `!artifacts` command | `cmd_practice_io.py`, `commands.py` |
 | Shelf pagination | Discord embeds + `split_message` |
-| Bar button | `eddy_lifecycle_bar.py` (v1.1) |
-| Shakedown | `scripts/shake_*.py` extension (TBD) |
+| Bar button | `eddy_lifecycle_bar.py` (legacy attunement lifecycle bar) |
+| Read-only web | `intake_server.py` → `GET /read/{mage_key}/{path}` |
+| Shakedown | `scripts/shake_artifacts.py` |
 
 **Review checklist:** [review-checklist.md](review-checklist.md) — any UX-touching slice updates this doc and §11.5 together.
 

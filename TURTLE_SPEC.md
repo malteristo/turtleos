@@ -654,9 +654,9 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 | Entry | When | Required v1 |
 |-------|------|-------------|
 | `!artifacts [shelf]` | Practitioner typed; works from river or eddy | Yes |
-| Eddy lifecycle bar **Artifacts** | Available in eddy once practitioner has ≥1 Tier-1 artifact | v1.1 |
-| Post-checkpoint hint | "Saved to Sessions — `!artifacts sessions`" | v1.1 (optional, non-spam) |
-| Read-only web (§11.4) | Long artifacts; Tailscale/local HTTP | v1.1; same allowlist as viewer |
+| Eddy lifecycle bar **Artifacts** | Available once practitioner has Tier-1 corpus or first checkpoint | **Shipped v1.1** |
+| Post-checkpoint hint | "Saved to Sessions — `!artifacts sessions`" | **Shipped v1.1** |
+| Read-only web (§11.4) | Long artifacts; Tailscale/local HTTP | **Shipped v1.1** (`/read/{mage_key}/{path}`) |
 
 **Layer 1 default:** The Artifacts bar button and proactive hints MUST remain hidden until the practitioner completes their first successful checkpoint **or** invokes `!artifacts` once — whichever comes first. Typed `!artifacts` is always available for practitioners who know to ask.
 

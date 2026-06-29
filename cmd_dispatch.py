@@ -22,6 +22,7 @@ COMMAND_ACT_FALLBACK = {
     "pin": "Message pinned in river channel.",
     "readiness": "Practice-readiness assessment posted.",
     "artifacts": "Practice artifact shelves displayed.",
+    "export": "Practice artifact exported as .md attachment.",
     "read": "Practice artifact content displayed.",
     "ls": "Allowlisted practice directory listing displayed.",
     "search": "Practice artifact search results displayed.",
@@ -40,6 +41,7 @@ _PRACTITIONER_COMMANDS = {
     "fetch",
     "share",
     "artifacts",
+    "export",
     "read",
     "ls",
     "search",
@@ -62,6 +64,8 @@ CONTEXTUAL_ACTION_COMMANDS = {
     "forget",
     "readiness",
     "flows",
+    "artifacts",
+    "export",
 }
 # Native eddies: lifecycle bar owns checkpoint / release / dissolve; seneschal extends beyond that.
 LIFECYCLE_BAR_COMMANDS = frozenset({"checkpoint", "release", "dissolve"})

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from mage import get_mage_type, get_pd, get_runtime_dir
 
@@ -276,7 +278,7 @@ def format_shelf_menu(*, mage_type: str | None = None) -> str:
     lines.extend(
         [
             "",
-            "View one: `!read <path>` · Search: `!search <term>`",
+            "View one: `!read <path>` · Export: `!export <path>` · Search: `!search <term>`",
             "Browse a shelf tree: `!ls sessions` (allowlisted paths only)",
         ]
     )
@@ -293,7 +295,68 @@ def format_shelf_listing(shelf_key: str, *, mage_type: str | None = None) -> str
     lines = [f"**{title}** ({len(artifacts)})", ""]
     for path in artifacts[:40]:
         display = path.replace(LINK_RESONANCE_PREFIX, "link · ")
-        lines.append(f"• `{display}` — `!read {path}`")
+        lines.append(f"• `{display}` — `!read {path}` · `!export {path}`")
     if len(artifacts) > 40:
         lines.append(f"\n*…and {len(artifacts) - 40} more. Use `!ls {shelf_key}` or `!search`.*")
     return "\n".join(lines)
+
+
+# ─── Discoverability (§11.5.3 v1.1) ─────────────────────────────
+
+
+def _discoverability_path() -> str:
+    state_dir = os.path.join(get_runtime_dir(), "thread-state")
+    os.makedirs(state_dir, exist_ok=True)
+    return os.path.join(state_dir, "artifact_discoverability.json")
+
+
+def _load_discoverability() -> dict:
+    path = _discoverability_path()
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_discoverability(data: dict) -> None:
+    with open(_discoverability_path(), "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+
+
+def tier1_artifact_count(*, mage_type: str | None = None) -> int:
+    return len(iter_artifact_files(mage_type=mage_type))
+
+
+def mark_artifacts_ui_unlocked(reason: str) -> None:
+    """Unlock Artifacts bar button after checkpoint, typed !artifacts, or corpus exists."""
+    data = _load_discoverability()
+    if data.get("ui_unlocked"):
+        return
+    data["ui_unlocked"] = True
+    data["reason"] = reason
+    data["unlocked_at"] = datetime.now(timezone.utc).isoformat()
+    _save_discoverability(data)
+
+
+def artifacts_ui_eligible(*, mage_type: str | None = None) -> bool:
+    """Show Artifacts lifecycle button (§11.5.3 — hidden until corpus or first unlock)."""
+    if _load_discoverability().get("ui_unlocked"):
+        return True
+    if tier1_artifact_count(mage_type=mage_type) > 0:
+        mark_artifacts_ui_unlocked("corpus")
+        return True
+    return False
+
+
+def checkpoint_artifact_hint(*, session_note: str | None, flow_write: str | None) -> str | None:
+    """One-line post-checkpoint hint when something was saved to Tier 1."""
+    if not session_note and not flow_write:
+        return None
+    if flow_write and not session_note:
+        return "Flow note saved — browse with `!artifacts notes`."
+    shelf = "sessions" if session_note else "notes"
+    return f"Saved to **{shelf.title()}** — try `!artifacts {shelf}`."

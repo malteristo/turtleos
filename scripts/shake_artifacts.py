@@ -41,6 +41,10 @@ def check_registration() -> list[str]:
         errors.append("_PRACTITIONER_COMMANDS missing artifacts")
     if "artifacts" not in COMMAND_ACT_FALLBACK:
         errors.append("COMMAND_ACT_FALLBACK missing artifacts")
+    if "export" not in DIRECT_COMMANDS:
+        errors.append("DIRECT_COMMANDS missing export")
+    if "export" not in _PRACTITIONER_COMMANDS:
+        errors.append("_PRACTITIONER_COMMANDS missing export")
     return errors
 
 
@@ -83,6 +87,23 @@ def check_shelf_menu() -> list[str]:
         errors.append("shelf menu missing title")
     if "!artifacts sessions" not in text:
         errors.append("shelf menu missing sessions hint")
+    if "!export" not in text:
+        errors.append("shelf menu missing export hint")
+    return errors
+
+
+def check_discoverability() -> list[str]:
+    errors: list[str] = []
+    import artifact_viewer as av
+
+    with patch("artifact_viewer._load_discoverability", return_value={}), patch(
+        "artifact_viewer.tier1_artifact_count", return_value=0
+    ):
+        if av.artifacts_ui_eligible():
+            errors.append("should be ineligible with empty corpus and no unlock")
+    with patch("artifact_viewer._load_discoverability", return_value={"ui_unlocked": True}):
+        if not av.artifacts_ui_eligible():
+            errors.append("should be eligible when unlocked")
     return errors
 
 
@@ -133,6 +154,7 @@ def main() -> int:
         "allowlist": check_allowlist(),
         "practice_io": check_practice_io(),
         "shelf_menu": check_shelf_menu(),
+        "discoverability": check_discoverability(),
     }
     if live:
         all_errors["live_river"] = check_live(wait)

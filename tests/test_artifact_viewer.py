@@ -69,6 +69,19 @@ class TestArtifactAllowlist(unittest.TestCase):
             paths = av.list_shelf_artifacts("sessions", mage_type="practitioner")
             self.assertEqual(paths, ["sessions/2026-06-29.md"])
 
+    def test_discoverability_unlocks_on_corpus(self) -> None:
+        with patch("artifact_viewer.get_pd", return_value=self.pd), patch(
+            "artifact_viewer.get_runtime_dir", return_value=self.runtime
+        ), patch("artifact_viewer.get_mage_type", return_value="practitioner"), patch(
+            "artifact_viewer._discoverability_path",
+            return_value=os.path.join(self.runtime, "artifact_discoverability.json"),
+        ):
+            self.assertTrue(av.artifacts_ui_eligible(mage_type="practitioner"))
+
+    def test_checkpoint_hint(self) -> None:
+        hint = av.checkpoint_artifact_hint(session_note="2026-06-29.md", flow_write=None)
+        self.assertIn("!artifacts sessions", hint or "")
+
 
 class TestCmdArtifacts(unittest.IsolatedAsyncioTestCase):
     async def test_menu_without_args(self) -> None:

@@ -396,6 +396,7 @@ Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** 
 - `!release` — checkpoint, then clear history
 - `!dissolve` — archive eddy + chronicle
 - `!fetch <url>` — distill URL to library (**not** automatic link-read embeds)
+- `!export <path>` — download allowlisted artifact as `.md`
 - `!artifacts` — curated practice artifact shelves
 - `!read` / `!ls` / `!search` — browse allowlisted practice artifacts
 - **flow library / `!flows`** — optional platform flows in `practice_root/flows/` (in-eddy)

@@ -485,6 +485,34 @@ async def handle_health(request):
     return web.json_response({"status": "ok", "service": "turtleos-intake"})
 
 
+async def handle_artifact_read(request):
+    """Read-only allowlisted practice artifact (TURTLE_SPEC §11.4 / §11.5)."""
+    from urllib.parse import unquote
+
+    from artifact_viewer import is_artifact_readable, resolve_artifact_path
+    from mage import get_mage_key, get_mage_type
+    from practice_io import read_safe
+
+    path_mage = request.match_info.get("mage_key", "")
+    rel_path = unquote(request.match_info.get("path", "")).lstrip("/")
+    if not rel_path or path_mage != get_mage_key():
+        raise web.HTTPNotFound()
+    if not is_artifact_readable(rel_path, mage_type=get_mage_type()):
+        raise web.HTTPForbidden(text="Artifact not available")
+    abs_path = resolve_artifact_path(rel_path, mage_type=get_mage_type())
+    if not abs_path:
+        raise web.HTTPNotFound()
+    content = read_safe(abs_path)
+    if not content.strip():
+        raise web.HTTPNotFound(text="Empty artifact")
+    return web.Response(
+        body=content,
+        content_type="text/markdown",
+        charset="utf-8",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 def _shell_endpoint_authorized(request) -> bool:
     """Allow local requests, or token-authenticated remote requests."""
     token = os.environ.get("TURTLE_SHELL_TOKEN", "").strip()
@@ -535,6 +563,7 @@ def create_intake_app(discord_client=None, vortex_thread_id=None) -> web.Applica
     app.router.add_get("/paste", handle_intake_page)
     app.router.add_post("/paste", handle_intake_submit)
     app.router.add_get("/health", handle_health)
+    app.router.add_get("/read/{mage_key}/{path:.+}", handle_artifact_read)
     app.router.add_post("/shell", handle_shell_submit)
 
     return app

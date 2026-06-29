@@ -53,6 +53,16 @@ class TestLifecycleBarState(unittest.TestCase):
                 self.assertFalse(bar.is_lifecycle_bar_active(99))
 
 
+class TestLifecycleBarArtifactsButton(unittest.TestCase):
+    def test_module_defines_artifacts_button(self) -> None:
+        import inspect
+
+        source = inspect.getsource(bar)
+        self.assertIn("artifacts_ui_eligible", source)
+        self.assertIn('label="Artifacts"', source)
+        self.assertIn("_on_artifacts", source)
+
+
 class TestPractitionerAuthor(unittest.TestCase):
     def test_spirit_counts_as_practitioner(self) -> None:
         class Author:

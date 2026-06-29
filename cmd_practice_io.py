@@ -1,9 +1,12 @@
-"""Practice-root browse commands — read, ls, search, artifacts (TURTLE_SPEC §5.5, §11.5)."""
+"""Practice-root browse commands — read, ls, search, artifacts, export (TURTLE_SPEC §5.5, §11.5)."""
 
 from __future__ import annotations
 
+import io
 import os
 from datetime import datetime
+
+import discord
 
 from artifact_viewer import (
     SHELF_DEFS,
@@ -11,6 +14,7 @@ from artifact_viewer import (
     format_shelf_menu,
     is_artifact_directory,
     is_artifact_readable,
+    mark_artifacts_ui_unlocked,
     resolve_artifact_path,
 )
 from helpers import split_message
@@ -167,6 +171,7 @@ async def cmd_search(message, args):
 
 
 async def cmd_artifacts(message, args):
+    mark_artifacts_ui_unlocked("typed")
     mage_type = get_mage_type()
     if not args:
         await message.reply(format_shelf_menu(mage_type=mage_type), mention_author=False)
@@ -189,3 +194,42 @@ async def cmd_artifacts(message, args):
     else:
         for chunk in split_message(text, limit=1900):
             await message.reply(chunk, mention_author=False)
+
+
+async def cmd_export(message, args):
+    if not args:
+        await message.reply(
+            "Usage: `!export <artifact>`\n"
+            "Example: `!export sessions/2026-06-29.md`",
+            mention_author=False,
+        )
+        return
+
+    filename = args[0]
+    if not filename.endswith(".md"):
+        filename += ".md"
+
+    if not is_readable(filename):
+        await message.reply(
+            f"Cannot export `{filename}`. Use `!artifacts` to browse your practice corpus.",
+            mention_author=False,
+        )
+        return
+
+    path = resolve_artifact_path(filename)
+    if not path or not os.path.isfile(path):
+        await message.reply(f"Cannot export `{filename}`.", mention_author=False)
+        return
+
+    content = read_safe(path)
+    if not content.strip():
+        await message.reply(f"`{filename}` is empty.", mention_author=False)
+        return
+
+    attachment_name = os.path.basename(filename)
+    file_obj = discord.File(fp=io.BytesIO(content.encode("utf-8")), filename=attachment_name)
+    await message.reply(
+        f"Exported `{attachment_name}` ({len(content)} chars).",
+        file=file_obj,
+        mention_author=False,
+    )

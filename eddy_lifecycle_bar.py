@@ -335,6 +335,26 @@ class EddyLifecycleBarView(discord.ui.View):
         dissolve_btn.callback = self._on_dissolve
         self.add_item(dissolve_btn)
 
+        from artifact_viewer import artifacts_ui_eligible
+
+        if artifacts_ui_eligible():
+            artifacts_btn = discord.ui.Button(
+                label="Artifacts",
+                custom_id=f"eddy:lifecycle:artifacts:{thread_id}",
+                style=discord.ButtonStyle.secondary,
+                emoji="📂",
+            )
+            artifacts_btn.callback = self._on_artifacts
+            self.add_item(artifacts_btn)
+
+    async def _on_artifacts(self, interaction: discord.Interaction):
+        if interaction.channel.id != self._thread_id:
+            await interaction.response.send_message("Wrong thread.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await _run_lifecycle_command(interaction, "artifacts")
+        await ensure_eddy_lifecycle_bar_at_bottom(interaction.channel, interaction.client)
+
     async def _on_checkpoint(self, interaction: discord.Interaction):
         if interaction.channel.id != self._thread_id:
             await interaction.response.send_message("Wrong thread.", ephemeral=True)

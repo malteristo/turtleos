@@ -94,6 +94,7 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 
 | Command | Handler | Purpose |
 |---------|---------|---------|
+| `!export <path>` | `cmd_export` | Download allowlisted artifact as `.md` |
 | `!artifacts [shelf]` | `cmd_artifacts` | Curated practice artifact shelves (§11.5) |
 | `!read <path>` | `cmd_read` | View allowlisted practice artifact |
 | `!ls [dir]` | `cmd_ls` | Browse allowlisted practice paths |
