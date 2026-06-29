@@ -719,7 +719,7 @@ Keep in chat when **any** of:
 - `PRACTICE_WEB_BASE` unset: `!read` MAY inline markdown in chat (degraded mode).
 - Operator-only: MAY expose `!read --inline` for debug; not product default for practitioners.
 
-**Implementation status (2026-06-29):** `!read` browser-first when web base set — **shipped**. `!search` snippet-only + Turtle citation caps — **target** (not fully enforced in harness yet).
+**Implementation status (2026-06-29):** `!read` browser-first when web base set — **shipped**. `!search` snippet-only + open links — **shipped**. Turtle citation caps — **prompt + tool law** (harness does not hard-truncate replies).
 
 #### 11.5.4. Traceability
 

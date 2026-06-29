@@ -83,6 +83,22 @@ class TestArtifactAllowlist(unittest.TestCase):
         self.assertIn("!artifacts sessions", hint or "")
 
 
+class TestSearchFormatting(unittest.TestCase):
+    def test_format_includes_open_link_not_full_body(self) -> None:
+        hits = [
+            av.SearchHit("sessions/a.md", 1, "# Title"),
+            av.SearchHit("sessions/a.md", 5, "some matching line here"),
+        ]
+        with patch("practice_io.PRACTICE_WEB_BASE", "http://127.0.0.1:8080"), patch(
+            "practice_io.get_mage_key", return_value="kermit"
+        ):
+            text = av.format_search_results(hits, "match")
+        self.assertIn("snippet", text.lower())
+        self.assertIn("!read sessions/a.md", text)
+        self.assertIn("http://127.0.0.1:8080/kermit/sessions/a.md", text)
+        self.assertNotIn("# Title\n\nsome matching", text)
+
+
 class TestCmdArtifacts(unittest.IsolatedAsyncioTestCase):
     async def test_menu_without_args(self) -> None:
         import cmd_practice_io as cpio

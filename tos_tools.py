@@ -71,7 +71,8 @@ TOS_TOOLS = [
         "function": {
             "name": "read_practice_file",
             "description": (
-                "Read an allowlisted practice artifact or workshop lore file. "
+                "Read an allowlisted practice artifact or workshop lore file (internal context). "
+                "In Discord replies: quote at most ~3 lines from an artifact; point to `!read <path>` for the full note — do not paste full bodies (§11.5.5). "
                 "Practice artifacts: sessions/, state/notes/, thread-archive/, chronicle/surface.md, "
                 "intentions/, box/intake/, surface files (boom.md, bright.md, …). "
                 "Workshop files (read-only, operator/Turtle tools): library/, system/, AGENTS.md, …"
@@ -304,6 +305,12 @@ def _execute_tos_tool_raw(name, arguments):
         directory = arguments.get("directory", "")
         if not query:
             return "No query provided"
+        from artifact_viewer import collect_artifact_search_hits, format_search_results
+
+        hits = collect_artifact_search_hits(query, directory=directory or "")
+        if hits:
+            return format_search_results(hits, query)
+        # Workshop-only fallback when no artifact hits (operator tooling paths)
         try:
             pattern = re.compile(query, re.IGNORECASE)
         except re.error:
@@ -318,20 +325,20 @@ def _execute_tos_tool_raw(name, arguments):
                     if f.endswith(".md"):
                         rel = os.path.relpath(os.path.join(root, f), rel_root)
                         rel = rel.replace("\\", "/")
-                        if _is_workshop_readable(rel) or is_readable(rel):
+                        if _is_workshop_readable(rel) and not is_readable(rel):
                             search_files.append(rel)
         for filepath in sorted(search_files):
             content = read_safe(os.path.join(rel_root, filepath))
             for i, line in enumerate(content.split("\n"), 1):
                 if pattern.search(line):
                     results.append(f"{filepath}:{i}: {line.strip()[:120]}")
-                    if len(results) >= 30:
+                    if len(results) >= 15:
                         break
-            if len(results) >= 30:
+            if len(results) >= 15:
                 break
         if not results:
             return f"No matches for '{query}'"
-        return f"Found {len(results)} match(es):\n" + "\n".join(results)
+        return f"Workshop matches ({len(results)}):\n" + "\n".join(results)
 
     if name == "list_practice_files":
         directory = arguments.get("directory", "")

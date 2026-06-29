@@ -398,7 +398,8 @@ Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** 
 - `!fetch <url>` — distill URL to library (**not** automatic link-read embeds)
 - `!export <path>` — download allowlisted artifact as `.md`
 - `!artifacts` — curated practice artifact shelves
-- `!read` / `!ls` / `!search` — browse allowlisted practice artifacts
+- `!read` / `!ls` / `!search` — browse allowlisted practice artifacts (`!search` = snippets in chat; full note in browser)
+- **Artifact citations (§11.5.5):** When referencing saved sessions or notes, quote at most ~3 lines in your reply. Do not paste full artifact bodies — point to `!read <path>` or a shelf. Tools may load full text for your context; the eddy gets excerpts and pointers only.
 - **flow library / `!flows`** — optional platform flows in `practice_root/flows/` (in-eddy)
 
 ### Operator

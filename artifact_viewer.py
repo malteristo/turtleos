@@ -360,3 +360,83 @@ def checkpoint_artifact_hint(*, session_note: str | None, flow_write: str | None
         return "Flow note saved — browse with `!artifacts notes`."
     shelf = "sessions" if session_note else "notes"
     return f"Saved to **{shelf.title()}** — try `!artifacts {shelf}`."
+
+
+# ─── Search (§11.5.5) ─────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class SearchHit:
+    path: str
+    line_no: int
+    line_text: str
+
+
+def collect_artifact_search_hits(
+    query: str,
+    *,
+    directory: str = "",
+    max_hits: int = 20,
+    mage_type: str | None = None,
+) -> list[SearchHit]:
+    """Return allowlisted artifact line matches (snippets only — no full bodies)."""
+    import re
+
+    if not query.strip():
+        return []
+    mage_type = _effective_mage_type(mage_type)
+    try:
+        pattern = re.compile(query, re.IGNORECASE)
+    except re.error:
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
+
+    prefix = directory.rstrip("/") + "/" if directory else ""
+    hits: list[SearchHit] = []
+
+    for rel_path in iter_artifact_files(mage_type=mage_type):
+        if prefix and not rel_path.startswith(prefix):
+            continue
+        abs_path = resolve_artifact_path(rel_path, mage_type=mage_type)
+        if not abs_path:
+            continue
+        try:
+            with open(abs_path, encoding="utf-8") as fh:
+                for i, line in enumerate(fh, 1):
+                    if pattern.search(line):
+                        hits.append(SearchHit(rel_path, i, line.rstrip("\n")))
+                        if len(hits) >= max_hits:
+                            return hits
+        except OSError:
+            continue
+    return hits
+
+
+def format_search_results(hits: list[SearchHit], query: str, *, max_snippets_per_file: int = 3) -> str:
+    """Chat snippets grouped by artifact with browser open links (§11.5.5)."""
+    from practice_io import obsidian_link
+
+    if not hits:
+        return f"No matches for `{query}` in your artifact corpus."
+
+    by_file: dict[str, list[SearchHit]] = {}
+    for hit in hits:
+        by_file.setdefault(hit.path, []).append(hit)
+
+    lines = [
+        f"**{len(hits)} snippet(s)** for `{query}` — open the full artifact in your browser:",
+        "",
+    ]
+    for path in sorted(by_file.keys()):
+        file_hits = by_file[path]
+        link = obsidian_link(path)
+        lines.append(f"**{path}**")
+        lines.append(f"Open: {link} · `!read {path}`")
+        for hit in file_hits[:max_snippets_per_file]:
+            snippet = hit.line_text.strip()[:120]
+            lines.append(f"  L{hit.line_no}: {snippet}")
+        extra = len(file_hits) - max_snippets_per_file
+        if extra > 0:
+            lines.append(f"  *…{extra} more line(s) in this artifact — use `!read`*")
+        lines.append("")
+
+    return "\n".join(lines).strip()

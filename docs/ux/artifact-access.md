@@ -110,7 +110,7 @@ Sharing practice with someone else: use **`!share`** to open a shared eddy, not 
 | Read-only web | `intake_server.py` → `GET /read/{mage_key}/{path}` |
 | Browser-first `!read` | `cmd_practice_io.py` when `PRACTICE_WEB_BASE` set |
 | Shakedown | `scripts/shake_artifacts.py` |
-| Search/citation caps (§11.5.5 target) | `cmd_practice_io.cmd_search`, Turtle harness — TBD |
+| Search/citation caps (§11.5.5) | `artifact_viewer.format_search_results`, `prompts.py`, `read_practice_file` tool desc |
 
 **Review checklist:** [review-checklist.md](review-checklist.md) — any UX-touching slice updates this doc and §11.5 together.
 
