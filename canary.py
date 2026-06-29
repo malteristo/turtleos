@@ -62,18 +62,15 @@ def format_age(seconds):
     return f"{hours // 24}d"
 
 
-def check_workshop_git_clone():
-    workshop = Path.home() / "workshop"
-    git_marker = workshop / ".git"
-    boom = workshop / "desk" / "boom.md"
-    if not git_marker.exists():
-        return "red", f"no git clone at {workshop}"
-    if not boom.exists():
-        return "yellow", "clone present but desk/boom.md missing"
-    rc, out, _ = run(["git", "-C", str(workshop), "rev-parse", "--short", "HEAD"])
+def check_magic_bare_repo():
+    """Forge canonical repo on Mini — bare host, no working-tree clone required."""
+    bare = Path.home() / "repos" / "magic.git"
+    if not bare.is_dir():
+        return "red", f"missing bare repo at {bare}"
+    rc, out, _ = run(["git", "-C", str(bare), "rev-parse", "--short", "HEAD"])
     if rc != 0:
-        return "yellow", f"git HEAD unreadable: {out.strip()}"
-    return "green", f"HEAD {out.strip()}"
+        return "yellow", f"bare HEAD unreadable: {out.strip()}"
+    return "green", f"magic.git @ {out.strip()}"
 
 
 def check_couchdb():
@@ -293,7 +290,7 @@ def check_triage_fallback_count():
 
 
 CHECKS = [
-    ("infra", "workshop_git_clone", check_workshop_git_clone, "high"),
+    ("infra", "magic_bare_repo", check_magic_bare_repo, "high"),
     ("infra", "discord_bot_alive", lambda: check_launchd_label("com.turtle.discord"), "high"),
     ("models", "ollama_reachable", check_ollama, "high"),
     ("models", "triage_fallback_count", check_triage_fallback_count, "medium"),

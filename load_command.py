@@ -210,7 +210,21 @@ async def cmd_load(message, args):
         return
 
     query = " ".join(args)
-    wr = get_workshop_root() or os.path.expanduser("~/workshop")
+    wr = get_workshop_root()
+    if not wr:
+        pd = os.path.expanduser("~/workshops/kermit")
+        context_dir = os.path.join(pd, "context")
+        if os.path.isdir(context_dir):
+            wr = context_dir
+        else:
+            await message.reply(
+                "**`!load` is retired on native turtleOS.**\n"
+                "Resonance bundles live on the Magic Forge workshop. "
+                "Use Cursor/Spirit for `@` flows and deep lore — or add curated bundles under "
+                "`context/` in your practice root.",
+                mention_author=False,
+            )
+            return
 
     matches = _search_resonance(query, wr)
 

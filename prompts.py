@@ -532,12 +532,11 @@ def _build_context_resonance(context_type: str) -> str:
     from mage import get_workshop_root, get_pd
     wr = get_workshop_root()
     if not wr:
-        # Fallback: try to derive from practice dir
         pd = get_pd()
-        if pd and pd.endswith("/desk"):
-            wr = pd[:-5]
-        else:
-            wr = os.path.expanduser("~/workshop")
+        context = os.path.join(pd, "context") if pd else ""
+        wr = context if context and os.path.isdir(context) else None
+    if not wr:
+        return ctx.get("rules", "") if ctx else ""
 
     parts = [ctx.get("rules", "")]
     max_chars = ctx.get("max_resonance_chars", 4000)

@@ -1,6 +1,9 @@
 # Example registry for turtleOS multi-practitioner routing.
 # Copy to mage_registry.yaml and replace placeholders with your Discord IDs,
 # channel IDs, and local practice paths. Keep the real file untracked.
+#
+# Native topology (2026-06-29): practice_dir and runtime_dir colocate at
+# ~/workshops/<name>/. No workshop_root — Magic framework stays on Forge only.
 
 # Attunement profile (TURTLE_SPEC §4, Appendix A):
 #   native  — vanilla platform law (target default)
