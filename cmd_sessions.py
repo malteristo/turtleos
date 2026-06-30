@@ -24,15 +24,14 @@ async def cmd_checkpoint(message):
         )
         return
 
+    ack = await message.reply("-# Checkpointing…", mention_author=False)
+
     from sessions import checkpoint_session
 
     result = await checkpoint_session(channel_id, trigger="manual", mark_paused=False)
 
     if not result.captured_anything:
-        await message.reply(
-            "Checkpoint ran — nothing new met the save threshold.",
-            mention_author=False,
-        )
+        await ack.edit(content="Checkpoint ran — nothing new met the save threshold.")
         return
 
     mark_artifacts_ui_unlocked("checkpoint")
@@ -60,6 +59,10 @@ async def cmd_checkpoint(message):
         embed=embed,
         open_actions=[("Open", f"!read {open_path}")] if open_path else [],
     )
+    try:
+        await ack.delete()
+    except discord.HTTPException:
+        pass
     await reply_artifact_surface(message, surface)
 
 

@@ -188,6 +188,23 @@ def compose_artifact_surface(
     )
 
 
+def _artifact_read_url(path: str) -> str | None:
+    """Browser URL for artifact when web read is configured."""
+    from state import PRACTICE_WEB_BASE
+
+    if not PRACTICE_WEB_BASE:
+        return None
+    rel = path.strip()
+    if not rel.endswith(".md"):
+        rel += ".md"
+    from practice_io import is_readable, obsidian_link
+
+    if not is_readable(rel):
+        return None
+    url = obsidian_link(rel)
+    return url if url.startswith("http") else None
+
+
 class _ArtifactOpenSelect(discord.ui.Select):
     def __init__(self, channel_id: int, options: list[tuple[str, str]], *, select_id: str):
         select_options = []
@@ -212,9 +229,25 @@ class _ArtifactOpenSelect(discord.ui.Select):
         if interaction.channel.id != self._channel_id:
             await interaction.response.send_message("Wrong channel.", ephemeral=True)
             return
+        path = self.values[0]
+        url = _artifact_read_url(path)
+        if url:
+            view = discord.ui.View()
+            view.add_item(
+                discord.ui.Button(
+                    label="Open in browser",
+                    style=discord.ButtonStyle.link,
+                    url=url,
+                )
+            )
+            await interaction.response.send_message(
+                f"**{artifact_display_name(path)}** — tap below to open.",
+                view=view,
+                ephemeral=False,
+            )
+            return
         from eddy_lifecycle_bar import _run_river_act_command
 
-        path = self.values[0]
         await interaction.response.defer()
         await _run_river_act_command(interaction, "read", [path])
 
@@ -250,8 +283,19 @@ class ArtifactPresenterView(discord.ui.View):
                 )
         else:
             for label, command in read_actions[:3]:
-                cmd, _ = _parse_act_command(command)
-                if cmd not in CONTEXTUAL_ACTION_COMMANDS:
+                _cmd, args = _parse_act_command(command)
+                path = args[0] if args else ""
+                url = _artifact_read_url(path) if path else None
+                if url:
+                    self.add_item(
+                        discord.ui.Button(
+                            label=label[:80],
+                            style=discord.ButtonStyle.link,
+                            url=url,
+                        )
+                    )
+                    continue
+                if _cmd not in CONTEXTUAL_ACTION_COMMANDS:
                     continue
                 custom_id = _encode_act_custom_id(channel_id, command)
                 if not custom_id:
@@ -261,7 +305,9 @@ class ArtifactPresenterView(discord.ui.View):
                     custom_id=custom_id,
                     style=discord.ButtonStyle.secondary,
                 )
-                button.callback = self._make_read_callback(custom_id, _run_river_act_command, _parse_act_command)
+                button.callback = self._make_read_callback(
+                    custom_id, _run_river_act_command, _parse_act_command
+                )
                 self.add_item(button)
 
         for label, command in other_actions[:3]:
