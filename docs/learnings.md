@@ -9,17 +9,33 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
-### 2026-06-30 — Generative UI E1.1 + standing bars + public artifact read
+### 2026-06-30 — Generative UI E1.1 dogfood: artifact browse + export UX
 
-**Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share` (native + magic). Bar re-anchor **deferred** for `!artifacts` / `!share`; artifact select **edits in place** (Open + Export) so the bar is not sandwiched between related actions. Eddy bar activates on first practitioner message (`touch_eddy_lifecycle_bar` in `river_bot.py`).
+**Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share`. Bar re-anchor deferred for `!artifacts` and `!share`. On **artifacts** bar press: bar **edits in place** (artifacts highlighted, others greyed) instead of delete+repost — avoids "deleted message" confusion and shows which flow started.
 
-**Public read:** `ARTIFACT_READ_TOKEN` + `PRACTICE_WEB_BASE=https://…` — Open URLs carry `?t=`; intake `/read/` rejects missing token when configured. See `deploy/caddy-practice-viewer.snippet` (public hostname + TLS; no Tailscale on practitioner device).
+**Public read:** `ARTIFACT_READ_TOKEN` + `PRACTICE_WEB_BASE=https://…` — Open URLs carry `?t=`; see `deploy/caddy-practice-viewer.snippet`.
 
-**E1.1 shipped:** Search embed + Open row (top 3 hits); River `present_artifacts` act type; shelf browse **Export** second button row (≤3 items); select follow-up adds Export .md; checkpoint progress embed.
+**E1.1 shipped:** Search Open row; River `present_artifacts`; shelf Export row (≤3); checkpoint progress embed; standing bars; public read token.
 
-**Dogfood (2026-06-30, Mage):** River bar buttons → Recent → select → Export .md **works** (thread archive landed correctly). Friction: (1) defer on `!artifacts` left bar **above** Recent when triggered from bar button; (2) `Act !… via button` ops embeds split output from standing bar. **Fix:** only `!share` defers re-anchor; drop success ops embeds for button acts (digest-only).
+**UX learnings (Mage dogfood — artifact browse + export):**
 
-**Still backlog:** `generative-ui-kit.md`, optional TURTLE_SPEC §11.5.6.
+| Pattern | Lesson |
+|---------|--------|
+| **One file, one surface** | Stacking instructional embed + code block + attachment + action row for the same artifact reads as clutter. Pick one primary representation. |
+| **Attachment = preview + download** | Discord's `.md` attachment bar is the preview (expandable) *and* the download affordance (`⋯` → Download). No separate Download button or duplicate ` ```md ` block needed. |
+| **No redundant titles** | Filename on the attachment bar is enough — drop bold display-name lines above the preview. |
+| **Export handoff compression** | Iterated: ops embed → full Phone/Desktop envelope → `-#` hint line → **attachment only**. Each step was still heavy until the last. |
+| **Bar during browse** | Delete+repost bar mid-flow breaks continuity. Edit bar to **active state**, defer re-anchor until artifact pick completes. |
+| **Select → replace, don't layer** | Dropdown pick should **replace** the Recent browse message — not "tap below to open" + Recent embed + buttons underneath. |
+| **Open in browser** | Keep as optional link button below attachment when web read is configured — secondary to in-chat preview, not a third copy of the content. |
+
+**Final select flow (Mini `7cd65dd`):** Recent embed + select → pick → message becomes `.md` attachment preview + optional **Open in browser** → river bar re-anchors at bottom.
+
+**Deploy lesson (unchanged):** Restart **`com.turtle.river` and `com.turtle.discord`** when changing shared command/presenter modules.
+
+**Still backlog:** `generative-ui-kit.md`, optional TURTLE_SPEC §11.5.6, HTTPS dogfood on public hostname.
+
+**Implementation notes:** Eddy bar activates on first practitioner message (`touch_eddy_lifecycle_bar`). Success ops embeds dropped for button acts (digest-only). Export iteration: ops embed → download envelope → `-#` hint → attachment-only.
 
 ### 2026-06-29 — Generative UI E1: artifact presenter (dogfood complete)
 

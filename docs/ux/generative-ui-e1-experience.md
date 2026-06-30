@@ -1,6 +1,6 @@
 # E1 experience — artifact navigation (practitioner view)
 
-**Status:** Dogfood complete (2026-06-29) — Mini at `3e89b2f`  
+**Status:** Dogfood complete (2026-06-29 E1; 2026-06-30 E1.1 artifact browse + export refinement) — Mini at `7cd65dd`  
 
 **Parent:** `docs/chapters/design-generative-ui-e1-artifact-presenter.md`  
 **Law unchanged:** Chat = dialogue; browser = corpus (§11.5.5)
@@ -237,6 +237,44 @@ Bot:    ┌ Recent ────────────────────�
         └ Search · All shelves: !artifacts --all ──────────┘
         [ Open: 2026-06-29 ] [ Open: 2026-06-27 ] [ Open: compile-notes ]
 ```
+
+---
+
+## Dogfood learnings (2026-06-30 — E1.1 artifact browse + export)
+
+Principles that emerged from Mage dogfood on river bar → Recent → select → preview/export. Treat as **presentation law** for the artifact kit going forward.
+
+### Composition
+
+1. **One file, one surface.** Don't stack instructional embed, code fence, attachment, and button row for the same artifact. The practitioner should see one coherent preview, not three versions of the same note.
+
+2. **Let Discord's attachment be the preview.** For `.md` exports and select follow-ups, the attachment bar (filename + expandable body) *is* the in-chat preview. A separate ` ```md ` block duplicates it and reads as clutter.
+
+3. **Filename once.** The attachment bar already shows `2026-06-30-3.md`. Drop bold display-name lines above the preview.
+
+4. **Download without a Download button.** Mobile save path = `⋯` on the attachment bar. A dedicated Download button is redundant when the file is already attached.
+
+5. **Instructional copy is not part of every handoff.** Phone/Desktop hints and `-#` download lines helped once; on a repeated action they become noise. Prefer silent attachment or one quiet line max — attachment-only won.
+
+### Navigation chrome
+
+6. **Standing bar = process indicator during browse.** Clicking **artifacts** on the river bar should highlight that action and grey out the rest — not delete the bar message (which reads as "reference to deleted message"). Re-anchor at bottom only when the browse step completes.
+
+7. **Select replaces the browse surface.** Picking from the Recent dropdown should transform *that message* into the preview — not leave the Recent embed visible under a "tap below to open" header with extra buttons.
+
+8. **Open in browser stays optional.** When `PRACTICE_WEB_BASE` is set, a single **Open in browser** link below the attachment is enough for full-corpus reading. It is secondary to the in-chat preview, not a third content copy.
+
+### What we tried and rejected (this session)
+
+| Attempt | Why it failed dogfood |
+|---------|-------------------------|
+| Export ops embed + hidden `⋯` | Opaque; practitioner couldn't find Download |
+| Full download envelope (Phone / Desktop fields + Open + Download) | Felt like a tutorial after every export |
+| `-#` hint line + attachment | Better, still redundant once attachment bar is understood |
+| Code block + title + attachment | Two previews of the same file |
+| Recent embed + select result layered | Confusing — two stages visible at once |
+
+**Reference implementation:** `artifact_presenter.py` — `present_artifact_preview_in_place()`, `RiverEddyBarView.with_active_command()`.
 
 ---
 

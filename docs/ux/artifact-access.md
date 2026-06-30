@@ -39,6 +39,10 @@ Hosted practitioners with portable surface files also see shelves backed by `boo
 
 **`!artifacts` (E1 — default):** Shows a **Recent** embed (newest practice artifacts across shelves, empty shelves hidden) with **Open** link buttons (up to three) or a select menu (four or more). Tap Open → Discord in-app browser → artifact in the practice viewer. Same allowlist as always.
 
+**Select menu (4+ recents):** Choosing an artifact **replaces** the browse message with the `.md` attachment preview (expandable in chat) and an optional **Open in browser** link when web read is configured. Download via `⋯` on the attachment bar — no separate Download button.
+
+**River bar → artifacts:** Highlights **artifacts** on the standing bar (others greyed) while browse is open; bar re-anchors at bottom after pick.
+
 **`!artifacts <shelf>`:** Browse one shelf — e.g. `!artifacts sessions`, `!artifacts notes`. Same Open buttons or select menu.
 
 **`!read <path>`:** Opens one artifact in the browser (embed + Open link). Use when you know the path.
