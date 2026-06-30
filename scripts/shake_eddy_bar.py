@@ -108,6 +108,33 @@ def _spirit_send(channel_id: str, text: str) -> None:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "spirit_ops send failed")
 
 
+async def _lifecycle_bar_labels_in_thread(thread_id: str) -> set[str]:
+    """Read button labels from recent messages (discord_ops text omits components)."""
+    import discord
+
+    env = _load_env()
+    token = env.get("RIVER_BOT_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("RIVER_BOT_TOKEN not set")
+
+    intents = discord.Intents.default()
+    intents.message_content = True
+    client = discord.Client(intents=intents)
+    await client.login(token)
+    found: set[str] = set()
+    try:
+        ch = await client.fetch_channel(int(thread_id))
+        async for message in ch.history(limit=20):
+            for row in message.components or []:
+                for child in getattr(row, "children", []):
+                    label = (getattr(child, "label", None) or "").lower().strip()
+                    if label in {"flows", "checkpoint", "share"}:
+                        found.add(label)
+    finally:
+        await client.close()
+    return found
+
+
 async def _spawn_blank_eddy() -> dict:
     import discord
     from river_handler import _spawn_eddy_from_anchor
@@ -196,10 +223,17 @@ def check_live(wait_seconds: int) -> list[str]:
     lower = transcript.lower()
     if "turtle" not in lower:
         errors.append("no Turtle reply after first message in blank eddy")
+
+    try:
+        bar_labels = asyncio.run(_lifecycle_bar_labels_in_thread(thread_id))
+    except Exception as exc:
+        errors.append(f"lifecycle bar component inspect failed: {exc}")
+        return errors
+
     for label in ("flows", "checkpoint", "share"):
-        if label not in lower:
+        if label not in bar_labels:
             errors.append(
-                f"standing lifecycle bar missing {label!r} after first message "
+                f"standing lifecycle bar missing {label!r} button "
                 "(expected flows · checkpoint · share)"
             )
 
