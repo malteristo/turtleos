@@ -49,6 +49,9 @@ def compose_export_handoff(rel_path: str) -> str:
     """One quiet line — attachment is the deliverable; Discord shows its own preview."""
     name = rel_path.replace("\\", "/").rstrip("/").split("/")[-1]
     return f"-# **{name}** — **⋯** → **Download**"
+
+
+def checkpoint_open_path(
     *,
     session_note: str | None,
     flow_write: str | None,
