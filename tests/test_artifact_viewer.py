@@ -6,7 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, ANY
 
 sys.modules.setdefault("discord", MagicMock())
 
@@ -104,10 +104,28 @@ class TestCmdArtifacts(unittest.IsolatedAsyncioTestCase):
         import cmd_practice_io as cpio
 
         message = MagicMock()
+        message.channel.id = 12345
         message.reply = AsyncMock()
-        with patch("cmd_practice_io.format_shelf_menu", return_value="**Practice artifacts**"):
+        fake_surface = MagicMock()
+        fake_surface.embed = MagicMock(title="Recent")
+        fake_surface.content = None
+        fake_surface.open_actions = [("Open", "!read sessions/x.md")]
+        with patch(
+            "artifact_presenter.compose_artifact_surface", return_value=fake_surface
+        ), patch("artifact_presenter.reply_artifact_surface", new_callable=AsyncMock) as reply:
             await cpio.cmd_artifacts(message, [])
-        self.assertIn("Practice artifacts", message.reply.await_args[0][0])
+        reply.assert_awaited_once()
+
+    async def test_all_flag(self) -> None:
+        import cmd_practice_io as cpio
+        from artifact_presenter import ArtifactIntent
+
+        message = MagicMock()
+        with patch(
+            "artifact_presenter.compose_artifact_surface", return_value=MagicMock(open_actions=[])
+        ) as compose, patch("artifact_presenter.reply_artifact_surface", new_callable=AsyncMock):
+            await cpio.cmd_artifacts(message, ["--all"])
+        compose.assert_called_once_with(ArtifactIntent.BROWSE_ALL, mage_type=ANY)
 
 
 if __name__ == "__main__":

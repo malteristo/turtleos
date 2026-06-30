@@ -124,8 +124,18 @@ def check_live(wait_seconds: int) -> list[str]:
     time.sleep(wait_seconds)
     read_proc = _run([str(VENV_PY), str(SPIRIT_OPS), "read", RIVER_CHANNEL, "8"], timeout=60)
     transcript = read_proc.stdout + read_proc.stderr
-    if "Practice artifacts" not in transcript and "Sessions" not in transcript:
+    if "Practice artifacts" not in transcript and "Recent" not in transcript and "Sessions" not in transcript:
         errors.append(f"!artifacts response not found in river transcript: {transcript[:400]}")
+
+    proc_all = _run([str(VENV_PY), str(SPIRIT_OPS), "send", RIVER_CHANNEL, "!artifacts --all"], timeout=60)
+    if proc_all.returncode != 0:
+        errors.append(f"spirit !artifacts --all send failed: {proc_all.stderr or proc_all.stdout}")
+    else:
+        time.sleep(wait_seconds)
+        read_all = _run([str(VENV_PY), str(SPIRIT_OPS), "read", RIVER_CHANNEL, "6"], timeout=60)
+        transcript_all = read_all.stdout + read_all.stderr
+        if "Practice artifacts" not in transcript_all:
+            errors.append("!artifacts --all missing operator catalog in transcript")
 
     deny_proc = _run(
         [str(VENV_PY), str(SPIRIT_OPS), "send", RIVER_CHANNEL, "!read thread-state/registry.yaml"],

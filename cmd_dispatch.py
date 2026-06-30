@@ -66,6 +66,7 @@ CONTEXTUAL_ACTION_COMMANDS = {
     "flows",
     "artifacts",
     "export",
+    "read",
 }
 # Native eddies: lifecycle bar owns checkpoint / release / dissolve; seneschal extends beyond that.
 LIFECYCLE_BAR_COMMANDS = frozenset({"checkpoint", "release", "dissolve"})

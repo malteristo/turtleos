@@ -271,17 +271,79 @@ def list_shelf_artifacts(shelf_key: str, *, mage_type: str | None = None) -> lis
     return [p for p in paths if is_artifact_readable(p, mage_type=mage_type)]
 
 
-def format_shelf_menu(*, mage_type: str | None = None) -> str:
+@dataclass(frozen=True)
+class RecentArtifact:
+    path: str
+    display_name: str
+    shelf_title: str
+    mtime: float
+
+
+def shelf_title_for_path(path: str) -> str:
+    if path.startswith("sessions/"):
+        return "Sessions"
+    if path.startswith("state/notes/"):
+        return "Notes"
+    if path.startswith("thread-archive/"):
+        return "Archives"
+    if path == "chronicle/surface.md":
+        return "Chronicle"
+    if path.startswith("box/intake/"):
+        return "Intake"
+    if path.startswith(LINK_RESONANCE_PREFIX):
+        return "Saved links"
+    if path.startswith("proposals/"):
+        return "Proposals"
+    if path.startswith("intentions/"):
+        return "Intentions"
+    if path in HOSTED_SURFACE_FILES:
+        return "Surface"
+    return "Artifact"
+
+
+def list_recent_artifacts(*, limit: int = 8, mage_type: str | None = None) -> list[RecentArtifact]:
+    mage_type = _effective_mage_type(mage_type)
+    scored: list[tuple[float, str]] = []
+    for path in iter_artifact_files(mage_type=mage_type):
+        abs_path = resolve_artifact_path(path, mage_type=mage_type)
+        if not abs_path or not os.path.isfile(abs_path):
+            continue
+        scored.append((os.path.getmtime(abs_path), path))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    out: list[RecentArtifact] = []
+    for mtime, path in scored[:limit]:
+        from practice_io import artifact_display_name
+
+        out.append(
+            RecentArtifact(
+                path=path,
+                display_name=artifact_display_name(path),
+                shelf_title=shelf_title_for_path(path),
+                mtime=mtime,
+            )
+        )
+    return out
+
+
+def format_shelf_menu(
+    *,
+    mage_type: str | None = None,
+    include_empty: bool = True,
+    operator_hints: bool = True,
+) -> str:
     lines = ["**Practice artifacts** — curated shelves (not the full filesystem)", ""]
     for shelf, count in list_shelves(mage_type=mage_type):
+        if not include_empty and count == 0:
+            continue
         lines.append(f"• **{shelf.title}** (`!artifacts {shelf.key}`) — {count} — {shelf.blurb}")
-    lines.extend(
-        [
-            "",
-            "View one: `!read <path>` · Export: `!export <path>` · Search: `!search <term>`",
-            "Browse a shelf tree: `!ls sessions` (allowlisted paths only)",
-        ]
-    )
+    if operator_hints:
+        lines.extend(
+            [
+                "",
+                "View one: `!read <path>` · Export: `!export <path>` · Search: `!search <term>`",
+                "Browse a shelf tree: `!ls sessions` (allowlisted paths only)",
+            ]
+        )
     return "\n".join(lines)
 
 

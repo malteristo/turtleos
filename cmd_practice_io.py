@@ -10,8 +10,6 @@ import discord
 
 from artifact_viewer import (
     SHELF_DEFS,
-    format_shelf_listing,
-    format_shelf_menu,
     is_artifact_directory,
     is_artifact_readable,
     mark_artifacts_ui_unlocked,
@@ -190,10 +188,19 @@ async def cmd_search(message, args):
 
 
 async def cmd_artifacts(message, args):
+    from artifact_presenter import ArtifactIntent, compose_artifact_surface, reply_artifact_surface
+
     mark_artifacts_ui_unlocked("typed")
     mage_type = get_mage_type()
+
+    if args and args[0].lower() == "--all":
+        surface = compose_artifact_surface(ArtifactIntent.BROWSE_ALL, mage_type=mage_type)
+        await reply_artifact_surface(message, surface)
+        return
+
     if not args:
-        await message.reply(format_shelf_menu(mage_type=mage_type), mention_author=False)
+        surface = compose_artifact_surface(ArtifactIntent.BROWSE_DEFAULT, mage_type=mage_type)
+        await reply_artifact_surface(message, surface)
         return
 
     shelf_key = args[0].lower()
@@ -202,17 +209,17 @@ async def cmd_artifacts(message, args):
         shelf_key == "proposals" and mage_type == "practitioner"
     ):
         await message.reply(
-            f"Unknown shelf `{args[0]}`. Try `!artifacts` for the menu.",
+            f"Unknown shelf `{args[0]}`. Try `!artifacts` for recent items.",
             mention_author=False,
         )
         return
 
-    text = format_shelf_listing(shelf_key, mage_type=mage_type)
-    if len(text) <= 1900:
-        await message.reply(text, mention_author=False)
-    else:
-        for chunk in split_message(text, limit=1900):
-            await message.reply(chunk, mention_author=False)
+    surface = compose_artifact_surface(
+        ArtifactIntent.BROWSE_SHELF,
+        mage_type=mage_type,
+        shelf_key=shelf_key,
+    )
+    await reply_artifact_surface(message, surface)
 
 
 async def cmd_export(message, args):
