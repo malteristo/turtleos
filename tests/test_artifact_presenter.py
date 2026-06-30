@@ -172,29 +172,12 @@ class TestComposeArtifactSurface(unittest.TestCase):
             url, "https://practice.example.com/kermit/sessions/a.md?t=secret-token"
         )
 
-    def test_compose_export_embed_includes_download_hints(self) -> None:
-        class CapturingEmbed:
-            def __init__(self, **kwargs):
-                self.title = kwargs.get("title")
-                self.description = kwargs.get("description")
-                self.fields = []
-                self.footer = MagicMock()
-                self.footer.text = ""
-
-            def add_field(self, *, name, value, inline=False):
-                self.fields.append({"name": name, "value": value})
-
-            def set_footer(self, *, text):
-                self.footer.text = text
-
-        with patch("artifact_presenter.discord.Embed", CapturingEmbed):
-            embed = ap.compose_export_embed("sessions/2026-06-30-3.md", "# Session\n" * 10)
-        self.assertIn("2026 06 30 3", embed.title)
-        self.assertIn("Sessions", embed.description)
-        fields = {f["name"]: f["value"] for f in embed.fields}
-        self.assertIn("⋯", fields["Phone"])
-        self.assertIn("filename", fields["Desktop"].lower())
-        self.assertIn("preview", embed.footer.text.lower())
+    def test_compose_export_handoff_is_compact(self) -> None:
+        text = ap.compose_export_handoff("chronicle/surface.md")
+        self.assertIn("surface.md", text)
+        self.assertIn("⋯", text)
+        self.assertIn("Download", text)
+        self.assertLess(len(text), 120)
 
 
 if __name__ == "__main__":

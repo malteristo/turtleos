@@ -101,7 +101,7 @@ class TestCmdSearch(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCmdExport(unittest.IsolatedAsyncioTestCase):
-    async def test_export_replies_with_embed_and_attachment(self) -> None:
+    async def test_export_replies_with_compact_handoff_and_attachment(self) -> None:
         message = MagicMock()
         message.reply = AsyncMock()
 
@@ -109,20 +109,15 @@ class TestCmdExport(unittest.IsolatedAsyncioTestCase):
             "cmd_practice_io.resolve_artifact_path", return_value="/practice/sessions/a.md"
         ), patch("cmd_practice_io.os.path.isfile", return_value=True), patch(
             "cmd_practice_io.read_safe", return_value="# Hello\n" * 20
-        ), patch(
-            "artifact_presenter.discord.Embed",
-            MagicMock(side_effect=lambda **kw: MagicMock(**kw)),
         ):
             await cpio.cmd_export(message, ["sessions/a.md"])
 
-        kwargs = message.reply.await_args.kwargs
-        self.assertIn("embed", kwargs)
+        args, kwargs = message.reply.await_args
+        self.assertIn("Download", args[0])
+        self.assertIn("⋯", args[0])
         self.assertIn("file", kwargs)
-        self.assertFalse(kwargs.get("mention_author"))
-        self.assertNotIn(
-            "Exported",
-            str(getattr(kwargs.get("embed"), "description", "")),
-        )
+        self.assertNotIn("embed", kwargs)
+        self.assertNotIn("view", kwargs)
 
 
 if __name__ == "__main__":

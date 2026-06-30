@@ -45,49 +45,10 @@ def _download_button_label(path: str | None = None) -> str:
     return "Download"
 
 
-def compose_export_embed(rel_path: str, content: str) -> discord.Embed:
-    """Practitioner-facing handoff after export — attachment is the deliverable."""
-    display = artifact_display_name(rel_path)
-    shelf = shelf_title_for_path(rel_path)
-    attachment_name = rel_path.replace("\\", "/").rstrip("/").split("/")[-1]
-    embed = discord.Embed(
-        title=display,
-        description=f"**{attachment_name}** is attached below · **{shelf}**",
-        color=0x5865F2,
-    )
-    embed.add_field(
-        name="Phone",
-        value="Tap **⋯** on the file bar → **Download**",
-        inline=True,
-    )
-    embed.add_field(
-        name="Desktop",
-        value="Click the filename to save",
-        inline=True,
-    )
-    embed.set_footer(
-        text=f"{len(content):,} chars · preview above is a glance — download for the full file"
-    )
-    return embed
-
-
-def build_export_open_view(rel_path: str) -> discord.ui.View | None:
-    """Optional Open link when browser read is configured."""
-    url = _artifact_read_url(rel_path)
-    if not url:
-        return None
-    view = discord.ui.View(timeout=3600)
-    view.add_item(
-        discord.ui.Button(
-            label="Open in browser",
-            style=discord.ButtonStyle.link,
-            url=url,
-        )
-    )
-    return view
-
-
-def checkpoint_open_path(
+def compose_export_handoff(rel_path: str) -> str:
+    """One quiet line — attachment is the deliverable; Discord shows its own preview."""
+    name = rel_path.replace("\\", "/").rstrip("/").split("/")[-1]
+    return f"-# **{name}** — **⋯** → **Download**"
     *,
     session_note: str | None,
     flow_write: str | None,

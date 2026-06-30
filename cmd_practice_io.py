@@ -251,7 +251,7 @@ async def cmd_artifacts(message, args):
 
 
 async def cmd_export(message, args):
-    from artifact_presenter import build_export_open_view, compose_export_embed
+    from artifact_presenter import compose_export_handoff
 
     if not args:
         await message.reply(
@@ -285,9 +285,8 @@ async def cmd_export(message, args):
     rel_path = filename
     attachment_name = os.path.basename(rel_path)
     file_obj = discord.File(fp=io.BytesIO(content.encode("utf-8")), filename=attachment_name)
-    embed = compose_export_embed(rel_path, content)
-    view = build_export_open_view(rel_path)
-    kwargs: dict = {"embed": embed, "file": file_obj, "mention_author": False}
-    if view is not None:
-        kwargs["view"] = view
-    await message.reply(**kwargs)
+    await message.reply(
+        compose_export_handoff(rel_path),
+        file=file_obj,
+        mention_author=False,
+    )
