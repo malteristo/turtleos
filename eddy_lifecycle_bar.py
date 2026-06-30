@@ -233,7 +233,6 @@ async def _run_river_act_command(
         return
 
     inject_act_digest(interaction.channel.id, cmd, digest or COMMAND_ACT_FALLBACK.get(cmd, ""))
-    await log_activity(f"Act `!{cmd}` via button", "\U0001f518", channel=interaction.channel)
 
     from cmd_dispatch import INTERACTIVE_COMMANDS_DEFER_BAR
 
@@ -241,6 +240,9 @@ async def _run_river_act_command(
         from bar_anchor import ensure_channel_bars
 
         await ensure_channel_bars(interaction.channel, interaction.client)
+
+    # Act digest is enough for Turtle context — skip channel ops embed on success
+    # (it sandwiched the standing bar between command output and practitioner UI).
 
 
 async def _run_lifecycle_command(

@@ -74,10 +74,9 @@ SENESCHAL_ACTION_COMMANDS = frozenset(
     cmd for cmd in CONTEXTUAL_ACTION_COMMANDS if cmd not in LIFECYCLE_BAR_COMMANDS
 )
 
-# Commands that post interactive surfaces (select menus, multi-step pickers).
-# Defer standing bar re-anchor until the interaction completes — avoids sandwiching
-# the river/eddy bar between related command output and follow-up UI.
-INTERACTIVE_COMMANDS_DEFER_BAR = frozenset({"artifacts", "share"})
+# Multi-step pickers only — re-anchor after the wizard completes (select follow-ups
+# edit in place, so !artifacts always re-anchors immediately).
+INTERACTIVE_COMMANDS_DEFER_BAR = frozenset({"share"})
 
 
 def inject_act_digest(channel_id: int, cmd: str, summary: str) -> None:
@@ -150,8 +149,6 @@ async def dispatch_direct_command(message, *, bar_client=None) -> bool:
     args = parts[1].split() if len(parts) > 1 else []
 
     defer_bar = cmd in INTERACTIVE_COMMANDS_DEFER_BAR
-    if cmd == "artifacts" and args and args[0].lower() != "--all":
-        defer_bar = False  # shelf browse — single surface, re-anchor immediately
 
     lock = get_channel_lock(message.channel.id)
     async with lock:

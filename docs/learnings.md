@@ -17,6 +17,8 @@ Append to this file after each research cycle — it persists across sessions.
 
 **E1.1 shipped:** Search embed + Open row (top 3 hits); River `present_artifacts` act type; shelf browse **Export** second button row (≤3 items); select follow-up adds Export .md; checkpoint progress embed.
 
+**Dogfood (2026-06-30, Mage):** River bar buttons → Recent → select → Export .md **works** (thread archive landed correctly). Friction: (1) defer on `!artifacts` left bar **above** Recent when triggered from bar button; (2) `Act !… via button` ops embeds split output from standing bar. **Fix:** only `!share` defers re-anchor; drop success ops embeds for button acts (digest-only).
+
 **Still backlog:** `generative-ui-kit.md`, optional TURTLE_SPEC §11.5.6.
 
 ### 2026-06-29 — Generative UI E1: artifact presenter (dogfood complete)
