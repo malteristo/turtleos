@@ -179,6 +179,34 @@ async def cmd_search(message, args):
         )
         return
     query = " ".join(args)
+    from artifact_viewer import collect_artifact_search_hits, format_search_results
+    from artifact_presenter import ArtifactPresenterView
+    from practice_io import artifact_display_name
+
+    hits = collect_artifact_search_hits(query, mage_type=get_mage_type())
+    if hits:
+        body = format_search_results(hits, query)
+        top_paths: list[str] = []
+        for hit in hits:
+            if hit.path not in top_paths:
+                top_paths.append(hit.path)
+            if len(top_paths) >= 3:
+                break
+        open_actions = [
+            (f"Open: {artifact_display_name(path)}", f"!read {path}") for path in top_paths
+        ]
+        embed = discord.Embed(
+            title=f"Search · {query[:80]}",
+            description=body[:4096],
+            color=0x5865F2,
+        )
+        view = ArtifactPresenterView(message.channel.id, open_actions)
+        kwargs: dict = {"embed": embed, "mention_author": False}
+        if view.children:
+            kwargs["view"] = view
+        await message.reply(**kwargs)
+        return
+
     result = execute_tos_tool("search_practice_files", {"query": query})
     if len(result) <= 1900:
         await message.reply(result, mention_author=False)

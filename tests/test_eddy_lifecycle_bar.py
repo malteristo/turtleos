@@ -32,12 +32,8 @@ class TestLifecycleBarEligibility(unittest.TestCase):
                     with patch("prompts.uses_native_turtle_prompt", return_value=True):
                         self.assertTrue(bar.lifecycle_bar_eligible(11, 22))
 
-    def test_native_disables_standing_bar(self) -> None:
-        with patch.object(bar, "standing_lifecycle_bar_enabled", return_value=False):
-            with patch("eddy_spawn.is_awaiting_title", return_value=False):
-                with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
-                    with patch("prompts.uses_native_turtle_prompt", return_value=True):
-                        self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
+    def test_native_enables_standing_bar(self) -> None:
+        self.assertTrue(bar.standing_lifecycle_bar_enabled())
 
 
 class TestLifecycleBarState(unittest.TestCase):
@@ -54,13 +50,14 @@ class TestLifecycleBarState(unittest.TestCase):
 
 
 class TestLifecycleBarArtifactsButton(unittest.TestCase):
-    def test_module_defines_artifacts_button(self) -> None:
-        import inspect
-
-        source = inspect.getsource(bar)
-        self.assertIn("artifacts_ui_eligible", source)
-        self.assertIn('label="Artifacts"', source)
-        self.assertIn("_on_artifacts", source)
+    def test_eddy_bar_has_flows_checkpoint_share(self) -> None:
+        src = (Path(__file__).resolve().parents[1] / "eddy_lifecycle_bar.py").read_text(
+            encoding="utf-8"
+        )
+        block = src.split("class EddyLifecycleBarView")[1].split("class EddyDissolveConfirmView")[0]
+        self.assertIn('label="flows"', block)
+        self.assertIn('label="checkpoint"', block)
+        self.assertIn('label="share"', block)
 
 
 class TestPractitionerAuthor(unittest.TestCase):

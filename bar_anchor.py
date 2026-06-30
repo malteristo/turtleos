@@ -4,9 +4,8 @@ Two River UI layers in native eddies (different positioning rules):
 
 - **Contextual act rows** (D3 Save / Checkpoint) — one-shot embed + button posted
   after the triggering turn; stays on the timeline near that context.
-- **Standing bars** (legacy lifecycle) — tracked in thread-state;
-  ``ensure_channel_bars`` reposts them as the last message when dialogue continues.
-  Flow library is **on-demand** via ``!flows`` / ``!flow`` (no standing bar).
+- **Standing eddy action bar** — flows · checkpoint · share; reposted as last message
+  when dialogue continues. Interactive commands defer re-anchor until pickers complete.
 """
 
 from __future__ import annotations
@@ -44,8 +43,8 @@ async def ensure_channel_bars(channel, client=None) -> None:
 async def _ensure_channel_bars_unlocked(channel, client=None) -> None:
     """Repost standing bars after any message that extends the channel timeline.
 
-    River parent channels: standing eddy bar (`new eddy` only).
-    Live eddy threads (legacy attunement): lifecycle bar when active.
+    River parent channels: standing river bar (`new eddy` · `artifacts` · `help`).
+    Live eddy threads: standing action bar (`flows` · `checkpoint` · `share`) when active.
 
     Idempotent when the bar is already last. Split-bot safe: uses River client for
     bar post/edit even when Turtle posted the preceding command or ops embed.

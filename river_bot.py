@@ -174,6 +174,9 @@ async def on_message(message: discord.Message):
             _maybe_schedule_contextual_offer(message)
             return
 
+        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+        await touch_eddy_lifecycle_bar(message, from_practitioner=True)
         _maybe_schedule_contextual_offer(message)
         return
 

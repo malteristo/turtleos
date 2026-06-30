@@ -1,6 +1,6 @@
 # E1 experience — artifact navigation (practitioner view)
 
-**Status:** Implemented (2026-06-29) — deploy to Mini to dogfood  
+**Status:** Dogfood complete (2026-06-29) — Mini at `3e89b2f`  
 
 **Parent:** `docs/chapters/design-generative-ui-e1-artifact-presenter.md`  
 **Law unchanged:** Chat = dialogue; browser = corpus (§11.5.5)

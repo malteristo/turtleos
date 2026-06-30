@@ -9,6 +9,30 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-06-30 — Generative UI E1.1 + standing bars + public artifact read
+
+**Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share` (native + magic). Bar re-anchor **deferred** for `!artifacts` / `!share`; artifact select **edits in place** (Open + Export) so the bar is not sandwiched between related actions. Eddy bar activates on first practitioner message (`touch_eddy_lifecycle_bar` in `river_bot.py`).
+
+**Public read:** `ARTIFACT_READ_TOKEN` + `PRACTICE_WEB_BASE=https://…` — Open URLs carry `?t=`; intake `/read/` rejects missing token when configured. See `deploy/caddy-practice-viewer.snippet` (public hostname + TLS; no Tailscale on practitioner device).
+
+**E1.1 shipped:** Search embed + Open row (top 3 hits); River `present_artifacts` act type; shelf browse **Export** second button row (≤3 items); select follow-up adds Export .md; checkpoint progress embed.
+
+**Still backlog:** `generative-ui-kit.md`, optional TURTLE_SPEC §11.5.6.
+
+### 2026-06-29 — Generative UI E1: artifact presenter (dogfood complete)
+
+**What shipped:** `artifact_presenter.py` — intent → embed + Open actions. `!artifacts` default = **Recent** (mtime, empty shelves hidden); `!artifacts <shelf>` = shelf browse; `!artifacts --all` = full catalog (operator/shakedown). Post-checkpoint and `!read` use the same composer. Open = Discord **link buttons** (≤3) or **select menu** (>3) with URLs pre-resolved at compose time.
+
+**Dogfood (2026-06-29, kermit practice):** All three journeys validated — `!checkpoint` → Open (session note in browser); `!artifacts` Recent + dropdown; `!artifacts sessions` link buttons. Fixes during dogfood: (1) link buttons instead of command buttons (one tap, no second embed); (2) select menu URLs must be built in `compose_artifact_surface()` — callbacks lack practice context and previously emitted `default/sessions/...` → practice viewer "Could not load"; (3) `-# Checkpointing…` ack before Ollama reflection (still ~1–2 min wait).
+
+**Deploy lesson (critical):** River owns `!` commands in eddies (`river_bot.py` → `dispatch_direct_command`). **`com.turtle.river` and `com.turtle.discord` must both restart** when changing `cmd_sessions.py`, `cmd_practice_io.py`, or `artifact_presenter.py`. Restarting discord only left stale checkpoint UI on River until river was bounced.
+
+**Friction (not blockers):** Checkpoint blocks on `REFLECTION_MODEL` (qwen3.5:27b) before reply; Tailscale IP triggers Discord "Leaving Discord" interstitial once; Recent >3 items uses dropdown (heavier than buttons).
+
+**Docs:** `docs/chapters/design-generative-ui-e1-artifact-presenter.md`, `docs/ux/generative-ui-e1-experience.md`, `docs/ux/artifact-access.md` (E1 section).
+
+**Next:** E1.1 — search Open row, River `present_artifacts` act type, export second row, hostname vs raw IP, stronger checkpoint progress UX; optional TURTLE_SPEC §11.5.6. **Strategic:** Mage validated generative UI as improvement — continue controlled-tier expansion in future sessions.
+
 ### 2026-06-28 — Native close startup unarchive anti-pattern
 
 **Never unarchive dissolved threads on startup.** Practitioner "Close Thread" is a commitment — `on_ready` paths that call `edit(archived=False)` on every registry thread resurrect sidebar ghosts and break trust. Fix: skip unarchive when `thread_registry.is_dissolved()`; re-archive dissolved entries via `ensure_dissolved_threads_archived`. See `discord_reconcile.py` + Mini `7abf2f2`.

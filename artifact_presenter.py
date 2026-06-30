@@ -33,6 +33,8 @@ class ArtifactSurface:
     content: str | None = None
     open_actions: list[tuple[str, str]] = field(default_factory=list)
     """(button label, turtle-talk command) pairs — typically !read <path>."""
+    export_paths: list[str] = field(default_factory=list)
+    """Paths for a second action row of Export buttons (≤3, when Open row uses link buttons)."""
 
 
 def checkpoint_open_path(
@@ -131,10 +133,13 @@ def compose_artifact_surface(
             color=0x5865F2,
         )
         embed.set_footer(text=_practitioner_footer())
+        open_paths = artifacts[:8]
+        export_paths = artifacts[:3] if len(open_paths) <= 3 else []
         return ArtifactSurface(
             template_id="shelf_listing",
             embed=embed,
-            open_actions=_open_actions_for_paths(artifacts[:8]),
+            open_actions=_open_actions_for_paths(open_paths),
+            export_paths=export_paths,
         )
 
     # browse_default
@@ -201,22 +206,12 @@ def _apply_practice_context(interaction: discord.Interaction) -> None:
 
 def _artifact_read_url(path: str) -> str | None:
     """Browser URL for artifact when web read is configured."""
-    from urllib.parse import quote
+    from practice_io import artifact_read_url, is_readable
 
-    from mage import get_mage_key
-    from state import PRACTICE_WEB_BASE
-
-    if not PRACTICE_WEB_BASE:
-        return None
     rel = path.strip()
-    if not rel.endswith(".md"):
-        rel += ".md"
-    from practice_io import is_readable
-
     if not is_readable(rel):
         return None
-    mage_key = get_mage_key()
-    return f"{PRACTICE_WEB_BASE.rstrip('/')}/{mage_key}/{quote(rel)}"
+    return artifact_read_url(rel)
 
 
 class _ArtifactOpenSelect(discord.ui.Select):
@@ -248,19 +243,21 @@ class _ArtifactOpenSelect(discord.ui.Select):
             custom_id=f"artifact:open_select:{channel_id}:{select_id}",
         )
         self._channel_id = channel_id
+        self._path_for_value = {
+            (url or path)[:100]: path for _label, path, url in options[:25]
+        }
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.channel.id != self._channel_id:
             await interaction.response.send_message("Wrong channel.", ephemeral=True)
             return
         selected = self.values[0]
+        path_hint = self._path_for_value.get(selected, selected)
         if selected.startswith("http://") or selected.startswith("https://"):
             url = selected
-            path_hint = selected.rsplit("/", 1)[-1]
         else:
             _apply_practice_context(interaction)
-            path_hint = selected
-            url = _artifact_read_url(selected)
+            url = _artifact_read_url(path_hint)
         if url:
             view = discord.ui.View()
             view.add_item(
@@ -270,11 +267,42 @@ class _ArtifactOpenSelect(discord.ui.Select):
                     url=url,
                 )
             )
-            await interaction.response.send_message(
-                f"**{artifact_display_name(path_hint)}** — tap below to open.",
+            export_path = path_hint
+            if export_path and not export_path.endswith(".md"):
+                export_path += ".md"
+            from cmd_dispatch import CONTEXTUAL_ACTION_COMMANDS
+            from eddy_lifecycle_bar import _encode_act_custom_id, _run_river_act_command
+
+            if export_path:
+                export_cmd = f"!export {export_path}"
+                custom_id = _encode_act_custom_id(self._channel_id, export_cmd)
+                if custom_id and "export" in CONTEXTUAL_ACTION_COMMANDS:
+
+                    async def _on_export(interaction: discord.Interaction):
+                        if interaction.channel.id != self._channel_id:
+                            await interaction.response.send_message("Wrong channel.", ephemeral=True)
+                            return
+                        _apply_practice_context(interaction)
+                        await interaction.response.defer()
+                        await _run_river_act_command(interaction, "export", [export_path])
+
+                    export_btn = discord.ui.Button(
+                        label="Export .md",
+                        custom_id=custom_id,
+                        style=discord.ButtonStyle.secondary,
+                    )
+                    export_btn.callback = _on_export
+                    view.add_item(export_btn)
+            display = artifact_display_name(path_hint)
+            embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else None
+            await interaction.response.edit_message(
+                content=f"**{display}** — tap below to open.",
+                embed=embed,
                 view=view,
-                ephemeral=False,
             )
+            from bar_anchor import ensure_channel_bars
+
+            await ensure_channel_bars(interaction.channel, interaction.client)
             return
         from eddy_lifecycle_bar import _run_river_act_command
 
@@ -285,7 +313,13 @@ class _ArtifactOpenSelect(discord.ui.Select):
 class ArtifactPresenterView(discord.ui.View):
     """Open / browse buttons for artifact presenter surfaces."""
 
-    def __init__(self, channel_id: int, actions: list[tuple[str, str]]):
+    def __init__(
+        self,
+        channel_id: int,
+        actions: list[tuple[str, str]],
+        *,
+        export_paths: list[str] | None = None,
+    ):
         super().__init__(timeout=3600)
         self._channel_id = channel_id
         from cmd_dispatch import CONTEXTUAL_ACTION_COMMANDS
@@ -361,6 +395,23 @@ class ArtifactPresenterView(discord.ui.View):
             button.callback = self._make_read_callback(custom_id, _run_river_act_command, _parse_act_command)
             self.add_item(button)
 
+        if export_paths and len(read_actions) <= 3 and "export" in CONTEXTUAL_ACTION_COMMANDS:
+            for path in export_paths[:3]:
+                command = f"!export {path}"
+                label = f"Export: {artifact_display_name(path)}"[:80]
+                custom_id = _encode_act_custom_id(channel_id, command)
+                if not custom_id:
+                    continue
+                button = discord.ui.Button(
+                    label=label,
+                    custom_id=custom_id,
+                    style=discord.ButtonStyle.secondary,
+                )
+                button.callback = self._make_read_callback(
+                    custom_id, _run_river_act_command, _parse_act_command
+                )
+                self.add_item(button)
+
     def _make_read_callback(self, custom_id: str, run_act, parse_cmd):
         async def callback(interaction: discord.Interaction):
             if interaction.channel.id != self._channel_id:
@@ -399,8 +450,12 @@ async def reply_artifact_surface(message, surface: ArtifactSurface) -> None:
         kwargs["content"] = "\u200b"
 
     view = None
-    if surface.open_actions:
-        view = ArtifactPresenterView(message.channel.id, surface.open_actions)
+    if surface.open_actions or surface.export_paths:
+        view = ArtifactPresenterView(
+            message.channel.id,
+            surface.open_actions,
+            export_paths=surface.export_paths,
+        )
         if view.children:
             kwargs["view"] = view
         else:

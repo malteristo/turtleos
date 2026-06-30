@@ -492,6 +492,12 @@ async def handle_artifact_read(request):
     from artifact_viewer import is_artifact_readable, resolve_artifact_path
     from mage import get_mage_type, set_practice_context_for_mage_key
     from practice_io import read_safe
+    from state import ARTIFACT_READ_TOKEN
+
+    if ARTIFACT_READ_TOKEN:
+        token = request.rel_url.query.get("t", "")
+        if token != ARTIFACT_READ_TOKEN:
+            raise web.HTTPForbidden(text="Artifact read token required")
 
     path_mage = request.match_info.get("mage_key", "")
     rel_path = unquote(request.match_info.get("path", "")).lstrip("/")

@@ -10,8 +10,11 @@ from urllib.parse import quote
 
 from mage import get_pd, get_mage_key, get_runtime_dir
 from state import (
-    OBSIDIAN_VAULT, PRACTICE_WEB_BASE,
-    MAX_BRIGHT_CHARS, MAX_INTENTION_LINES,
+    ARTIFACT_READ_TOKEN,
+    OBSIDIAN_VAULT,
+    PRACTICE_WEB_BASE,
+    MAX_BRIGHT_CHARS,
+    MAX_INTENTION_LINES,
 )
 
 
@@ -57,13 +60,26 @@ def truncate(text, limit=2000):
     return text[:limit - 20] + "\n\n*...truncated*"
 
 
+def artifact_read_url(rel_path: str) -> str | None:
+    """HTTPS browser URL for an allowlisted artifact when ``PRACTICE_WEB_BASE`` is set."""
+    rel = rel_path.strip()
+    if not rel.endswith(".md"):
+        rel += ".md"
+    if not PRACTICE_WEB_BASE:
+        return None
+    mage_key = get_mage_key()
+    url = f"{PRACTICE_WEB_BASE.rstrip('/')}/{mage_key}/{quote(rel)}"
+    if ARTIFACT_READ_TOKEN:
+        url = f"{url}?t={quote(ARTIFACT_READ_TOKEN, safe='')}"
+    return url
+
+
 def obsidian_link(filename):
     """Generate a tappable link for a practice file.
     Prefers web link (works in Discord's in-app browser) with obsidian:// fallback."""
     name = filename.replace(".md", "")
-    mage_key = get_mage_key()
-    if PRACTICE_WEB_BASE:
-        web_url = f"{PRACTICE_WEB_BASE.rstrip('/')}/{mage_key}/{quote(filename)}"
+    web_url = artifact_read_url(filename)
+    if web_url:
         return web_url
     return f"[{filename}](obsidian://open?vault={quote(OBSIDIAN_VAULT)}&file={quote(name)})"
 

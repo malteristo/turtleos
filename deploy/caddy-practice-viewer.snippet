@@ -1,10 +1,18 @@
 # Practice artifact browser (Discord in-app web view)
-# Merge into /Users/turtle/caddy/Caddyfile under :8080 { ... }
+# Merge into /Users/turtle/caddy/Caddyfile
 #
 # Serves static/practice_viewer from turtleos repo; fetches markdown via
 # allowlisted GET /read/{mage}/{path} on intake (port 8742).
+#
+# Public HTTPS (no Tailscale on practitioner device):
+#   1. Point a hostname at your Mini (Tailscale Funnel, Cloudflare Tunnel, or port-forward).
+#   2. Set PRACTICE_WEB_BASE=https://your-hostname  (no trailing slash)
+#   3. Set ARTIFACT_READ_TOKEN to a long random secret — appended to Open URLs as ?t=
+#   4. Reload Caddy + restart discord/river after .env change.
+#
+# Tailscale-only (legacy): http://100.x.x.x:8080 works but Discord shows "Leaving Discord".
 
-:8080 {
+your-hostname.example.com {
     handle /read/* {
         reverse_proxy localhost:8742
     }
@@ -22,3 +30,6 @@
         file_server
     }
 }
+
+# Local / LAN fallback (no TLS):
+# :8080 { ... same handle blocks ... }

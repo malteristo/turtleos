@@ -98,6 +98,40 @@ class TestComposeArtifactSurface(unittest.TestCase):
         self.assertEqual(surface.embed.title, "Recent")
         self.assertTrue(surface.open_actions)
 
+    def test_browse_shelf_includes_export_row_paths(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        pd = tmp.name
+        os.makedirs(os.path.join(pd, "sessions"), exist_ok=True)
+        runtime = os.path.join(pd, "runtime")
+        os.makedirs(runtime, exist_ok=True)
+        for name in ("a.md", "b.md", "c.md"):
+            with open(os.path.join(pd, "sessions", name), "w") as fh:
+                fh.write("# x")
+        try:
+            class CapturingEmbed:
+                def __init__(self, **kwargs):
+                    self.title = kwargs.get("title")
+                    self.description = kwargs.get("description")
+
+                def set_footer(self, **kwargs):
+                    pass
+
+            with patch("artifact_viewer.get_pd", return_value=pd), patch(
+                "artifact_viewer.get_runtime_dir", return_value=runtime
+            ), patch("artifact_viewer.get_mage_type", return_value="practitioner"), patch(
+                "artifact_presenter.discord.Embed", CapturingEmbed
+            ):
+                surface = ap.compose_artifact_surface(
+                    ap.ArtifactIntent.BROWSE_SHELF,
+                    mage_type="practitioner",
+                    shelf_key="sessions",
+                )
+            self.assertEqual(surface.template_id, "shelf_listing")
+            self.assertEqual(len(surface.export_paths), 3)
+            self.assertTrue(all(p.startswith("sessions/") for p in surface.export_paths))
+        finally:
+            tmp.cleanup()
+
     def test_browse_all_operator_menu(self) -> None:
         class CapturingEmbed:
             def __init__(self, **kwargs):
@@ -118,13 +152,24 @@ class TestComposeArtifactSurface(unittest.TestCase):
 
     def test_artifact_read_url_uses_mage_key_not_default(self) -> None:
         with patch("practice_io.is_readable", return_value=True), patch(
-            "state.PRACTICE_WEB_BASE", "http://100.110.46.104:8080"
-        ), patch("practice_io.get_mage_key", return_value="kermit"), patch(
-            "mage.get_mage_key", return_value="kermit"
+            "practice_io.PRACTICE_WEB_BASE", "http://100.110.46.104:8080"
+        ), patch("practice_io.ARTIFACT_READ_TOKEN", ""), patch(
+            "practice_io.get_mage_key", return_value="kermit"
         ):
             url = ap._artifact_read_url("sessions/2026-06-30-3.md")
         self.assertEqual(
             url, "http://100.110.46.104:8080/kermit/sessions/2026-06-30-3.md"
+        )
+
+    def test_artifact_read_url_appends_token_when_configured(self) -> None:
+        with patch("practice_io.is_readable", return_value=True), patch(
+            "practice_io.PRACTICE_WEB_BASE", "https://practice.example.com"
+        ), patch("practice_io.ARTIFACT_READ_TOKEN", "secret-token"), patch(
+            "practice_io.get_mage_key", return_value="kermit"
+        ):
+            url = ap._artifact_read_url("sessions/a.md")
+        self.assertEqual(
+            url, "https://practice.example.com/kermit/sessions/a.md?t=secret-token"
         )
 
 

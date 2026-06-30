@@ -1,6 +1,6 @@
 # Design: Generative UI E1 — Artifact presenter
 
-**Status:** Implemented — deploy + dogfood  
+**Status:** Shipped + dogfood complete (2026-06-29) — Mini at `3e89b2f`  
 **Experience (read first):** [generative-ui-e1-experience.md](../ux/generative-ui-e1-experience.md)  
 **Parent:** Magic `desk/proposals/2026-06-29-generative-ui.md`  
 **Spec trace:** TURTLE_SPEC §11.5–11.5.5, §9.6  

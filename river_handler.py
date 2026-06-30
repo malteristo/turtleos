@@ -212,7 +212,7 @@ async def _materialize_from_bar(
 
 
 class RiverEddyBarView(discord.ui.View):
-    """Standing bottom bar — new eddy only (flows load inside the eddy)."""
+    """Standing bottom bar — new eddy · artifacts · help."""
 
     def __init__(self, channel_id: int):
         super().__init__(timeout=None)
@@ -225,6 +225,46 @@ class RiverEddyBarView(discord.ui.View):
         )
         new_btn.callback = self._on_new_eddy
         self.add_item(new_btn)
+
+        from eddy_lifecycle_bar import (
+            _encode_act_custom_id,
+            _parse_act_command,
+            _run_river_act_command,
+        )
+
+        for label, command, emoji in (
+            ("artifacts", "!artifacts", "📂"),
+            ("help", "!help", "❓"),
+        ):
+            custom_id = _encode_act_custom_id(channel_id, command)
+            if not custom_id:
+                continue
+            btn = discord.ui.Button(
+                label=label,
+                custom_id=custom_id,
+                style=discord.ButtonStyle.secondary,
+                emoji=emoji,
+            )
+            btn.callback = self._make_act_callback(custom_id, _parse_act_command, _run_river_act_command)
+            self.add_item(btn)
+
+    def _make_act_callback(self, custom_id, parse_cmd, run_act):
+        from eddy_lifecycle_bar import _decode_act_custom_id
+
+        async def callback(interaction: discord.Interaction):
+            if interaction.channel.id != self._channel_id:
+                await interaction.response.send_message("Wrong channel.", ephemeral=True)
+                return
+            try:
+                _, decoded = _decode_act_custom_id(custom_id)
+            except ValueError:
+                await interaction.response.send_message("This action expired.", ephemeral=True)
+                return
+            cmd, args = parse_cmd(decoded)
+            await interaction.response.defer()
+            await run_act(interaction, cmd, args)
+
+        return callback
 
     async def _on_new_eddy(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -366,6 +406,27 @@ async def render_acts(
                 surface = f"{surface} ({jump})"
             if surface:
                 _append_chronicle(practice_dir, surface, act.get("deep"))
+
+        elif kind == "present_artifacts":
+            from artifact_presenter import ArtifactIntent, compose_artifact_surface, reply_artifact_surface
+            from artifact_viewer import mark_artifacts_ui_unlocked
+            from mage import get_mage_type
+
+            mark_artifacts_ui_unlocked("river_act")
+            intent_raw = (act.get("intent") or "browse_default").lower()
+            intent_map = {
+                "browse_default": ArtifactIntent.BROWSE_DEFAULT,
+                "browse_shelf": ArtifactIntent.BROWSE_SHELF,
+                "browse_all": ArtifactIntent.BROWSE_ALL,
+            }
+            intent = intent_map.get(intent_raw, ArtifactIntent.BROWSE_DEFAULT)
+            surface = compose_artifact_surface(
+                intent,
+                mage_type=get_mage_type(),
+                shelf_key=act.get("shelf"),
+            )
+            await reply_artifact_surface(message, surface)
+            summary["views"] += 1
 
     _append_chronicle(
         practice_dir,

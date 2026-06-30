@@ -74,6 +74,11 @@ SENESCHAL_ACTION_COMMANDS = frozenset(
     cmd for cmd in CONTEXTUAL_ACTION_COMMANDS if cmd not in LIFECYCLE_BAR_COMMANDS
 )
 
+# Commands that post interactive surfaces (select menus, multi-step pickers).
+# Defer standing bar re-anchor until the interaction completes — avoids sandwiching
+# the river/eddy bar between related command output and follow-up UI.
+INTERACTIVE_COMMANDS_DEFER_BAR = frozenset({"artifacts", "share"})
+
 
 def inject_act_digest(channel_id: int, cmd: str, summary: str) -> None:
     """Record a River act outcome for Turtle dialogue context (not Turtle prose)."""
@@ -139,10 +144,15 @@ async def dispatch_direct_command(message, *, bar_client=None) -> bool:
     """Execute turtle-talk ``!`` command, inject act digest, re-anchor bars."""
     from state import get_channel_lock
 
+    text = message.content.strip()
+    cmd = text[1:].split(None, 1)[0].lower() if text.startswith("!") else ""
+
     lock = get_channel_lock(message.channel.id)
     async with lock:
         if not await try_direct_command(message):
             return False
+        if cmd in INTERACTIVE_COMMANDS_DEFER_BAR:
+            return True
         from bar_anchor import _ensure_channel_bars_unlocked
 
         await _ensure_channel_bars_unlocked(message.channel, bar_client)

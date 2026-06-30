@@ -1,6 +1,6 @@
 # Practice artifacts — curated shelves
 
-**Status:** v1 + v1.1 shipped (2026-06-29); **§11.5.5** chat-vs-browser presentation law (2026-06-29).  
+**Status:** v1 + v1.1 + **E1 generative presentation** shipped (2026-06-29); **§11.5.5** chat-vs-browser presentation law (2026-06-29).  
 **Canonical law:** [TURTLE_SPEC.md](../../TURTLE_SPEC.md) §11.5  
 **Chapter seed:** Magic `floor/drafts/file-access-on-turtleos-chapter-seed.md`
 
@@ -37,13 +37,19 @@ Hosted practitioners with portable surface files also see shelves backed by `boo
 
 ## How you open it
 
-**Today:** `!read` with `PRACTICE_WEB_BASE` set opens artifacts in **Discord's in-app browser** (tap the embed title) instead of dumping markdown in chat. Same allowlist as `!artifacts`.
+**`!artifacts` (E1 — default):** Shows a **Recent** embed (newest practice artifacts across shelves, empty shelves hidden) with **Open** link buttons (up to three) or a select menu (four or more). Tap Open → Discord in-app browser → artifact in the practice viewer. Same allowlist as always.
 
-**Read-only web:** When `PRACTICE_WEB_BASE` is set (Tailscale/local), long artifacts open at `{PRACTICE_WEB_BASE}/{mage_key}/{path}` — same allowlist as Discord.
+**`!artifacts <shelf>`:** Browse one shelf — e.g. `!artifacts sessions`, `!artifacts notes`. Same Open buttons or select menu.
 
-We do **not** pop up browsers unprompted. After checkpoint, a single line like "Saved to Sessions — try `!artifacts`" is enough.
+**`!read <path>`:** Opens one artifact in the browser (embed + Open link). Use when you know the path.
 
-Layer 1 users who only chat may never open Artifacts. That is fine.
+**After checkpoint:** Embed + Open button for the session note just saved (same composer as above).
+
+**Read-only web:** When `PRACTICE_WEB_BASE` is set (Tailscale/local), artifacts open at `{PRACTICE_WEB_BASE}/{mage_key}/{path}` — same allowlist as Discord.
+
+**Operator:** `!artifacts --all` shows the full shelf catalog (including empty shelves) — shakedown and debugging only.
+
+We do **not** pop up browsers unprompted except when you tap Open or use `!read`. Layer 1 users who only chat may never open Artifacts. That is fine.
 
 ---
 

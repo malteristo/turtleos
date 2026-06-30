@@ -20,10 +20,8 @@ _dissolve_in_progress: set[int] = set()
 
 
 def standing_lifecycle_bar_enabled() -> bool:
-    """Native dogfood uses contextual act rows + typed ``!`` — not a standing bar."""
-    from mage import get_attunement_profile
-
-    return get_attunement_profile() != "native"
+    """Standing eddy action bar — flows · checkpoint · share at thread bottom."""
+    return True
 
 
 def is_practitioner_input(message: discord.Message) -> bool:
@@ -138,6 +136,7 @@ class _LifecycleInteractionMessage:
             send_kwargs["content"] = content
         if embed:
             send_kwargs["embed"] = embed
+        send_kwargs.update(kwargs)
         if not send_kwargs:
             return
         if not self._sent:
@@ -236,9 +235,12 @@ async def _run_river_act_command(
     inject_act_digest(interaction.channel.id, cmd, digest or COMMAND_ACT_FALLBACK.get(cmd, ""))
     await log_activity(f"Act `!{cmd}` via button", "\U0001f518", channel=interaction.channel)
 
-    from bar_anchor import ensure_channel_bars
+    from cmd_dispatch import INTERACTIVE_COMMANDS_DEFER_BAR
 
-    await ensure_channel_bars(interaction.channel, interaction.client)
+    if cmd not in INTERACTIVE_COMMANDS_DEFER_BAR:
+        from bar_anchor import ensure_channel_bars
+
+        await ensure_channel_bars(interaction.channel, interaction.client)
 
 
 async def _run_lifecycle_command(
@@ -302,14 +304,23 @@ def _schedule_confirm_revert(interaction: discord.Interaction, thread_id: int) -
 
 
 class EddyLifecycleBarView(discord.ui.View):
-    """Normal lifecycle row — checkpoint, release, dissolve."""
+    """Standing eddy action bar — flows · checkpoint · share (typed ``!release`` / ``!dissolve`` remain)."""
 
     def __init__(self, thread_id: int):
         super().__init__(timeout=None)
         self._thread_id = thread_id
 
+        flows_btn = discord.ui.Button(
+            label="flows",
+            custom_id=f"eddy:lifecycle:flows:{thread_id}",
+            style=discord.ButtonStyle.secondary,
+            emoji="📚",
+        )
+        flows_btn.callback = self._on_flows
+        self.add_item(flows_btn)
+
         checkpoint_btn = discord.ui.Button(
-            label="Checkpoint",
+            label="checkpoint",
             custom_id=f"eddy:lifecycle:checkpoint:{thread_id}",
             style=discord.ButtonStyle.secondary,
             emoji="💾",
@@ -317,43 +328,21 @@ class EddyLifecycleBarView(discord.ui.View):
         checkpoint_btn.callback = self._on_checkpoint
         self.add_item(checkpoint_btn)
 
-        release_btn = discord.ui.Button(
-            label="Release",
-            custom_id=f"eddy:lifecycle:release:{thread_id}",
+        share_btn = discord.ui.Button(
+            label="share",
+            custom_id=f"eddy:lifecycle:share:{thread_id}",
             style=discord.ButtonStyle.secondary,
-            emoji="🌙",
+            emoji="📤",
         )
-        release_btn.callback = self._on_release
-        self.add_item(release_btn)
+        share_btn.callback = self._on_share
+        self.add_item(share_btn)
 
-        dissolve_btn = discord.ui.Button(
-            label="Dissolve",
-            custom_id=f"eddy:lifecycle:dissolve:{thread_id}",
-            style=discord.ButtonStyle.secondary,
-            emoji="🍃",
-        )
-        dissolve_btn.callback = self._on_dissolve
-        self.add_item(dissolve_btn)
-
-        from artifact_viewer import artifacts_ui_eligible
-
-        if artifacts_ui_eligible():
-            artifacts_btn = discord.ui.Button(
-                label="Artifacts",
-                custom_id=f"eddy:lifecycle:artifacts:{thread_id}",
-                style=discord.ButtonStyle.secondary,
-                emoji="📂",
-            )
-            artifacts_btn.callback = self._on_artifacts
-            self.add_item(artifacts_btn)
-
-    async def _on_artifacts(self, interaction: discord.Interaction):
+    async def _on_flows(self, interaction: discord.Interaction):
         if interaction.channel.id != self._thread_id:
             await interaction.response.send_message("Wrong thread.", ephemeral=True)
             return
         await interaction.response.defer()
-        await _run_lifecycle_command(interaction, "artifacts")
-        await ensure_eddy_lifecycle_bar_at_bottom(interaction.channel, interaction.client)
+        await _run_lifecycle_command(interaction, "flows")
 
     async def _on_checkpoint(self, interaction: discord.Interaction):
         if interaction.channel.id != self._thread_id:
@@ -361,24 +350,13 @@ class EddyLifecycleBarView(discord.ui.View):
             return
         await interaction.response.defer()
         await _run_lifecycle_command(interaction, "checkpoint")
-        await ensure_eddy_lifecycle_bar_at_bottom(interaction.channel, interaction.client)
 
-    async def _on_release(self, interaction: discord.Interaction):
+    async def _on_share(self, interaction: discord.Interaction):
         if interaction.channel.id != self._thread_id:
             await interaction.response.send_message("Wrong thread.", ephemeral=True)
             return
         await interaction.response.defer()
-        await _run_lifecycle_command(interaction, "release")
-        await ensure_eddy_lifecycle_bar_at_bottom(interaction.channel, interaction.client)
-
-    async def _on_dissolve(self, interaction: discord.Interaction):
-        if interaction.channel.id != self._thread_id:
-            await interaction.response.send_message("Wrong thread.", ephemeral=True)
-            return
-        confirm = EddyDissolveConfirmView(self._thread_id)
-        interaction.client.add_view(confirm)
-        await interaction.response.edit_message(content="\u200b", view=confirm)
-        _schedule_confirm_revert(interaction, self._thread_id)
+        await _run_lifecycle_command(interaction, "share")
 
 
 class EddyDissolveConfirmView(discord.ui.View):

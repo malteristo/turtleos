@@ -24,7 +24,14 @@ async def cmd_checkpoint(message):
         )
         return
 
-    ack = await message.reply("-# Checkpointing…", mention_author=False)
+    ack = await message.reply(
+        embed=discord.Embed(
+            title="Checkpointing…",
+            description="Saving flow state and writing your session note — usually 1–2 minutes.",
+            color=0x5865F2,
+        ),
+        mention_author=False,
+    )
 
     from sessions import checkpoint_session
 
