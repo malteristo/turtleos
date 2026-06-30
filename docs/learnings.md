@@ -35,6 +35,8 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Still backlog:** `generative-ui-kit.md`, optional TURTLE_SPEC §11.5.6, HTTPS dogfood on public hostname.
 
+**Release hygiene (2026-06-30):** `shake_eddy_bar.py` live checks updated for standing lifecycle bar (`flows` · `checkpoint` · `share`) — old script expected flow library bar. Design doc acceptance criteria marked complete.
+
 **Implementation notes:** Eddy bar activates on first practitioner message (`touch_eddy_lifecycle_bar`). Success ops embeds dropped for button acts (digest-only). Export iteration: ops embed → download envelope → `-#` hint → attachment-only.
 
 ### 2026-06-29 — Generative UI E1: artifact presenter (dogfood complete)

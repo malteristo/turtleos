@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Shakedown for standing eddy bar → blank eddy + in-eddy flow library (Slice 1).
+"""Shakedown for blank eddy spawn + standing lifecycle bar (flows · checkpoint · share).
 
 Exercises `_spawn_eddy_from_anchor(channel)` → `spawn_river_eddy` (empty room)
-→ first practitioner message → bottom flow library bar via migrate.
+→ first practitioner message → bottom lifecycle bar via `touch_eddy_lifecycle_bar`.
+
+Flow library is on-demand via the **flows** button (`!flows`), not a standing bar.
 
 Offline checks always run. With --live, uses River bot token on Mac Mini.
 
@@ -68,6 +70,20 @@ def check_offline() -> list[str]:
     bar_block = river_src.split("class RiverEddyBarView")[1].split("class RiverEddyView")[0]
     if "flow menu" in bar_block or "_on_flow_menu" in bar_block:
         errors.append("RiverEddyBarView still references flow menu")
+
+    try:
+        from eddy_lifecycle_bar import EddyLifecycleBarView  # noqa: F401
+    except ImportError as exc:
+        errors.append(f"eddy_lifecycle_bar import failed: {exc}")
+        return errors
+
+    lifecycle_src = (REPO / "eddy_lifecycle_bar.py").read_text(encoding="utf-8")
+    lifecycle_block = lifecycle_src.split("class EddyLifecycleBarView")[1].split(
+        "class EddyDissolveConfirmView", 1
+    )[0]
+    for label in ("flows", "checkpoint", "share"):
+        if f'label="{label}"' not in lifecycle_block:
+            errors.append(f"EddyLifecycleBarView missing {label!r} button")
 
     try:
         from eddy_flow_library import EddyFlowLibraryView, post_eddy_flow_library  # noqa: F401
@@ -165,8 +181,8 @@ def check_live(wait_seconds: int) -> list[str]:
     lower = transcript.lower()
     if "guided flow" in lower or "load a guided flow" in lower:
         errors.append(
-            "top flow library embed visible at materialize "
-            "(expected empty room until first practitioner message)"
+            "flow library embed visible at materialize "
+            "(expected empty room until first practitioner message or !flows)"
         )
 
     try:
@@ -180,19 +196,20 @@ def check_live(wait_seconds: int) -> list[str]:
     lower = transcript.lower()
     if "turtle" not in lower:
         errors.append("no Turtle reply after first message in blank eddy")
-    if "checkpoint" in lower and "release" in lower and "dissolve" in lower:
-        errors.append("standing lifecycle bar still visible (expected flow library bar)")
-    if "guided flow" not in lower and "load a guided flow" not in lower:
-        errors.append(
-            "bottom flow library bar not visible after first message "
-            "(expected guided flow / Load a guided flow)"
-        )
+    for label in ("flows", "checkpoint", "share"):
+        if label not in lower:
+            errors.append(
+                f"standing lifecycle bar missing {label!r} after first message "
+                "(expected flows · checkpoint · share)"
+            )
 
     return errors
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Eddy bar blank-eddy + flow library shakedown")
+    parser = argparse.ArgumentParser(
+        description="Blank eddy spawn + standing lifecycle bar shakedown"
+    )
     parser.add_argument("--live", action="store_true", help="Live Discord on Mini (River token)")
     parser.add_argument("--wait", type=int, default=50, help="Seconds to wait for Turtle reply")
     args = parser.parse_args()
@@ -202,7 +219,7 @@ def main() -> int:
         all_errors["live"] = check_live(args.wait)
 
     report = {
-        "capability": "river/eddy_bar_blank_eddy",
+        "capability": "river/eddy_lifecycle_bar_blank_eddy",
         "status": "pass" if not any(all_errors.values()) else "fail",
         "live": args.live,
         "checks": {k: "ok" if not v else v for k, v in all_errors.items()},

@@ -165,23 +165,23 @@ Prefer **filesystem mtime** for E1 (matches pulse spirit; no new persistence). O
 
 ### Practitioner experience
 
-- [ ] `!artifacts` with corpus shows **Recent** first; empty shelves hidden.
-- [ ] Practitioner can open a recent artifact **without typing** `!read`.
-- [ ] `!artifacts sessions` (etc.) shows shelf content with tap-to-open, not command copy per line.
-- [ ] Post-checkpoint message includes **[Open]** when a session/note path was written.
-- [ ] With `PRACTICE_WEB_BASE` set, Open uses browser embed path (same as `!read`).
+- [x] `!artifacts` with corpus shows **Recent** first; empty shelves hidden.
+- [x] Practitioner can open a recent artifact **without typing** `!read`.
+- [x] `!artifacts sessions` (etc.) shows shelf content with tap-to-open, not command copy per line.
+- [x] Post-checkpoint message includes **[Open]** when a session/note path was written.
+- [x] With `PRACTICE_WEB_BASE` set, Open uses browser embed path (same as `!read`).
 
 ### Operator / regression
 
-- [ ] `!artifacts --all` shows full catalog (today's menu) for shakedown.
-- [ ] Allowlist denials unchanged (`proposals` for practitioner, etc.).
-- [ ] `!export`, `!search`, `!read` still work unchanged.
+- [x] `!artifacts --all` shows full catalog (today's menu) for shakedown.
+- [x] Allowlist denials unchanged (`proposals` for practitioner, etc.).
+- [x] `!export`, `!search`, `!read` still work unchanged.
 
 ### Automated
 
-- [ ] `pytest tests/test_artifact_presenter.py tests/test_artifact_viewer.py tests/test_cmd_practice_io.py` pass.
-- [ ] `python scripts/shake_artifacts.py` offline pass.
-- [ ] `python scripts/shake_artifacts.py --live` pass on Mini (update transcript assertions for Recent OR `--all` probe).
+- [x] `pytest tests/test_artifact_presenter.py tests/test_artifact_viewer.py tests/test_cmd_practice_io.py` pass.
+- [x] `python scripts/shake_artifacts.py` offline pass.
+- [x] `python scripts/shake_artifacts.py --live` pass on Mini (Mage dogfood 2026-06-30; re-run before release sign-off).
 
 ---
 
@@ -199,33 +199,22 @@ Prefer **filesystem mtime** for E1 (matches pulse spirit; no new persistence). O
 
 ## Rollout
 
-1. **Implement on Forge** — unit tests green.
-2. **Offline shake** — local turtleos repo.
-3. **Deploy Mini** — `git pull`, restart discord service, live shake.
-4. **Mage dogfood** — 3 journeys: resume after checkpoint, browse corpus, search then open (search UI unchanged in E1).
-5. **Learnings** — append `docs/learnings.md`: what worked, select vs buttons threshold, empty corpus edge case.
-6. **Docs + spec proposal** — `artifact-access.md`; draft §11.5.6 if rules stable.
+1. **Implement on Forge** — unit tests green. ✅
+2. **Offline shake** — local turtleos repo. ✅
+3. **Deploy Mini** — `git pull`, restart river + discord services, live shake. ✅
+4. **Mage dogfood** — checkpoint, browse, search, export refinement. ✅ 2026-06-29 / 2026-06-30
+5. **Learnings** — `docs/learnings.md`, `docs/ux/generative-ui-e1-experience.md`. ✅
+6. **Docs + spec proposal** — `artifact-access.md` ✅; §11.5.6 deferred.
 
 ---
 
-## Telemetry (lightweight)
+## E1.1 (shipped 2026-06-30)
 
-Log `template_id` at compose time (print or structured log line):
-
-```
-artifact_presenter intent=browse_default template=recent_cross_shelf items=5
-```
-
-Dogfood notes capture useful vs noise; no dashboard required for E1.
-
----
-
-## E1.1 candidates (after dogfood)
-
-- Post-search Open act row on top hit
-- River `present_artifacts` act type → same composer
-- Export on second button row
-- `generative-ui-kit.md` doc extraction from this chapter
+- [x] Post-search Open act row on top hits
+- [x] River `present_artifacts` act type → same composer
+- [x] Export on second button row (shelf ≤3); select → attachment preview
+- [x] Standing river + eddy bars; bar active state during artifact browse
+- [ ] `generative-ui-kit.md` doc extraction — deferred
 
 ---
 
