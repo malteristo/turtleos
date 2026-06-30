@@ -181,10 +181,11 @@ class TestComposeArtifactSurface(unittest.TestCase):
 
     def test_compose_artifact_preview_content_truncates_long_files(self) -> None:
         content = "line\n" * 500
-        text = ap.compose_artifact_preview_content("sessions/long.md", content)
-        self.assertIn("**long**", text)
+        text = ap.compose_artifact_preview_content(content)
+        assert text is not None
         self.assertIn("```md", text)
         self.assertIn("lines total", text)
+        self.assertNotIn("**", text)
 
 
 class TestPresentArtifactPreview(unittest.IsolatedAsyncioTestCase):
@@ -206,7 +207,8 @@ class TestPresentArtifactPreview(unittest.IsolatedAsyncioTestCase):
         interaction.response.edit_message.assert_awaited()
         kwargs = interaction.response.edit_message.await_args.kwargs
         self.assertIsNone(kwargs.get("embed"))
-        self.assertIn("Surface", kwargs["content"])
+        self.assertEqual(kwargs["content"], "\u200b")
+        self.assertIn("attachments", kwargs)
         _ensure.assert_awaited_once()
 
 

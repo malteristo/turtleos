@@ -239,17 +239,13 @@ def _load_artifact_content(path_hint: str) -> tuple[str, str] | None:
     return rel, content
 
 
-def compose_artifact_preview_content(rel_path: str, content: str) -> str:
-    """Markdown code preview for in-chat artifact reading."""
-    display = artifact_display_name(rel_path)
+def compose_artifact_preview_content(content: str) -> str | None:
+    """Fallback inline preview when Discord rejects attachment-on-edit."""
     if len(content) <= 1800:
-        body = content
-        suffix = ""
-    else:
-        lines = content.count("\n") + 1
-        body = content[:1500]
-        suffix = f"\n-# *…{lines} lines total — expand preview or open in browser for the full file.*"
-    return f"**{display}**\n```md\n{body}\n```{suffix}"
+        return f"```md\n{content}\n```"
+    lines = content.count("\n") + 1
+    body = content[:1500]
+    return f"```md\n{body}\n```\n-# *…{lines} lines total — expand preview or open in browser for the full file.*"
 
 
 def build_artifact_open_view(channel_id: int, path: str) -> discord.ui.View | None:
@@ -282,7 +278,6 @@ async def present_artifact_preview_in_place(
         return
 
     rel_path, content = loaded
-    preview = compose_artifact_preview_content(rel_path, content)
     view = build_artifact_open_view(interaction.channel.id, rel_path)
     attachment_name = os.path.basename(rel_path)
     file_obj = discord.File(
@@ -291,14 +286,15 @@ async def present_artifact_preview_in_place(
     )
 
     edit_kwargs: dict = {
-        "content": preview,
+        "content": "\u200b",
         "embed": None,
         "view": view,
     }
     try:
         await interaction.response.edit_message(attachments=[file_obj], **edit_kwargs)
     except (discord.HTTPException, TypeError):
-        await interaction.response.edit_message(**edit_kwargs)
+        fallback = compose_artifact_preview_content(content)
+        await interaction.response.edit_message(content=fallback, **edit_kwargs)
 
     from bar_anchor import ensure_channel_bars
 
