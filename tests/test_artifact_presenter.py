@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 
@@ -178,6 +178,36 @@ class TestComposeArtifactSurface(unittest.TestCase):
         self.assertIn("⋯", text)
         self.assertIn("Download", text)
         self.assertLess(len(text), 120)
+
+    def test_compose_artifact_preview_content_truncates_long_files(self) -> None:
+        content = "line\n" * 500
+        text = ap.compose_artifact_preview_content("sessions/long.md", content)
+        self.assertIn("**long**", text)
+        self.assertIn("```md", text)
+        self.assertIn("lines total", text)
+
+
+class TestPresentArtifactPreview(unittest.IsolatedAsyncioTestCase):
+    @patch("artifact_presenter._apply_practice_context")
+    @patch("artifact_presenter._load_artifact_content", return_value=("chronicle/surface.md", "# Surface\n"))
+    @patch("artifact_presenter.build_artifact_open_view", return_value=MagicMock())
+    @patch("bar_anchor.ensure_channel_bars", new_callable=AsyncMock)
+    async def test_present_artifact_preview_replaces_embed(
+        self, _ensure, _view, _load, _ctx
+    ) -> None:
+        interaction = MagicMock()
+        interaction.channel = MagicMock()
+        interaction.channel.id = 1
+        interaction.response.edit_message = AsyncMock()
+        interaction.client = MagicMock()
+
+        await ap.present_artifact_preview_in_place(interaction, "chronicle/surface.md")
+
+        interaction.response.edit_message.assert_awaited()
+        kwargs = interaction.response.edit_message.await_args.kwargs
+        self.assertIsNone(kwargs.get("embed"))
+        self.assertIn("Surface", kwargs["content"])
+        _ensure.assert_awaited_once()
 
 
 if __name__ == "__main__":

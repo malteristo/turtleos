@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import enum
+import io
+import os
 import uuid
 from dataclasses import dataclass, field
 
@@ -218,6 +220,91 @@ def _apply_practice_context(interaction: discord.Interaction) -> None:
         set_practice_context_for_channel(channel.id)
 
 
+def _load_artifact_content(path_hint: str) -> tuple[str, str] | None:
+    """Return (relative path, content) when the artifact is readable."""
+    from artifact_viewer import resolve_artifact_path
+    from practice_io import is_readable, read_safe
+
+    rel = path_hint.strip().replace("\\", "/")
+    if not rel.endswith(".md"):
+        rel += ".md"
+    if not is_readable(rel):
+        return None
+    fs_path = resolve_artifact_path(rel)
+    if not fs_path or not os.path.isfile(fs_path):
+        return None
+    content = read_safe(fs_path)
+    if not content.strip():
+        return None
+    return rel, content
+
+
+def compose_artifact_preview_content(rel_path: str, content: str) -> str:
+    """Markdown code preview for in-chat artifact reading."""
+    display = artifact_display_name(rel_path)
+    if len(content) <= 1800:
+        body = content
+        suffix = ""
+    else:
+        lines = content.count("\n") + 1
+        body = content[:1500]
+        suffix = f"\n-# *…{lines} lines total — expand preview or open in browser for the full file.*"
+    return f"**{display}**\n```md\n{body}\n```{suffix}"
+
+
+def build_artifact_open_view(channel_id: int, path: str) -> discord.ui.View | None:
+    """Optional browser link below an in-chat artifact preview."""
+    url = _artifact_read_url(path)
+    if not url:
+        return None
+    view = discord.ui.View(timeout=3600)
+    view.add_item(
+        discord.ui.Button(
+            label="Open in browser",
+            style=discord.ButtonStyle.link,
+            url=url,
+        )
+    )
+    return view
+
+
+async def present_artifact_preview_in_place(
+    interaction: discord.Interaction,
+    path_hint: str,
+) -> None:
+    """Replace a browse surface with an inline preview (+ attachment when Discord allows)."""
+    _apply_practice_context(interaction)
+    loaded = _load_artifact_content(path_hint)
+    if not loaded:
+        await interaction.response.send_message(
+            "Cannot read that artifact.", ephemeral=True
+        )
+        return
+
+    rel_path, content = loaded
+    preview = compose_artifact_preview_content(rel_path, content)
+    view = build_artifact_open_view(interaction.channel.id, rel_path)
+    attachment_name = os.path.basename(rel_path)
+    file_obj = discord.File(
+        fp=io.BytesIO(content.encode("utf-8")),
+        filename=attachment_name,
+    )
+
+    edit_kwargs: dict = {
+        "content": preview,
+        "embed": None,
+        "view": view,
+    }
+    try:
+        await interaction.response.edit_message(attachments=[file_obj], **edit_kwargs)
+    except (discord.HTTPException, TypeError):
+        await interaction.response.edit_message(**edit_kwargs)
+
+    from bar_anchor import ensure_channel_bars
+
+    await ensure_channel_bars(interaction.channel, interaction.client)
+
+
 def _artifact_read_url(path: str) -> str | None:
     """Browser URL for artifact when web read is configured."""
     from practice_io import artifact_read_url, is_readable
@@ -267,61 +354,7 @@ class _ArtifactOpenSelect(discord.ui.Select):
             return
         selected = self.values[0]
         path_hint = self._path_for_value.get(selected, selected)
-        if selected.startswith("http://") or selected.startswith("https://"):
-            url = selected
-        else:
-            _apply_practice_context(interaction)
-            url = _artifact_read_url(path_hint)
-        if url:
-            view = discord.ui.View()
-            view.add_item(
-                discord.ui.Button(
-                    label="Open in browser",
-                    style=discord.ButtonStyle.link,
-                    url=url,
-                )
-            )
-            export_path = path_hint
-            if export_path and not export_path.endswith(".md"):
-                export_path += ".md"
-            from cmd_dispatch import CONTEXTUAL_ACTION_COMMANDS
-            from eddy_lifecycle_bar import _encode_act_custom_id, _run_river_act_command
-
-            if export_path:
-                export_cmd = f"!export {export_path}"
-                custom_id = _encode_act_custom_id(self._channel_id, export_cmd)
-                if custom_id and "export" in CONTEXTUAL_ACTION_COMMANDS:
-
-                    async def _on_export(interaction: discord.Interaction):
-                        if interaction.channel.id != self._channel_id:
-                            await interaction.response.send_message("Wrong channel.", ephemeral=True)
-                            return
-                        _apply_practice_context(interaction)
-                        await interaction.response.defer()
-                        await _run_river_act_command(interaction, "export", [export_path])
-
-                    export_btn = discord.ui.Button(
-                        label="Download",
-                        custom_id=custom_id,
-                        style=discord.ButtonStyle.secondary,
-                    )
-                    export_btn.callback = _on_export
-                    view.add_item(export_btn)
-            display = artifact_display_name(path_hint)
-            embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else None
-            await interaction.response.edit_message(
-                content=f"**{display}** — tap below to open.",
-                embed=embed,
-                view=view,
-            )
-            from bar_anchor import ensure_channel_bars
-
-            await ensure_channel_bars(interaction.channel, interaction.client)
-            return
-        from eddy_lifecycle_bar import _run_river_act_command
-
-        await interaction.response.defer()
-        await _run_river_act_command(interaction, "read", [path_hint])
+        await present_artifact_preview_in_place(interaction, path_hint)
 
 
 class ArtifactPresenterView(discord.ui.View):

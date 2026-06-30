@@ -66,7 +66,7 @@ class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(handled)
                 ensure.assert_not_called()
 
-    async def test_dispatch_reanchors_after_artifacts(self) -> None:
+    async def test_dispatch_defers_bar_for_artifacts(self) -> None:
         message = MagicMock()
         message.channel = MagicMock()
         message.channel.id = 1
@@ -76,7 +76,7 @@ class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
             with patch("bar_anchor._ensure_channel_bars_unlocked", new_callable=AsyncMock) as ensure:
                 handled = await dispatch.dispatch_direct_command(message, bar_client=MagicMock())
                 self.assertTrue(handled)
-                ensure.assert_awaited_once()
+                ensure.assert_not_called()
 
 
 if __name__ == "__main__":

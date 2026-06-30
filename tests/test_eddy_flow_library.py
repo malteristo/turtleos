@@ -15,7 +15,7 @@ class EddyFlowLibraryTests(unittest.TestCase):
         self.assertIn("new eddy", bar_block)
         self.assertIn("artifacts", bar_block)
         self.assertIn("help", bar_block)
-        self.assertNotIn("flow menu", bar_block)
+        self.assertIn("with_active_command", bar_block)
 
     def test_eddy_flow_library_module(self) -> None:
         src = (REPO / "eddy_flow_library.py").read_text(encoding="utf-8")

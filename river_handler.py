@@ -214,7 +214,7 @@ async def _materialize_from_bar(
 class RiverEddyBarView(discord.ui.View):
     """Standing bottom bar — new eddy · artifacts · help."""
 
-    def __init__(self, channel_id: int):
+    def __init__(self, channel_id: int, *, active: str | None = None):
         super().__init__(timeout=None)
         self._channel_id = channel_id
         new_btn = discord.ui.Button(
@@ -222,7 +222,10 @@ class RiverEddyBarView(discord.ui.View):
             custom_id=f"river:bar:new:{channel_id}",
             style=discord.ButtonStyle.secondary,
             emoji="🌀",
+            disabled=active is not None and active != "new eddy",
         )
+        if active == "new eddy":
+            new_btn.style = discord.ButtonStyle.primary
         new_btn.callback = self._on_new_eddy
         self.add_item(new_btn)
 
@@ -242,11 +245,17 @@ class RiverEddyBarView(discord.ui.View):
             btn = discord.ui.Button(
                 label=label,
                 custom_id=custom_id,
-                style=discord.ButtonStyle.secondary,
+                style=discord.ButtonStyle.primary if active == label else discord.ButtonStyle.secondary,
                 emoji=emoji,
+                disabled=active is not None and active != label,
             )
             btn.callback = self._make_act_callback(custom_id, _parse_act_command, _run_river_act_command)
             self.add_item(btn)
+
+    @classmethod
+    def with_active_command(cls, channel_id: int, active: str) -> "RiverEddyBarView":
+        """Highlight one bar action and grey out the rest (browse-in-progress affordance)."""
+        return cls(channel_id, active=active)
 
     def _make_act_callback(self, custom_id, parse_cmd, run_act):
         from eddy_lifecycle_bar import _decode_act_custom_id
@@ -261,7 +270,12 @@ class RiverEddyBarView(discord.ui.View):
                 await interaction.response.send_message("This action expired.", ephemeral=True)
                 return
             cmd, args = parse_cmd(decoded)
-            await interaction.response.defer()
+            if cmd == "artifacts":
+                selected = RiverEddyBarView.with_active_command(self._channel_id, "artifacts")
+                interaction.client.add_view(selected)
+                await interaction.response.edit_message(content="\u200b", view=selected)
+            else:
+                await interaction.response.defer()
             await run_act(interaction, cmd, args)
 
         return callback

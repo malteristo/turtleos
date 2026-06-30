@@ -75,8 +75,8 @@ SENESCHAL_ACTION_COMMANDS = frozenset(
 )
 
 # Multi-step pickers only — re-anchor after the wizard completes (select follow-ups
-# edit in place, so !artifacts always re-anchors immediately).
-INTERACTIVE_COMMANDS_DEFER_BAR = frozenset({"share"})
+# edit in place; bar shows active state until artifact pick finishes).
+INTERACTIVE_COMMANDS_DEFER_BAR = frozenset({"share", "artifacts"})
 
 
 def inject_act_digest(channel_id: int, cmd: str, summary: str) -> None:
