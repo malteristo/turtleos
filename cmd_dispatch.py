@@ -145,13 +145,19 @@ async def dispatch_direct_command(message, *, bar_client=None) -> bool:
     from state import get_channel_lock
 
     text = message.content.strip()
-    cmd = text[1:].split(None, 1)[0].lower() if text.startswith("!") else ""
+    parts = text[1:].split(None, 1) if text.startswith("!") else []
+    cmd = parts[0].lower() if parts else ""
+    args = parts[1].split() if len(parts) > 1 else []
+
+    defer_bar = cmd in INTERACTIVE_COMMANDS_DEFER_BAR
+    if cmd == "artifacts" and args and args[0].lower() != "--all":
+        defer_bar = False  # shelf browse — single surface, re-anchor immediately
 
     lock = get_channel_lock(message.channel.id)
     async with lock:
         if not await try_direct_command(message):
             return False
-        if cmd in INTERACTIVE_COMMANDS_DEFER_BAR:
+        if defer_bar:
             return True
         from bar_anchor import _ensure_channel_bars_unlocked
 
