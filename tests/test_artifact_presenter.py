@@ -116,6 +116,17 @@ class TestComposeArtifactSurface(unittest.TestCase):
         assert surface.embed is not None
         self.assertIn("!artifacts sessions", surface.embed.description or "")
 
+    def test_artifact_read_url_uses_mage_key_not_default(self) -> None:
+        with patch("practice_io.is_readable", return_value=True), patch(
+            "state.PRACTICE_WEB_BASE", "http://100.110.46.104:8080"
+        ), patch("practice_io.get_mage_key", return_value="kermit"), patch(
+            "mage.get_mage_key", return_value="kermit"
+        ):
+            url = ap._artifact_read_url("sessions/2026-06-30-3.md")
+        self.assertEqual(
+            url, "http://100.110.46.104:8080/kermit/sessions/2026-06-30-3.md"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

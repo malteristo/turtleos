@@ -188,8 +188,22 @@ def compose_artifact_surface(
     )
 
 
+def _apply_practice_context(interaction: discord.Interaction) -> None:
+    """Restore mage/practice context for button/select callbacks (split-bot eddies)."""
+    from mage import set_practice_context_for_channel
+
+    channel = interaction.channel
+    if isinstance(channel, discord.Thread) and channel.parent_id:
+        set_practice_context_for_channel(channel.parent_id)
+    elif channel:
+        set_practice_context_for_channel(channel.id)
+
+
 def _artifact_read_url(path: str) -> str | None:
     """Browser URL for artifact when web read is configured."""
+    from urllib.parse import quote
+
+    from mage import get_mage_key
     from state import PRACTICE_WEB_BASE
 
     if not PRACTICE_WEB_BASE:
@@ -197,22 +211,32 @@ def _artifact_read_url(path: str) -> str | None:
     rel = path.strip()
     if not rel.endswith(".md"):
         rel += ".md"
-    from practice_io import is_readable, obsidian_link
+    from practice_io import is_readable
 
     if not is_readable(rel):
         return None
-    url = obsidian_link(rel)
-    return url if url.startswith("http") else None
+    mage_key = get_mage_key()
+    return f"{PRACTICE_WEB_BASE.rstrip('/')}/{mage_key}/{quote(rel)}"
 
 
 class _ArtifactOpenSelect(discord.ui.Select):
-    def __init__(self, channel_id: int, options: list[tuple[str, str]], *, select_id: str):
+    """Select menu — option values store pre-resolved browser URLs when available."""
+
+    def __init__(
+        self,
+        channel_id: int,
+        options: list[tuple[str, str, str | None]],
+        *,
+        select_id: str,
+    ):
         select_options = []
-        for label, path in options[:25]:
+        for label, path, url in options[:25]:
+            # Embed resolved URL at compose time (practice context is correct then).
+            value = (url or path)[:100]
             select_options.append(
                 discord.SelectOption(
                     label=label[:100],
-                    value=path[:100],
+                    value=value,
                     description=shelf_title_for_path(path)[:100],
                 )
             )
@@ -229,8 +253,14 @@ class _ArtifactOpenSelect(discord.ui.Select):
         if interaction.channel.id != self._channel_id:
             await interaction.response.send_message("Wrong channel.", ephemeral=True)
             return
-        path = self.values[0]
-        url = _artifact_read_url(path)
+        selected = self.values[0]
+        if selected.startswith("http://") or selected.startswith("https://"):
+            url = selected
+            path_hint = selected.rsplit("/", 1)[-1]
+        else:
+            _apply_practice_context(interaction)
+            path_hint = selected
+            url = _artifact_read_url(selected)
         if url:
             view = discord.ui.View()
             view.add_item(
@@ -241,7 +271,7 @@ class _ArtifactOpenSelect(discord.ui.Select):
                 )
             )
             await interaction.response.send_message(
-                f"**{artifact_display_name(path)}** — tap below to open.",
+                f"**{artifact_display_name(path_hint)}** — tap below to open.",
                 view=view,
                 ephemeral=False,
             )
@@ -249,7 +279,7 @@ class _ArtifactOpenSelect(discord.ui.Select):
         from eddy_lifecycle_bar import _run_river_act_command
 
         await interaction.response.defer()
-        await _run_river_act_command(interaction, "read", [path])
+        await _run_river_act_command(interaction, "read", [path_hint])
 
 
 class ArtifactPresenterView(discord.ui.View):
@@ -271,12 +301,18 @@ class ArtifactPresenterView(discord.ui.View):
                 other_actions.append((label, command))
 
         if len(read_actions) > 3:
-            options: list[tuple[str, str]] = []
+            options: list[tuple[str, str, str | None]] = []
             for _label, command in read_actions[:25]:
                 _cmd, args = _parse_act_command(command)
                 path = args[0] if args else ""
                 if path:
-                    options.append((artifact_display_name(path), path))
+                    options.append(
+                        (
+                            artifact_display_name(path),
+                            path,
+                            _artifact_read_url(path),
+                        )
+                    )
             if options:
                 self.add_item(
                     _ArtifactOpenSelect(channel_id, options, select_id=uuid.uuid4().hex[:8])
@@ -330,6 +366,7 @@ class ArtifactPresenterView(discord.ui.View):
             if interaction.channel.id != self._channel_id:
                 await interaction.response.send_message("Wrong channel.", ephemeral=True)
                 return
+            _apply_practice_context(interaction)
             from eddy_lifecycle_bar import _decode_act_custom_id
 
             try:
