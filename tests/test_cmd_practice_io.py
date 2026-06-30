@@ -100,5 +100,30 @@ class TestCmdSearch(unittest.IsolatedAsyncioTestCase):
         message.reply.assert_awaited_once_with("match: turtle.md", mention_author=False)
 
 
+class TestCmdExport(unittest.IsolatedAsyncioTestCase):
+    async def test_export_replies_with_embed_and_attachment(self) -> None:
+        message = MagicMock()
+        message.reply = AsyncMock()
+
+        with patch("cmd_practice_io.is_readable", return_value=True), patch(
+            "cmd_practice_io.resolve_artifact_path", return_value="/practice/sessions/a.md"
+        ), patch("cmd_practice_io.os.path.isfile", return_value=True), patch(
+            "cmd_practice_io.read_safe", return_value="# Hello\n" * 20
+        ), patch(
+            "artifact_presenter.discord.Embed",
+            MagicMock(side_effect=lambda **kw: MagicMock(**kw)),
+        ):
+            await cpio.cmd_export(message, ["sessions/a.md"])
+
+        kwargs = message.reply.await_args.kwargs
+        self.assertIn("embed", kwargs)
+        self.assertIn("file", kwargs)
+        self.assertFalse(kwargs.get("mention_author"))
+        self.assertNotIn(
+            "Exported",
+            str(getattr(kwargs.get("embed"), "description", "")),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

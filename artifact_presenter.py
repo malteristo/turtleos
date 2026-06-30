@@ -37,6 +37,56 @@ class ArtifactSurface:
     """Paths for a second action row of Export buttons (≤3, when Open row uses link buttons)."""
 
 
+def _download_button_label(path: str | None = None) -> str:
+    if path:
+        name = artifact_display_name(path)
+        label = f"Download: {name}"
+        return label[:80]
+    return "Download"
+
+
+def compose_export_embed(rel_path: str, content: str) -> discord.Embed:
+    """Practitioner-facing handoff after export — attachment is the deliverable."""
+    display = artifact_display_name(rel_path)
+    shelf = shelf_title_for_path(rel_path)
+    attachment_name = rel_path.replace("\\", "/").rstrip("/").split("/")[-1]
+    embed = discord.Embed(
+        title=display,
+        description=f"**{attachment_name}** is attached below · **{shelf}**",
+        color=0x5865F2,
+    )
+    embed.add_field(
+        name="Phone",
+        value="Tap **⋯** on the file bar → **Download**",
+        inline=True,
+    )
+    embed.add_field(
+        name="Desktop",
+        value="Click the filename to save",
+        inline=True,
+    )
+    embed.set_footer(
+        text=f"{len(content):,} chars · preview above is a glance — download for the full file"
+    )
+    return embed
+
+
+def build_export_open_view(rel_path: str) -> discord.ui.View | None:
+    """Optional Open link when browser read is configured."""
+    url = _artifact_read_url(rel_path)
+    if not url:
+        return None
+    view = discord.ui.View(timeout=3600)
+    view.add_item(
+        discord.ui.Button(
+            label="Open in browser",
+            style=discord.ButtonStyle.link,
+            url=url,
+        )
+    )
+    return view
+
+
 def checkpoint_open_path(
     *,
     session_note: str | None,
@@ -287,7 +337,7 @@ class _ArtifactOpenSelect(discord.ui.Select):
                         await _run_river_act_command(interaction, "export", [export_path])
 
                     export_btn = discord.ui.Button(
-                        label="Export .md",
+                        label="Download",
                         custom_id=custom_id,
                         style=discord.ButtonStyle.secondary,
                     )
@@ -398,7 +448,7 @@ class ArtifactPresenterView(discord.ui.View):
         if export_paths and len(read_actions) <= 3 and "export" in CONTEXTUAL_ACTION_COMMANDS:
             for path in export_paths[:3]:
                 command = f"!export {path}"
-                label = f"Export: {artifact_display_name(path)}"[:80]
+                label = _download_button_label(path)
                 custom_id = _encode_act_custom_id(channel_id, command)
                 if not custom_id:
                     continue
