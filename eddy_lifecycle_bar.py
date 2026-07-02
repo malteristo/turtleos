@@ -619,6 +619,11 @@ async def _ensure_eddy_lifecycle_bar_at_bottom_unlocked(
     parent_id = getattr(thread, "parent_id", None)
     if not parent_id or not is_lifecycle_bar_active(thread.id):
         return
+
+    from mage import set_practice_context_for_channel
+
+    set_practice_context_for_channel(parent_id)
+
     phase = get_bar_phase(thread.id) or "live"
     if not _bar_eligible_for_phase(thread.id, parent_id, phase):
         return
@@ -670,6 +675,11 @@ async def touch_eddy_lifecycle_bar(
     parent_id = thread.parent_id
     if not parent_id:
         return
+
+    from mage import set_practice_context_for_channel
+
+    set_practice_context_for_channel(parent_id)
+
     phase = get_bar_phase(thread.id)
     if phase == "bootstrap":
         if not bootstrap_bar_eligible(thread.id, parent_id):
@@ -704,6 +714,10 @@ async def _touch_eddy_lifecycle_bar_unlocked(
     parent_id = thread.parent_id
     if not parent_id:
         return
+
+    from mage import set_practice_context_for_channel
+
+    set_practice_context_for_channel(parent_id)
 
     client = get_lifecycle_bar_client(thread)
     if not client:

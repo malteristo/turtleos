@@ -399,6 +399,15 @@ async def _complete_flow_pick(
         await interaction.followup.send("Could not load that flow.", ephemeral=True)
         return
 
+    from mage import set_practice_context_for_channel
+
+    set_practice_context_for_channel(parent_id)
+
+    from eddy_lifecycle_bar import get_bar_phase, upgrade_eddy_bar_to_live
+
+    if get_bar_phase(thread_id) == "bootstrap" and not is_lens_load(thread, flow_id):
+        await upgrade_eddy_bar_to_live(thread, interaction.client)
+
     from eddy_spawn import patch_awaiting_title
 
     patch_awaiting_title(thread_id, parent_id, flow_library_msg_id=None)
