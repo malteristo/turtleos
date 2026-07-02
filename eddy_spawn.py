@@ -1206,6 +1206,15 @@ async def spawn_river_eddy(
 
     print(f"River eddy materialized: {thread_name} (id: {thread.id}) split_bot={split_bot}")
 
+    if not flow_id and channel_att == "native":
+        from eddy_lifecycle_bar import post_eddy_bootstrap_bar
+        from river_handler import _river_client_for_channel
+
+        bar_client = _river_client_for_channel(message.channel) or bot_client
+        posted = await post_eddy_bootstrap_bar(thread, bar_client)
+        if posted:
+            print(f"Bootstrap bar posted in #{thread_name} ({thread.id})")
+
     return thread
 
 

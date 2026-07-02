@@ -24,12 +24,30 @@ from prompts import get_native_eddy_prompt
 from state import TURTLE_MODEL, active_sessions, dialogue_histories, get_channel_lock
 
 
-def _bootstrap_dir() -> Path:
+def _bootstrap_dir(runtime_dir: str | None = None) -> Path:
     from mage import get_runtime_dir
 
-    path = Path(get_runtime_dir()) / "thread-state" / "flow-bootstrap"
+    root = Path(runtime_dir or get_runtime_dir())
+    path = root / "thread-state" / "flow-bootstrap"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _all_bootstrap_dirs() -> list[Path]:
+    from mage import list_registered_runtime_dirs
+
+    dirs: list[Path] = []
+    seen: set[str] = set()
+    for runtime_dir in list_registered_runtime_dirs():
+        if runtime_dir in seen:
+            continue
+        seen.add(runtime_dir)
+        bootstrap = Path(runtime_dir) / "thread-state" / "flow-bootstrap"
+        bootstrap.mkdir(parents=True, exist_ok=True)
+        dirs.append(bootstrap)
+    if not dirs:
+        dirs.append(_bootstrap_dir())
+    return dirs
 
 
 def write_flow_bootstrap_request(
@@ -50,8 +68,12 @@ def write_flow_bootstrap_request(
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def pop_flow_bootstrap_request(thread_id: int) -> dict | None:
-    path = _bootstrap_dir() / f"{thread_id}.json"
+def pop_flow_bootstrap_request(
+    thread_id: int,
+    *,
+    runtime_dir: str | None = None,
+) -> dict | None:
+    path = _bootstrap_dir(runtime_dir) / f"{thread_id}.json"
     if not path.exists():
         return None
     try:
@@ -64,13 +86,17 @@ def pop_flow_bootstrap_request(thread_id: int) -> dict | None:
 
 def list_flow_bootstrap_requests() -> list[dict]:
     out: list[dict] = []
-    for path in sorted(_bootstrap_dir().glob("*.json")):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            continue
-        if isinstance(data, dict) and data.get("thread_id"):
-            out.append(data)
+    for bootstrap_dir in _all_bootstrap_dirs():
+        runtime_dir = str(bootstrap_dir.parent.parent)
+        for path in sorted(bootstrap_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict) and data.get("thread_id"):
+                payload = dict(data)
+                payload["_runtime_dir"] = runtime_dir
+                out.append(payload)
     return out
 
 
@@ -309,8 +335,10 @@ async def process_flow_bootstrap(client, payload: dict) -> None:
     parent_id = int(payload["parent_id"])
     flow_id = str(payload["flow_id"])
     lens = bool(payload.get("lens"))
-    if pop_flow_bootstrap_request(thread_id) is None:
+    runtime_dir = payload.get("_runtime_dir")
+    if pop_flow_bootstrap_request(thread_id, runtime_dir=runtime_dir) is None:
         return
+    set_practice_context_for_channel(parent_id)
     await asyncio.sleep(0.35)
     await deliver_flow_bootstrap(client, thread_id, parent_id, flow_id, lens=lens)
 

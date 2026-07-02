@@ -322,7 +322,12 @@ def seed_space_workshop(space_key: str) -> str:
     return workshop
 
 
-def find_shared_river_channel(registry: dict[str, Any], space_key: str) -> tuple[str, dict] | None:
+def find_shared_river_channel(
+    registry: dict[str, Any],
+    space_key: str,
+    *,
+    include_archived: bool = False,
+) -> tuple[str, dict] | None:
     for ch_id_str, entry in registry.get("channels", {}).items():
         if not isinstance(entry, dict):
             continue
@@ -330,7 +335,7 @@ def find_shared_river_channel(registry: dict[str, Any], space_key: str) -> tuple
             continue
         if entry.get("mage") != space_key:
             continue
-        if entry.get("archived"):
+        if entry.get("archived") and not include_archived:
             continue
         return ch_id_str, entry
     return None
@@ -391,7 +396,53 @@ def mark_space_archived(registry: dict[str, Any], channel_id_str: str) -> None:
     if isinstance(entry, dict):
         entry["archived"] = True
         entry["archived_at"] = datetime.now(timezone.utc).isoformat()
+        space_key = entry.get("mage")
+        if space_key and isinstance(registry.get("spaces", {}).get(space_key), dict):
+            registry["spaces"][space_key]["archived"] = True
+            registry["spaces"][space_key]["archived_at"] = entry["archived_at"]
     save_registry(registry)
+
+
+def build_hidden_space_overwrites(
+    guild: discord.Guild,
+    *,
+    member_discord_ids: list[int] | None = None,
+) -> dict:
+    """Hide a shared space from practitioners; operators and bots retain access."""
+    everyone = guild.default_role
+    overwrites: dict = {
+        everyone: discord.PermissionOverwrite(view_channel=False),
+    }
+    for uid in member_discord_ids or []:
+        member = guild.get_member(uid)
+        if member:
+            overwrites[member] = discord.PermissionOverwrite(view_channel=False)
+
+    for op_id in _primary_operator_ids():
+        member = guild.get_member(op_id)
+        if member:
+            overwrites[member] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                manage_channels=True,
+                manage_messages=True,
+            )
+
+    me = guild.me
+    if me:
+        overwrites[me] = _bot_channel_perms()
+    river = _river_bot_member(guild)
+    if river:
+        overwrites[river] = _bot_channel_perms()
+    return overwrites
+
+
+def parse_space_hide_args(args: list[str]) -> SpaceCloseOptions:
+    """Parse tokens after ``!admin space hide`` (same flags as close)."""
+    if len(args) < 2:
+        raise ValueError("Usage: `!admin space hide <space-key> [--confirm] [--dissolve-eddies]`")
+    return parse_space_close_args(["close", args[1], *args[2:]])
 
 
 def mark_channel_orphaned(
@@ -518,48 +569,118 @@ async def close_shared_space(
     if not options.confirm:
         return summary
 
-    if isinstance(channel, discord.TextChannel):
-        archived_category = discord.utils.get(guild.categories, name="Archived")
-        lock_overwrites = dict(channel.overwrites)
-        everyone = guild.default_role
-        lock_overwrites[everyone] = discord.PermissionOverwrite(
-            view_channel=True,
-            read_message_history=True,
-            send_messages=False,
-        )
-        for target, ow in list(lock_overwrites.items()):
-            if hasattr(target, "bot") and target.bot:
-                continue
-            lock_overwrites[target] = discord.PermissionOverwrite(
-                view_channel=True,
-                read_message_history=True,
-                send_messages=False,
-                create_public_threads=False,
-                send_messages_in_threads=False,
-            )
-        edit_kwargs: dict[str, Any] = {"overwrites": lock_overwrites}
-        if archived_category:
-            edit_kwargs["category"] = archived_category
-        try:
-            await channel.edit(**edit_kwargs)
-        except discord.HTTPException as exc:
-            raise ValueError(f"Could not archive channel: {exc}") from exc
-
-        if options.dissolve_eddies:
-            from runtime.adapters.lifecycle import close_eddy
-
-            threads = list(channel.threads)
-            for thread in threads:
-                if not thread.archived:
-                    await close_eddy(
-                        thread.id,
-                        None,
-                        source="admin",
-                        discord_client=discord_client,
-                        parent_channel_id=channel.id,
-                    )
-
+    await _apply_space_hide(
+        guild,
+        channel,
+        registry,
+        options,
+        discord_client=discord_client,
+        member_keys=members,
+    )
     mark_space_archived(registry, ch_id_str)
     reload_mage_registry()
     summary["archived"] = True
+    summary["hidden"] = True
+    return summary
+
+
+async def _member_discord_ids_for_space(
+    registry: dict[str, Any], member_keys: list[str]
+) -> list[int]:
+    member_ids: list[int] = []
+    for key in member_keys:
+        mage = registry.get("mages", {}).get(key, {})
+        raw = mage.get("discord_id")
+        if raw:
+            member_ids.append(int(raw))
+    return member_ids
+
+
+async def _apply_space_hide(
+    guild: discord.Guild,
+    channel,
+    registry: dict[str, Any],
+    options: SpaceCloseOptions,
+    *,
+    discord_client,
+    member_keys: list[str],
+) -> None:
+    if not isinstance(channel, discord.TextChannel):
+        return
+
+    member_ids = await _member_discord_ids_for_space(registry, member_keys)
+    hide_overwrites = build_hidden_space_overwrites(guild, member_discord_ids=member_ids)
+    edit_kwargs: dict[str, Any] = {"overwrites": hide_overwrites}
+    archived_category = discord.utils.get(guild.categories, name="Archived")
+    if archived_category:
+        edit_kwargs["category"] = archived_category
+    try:
+        await channel.edit(**edit_kwargs)
+    except discord.HTTPException as exc:
+        raise ValueError(f"Could not hide archived channel: {exc}") from exc
+
+    if options.dissolve_eddies:
+        from runtime.adapters.lifecycle import close_eddy
+
+        for thread in list(channel.threads):
+            if not thread.archived:
+                await close_eddy(
+                    thread.id,
+                    None,
+                    source="admin",
+                    discord_client=discord_client,
+                    parent_channel_id=channel.id,
+                )
+
+
+async def hide_shared_space(
+    guild: discord.Guild,
+    options: SpaceCloseOptions,
+    *,
+    discord_client,
+) -> dict[str, Any]:
+    """Repair hide for an already-archived space whose Discord channel is still visible."""
+    from mage import get_registry, reload_mage_registry
+
+    registry = get_registry()
+    binding = find_shared_river_channel(registry, options.space_key, include_archived=True)
+    if not binding:
+        raise ValueError(f"No shared-river space `{options.space_key}` found in registry.")
+
+    ch_id_str, entry = binding
+    channel = guild.get_channel(int(ch_id_str))
+    if channel is None:
+        try:
+            channel = await guild.fetch_channel(int(ch_id_str))
+        except discord.HTTPException as exc:
+            raise ValueError(f"Registry channel `{ch_id_str}` not reachable: {exc}") from exc
+
+    space = registry.get("spaces", {}).get(options.space_key, {})
+    members = list(space.get("members") or []) if isinstance(space, dict) else []
+    open_threads = len(channel.threads) if isinstance(channel, discord.TextChannel) else 0
+
+    summary = {
+        "space_key": options.space_key,
+        "channel_name": getattr(channel, "name", ch_id_str),
+        "channel_id": ch_id_str,
+        "members": members,
+        "registry_archived": bool(entry.get("archived")),
+        "open_threads": open_threads,
+    }
+
+    if not options.confirm:
+        return summary
+
+    await _apply_space_hide(
+        guild,
+        channel,
+        registry,
+        options,
+        discord_client=discord_client,
+        member_keys=members,
+    )
+    if not entry.get("archived"):
+        mark_space_archived(registry, ch_id_str)
+    reload_mage_registry()
+    summary["hidden"] = True
     return summary

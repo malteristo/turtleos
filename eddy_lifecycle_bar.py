@@ -76,10 +76,73 @@ def clear_lifecycle_bar_state(thread_id: int) -> None:
     state = _load_state()
     if state.pop(str(thread_id), None) is not None:
         _save_state(state)
+    clear_bar_phase(thread_id)
+
+
+def _phase_state_path() -> str:
+    from mage import get_runtime_dir
+
+    bar_dir = os.path.join(get_runtime_dir(), "thread-state", "eddy")
+    os.makedirs(bar_dir, exist_ok=True)
+    return os.path.join(bar_dir, "bar_phase.json")
+
+
+def _load_phase_state() -> dict[str, str]:
+    path = _phase_state_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return {str(k): str(v) for k, v in data.items()}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {}
+
+
+def _save_phase_state(state: dict[str, str]) -> None:
+    with open(_phase_state_path(), "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
+
+
+def get_bar_phase(thread_id: int) -> str | None:
+    phase = _load_phase_state().get(str(thread_id))
+    if phase in ("bootstrap", "live"):
+        return phase
+    return None
+
+
+def set_bar_phase(thread_id: int, phase: str) -> None:
+    if phase not in ("bootstrap", "live"):
+        return
+    state = _load_phase_state()
+    state[str(thread_id)] = phase
+    _save_phase_state(state)
+
+
+def clear_bar_phase(thread_id: int) -> None:
+    state = _load_phase_state()
+    if state.pop(str(thread_id), None) is not None:
+        _save_phase_state(state)
+
+
+def bootstrap_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
+    """Phase 0 bar — flows select on empty eddy (may be awaiting first message)."""
+    if not standing_lifecycle_bar_enabled():
+        return False
+    if not parent_id:
+        return False
+    from eddy_spawn import is_awaiting_flow_intake
+    from prompts import uses_native_turtle_prompt
+
+    if not uses_native_turtle_prompt(parent_id):
+        return False
+    if is_awaiting_flow_intake(thread_id, parent_id):
+        return False
+    return True
 
 
 def lifecycle_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
-    """True when the eddy is live enough for lifecycle controls."""
+    """Phase 1+ bar — checkpoint/share need live dialogue (not pre-first-message)."""
     if not standing_lifecycle_bar_enabled():
         return False
     if not parent_id:
@@ -94,6 +157,16 @@ def lifecycle_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
     if is_awaiting_title(thread_id, parent_id):
         return False
     return True
+
+
+def _bar_eligible_for_phase(thread_id: int, parent_id: int | None, phase: str) -> bool:
+    if phase == "bootstrap":
+        return bootstrap_bar_eligible(thread_id, parent_id)
+    return lifecycle_bar_eligible(thread_id, parent_id)
+
+
+def _flow_display_name(flow_id: str) -> str:
+    return flow_id.replace("_", " ").title()
 
 
 def get_lifecycle_bar_client(thread: discord.Thread):
@@ -284,7 +357,12 @@ async def _revert_confirm_after(
         }
         if not any(cid and cid.startswith("eddy:lifecycle:confirm:") for cid in custom_ids):
             return
-        view = EddyLifecycleBarView(thread_id)
+        parent_id = thread.parent_id
+        phase = get_bar_phase(thread_id) or "live"
+        if parent_id:
+            view = EddyLifecycleBarView(thread_id, parent_id, phase=phase)
+        else:
+            view = EddyLifecycleBarView(thread_id, 0, phase=phase)
         client.add_view(view)
         await bar_msg.edit(content="\u200b", view=view)
     except asyncio.CancelledError:
@@ -306,45 +384,77 @@ def _schedule_confirm_revert(interaction: discord.Interaction, thread_id: int) -
 
 
 class EddyLifecycleBarView(discord.ui.View):
-    """Standing eddy action bar — flows · checkpoint · share (typed ``!release`` / ``!dissolve`` remain)."""
+    """Phased eddy bar — bootstrap: flow select only; live: flows + checkpoint + share."""
 
-    def __init__(self, thread_id: int):
+    def __init__(self, thread_id: int, parent_id: int, *, phase: str = "live"):
         super().__init__(timeout=None)
         self._thread_id = thread_id
+        self._parent_id = parent_id
+        self._phase = phase if phase in ("bootstrap", "live") else "live"
 
-        flows_btn = discord.ui.Button(
-            label="flows",
-            custom_id=f"eddy:lifecycle:flows:{thread_id}",
-            style=discord.ButtonStyle.secondary,
-            emoji="📚",
-        )
-        flows_btn.callback = self._on_flows
-        self.add_item(flows_btn)
+        from flow_runner import list_flow_ids_for_bar_phase
 
-        checkpoint_btn = discord.ui.Button(
-            label="checkpoint",
-            custom_id=f"eddy:lifecycle:checkpoint:{thread_id}",
-            style=discord.ButtonStyle.secondary,
-            emoji="💾",
-        )
-        checkpoint_btn.callback = self._on_checkpoint
-        self.add_item(checkpoint_btn)
+        flow_ids = list_flow_ids_for_bar_phase(self._phase)
+        if flow_ids:
+            placeholder = (
+                "Load a guided flow…"
+                if self._phase == "bootstrap"
+                else "Load or switch flow…"
+            )
+            options = [
+                discord.SelectOption(label=_flow_display_name(fid)[:100], value=fid)
+                for fid in flow_ids[:25]
+            ]
+            select = discord.ui.Select(
+                placeholder=placeholder,
+                options=options,
+                custom_id=f"eddy:lifecycle:flowpick:{thread_id}",
+            )
+            select.callback = self._on_flow_pick
+            self.add_item(select)
 
-        share_btn = discord.ui.Button(
-            label="share",
-            custom_id=f"eddy:lifecycle:share:{thread_id}",
-            style=discord.ButtonStyle.secondary,
-            emoji="📤",
-        )
-        share_btn.callback = self._on_share
-        self.add_item(share_btn)
+        if self._phase == "live":
+            checkpoint_btn = discord.ui.Button(
+                label="checkpoint",
+                custom_id=f"eddy:lifecycle:checkpoint:{thread_id}",
+                style=discord.ButtonStyle.secondary,
+                emoji="💾",
+            )
+            checkpoint_btn.callback = self._on_checkpoint
+            self.add_item(checkpoint_btn)
 
-    async def _on_flows(self, interaction: discord.Interaction):
-        if interaction.channel.id != self._thread_id:
-            await interaction.response.send_message("Wrong thread.", ephemeral=True)
+            share_btn = discord.ui.Button(
+                label="share",
+                custom_id=f"eddy:lifecycle:share:{thread_id}",
+                style=discord.ButtonStyle.secondary,
+                emoji="📤",
+            )
+            share_btn.callback = self._on_share
+            self.add_item(share_btn)
+
+    async def _on_flow_pick(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") or []
+        flow_id = values[0] if values else None
+        if not flow_id:
+            await interaction.response.send_message("No flow selected.", ephemeral=True)
+            return
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread) or thread.id != self._thread_id:
+            await interaction.response.send_message("Open this from the eddy thread.", ephemeral=True)
             return
         await interaction.response.defer()
-        await _run_lifecycle_command(interaction, "flows")
+        from eddy_flow_library import _complete_flow_pick
+
+        await _complete_flow_pick(
+            interaction,
+            thread_id=self._thread_id,
+            parent_id=self._parent_id,
+            flow_id=flow_id,
+            dismiss_message=False,
+        )
+        from bar_anchor import ensure_channel_bars
+
+        await ensure_channel_bars(thread, interaction.client)
 
     async def _on_checkpoint(self, interaction: discord.Interaction):
         if interaction.channel.id != self._thread_id:
@@ -386,7 +496,10 @@ class EddyDissolveConfirmView(discord.ui.View):
 
     async def _on_cancel(self, interaction: discord.Interaction):
         _cancel_confirm_revert(self._thread_id)
-        view = EddyLifecycleBarView(self._thread_id)
+        thread = interaction.channel
+        parent_id = thread.parent_id if isinstance(thread, discord.Thread) else 0
+        phase = get_bar_phase(self._thread_id) or "live"
+        view = EddyLifecycleBarView(self._thread_id, parent_id or 0, phase=phase)
         interaction.client.add_view(view)
         await interaction.response.edit_message(content="\u200b", view=view)
 
@@ -412,24 +525,80 @@ class EddyDissolveConfirmView(discord.ui.View):
             _dissolve_in_progress.discard(self._thread_id)
 
 
-async def post_eddy_lifecycle_bar(
+async def _post_eddy_bar(
     thread: discord.Thread,
     client,
+    *,
+    phase: str,
 ) -> discord.Message | None:
     if not standing_lifecycle_bar_enabled():
         return None
+    parent_id = thread.parent_id
+    if not parent_id or not _bar_eligible_for_phase(thread.id, parent_id, phase):
+        return None
+
+    from flow_runner import list_flow_ids_for_bar_phase
+
+    if not list_flow_ids_for_bar_phase(phase):
+        return None
+
     from bar_anchor import channel_for_client
 
     ch = await channel_for_client(thread, client)
-    view = EddyLifecycleBarView(ch.id)
+    view = EddyLifecycleBarView(ch.id, parent_id, phase=phase)
+    if not view.children:
+        return None
     try:
         msg = await ch.send("\u200b", view=view, silent=True)
     except discord.HTTPException as exc:
         print(f"Lifecycle bar post failed for {ch.id}: {type(exc).__name__}: {exc}")
         return None
     _mark_bar_message(ch.id, msg.id)
+    set_bar_phase(ch.id, phase)
     client.add_view(view)
     return msg
+
+
+async def post_eddy_bootstrap_bar(
+    thread: discord.Thread,
+    client,
+) -> discord.Message | None:
+    """Phase 0 — filtered flow select on empty eddy."""
+    return await _post_eddy_bar(thread, client, phase="bootstrap")
+
+
+async def post_eddy_lifecycle_bar(
+    thread: discord.Thread,
+    client,
+) -> discord.Message | None:
+    """Phase 1 — full bar after practitioner content."""
+    return await _post_eddy_bar(thread, client, phase="live")
+
+
+async def upgrade_eddy_bar_to_live(thread: discord.Thread, client) -> None:
+    """Expand bootstrap bar to live phase after first practitioner message."""
+    parent_id = thread.parent_id
+    if not parent_id:
+        return
+    set_bar_phase(thread.id, "live")
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(thread, client)
+    state = _load_state()
+    bar_id = state.get(str(ch.id))
+    view = EddyLifecycleBarView(ch.id, parent_id, phase="live")
+    if not view.children:
+        return
+    client.add_view(view)
+    if bar_id:
+        try:
+            bar_msg = await ch.fetch_message(bar_id)
+            await bar_msg.edit(content="\u200b", view=view)
+            print(f"Lifecycle bar upgraded to live in #{getattr(ch, 'name', ch.id)} ({ch.id})")
+            return
+        except discord.HTTPException:
+            pass
+    await _post_eddy_bar(ch, client, phase="live")
 
 
 async def ensure_eddy_lifecycle_bar_at_bottom(
@@ -450,7 +619,8 @@ async def _ensure_eddy_lifecycle_bar_at_bottom_unlocked(
     parent_id = getattr(thread, "parent_id", None)
     if not parent_id or not is_lifecycle_bar_active(thread.id):
         return
-    if not lifecycle_bar_eligible(thread.id, parent_id):
+    phase = get_bar_phase(thread.id) or "live"
+    if not _bar_eligible_for_phase(thread.id, parent_id, phase):
         return
 
     client = client or get_lifecycle_bar_client(thread)
@@ -467,7 +637,7 @@ async def _ensure_eddy_lifecycle_bar_at_bottom_unlocked(
             bar_msg = await ch.fetch_message(bar_id)
             async for last in ch.history(limit=1):
                 if last.id == bar_id:
-                    view = EddyLifecycleBarView(ch.id)
+                    view = EddyLifecycleBarView(ch.id, parent_id, phase=phase)
                     client.add_view(view)
                     try:
                         await bar_msg.edit(view=view)
@@ -481,7 +651,7 @@ async def _ensure_eddy_lifecycle_bar_at_bottom_unlocked(
         except discord.HTTPException:
             pass
 
-    msg = await post_eddy_lifecycle_bar(ch, client)
+    msg = await _post_eddy_bar(ch, client, phase=phase)
     if msg:
         print(f"Lifecycle bar reposted in #{getattr(ch, 'name', ch.id)} ({ch.id})")
 
@@ -491,14 +661,25 @@ async def touch_eddy_lifecycle_bar(
     *,
     from_practitioner: bool = False,
 ) -> None:
-    """Activate on first practitioner activity; keep bar at bottom afterward."""
+    """Post bootstrap bar on materialize; upgrade to live on first practitioner activity."""
     if not standing_lifecycle_bar_enabled():
         return
     if not isinstance(message.channel, discord.Thread):
         return
     thread = message.channel
     parent_id = thread.parent_id
-    if not parent_id or not lifecycle_bar_eligible(thread.id, parent_id):
+    if not parent_id:
+        return
+    phase = get_bar_phase(thread.id)
+    if phase == "bootstrap":
+        if not bootstrap_bar_eligible(thread.id, parent_id):
+            return
+    elif phase == "live":
+        if not lifecycle_bar_eligible(thread.id, parent_id):
+            return
+    elif not bootstrap_bar_eligible(thread.id, parent_id) and not lifecycle_bar_eligible(
+        thread.id, parent_id
+    ):
         return
 
     client = get_lifecycle_bar_client(thread)
@@ -521,7 +702,7 @@ async def _touch_eddy_lifecycle_bar_unlocked(
         return
     thread = message.channel
     parent_id = thread.parent_id
-    if not parent_id or not lifecycle_bar_eligible(thread.id, parent_id):
+    if not parent_id:
         return
 
     client = get_lifecycle_bar_client(thread)
@@ -529,7 +710,12 @@ async def _touch_eddy_lifecycle_bar_unlocked(
         return
 
     if from_practitioner and _is_practitioner_author(message):
-        if not is_lifecycle_bar_active(thread.id):
+        phase = get_bar_phase(thread.id)
+        if phase == "bootstrap":
+            await upgrade_eddy_bar_to_live(thread, client)
+            await _ensure_eddy_lifecycle_bar_at_bottom_unlocked(thread, client)
+            return
+        if not is_lifecycle_bar_active(thread.id) and lifecycle_bar_eligible(thread.id, parent_id):
             msg = await post_eddy_lifecycle_bar(thread, client)
             if msg:
                 print(f"Lifecycle bar activated in #{thread.name} ({thread.id})")

@@ -1004,9 +1004,11 @@ async def cmd_admin(message, args):
             close_shared_space,
             create_shared_space,
             find_shared_river_channel,
+            hide_shared_space,
             list_active_spaces,
             parse_space_close_args,
             parse_space_create_args,
+            parse_space_hide_args,
             resolve_member_keys,
         )
         from mage import ensure_space_channel_access
@@ -1019,6 +1021,7 @@ async def cmd_admin(message, args):
                 "**Space commands:**\n"
                 "- `!admin space create <space-key> [--members @user ...] [--open] [--policy all_practitioners|members_only] [--context family|shared] [--channel name]`\n"
                 "- `!admin space close <space-key> [--confirm] [--dissolve-eddies]`\n"
+                "- `!admin space hide <space-key> [--confirm]` — hide an archived space from Discord (repair)\n"
                 "- `!admin space list` — active shared spaces\n"
                 "- `!admin space sync <space-key>` — repair Discord permissions from registry\n",
                 mention_author=False,
@@ -1047,9 +1050,10 @@ async def cmd_admin(message, args):
                     options,
                     member_keys=member_keys,
                 )
-                from river_handler import ensure_bar_at_bottom
+                from river_handler import _river_client_for_channel, ensure_bar_at_bottom
 
-                await ensure_bar_at_bottom(channel, client)
+                bar_client = _river_client_for_channel(channel) or client
+                await ensure_bar_at_bottom(channel, bar_client)
             except ValueError as exc:
                 await message.reply(str(exc), mention_author=False)
                 return
@@ -1097,12 +1101,44 @@ async def cmd_admin(message, args):
 
             await message.reply(
                 f"**Archived shared space `{summary['space_key']}`**\n"
-                f"- Channel: `#{summary['channel_name']}` locked (moved to Archived if category exists)\n"
+                f"- Channel: `#{summary['channel_name']}` hidden from members (operators retain access)\n"
                 f"- Registry: marked archived; river harness will skip this channel\n",
                 mention_author=False,
             )
             await log_activity(
                 f"Archived shared space **{summary['space_key']}** — #{summary['channel_name']}",
+                "\U0001f4e6",
+                channel=message.channel,
+            )
+
+        elif space_sub == "hide":
+            try:
+                options = parse_space_hide_args(args[1:])
+                summary = await hide_shared_space(guild, options, discord_client=client)
+            except ValueError as exc:
+                await message.reply(str(exc), mention_author=False)
+                return
+
+            if not options.confirm:
+                state = "already archived" if summary.get("registry_archived") else "active"
+                await message.reply(
+                    f"**Hide `{summary['space_key']}`?** (registry: {state})\n"
+                    f"- Channel: `#{summary['channel_name']}` (`{summary['channel_id']}`)\n"
+                    f"- Members who will lose view: {', '.join(f'`{m}`' for m in summary['members']) or '(none)'}\n"
+                    f"- Open threads: {summary['open_threads']}\n\n"
+                    f"Re-run with `--confirm` to hide from practitioners (operators retain access).",
+                    mention_author=False,
+                )
+                return
+
+            await message.reply(
+                f"**Hidden shared space `{summary['space_key']}`**\n"
+                f"- Channel: `#{summary['channel_name']}` no longer visible to members\n"
+                f"- Registry: archived; river harness skips this channel\n",
+                mention_author=False,
+            )
+            await log_activity(
+                f"Hidden shared space **{summary['space_key']}** — #{summary['channel_name']}",
                 "\U0001f4e6",
                 channel=message.channel,
             )

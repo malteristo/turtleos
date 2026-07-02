@@ -363,6 +363,30 @@ def get_runtime_dir():
     return _runtime_dir_ctx.get() or _resolve_primary_runtime_dir()
 
 
+def list_registered_runtime_dirs() -> list[str]:
+    """Unique runtime roots from registry — for cross-space background polling."""
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def _add(path: str | None) -> None:
+        if not path:
+            return
+        expanded = os.path.expanduser(path)
+        if expanded in seen:
+            return
+        seen.add(expanded)
+        out.append(expanded)
+
+    _add(_resolve_primary_runtime_dir())
+    for entry in (_MAGE_REGISTRY.get("mages") or {}).values():
+        if isinstance(entry, dict):
+            _add(entry.get("runtime_dir"))
+    for entry in (_MAGE_REGISTRY.get("spaces") or {}).values():
+        if isinstance(entry, dict):
+            _add(entry.get("runtime_dir"))
+    return out
+
+
 def get_topology():
     """Return current topology paths for diagnostics and drift checks."""
     return {

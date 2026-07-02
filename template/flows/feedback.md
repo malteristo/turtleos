@@ -1,5 +1,6 @@
 ---
 title: Feedback
+entry: lens
 reads: [state/notes/feedback-last.md]
 writes: [state/notes/feedback-last.md]
 think_aloud: auto

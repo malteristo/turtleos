@@ -42,6 +42,7 @@ class FlowSpec:
     path: str
     entry_contract: str = ""
     intake: FlowIntakeSpec | None = None
+    entry: str = "both"  # fresh | lens | both — bar phase filtering
 
 
 def split_front_matter(text: str) -> tuple[dict[str, Any], str]:
@@ -119,6 +120,8 @@ def load_flow_spec(flow_id: str | None, practice_dir: str | None = None) -> Flow
     reads = list(meta.get("reads") or meta.get("loads") or [])
     writes = list(meta.get("writes") or [])
     title = (meta.get("title") or flow_id).strip()
+    entry_raw = str(meta.get("entry") or "both").strip().lower()
+    entry = entry_raw if entry_raw in ("fresh", "lens", "both") else "both"
     return FlowSpec(
         flow_id=slug,
         title=title,
@@ -130,6 +133,7 @@ def load_flow_spec(flow_id: str | None, practice_dir: str | None = None) -> Flow
         path=path,
         entry_contract=str(meta.get("entry_contract") or "").strip(),
         intake=_parse_intake_spec(meta, slug),
+        entry=entry,
     )
 
 
@@ -402,6 +406,21 @@ def list_flow_ids(practice_dir: str | None = None) -> list[str]:
 def list_resolvable_flow_ids(practice_dir: str | None = None) -> list[str]:
     """Flow ids that resolve to a spec — for menus and close-time inference."""
     return [fid for fid in list_flow_ids(practice_dir) if load_flow_spec(fid, practice_dir)]
+
+
+def list_flow_ids_for_bar_phase(phase: str, practice_dir: str | None = None) -> list[str]:
+    """Filter installed flows for eddy bar phase — bootstrap (fresh) vs live (all)."""
+    out: list[str] = []
+    for fid in list_resolvable_flow_ids(practice_dir):
+        spec = load_flow_spec(fid, practice_dir)
+        if not spec:
+            continue
+        if phase == "bootstrap":
+            if spec.entry in ("fresh", "both"):
+                out.append(fid)
+        else:
+            out.append(fid)
+    return out
 
 
 def _flow_summary_line(spec: FlowSpec) -> str:

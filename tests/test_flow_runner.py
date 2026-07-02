@@ -21,6 +21,7 @@ from flow_runner import (
     flow_entry_blurb,
     resolve_flow_for_close,
     list_resolvable_flow_ids,
+    list_flow_ids_for_bar_phase,
     strip_model_operational_lines,
     strip_question_sentences,
     apply_flow_reply_guard,
@@ -196,6 +197,21 @@ class FlowRunnerTests(unittest.TestCase):
             self.assertIn(flow_id, flows)
         self.assertNotIn("shelter", flows)
         self.assertEqual(len(flows), len(set(flows)))
+
+    def test_list_flow_ids_for_bar_phase_filters_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flows = os.path.join(tmp, "flows")
+            os.makedirs(flows)
+            with open(os.path.join(flows, "navigator.md"), "w", encoding="utf-8") as fh:
+                fh.write("---\ntitle: Navigator\nentry: fresh\n---\n# Nav\n")
+            with open(os.path.join(flows, "feedback.md"), "w", encoding="utf-8") as fh:
+                fh.write("---\ntitle: Feedback\nentry: lens\n---\n# FB\n")
+            bootstrap = list_flow_ids_for_bar_phase("bootstrap", tmp)
+            live = list_flow_ids_for_bar_phase("live", tmp)
+        self.assertIn("navigator", bootstrap)
+        self.assertNotIn("feedback", bootstrap)
+        self.assertIn("feedback", live)
+        self.assertGreaterEqual(len(live), len(bootstrap))
 
     def test_load_shipped_flow_templates(self) -> None:
         expected = {

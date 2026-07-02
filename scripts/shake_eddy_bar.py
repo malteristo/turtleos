@@ -81,9 +81,15 @@ def check_offline() -> list[str]:
     lifecycle_block = lifecycle_src.split("class EddyLifecycleBarView")[1].split(
         "class EddyDissolveConfirmView", 1
     )[0]
-    for label in ("flows", "checkpoint", "share"):
+    if "eddy:lifecycle:flowpick:" not in lifecycle_block:
+        errors.append("EddyLifecycleBarView missing flow pick select")
+    for label in ("checkpoint", "share"):
         if f'label="{label}"' not in lifecycle_block:
-            errors.append(f"EddyLifecycleBarView missing {label!r} button")
+            errors.append(f"EddyLifecycleBarView missing {label!r} button (live phase)")
+    if "post_eddy_bootstrap_bar" not in lifecycle_src:
+        errors.append("eddy_lifecycle_bar missing post_eddy_bootstrap_bar")
+    if "upgrade_eddy_bar_to_live" not in lifecycle_src:
+        errors.append("eddy_lifecycle_bar missing upgrade_eddy_bar_to_live")
 
     try:
         from eddy_flow_library import EddyFlowLibraryView, post_eddy_flow_library  # noqa: F401
@@ -128,8 +134,11 @@ async def _lifecycle_bar_labels_in_thread(thread_id: str) -> set[str]:
             for row in message.components or []:
                 for child in getattr(row, "children", []):
                     label = (getattr(child, "label", None) or "").lower().strip()
-                    if label in {"flows", "checkpoint", "share"}:
+                    if label in {"checkpoint", "share"}:
                         found.add(label)
+                    cid = getattr(child, "custom_id", None) or ""
+                    if "eddy:lifecycle:flowpick:" in cid:
+                        found.add("flowpick")
     finally:
         await client.close()
     return found
@@ -206,11 +215,22 @@ def check_live(wait_seconds: int) -> list[str]:
     time.sleep(2)
     transcript = _read_thread(thread_id)
     lower = transcript.lower()
-    if "guided flow" in lower or "load a guided flow" in lower:
+    if "guided flow" in lower and "optional" in lower:
         errors.append(
             "flow library embed visible at materialize "
-            "(expected empty room until first practitioner message or !flows)"
+            "(expected bootstrap bar select only)"
         )
+
+    try:
+        bar_labels = asyncio.run(_lifecycle_bar_labels_in_thread(thread_id))
+    except Exception as exc:
+        errors.append(f"lifecycle bar component inspect failed: {exc}")
+        return errors
+
+    if "flowpick" not in bar_labels:
+        errors.append("bootstrap bar missing flow pick at materialize")
+    if "checkpoint" in bar_labels or "share" in bar_labels:
+        errors.append("checkpoint/share visible before first practitioner message")
 
     try:
         _spirit_send(thread_id, "shake: blank eddy bar path — hello turtle")
@@ -230,11 +250,11 @@ def check_live(wait_seconds: int) -> list[str]:
         errors.append(f"lifecycle bar component inspect failed: {exc}")
         return errors
 
-    for label in ("flows", "checkpoint", "share"):
+    for label in ("flowpick", "checkpoint", "share"):
         if label not in bar_labels:
             errors.append(
-                f"standing lifecycle bar missing {label!r} button "
-                "(expected flows · checkpoint · share)"
+                f"live lifecycle bar missing {label!r} "
+                "(expected flow pick · checkpoint · share after first message)"
             )
 
     return errors

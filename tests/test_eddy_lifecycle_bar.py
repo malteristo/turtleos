@@ -12,18 +12,24 @@ import eddy_lifecycle_bar as bar
 
 
 class TestLifecycleBarEligibility(unittest.TestCase):
-    def test_blocks_awaiting_title(self) -> None:
-        with patch.object(bar, "lifecycle_bar_eligible", wraps=bar.lifecycle_bar_eligible):
-            with patch("eddy_spawn.is_awaiting_title", return_value=True):
-                with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
-                    with patch("prompts.uses_native_turtle_prompt", return_value=True):
-                        self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
+    def test_bootstrap_allows_awaiting_title(self) -> None:
+        with patch("eddy_spawn.is_awaiting_title", return_value=True):
+            with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
+                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                    self.assertTrue(bar.bootstrap_bar_eligible(11, 22))
+
+    def test_live_blocks_awaiting_title(self) -> None:
+        with patch("eddy_spawn.is_awaiting_title", return_value=True):
+            with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
+                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                    self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
 
     def test_blocks_awaiting_intake(self) -> None:
         with patch("eddy_spawn.is_awaiting_title", return_value=False):
             with patch("eddy_spawn.is_awaiting_flow_intake", return_value=True):
                 with patch("prompts.uses_native_turtle_prompt", return_value=True):
                     self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
+                    self.assertFalse(bar.bootstrap_bar_eligible(11, 22))
 
     def test_allows_live_eddy(self) -> None:
         with patch.object(bar, "standing_lifecycle_bar_enabled", return_value=True):
@@ -50,14 +56,29 @@ class TestLifecycleBarState(unittest.TestCase):
 
 
 class TestLifecycleBarArtifactsButton(unittest.TestCase):
-    def test_eddy_bar_has_flows_checkpoint_share(self) -> None:
+    def test_eddy_bar_phased_flow_pick_and_live_actions(self) -> None:
         src = (Path(__file__).resolve().parents[1] / "eddy_lifecycle_bar.py").read_text(
             encoding="utf-8"
         )
         block = src.split("class EddyLifecycleBarView")[1].split("class EddyDissolveConfirmView")[0]
-        self.assertIn('label="flows"', block)
+        self.assertIn("eddy:lifecycle:flowpick:", block)
         self.assertIn('label="checkpoint"', block)
         self.assertIn('label="share"', block)
+        self.assertIn('phase == "live"', block)
+
+
+class TestBarPhaseState(unittest.TestCase):
+    def test_phase_roundtrip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            phase_path = Path(tmp) / "bar_phase.json"
+            with patch.object(bar, "_phase_state_path", return_value=str(phase_path)):
+                self.assertIsNone(bar.get_bar_phase(42))
+                bar.set_bar_phase(42, "bootstrap")
+                self.assertEqual(bar.get_bar_phase(42), "bootstrap")
+                bar.set_bar_phase(42, "live")
+                self.assertEqual(bar.get_bar_phase(42), "live")
+                bar.clear_bar_phase(42)
+                self.assertIsNone(bar.get_bar_phase(42))
 
 
 class TestPractitionerAuthor(unittest.TestCase):
