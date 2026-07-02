@@ -905,6 +905,22 @@ async def _continue_dialogue_turn(
         runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
         system_prompt = runtime_env + system_prompt
 
+    # Continuity Engine — Slice 0: prepend the current-layer block (time, place,
+    # machine/model) so Turtle is oriented in the present without being told.
+    # dialogue_model is the model resolved for THIS turn (hardware honesty).
+    try:
+        from continuity_engine import refresh_and_render
+
+        current_block = refresh_and_render(
+            get_pd(),
+            dialogue_model=thread_model,
+            use_api=thread_use_api,
+        )
+        if current_block:
+            system_prompt = current_block + system_prompt
+    except Exception as exc:
+        print(f"CE current block failed: {type(exc).__name__}: {exc}")
+
     source_flags = []
     if url_content:
         if content_from_boom_capture:
