@@ -290,6 +290,7 @@ def _help_embed_fields() -> list[tuple[str, str]]:
     eddy_core = [
         ("`!checkpoint`", "Save resonance — flow state + session note; keeps history"),
         ("`!release`", "Close session — checkpoint, then clear history"),
+        ("`!focus <topic>`", "Narrow this eddy to one thing (`!focus` to view, `!focus clear` to widen)"),
         ("`!dissolve`", "Archive eddy + chronicle — distinct from `!release`"),
         ("`!help`", "This inventory"),
         ("`!status`", "System + practice-root dashboard"),
@@ -660,6 +661,79 @@ async def cmd_readiness(message):
     embed.set_footer(text=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     await message.reply(embed=embed, mention_author=False)
     save_readiness_trail(result)
+
+
+async def cmd_focus(message, args):
+    """Narrow this conversation to one thing (CE Slice 1 — the power-user shortcut).
+
+    Conversational narrowing is the intended front door (Slice 1b); this ``!``
+    lever exists for practitioners who want an explicit handle (design §5.2a).
+      - ``!focus``            → what's in motion + this eddy's current focus
+      - ``!focus <label>``    → focus on that thread (create it if new); scope
+                                is per-eddy so other conversations stay wide
+      - ``!focus clear``      → widen back to holistic
+    """
+    from continuity_engine import (
+        add_active_thread,
+        clear_scope,
+        find_active_thread,
+        get_scope,
+        list_active_threads,
+        set_scope,
+    )
+
+    set_practice_context(message)
+    pd = get_pd()
+    channel_id = message.channel.id
+
+    # No args → show what's in motion + current focus (plain language, firewall §4).
+    if not args:
+        threads = list_active_threads(pd)
+        current = get_scope(pd, channel_id)
+        current_label = None
+        if current:
+            found = find_active_thread(pd, current)
+            current_label = found.get("label") if found else current
+        if threads:
+            listed = "\n".join(
+                f"- **{t.get('label', t.get('id'))}**"
+                f"{' — ' + t['tone'] if t.get('tone') else ''}"
+                + ("  ← focused here" if str(t.get("id")) == str(current) else "")
+                for t in threads
+            )
+            body = f"In motion:\n{listed}"
+        else:
+            body = "Nothing in motion yet. `!focus <topic>` starts one."
+        if current_label:
+            body += f"\n\nThis eddy is focused on **{current_label}**. `!focus clear` to widen."
+        await message.reply(body, mention_author=False)
+        return f"Focus overview shown ({len(threads)} in motion)."
+
+    first = args[0].lower()
+    if first in ("clear", "off", "wide", "none"):
+        cleared = clear_scope(pd, channel_id)
+        await message.reply(
+            "Widened back out — talking about everything again."
+            if cleared
+            else "This eddy wasn't focused on anything in particular.",
+            mention_author=False,
+        )
+        return "Focus cleared." if cleared else "Focus already wide."
+
+    label = " ".join(args).strip().strip('"').strip("'")
+    thread = find_active_thread(pd, label)
+    created = False
+    if not thread:
+        thread = add_active_thread(pd, label)
+        created = True
+    set_scope(pd, channel_id, str(thread.get("id")))
+    tlabel = thread.get("label", label)
+    await message.reply(
+        f"Focusing on **{tlabel}**{' (new)' if created else ''} — I'll pull deeper "
+        "context on it here. `!focus clear` to widen.",
+        mention_author=False,
+    )
+    return f"Focused this eddy on \"{tlabel}\"{' (new thread)' if created else ''}."
 
 
 # ─── Admin Commands ──────────────────────────────────────────────
@@ -1104,6 +1178,7 @@ DIRECT_COMMANDS = {
     "absorbed": lambda msg, args: cmd_absorbed(msg, args),
     "forget": lambda msg, args: cmd_forget(msg, args),
     "readiness": lambda msg, args: cmd_readiness(msg),
+    "focus": lambda msg, args: cmd_focus(msg, args),
     "diagnose": lambda msg, args: cmd_diagnose(msg),
     "panel": lambda msg, args: cmd_panel(msg),
     "help": lambda msg, args: cmd_help(msg),

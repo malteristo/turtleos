@@ -905,21 +905,26 @@ async def _continue_dialogue_turn(
         runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
         system_prompt = runtime_env + system_prompt
 
-    # Continuity Engine — Slice 0: prepend the current-layer block (time, place,
-    # machine/model) so Turtle is oriented in the present without being told.
-    # dialogue_model is the model resolved for THIS turn (hardware honesty).
+    # Continuity Engine — Slice 0 (current layer) + Slice 1 (alive headers +
+    # per-eddy narrowing). Prepend the substrate packet so Turtle is oriented in
+    # the present and knows what's in motion, without being told. Scope is read
+    # from scopes.yaml (cross-process: !focus runs in the River bot, this reads
+    # it in the Turtle bot). dialogue_model is resolved for THIS turn (hw honesty).
     try:
-        from continuity_engine import refresh_and_render
+        from continuity_engine import get_scope, render_substrate_packet
 
-        current_block = refresh_and_render(
-            get_pd(),
+        pd = get_pd()
+        scope = get_scope(pd, channel_id)
+        current_block = render_substrate_packet(
+            pd,
             dialogue_model=thread_model,
             use_api=thread_use_api,
+            scope=scope,
         )
         if current_block:
             system_prompt = current_block + system_prompt
     except Exception as exc:
-        print(f"CE current block failed: {type(exc).__name__}: {exc}")
+        print(f"CE substrate packet failed: {type(exc).__name__}: {exc}")
 
     source_flags = []
     if url_content:

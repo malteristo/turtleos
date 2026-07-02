@@ -72,12 +72,15 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 |---------|---------|------|-----------------|
 | `!checkpoint` | `cmd_checkpoint` | §8.4 | No — saves flow state + session notes |
 | `!release` | `cmd_release` | §8.4, §9.2 | Yes — after checkpoint |
+| `!focus` | `cmd_focus` | CE Slice 1, design §5.2a | No — narrows this eddy's substrate to one thing |
 | `!dissolve` | `cmd_dissolve` | §9.2 | Archives thread — does not clear history first |
 | `!help` | `cmd_help` | — | Profile-aware inventory (this doc) |
 | `!status` | `cmd_status` | Ops | No |
 | `!readiness` | `cmd_readiness` | Ops (hosted substrate check) | No |
 
 **Idle checkpoint:** 15 min quiet → automatic checkpoint; does **not** release (§8.4, Law of Checkpoint Before Sweep).
+
+**`!focus` (Continuity Engine narrowing):** the **power-user shortcut** for narrowing — conversational narrowing is the intended front door (design §5.2a, ships in Slice 1b). `!focus <topic>` narrows this eddy to one active thread (creating it if new) and pulls deeper context from matching session notes; `!focus` alone shows what's in motion; `!focus clear` widens back to holistic. Scope is **per-eddy** (cross-process via `state/scopes.yaml`), so narrowing one conversation never narrows the others.
 
 **Flow session state:** Flows with YAML front matter participate in persistent practice state — declared `writes` paths updated on checkpoint (§10). This is platform continuity, not a Magic workshop mirror.
 
