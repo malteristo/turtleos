@@ -46,6 +46,11 @@ class ShakeFlowOfflineTests(unittest.TestCase):
         errors = shake_flow.check_offline("navigator")
         self.assertEqual(errors, [], errors)
 
+    def test_offline_dnd_dm_passes(self) -> None:
+        shake_flow = _load_shake_flow()
+        errors = shake_flow.check_offline("dnd_dm")
+        self.assertEqual(errors, [], errors)
+
 
 if __name__ == "__main__":
     unittest.main()

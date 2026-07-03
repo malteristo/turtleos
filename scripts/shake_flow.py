@@ -37,6 +37,20 @@ FLOW_SPECS: dict[str, dict] = {
         ),
         "followup_message": "that next step feels doable — what would make it smaller if not?",
     },
+    "dnd_dm": {
+        "flow_id": "dnd_dm",
+        "checkpoint_rel": "campaign/checkpoints/latest.md",
+        "prompt_markers": ["Dungeon Master", "Don't Panic", "campaign/"],
+        "presence_markers": ["Dungeon Master"],
+        "shake_message": (
+            "shake: I grab my towel and sprint toward the village gate — "
+            "what do I see as the demolition notices start glowing?"
+        ),
+        "followup_message": (
+            "(OOC) I look around for Ford — does anyone else seem to know "
+            "what's actually happening?"
+        ),
+    },
 }
 
 
