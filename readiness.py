@@ -76,6 +76,22 @@ def assess_practitioner_substrate(pd=None) -> dict:
     return {"dimensions": dims, "summary": summary, "highest_leverage": None}
 
 
+def assess_space_substrate(pd=None, *, space_key: str | None = None) -> dict:
+    """Honest check for shared-river spaces — not operator readiness scoring."""
+    result = assess_practitioner_substrate(pd)
+    if "fresh" not in result["summary"].lower():
+        return result
+    label = (space_key or "shared space").replace("_", " ").title()
+    result["summary"] = (
+        f"**{label} is fresh.** Nothing is broken — there is nothing to score yet. "
+        "Open a thread from the bar when the space is ready for shared practice."
+    )
+    result["dimensions"] = [
+        {"name": "Shared space", "status": "ready", "detail": "empty — new shared practice"}
+    ]
+    return result
+
+
 def assess_readiness(pd=None) -> dict:
     """Full 8-dimension practice-readiness assessment.
 
@@ -83,13 +99,18 @@ def assess_readiness(pd=None) -> dict:
     'summary' (formatted string), and 'highest_leverage' (what to fix first).
     Each dimension: {name, status, detail} where status is ready/degraded/impaired.
 
-    Practitioners on hosted rivers get an honest substrate check — not operator-style scoring.
+    Practitioners on hosted rivers and shared-river spaces get honest substrate checks —
+    not operator-style scoring.
     """
-    from mage import get_mage_type
+    from mage import get_mage_key, get_mage_type, get_registry
 
     pd = pd or _resolve_default_pd()
     if get_mage_type() == "practitioner":
         return assess_practitioner_substrate(pd)
+
+    mage_key = get_mage_key()
+    if mage_key and mage_key in get_registry().get("spaces", {}):
+        return assess_space_substrate(pd, space_key=mage_key)
 
     # Import here to avoid circular imports — these are background task references
     from sessions import session_monitor

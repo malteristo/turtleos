@@ -7,9 +7,9 @@ from mage import get_mage_type
 from state import MAX_DIALOGUE_HISTORY
 
 COMMAND_ACT_FALLBACK = {
-    "status": "Platform status embed posted (models, uptime, practice root summary).",
-    "diagnose": "Stack diagnostic embed posted (canary checks).",
-    "help": "Command inventory embed posted.",
+    "status": "Platform status act posted (models, uptime, practice root summary).",
+    "diagnose": "Stack diagnostic act posted (canary checks).",
+    "help": "River command summary posted (full inventory in eddies).",
     "thread-type": "Eddy type updated.",
     "rename": "Eddy renamed on Discord.",
     "eddy-check": "Eddy dissolution scan completed.",
@@ -21,7 +21,7 @@ COMMAND_ACT_FALLBACK = {
     "dissolve": "Eddy dissolved — thread archived, chronicle updated.",
     "flows": "Flow menu opened.",
     "pin": "Message pinned in river channel.",
-    "readiness": "Practice-readiness assessment posted.",
+    "readiness": "Practice-readiness act posted.",
     "artifacts": "Practice artifact shelves displayed.",
     "export": "Practice artifact exported as .md attachment.",
     "read": "Practice artifact content displayed.",

@@ -34,7 +34,7 @@ from mage import (
     get_pd, get_runtime_dir, get_workshop_root, get_topology, get_mage_name, get_mage_key, get_mage_type,
     get_attunement_profile,
     set_practice_context, set_practice_context_for_channel,
-    is_practice_channel, is_registered_parent_channel,
+    is_practice_channel, is_registered_parent_channel, is_river_message,
     reload_mage_registry, get_registry,
     _resolve_mage_from_author, _MAGE_REGISTRY,
     get_thread_member_ids,
@@ -56,6 +56,7 @@ from llm import (
 from tos_tools import TOS_TOOLS, execute_tos_tool, build_tool_report
 
 from readiness import assess_readiness, startup_readiness_check, save_readiness_trail
+from sessions import post_command_act
 
 from content_fetch import (
     extract_urls as _extract_urls,
@@ -111,6 +112,11 @@ from cmd_threads import (
 
 # ─── Direct Commands ─────────────────────────────────────────────
 
+async def _post_river_command_act(message, *, title: str, body: str, emoji: str = "📋") -> None:
+    """Compact River act on parent channels — not Turtle multi-field panels."""
+    await post_command_act(message.channel.id, title=title, body=body, emoji=emoji)
+
+
 async def cmd_status(message):
     now = datetime.now(timezone.utc)
     try:
@@ -144,6 +150,25 @@ async def cmd_status(message):
 
     active_count = sum(1 for s in active_sessions.values() if not s["closed"])
 
+    practice = [
+        f"Practice root: `{get_pd()}`",
+        f"Session files: **{len(session_files)}** (last `{last_session}`)",
+        f"Installed flows: **{len(flow_files)}**",
+    ]
+    digest = (
+        f"{len(session_files)} sessions, {len(flow_files)} flows, "
+        f"last session `{last_session}`, {active_count} active channel(s)"
+    )
+
+    if is_river_message(message):
+        river_body = "\n".join([
+            f"River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}` · Ollama: {ollama_status}",
+            f"Uptime {uptime} · {active_count} active session(s)",
+            *practice,
+        ])
+        await _post_river_command_act(message, title="Status", body=river_body, emoji="🐢")
+        return digest
+
     embed = discord.Embed(title="\U0001f422 Turtle Status", color=EMBED_COLORS["status_ok"], timestamp=now)
     embed.add_field(name="River", value=f"`{RIVER_MODEL}`\n(local)", inline=True)
     embed.add_field(name="Turtle", value=f"`{TURTLE_MODEL}`\n(local)", inline=True)
@@ -158,19 +183,10 @@ async def cmd_status(message):
     embed.add_field(name="Uptime", value=uptime, inline=True)
     embed.add_field(name="Sessions", value=str(active_count), inline=True)
     embed.add_field(name="tOS", value="active" if os.path.isfile(os.path.join(get_pd(), "system.md")) else "missing", inline=True)
-
-    practice = [
-        f"Practice root: `{get_pd()}`",
-        f"Session files: **{len(session_files)}** (last `{last_session}`)",
-        f"Installed flows: **{len(flow_files)}**",
-    ]
     embed.add_field(name="Practice root", value="\n".join(practice), inline=False)
     embed.set_footer(text="turtleOS shell")
     await message.reply(embed=embed, mention_author=False)
-    return (
-        f"{len(session_files)} sessions, {len(flow_files)} flows, "
-        f"last session `{last_session}`, {active_count} active channel(s)"
-    )
+    return digest
 
 
 async def cmd_diagnose(message):
@@ -267,7 +283,35 @@ async def cmd_diagnose(message):
         )
 
     embed.set_footer(text="!diagnose is a read-only view of canary.py; scheduled canary handles alerts")
+    digest = f"{green_count}/{len(results)} checks green ({overall})"
+    if is_river_message(message):
+        river_body = f"{green_count}/{len(results)} checks green ({overall}).\n" + truncate(
+            "\n".join(check_lines[:12]), 3500
+        )
+        await _post_river_command_act(
+            message,
+            title="Diagnostic",
+            body=river_body,
+            emoji="🩺" if overall == "green" else "⚠️",
+        )
+        return digest
     await message.reply(embed=embed, mention_author=False)
+    return digest
+
+
+def _river_help_body() -> str:
+    """Compact parent-river command summary — full inventory lives in eddies."""
+    mage_type = get_mage_type()
+    lines = [
+        "**River:** standing bar · `!pin` · `!dissolve`",
+        "**Eddies:** `!checkpoint` · `!release` · `!flows` · `!share` · `!help` (full list)",
+        "**Browse:** `!artifacts` · `!read` / `!ls` / `!search`",
+        f"Models: River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}`",
+    ]
+    if mage_type != "practitioner":
+        lines.insert(3, "**Operator:** `!diagnose` · `!admin …`")
+    lines.append("Open an eddy for the full command inventory.")
+    return "\n".join(lines)
 
 
 def _help_lines(pairs: list[tuple[str, str]]) -> str:
@@ -328,6 +372,11 @@ def _help_embed_fields() -> list[tuple[str, str]]:
 
 
 async def cmd_help(message):
+    if is_river_message(message):
+        body = _river_help_body()
+        await _post_river_command_act(message, title="Commands", body=body, emoji="📋")
+        return "River command summary posted (full inventory in eddies)."
+
     embed = discord.Embed(
         title="\U0001f422 Turtle Commands",
         description="Direct `!` commands bypass the LLM — instant and free. Layered per TURTLE_SPEC v1.",
@@ -647,20 +696,40 @@ async def cmd_forget(message, args):
 async def cmd_readiness(message):
     set_practice_context(message)
     result = assess_readiness()
-    title = (
-        "🌊 Practice substrate"
-        if get_mage_type() == "practitioner"
-        else "🧭 Practice-Readiness Assessment"
+    mage_key = get_mage_key()
+    is_space = bool(mage_key and mage_key in get_registry().get("spaces", {}))
+    if get_mage_type() == "practitioner":
+        title = "Practice substrate"
+    elif is_space:
+        title = "Shared space"
+    else:
+        title = "Practice-readiness"
+    color = (
+        0x2ECC71 if not result["highest_leverage"] else
+        (0xE67E22 if result["highest_leverage"]["status"] == "degraded" else 0xE74C3C)
     )
+    digest = result["summary"].replace("**", "")
+
+    if is_river_message(message):
+        await post_command_act(
+            message.channel.id,
+            title=title,
+            body=result["summary"],
+            emoji="🧭",
+            color=color,
+        )
+        save_readiness_trail(result)
+        return truncate(digest, 200)
+
     embed = discord.Embed(
-        title=title,
+        title=f"{'🌊' if get_mage_type() == 'practitioner' else '🧭'} {title}",
         description=result["summary"],
-        color=0x2ECC71 if not result["highest_leverage"] else
-              (0xE67E22 if result["highest_leverage"]["status"] == "degraded" else 0xE74C3C),
+        color=color,
     )
     embed.set_footer(text=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     await message.reply(embed=embed, mention_author=False)
     save_readiness_trail(result)
+    return truncate(digest, 200)
 
 
 async def cmd_focus(message, args):

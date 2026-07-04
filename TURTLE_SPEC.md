@@ -828,15 +828,26 @@ Deliverables: `character/soul.md`, `character/conduct.md`, `character/river_prom
 
 turtleOS MAY host multiple practitioners via `mage_registry.yaml` — each with isolated practice root and river channel. Sovereign setup (own server) is recommended; hosted setup (trusted server) is permitted with explicit sovereignty tradeoff.
 
-### 15.1 Channel types
+### 15.1 Channel families (v1 taxonomy)
 
-| Type | Purpose |
-|------|---------|
-| `river` | Operator/practitioner main practice surface on their own server or as primary mage |
-| `hosted-river` | Sovereign practitioner's private river on an operator's server — same River harness as `river` |
-| `unclaimed-river` | Private claim room before first bind; becomes `hosted-river` on river key drop |
-| `shared` | Legacy multi-practitioner dialogue — migrate to `shared-river` |
-| `shared-river` | Multi-member practice spaces (family, etc.) — River harness in parent; shared eddies with space `members` auto-join |
+Three **product families** govern Discord surfaces. Sovereignty (who owns the server / practice root) is orthogonal — it does not change harness behavior within a family.
+
+| Family | Registry types | Purpose |
+|--------|----------------|---------|
+| **Solo rivers** | `river`, `hosted-river`, `unclaimed-river` | One practitioner's main practice surface. `hosted-river` and `unclaimed-river` differ in **sovereignty** (guest on operator server, claim-room bind) — same River harness as `river`. |
+| **Shared rivers** | `shared-river` + `spaces.*` | Multi-member practice spaces (family, sandbox, play spaces). Acts in parent; shared eddies with space `members` auto-join. Per-space conduct via `default_context` (design: `docs/chapters/design-shared-river-attunement.md`). |
+| **Specialized** | `craft` | Builder vocation surface — attunement override (`attunement: craft`), not a dialogue river. |
+
+**Legacy / transient:**
+
+| Type | Status |
+|------|--------|
+| `shared` | Pre-v1 legacy — migrate to `shared-river` |
+| Discord **Practice** category | Operational heuristic only (`runtime/adapters/structural.py`) — not product taxonomy |
+
+**Parent-channel law (all river-family types):** River acts only — no Turtle prose panels. Turtle-talk `!` commands on the parent surface post **compact River acts**, not multi-field Turtle embeds (§5.5). Full command inventory remains available inside eddies.
+
+**Readiness on empty substrate:** Hosted practitioners and shared-river spaces MUST NOT receive operator-style 8-dimension readiness scoring on empty practice roots — a fresh space is **new**, not impaired (§15.5).
 
 ### 15.2 Practitioner profile
 

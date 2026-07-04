@@ -428,6 +428,37 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
 
 
+async def post_command_act(
+    channel_id: int | None,
+    *,
+    title: str,
+    body: str,
+    emoji: str = "📋",
+    color: int = 0x5865F2,
+) -> None:
+    """Post a compact River act for turtle-talk ``!`` commands on parent channels."""
+    import discord
+
+    if not channel_id:
+        print(f"Command act skipped — no channel for {title!r}")
+        return
+
+    embed = discord.Embed(
+        title=f"{emoji} {title}",
+        description=body[:4000],
+        color=color,
+    )
+    embed.set_footer(text=local_now().strftime("%H:%M"))
+
+    try:
+        from helpers import deliver_channel_embed
+
+        await deliver_channel_embed(channel_id, embed, silent=False)
+        print(f"Command act posted to {channel_id}: {title}")
+    except Exception as exc:
+        print(f"Command act failed for {channel_id}: {type(exc).__name__}: {exc}")
+
+
 async def post_lifecycle_act(
     parent_channel_id: int | None,
     *,

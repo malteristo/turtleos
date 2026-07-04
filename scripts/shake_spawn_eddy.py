@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Spawn a native flow eddy for Spirit shakedown (no Eddy Door button click).
 
-Uses the Turtle bot token. With split-bot mode, writes pending native eddy
-state for the running discord_bot to finalize on thread join.
+Uses the River bot token when available (split-bot native mode). Falls back to
+the Turtle token on single-bot installs. With split-bot mode, writes pending
+native eddy state for the running discord_bot to finalize on thread join.
 
 Exit 0 on success (prints JSON with thread_id). Exit 1 on failure.
 """
@@ -61,9 +62,10 @@ async def main_async(args: argparse.Namespace) -> dict:
     import discord
     from eddy_spawn import spawn_blank_river_eddy
 
-    token = env.get("DISCORD_BOT_TOKEN")
+    # Prefer River bot so thread creation does not leave Turtle prose in the parent channel.
+    token = env.get("RIVER_BOT_TOKEN") or env.get("DISCORD_BOT_TOKEN")
     if not token:
-        raise RuntimeError("DISCORD_BOT_TOKEN not found in ~/turtleos/.env")
+        raise RuntimeError("RIVER_BOT_TOKEN or DISCORD_BOT_TOKEN not found in ~/turtleos/.env")
 
     channel_id = resolve_river_channel_id(env)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
