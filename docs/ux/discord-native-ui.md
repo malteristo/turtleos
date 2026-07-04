@@ -63,9 +63,12 @@ Tier 1 stays entirely in Discord. Tiers 2–3 converge on the same adapter funct
 | Native action | turtleOS |
 |---------------|----------|
 | **Edit Thread** → rename | `thread_registry` name synced |
-| **Lock Thread** | Logged; registry lock flag deferred in v1 |
+| **Lock Thread** | Registry `locked` + `locked_at`; River act on parent; Turtle skips dialogue + lifecycle bar touch while locked |
+| **Unlock Thread** | Registry lock cleared; River unlock act; Turtle resumes on next message |
 
----
+**Practitioner guidance:** **Close** when done · **Lock** to pause · **Delete** only for junk (Close first if you want essence).
+
+`!` commands still work in locked threads — lock pauses Turtle dialogue, not operator acts.
 
 ## Channels (operators)
 

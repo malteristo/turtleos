@@ -179,6 +179,119 @@ class TestHandleThreadUpdate(unittest.IsolatedAsyncioTestCase):
 
         archive.assert_awaited_once()
 
+    async def test_lock_delegates_to_lock_transition_handler(self) -> None:
+        from discord_reconcile import handle_thread_update
+
+        before = _thread(locked=False)
+        after = _thread(locked=True)
+
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+            "discord_reconcile.reconcile_thread_lock_transition",
+            new_callable=AsyncMock,
+            return_value={"locked": True, "thread_id": 9001},
+        ) as lock_fn:
+            await handle_thread_update(before, after, discord_client=MagicMock())
+
+        lock_fn.assert_awaited_once()
+
+    async def test_unlock_delegates_to_lock_transition_handler(self) -> None:
+        from discord_reconcile import handle_thread_update
+
+        before = _thread(locked=True)
+        after = _thread(locked=False)
+
+        with patch("discord_reconcile.is_registered_parent_channel", return_value=True), patch(
+            "discord_reconcile.reconcile_thread_lock_transition",
+            new_callable=AsyncMock,
+            return_value={"locked": False, "thread_id": 9001},
+        ) as lock_fn:
+            await handle_thread_update(before, after, discord_client=MagicMock())
+
+        lock_fn.assert_awaited_once()
+
+
+class TestReconcileThreadLockTransition(unittest.IsolatedAsyncioTestCase):
+    async def test_skips_unregistered_parent(self) -> None:
+        from runtime.adapters.lifecycle import reconcile_thread_lock_transition
+
+        before = _thread(locked=False)
+        after = _thread(locked=True)
+        with patch("mage.is_registered_parent_channel", return_value=False):
+            result = await reconcile_thread_lock_transition(
+                before, after, discord_client=MagicMock()
+            )
+        self.assertIsNone(result)
+
+    async def test_lock_updates_registry_and_posts_act(self) -> None:
+        from runtime.adapters.lifecycle import reconcile_thread_lock_transition
+
+        before = _thread(locked=False)
+        after = _thread(locked=True)
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "thread_registry.update_thread_locked"
+        ) as update, patch(
+            "sessions.post_lifecycle_act",
+            new_callable=AsyncMock,
+        ) as act:
+            result = await reconcile_thread_lock_transition(
+                before, after, discord_client=MagicMock()
+            )
+
+        update.assert_called_once_with(9001, True)
+        act.assert_awaited_once()
+        self.assertEqual(act.await_args.kwargs["action"], "Locked eddy")
+        self.assertTrue(result["locked"])
+
+    async def test_unlock_clears_registry_and_posts_act(self) -> None:
+        from runtime.adapters.lifecycle import reconcile_thread_lock_transition
+
+        before = _thread(locked=True)
+        after = _thread(locked=False)
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "thread_registry.update_thread_locked"
+        ) as update, patch(
+            "sessions.post_lifecycle_act",
+            new_callable=AsyncMock,
+        ) as act:
+            result = await reconcile_thread_lock_transition(
+                before, after, discord_client=MagicMock()
+            )
+
+        update.assert_called_once_with(9001, False)
+        act.assert_awaited_once()
+        self.assertEqual(act.await_args.kwargs["action"], "Unlocked eddy")
+        self.assertFalse(result["locked"])
+
+
+class TestThreadRegistryLock(unittest.TestCase):
+    def test_is_eddy_locked_from_discord(self) -> None:
+        from thread_registry import clear_registry_cache_for_tests, is_eddy_locked
+
+        clear_registry_cache_for_tests()
+        self.assertTrue(is_eddy_locked(1, discord_locked=True))
+
+    def test_is_eddy_locked_from_registry(self) -> None:
+        import thread_registry as tr
+
+        tr.clear_registry_cache_for_tests()
+        tr.load_registry()["threads"]["42"] = {"name": "x", "locked": True}
+        self.assertTrue(tr.is_eddy_locked(42))
+        self.assertFalse(tr.is_eddy_locked(99))
+
+    def test_update_thread_locked_sets_and_clears(self) -> None:
+        import thread_registry as tr
+
+        tr.clear_registry_cache_for_tests()
+        tr.load_registry()["threads"]["7"] = {"name": "pause-me"}
+        tr.update_thread_locked(7, True)
+        entry = tr.load_registry()["threads"]["7"]
+        self.assertTrue(entry.get("locked"))
+        self.assertIn("locked_at", entry)
+        tr.update_thread_locked(7, False)
+        entry = tr.load_registry()["threads"]["7"]
+        self.assertNotIn("locked", entry)
+        self.assertNotIn("locked_at", entry)
+
 
 class TestHandleThreadDelete(unittest.IsolatedAsyncioTestCase):
     async def test_skips_unregistered_parent(self) -> None:

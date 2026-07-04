@@ -191,6 +191,31 @@ def update_thread_context_type(thread_id: int, context_type: str | None) -> None
     save_registry(registry)
 
 
+def update_thread_locked(thread_id: int, locked: bool) -> None:
+    """Sync Discord Lock Thread state into registry."""
+    registry = load_registry()
+    tid = str(thread_id)
+    if tid not in registry["threads"]:
+        return
+    entry = registry["threads"][tid]
+    if locked:
+        entry["locked"] = True
+        entry["locked_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        entry.pop("locked", None)
+        entry.pop("locked_at", None)
+    save_registry(registry, force=True)
+
+
+def is_eddy_locked(thread_id: int, *, discord_locked: bool = False) -> bool:
+    """True when Discord or registry marks this eddy locked (read-only pause)."""
+    if discord_locked:
+        return True
+    registry = load_registry()
+    entry = registry.get("threads", {}).get(str(thread_id))
+    return bool(entry and entry.get("locked"))
+
+
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -239,10 +264,11 @@ def format_thread_awareness_line(thread_id: str, info: dict, now: datetime | Non
     attunement = info.get("attunement") or "semi"
     eddy = info.get("eddy_type") or "fast"
     messages = info.get("message_count", 0)
+    lock_tag = " · 🔒locked" if info.get("locked") else ""
     return (
         f"- **{info.get('name', 'unknown')}** — `{model}` / `{attunement}` · "
         f"`{eddy}` · status:{status} · created:{created} ago · last:{last} ago · "
-        f"messages:{messages} · id:{thread_id}"
+        f"messages:{messages}{lock_tag} · id:{thread_id}"
     )
 
 
@@ -464,6 +490,11 @@ async def backfill_from_discord(guild, parent_channels: list[int] | None = None)
             entry["name"] = t.name
             if msg_count > entry.get("message_count", 0):
                 entry["message_count"] = msg_count
+            if getattr(t, "locked", False):
+                entry["locked"] = True
+            elif entry.get("locked"):
+                entry.pop("locked", None)
+                entry.pop("locked_at", None)
             updated += 1
 
     registry["last_backfill"] = datetime.now(timezone.utc).isoformat()

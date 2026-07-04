@@ -676,6 +676,11 @@ async def touch_eddy_lifecycle_bar(
     if not parent_id:
         return
 
+    from thread_registry import is_eddy_locked
+
+    if is_eddy_locked(thread.id, discord_locked=getattr(thread, "locked", False)):
+        return
+
     from mage import set_practice_context_for_channel
 
     set_practice_context_for_channel(parent_id)

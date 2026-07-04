@@ -189,6 +189,50 @@ async def open_eddy(
     return {"opened_act": True, "thread_id": thread.id, "via_discord_ui": via_discord_ui}
 
 
+async def reconcile_thread_lock_transition(
+    before: discord.Thread,
+    after: discord.Thread,
+    *,
+    discord_client,
+) -> dict[str, Any] | None:
+    """Native UI lock/unlock → registry sync + parent river act."""
+    if before.locked == after.locked:
+        return None
+
+    parent_id = after.parent_id or 0
+    if not mage.is_registered_parent_channel(parent_id):
+        return None
+
+    from thread_registry import update_thread_locked
+
+    update_thread_locked(after.id, after.locked)
+
+    from sessions import post_lifecycle_act
+
+    if after.locked:
+        await post_lifecycle_act(
+            parent_id,
+            action="Locked eddy",
+            thread_name=after.name,
+            detail="read-only until unlocked",
+            via_discord_ui=True,
+            jump_url=getattr(after, "jump_url", None) or "",
+            emoji="\U0001f512",
+        )
+    else:
+        await post_lifecycle_act(
+            parent_id,
+            action="Unlocked eddy",
+            thread_name=after.name,
+            detail=None,
+            via_discord_ui=True,
+            jump_url=getattr(after, "jump_url", None) or "",
+            emoji="\U0001f513",
+        )
+
+    return {"locked": after.locked, "thread_id": after.id, "parent_channel_id": parent_id}
+
+
 async def reconcile_thread_delete(thread: discord.Thread, *, discord_client) -> dict[str, Any]:
     """S2: native thread delete → registry + memory cleanup."""
     parent_id = thread.parent_id or 0

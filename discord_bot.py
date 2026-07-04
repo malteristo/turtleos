@@ -625,6 +625,19 @@ async def handle_dialogue(message):
     except Exception as exc:
         print(f"Shared eddy gate failed: {type(exc).__name__}: {exc}")
 
+    if isinstance(message.channel, discord.Thread):
+        from thread_registry import is_eddy_locked
+
+        if is_eddy_locked(
+            message.channel.id,
+            discord_locked=getattr(message.channel, "locked", False),
+        ):
+            print(
+                f"Dialogue skipped — thread locked: "
+                f"{message.channel.name} ({message.channel.id})"
+            )
+            return
+
     channel_id = message.channel.id
     attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (
         await _gather_dialogue_attachments(message)
@@ -1210,6 +1223,14 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     if after.content.strip().startswith("!") and river_bot_enabled():
         return
+    if isinstance(after.channel, discord.Thread):
+        from thread_registry import is_eddy_locked
+
+        if is_eddy_locked(
+            after.channel.id,
+            discord_locked=getattr(after.channel, "locked", False),
+        ):
+            return
 
     set_practice_context(after)
     unmark_processed_message(after.id)

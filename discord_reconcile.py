@@ -16,6 +16,7 @@ from runtime.adapters.lifecycle import (
     close_eddy_from_archive_transition,
     open_eddy,
     reconcile_thread_delete,
+    reconcile_thread_lock_transition,
     _load_history_for_thread,
     _registry_entry,
 )
@@ -76,8 +77,16 @@ async def handle_thread_update(before: discord.Thread, after: discord.Thread, *,
         except Exception as exc:
             print(f"Native thread archive reconcile failed for {after.id}: {exc}")
 
-    if not before.locked and after.locked:
-        print(f"Thread locked via Discord UI: {after.name} ({after.id})")
+    if before.locked != after.locked:
+        try:
+            outcome = await reconcile_thread_lock_transition(
+                before, after, discord_client=discord_client
+            )
+            if outcome:
+                state = "locked" if outcome.get("locked") else "unlocked"
+                print(f"Native thread lock reconciled ({state}): {after.name} ({after.id})")
+        except Exception as exc:
+            print(f"Native thread lock reconcile failed for {after.id}: {exc}")
 
 
 async def ensure_dissolved_threads_archived(discord_client, parent_channel_id: int) -> None:
