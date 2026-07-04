@@ -38,8 +38,8 @@
 | §7.7 | Presence indicators | `eddy_lifecycle`, spawn | mixed legacy + native | **Partial** | `test_flow_runner` presence | `docs/ux/` | **Integrate** |
 | §8.1 | Two-stack local models (River 4–9B, Turtle ~30B) | `models.py` | same + `triage.py`, `proprioceptor.py` | **Partial** | `models` via integration | §8.1 | **Strangle** triage/proprio on native; **Retire** as vanilla default |
 | §8.1 | Proprioception pipeline | — (retired vanilla) | `proprioceptor.py`, `pulse.py`, `discord_bot.py` | **Retire-pending** | none dedicated | §8.1 | **Strangle** behind `attunement: magic` |
-| §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same | **Partial** | `test_sessions`, `shake_flow.py`; dogfood R4 **fail** split-bot | `docs/ux/eddy-lifecycle-bar.md`, acceptance ch. | **Integrate** — River capture must use Turtle dialogue history |
-| §8.4 | Release (checkpoint + clear) | `sessions.py`, `cmd_sessions.py` | same | **Partial** | `test_sessions`; dogfood R5 **fail** — embed over-claims note | same | **Integrate** — honest `CheckpointResult` in release embed |
+| §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same + `dialogue_store.py` | **Partial** | `test_sessions`, `test_dialogue_store`, `shake_lifecycle.py` offline green; live R4 dogfood pending | `docs/ux/eddy-lifecycle-bar.md`, acceptance ch. | **Integrate** — offline wiring done; live re-dogfood + clearer threshold copy |
+| §8.4 | Release (checkpoint + clear) | `sessions.py`, `cmd_sessions.py` | same | **Partial** | `test_cmd_sessions` (honest embed); `shake_lifecycle.py` | same | **Integrate** — honest embed shipped; live R5 dogfood pending |
 | §9.2 | No auto-dissolve eddies | `sessions.py`, lifecycle | same | **Aligned** | `test_eddy_lifecycle_bar` | §9.2 | **Keep** |
 | §9.6 | Discord native UI reconciliation | `discord_reconcile.py`, `runtime/adapters/lifecycle.py`, `runtime/adapters/structural.py` | same | **Aligned** (S1–S5) | `test_discord_reconcile`, `test_lifecycle_adapters` | `docs/ux/discord-native-ui.md`, design chapter | **Keep** |
 | §9.4 | Attachment preprocessing | `content_fetch.py`, pipeline | same | **Aligned** | `test_attachment_pipeline` | — | **Keep** |
@@ -98,7 +98,7 @@
 |------|----------------|
 | Harness Save offer (Slice 2) | Done — Mini dogfood pass (H2/H3) |
 | Acceptance harness (H1–H5) | Done — `2026-06-20-acceptance.md` |
-| Split-bot lifecycle (R4–R5) | Next — shared capture history + bar identity |
+| Split-bot lifecycle (R4–R5) | Offline green (`dialogue_store`, `reload_history`, honest release); live Discord re-dogfood queued |
 | TURTLE_SPEC cross-refs (Slice 3) | Done |
 | `commands.py` decomposition | Complete (Slice 5) — seneschal retire optional |
 | Attunement profile cleanup | After harness green |

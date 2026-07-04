@@ -11,7 +11,29 @@ from artifact_presenter import ArtifactSurface, checkpoint_open_path, reply_arti
 from helpers import clear_history, get_history, reload_history
 from mage import get_mage_name, get_pd, is_practice_channel
 from practice_io import count_items, read_safe
-from state import MIN_EXCHANGES_FOR_CHECKPOINT, active_sessions
+from state import MIN_EXCHANGES_FOR_CHECKPOINT, MIN_EXCHANGES_FOR_REFLECTION, active_sessions
+
+
+def _short_history_message(history: list[dict], *, action: str) -> str:
+    n = len(history)
+    need = MIN_EXCHANGES_FOR_CHECKPOINT
+    return (
+        f"Not enough conversation to {action} yet "
+        f"({n}/{need} exchanges on the shared dialogue store)."
+    )
+
+
+def _nothing_captured_message(history: list[dict]) -> str:
+    n = len(history)
+    if n < MIN_EXCHANGES_FOR_REFLECTION:
+        return (
+            f"Checkpoint ran — {n} exchange(s) saved; session notes need at least "
+            f"{MIN_EXCHANGES_FOR_REFLECTION}. Keep talking, then checkpoint again."
+        )
+    return (
+        "Checkpoint ran — nothing new met the save threshold "
+        "(reflection cooldown or model produced no note)."
+    )
 
 
 async def cmd_checkpoint(message):
@@ -19,7 +41,7 @@ async def cmd_checkpoint(message):
     history = reload_history(channel_id)
     if len(history) < MIN_EXCHANGES_FOR_CHECKPOINT:
         await message.reply(
-            "Not enough conversation to checkpoint yet.",
+            _short_history_message(history, action="checkpoint"),
             mention_author=False,
         )
         return
@@ -38,7 +60,7 @@ async def cmd_checkpoint(message):
     result = await checkpoint_session(channel_id, trigger="manual", mark_paused=False)
 
     if not result.captured_anything:
-        await ack.edit(content="Checkpoint ran — nothing new met the save threshold.")
+        await ack.edit(content=_nothing_captured_message(history))
         return
 
     mark_artifacts_ui_unlocked("checkpoint")

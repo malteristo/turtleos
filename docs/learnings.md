@@ -63,6 +63,12 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Deploy pitfall (2026-06-28):** `git pull` alone does not reload Python — verify `ps -p $(pgrep -f discord_bot.py) -o lstart=` is *after* the pull before dogfood. First kickstart after Opened eddy deploy left a 09:54 process running 10:06 code on disk; second kickstart at 10:11 fixed it. Always confirm restart, not assume.
 
+### 2026-07-04 — Maintenance chapter: ops harvest + lifecycle status
+
+**Ops loop:** `e436667` fixed stale ops-gate tests; kickstart → `LastExitStatus=0`. Mini tests: use `./venv/bin/python3` (system python lacks venv deps). Native topology harvest: Forge pulls `state/notes/automation-reports/` via Magic `sync_practice_root.sh` — no `~/workshop` clone required.
+
+**R4/R5 lifecycle:** `dialogue_store` + `reload_history` + honest release embed already shipped; `shake_lifecycle.py` offline green. Remaining: live Discord re-dogfood. Checkpoint copy now names exchange counts and reflection threshold.
+
 **S3 channel create/update:** `on_guild_channel_create` posts dialogue ops notice for unregistered text channels with binding hints (no auto-bind). `on_guild_channel_update` logs rename + permission drift for registry-bound channels; syncs `discord_name`. Blessed creates use `expect_channel_registry_binding()` to skip duplicate notices.
 
 ### 2026-06-25 — Share eddy Slice 1 + flow library on-demand
