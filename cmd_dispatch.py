@@ -72,6 +72,8 @@ CONTEXTUAL_ACTION_COMMANDS = {
 }
 # Native eddies: lifecycle bar owns checkpoint / release / dissolve; seneschal extends beyond that.
 LIFECYCLE_BAR_COMMANDS = frozenset({"checkpoint", "release", "dissolve"})
+# Release/dissolve clear history — act digest would recreate the shared dialogue file.
+COMMANDS_SKIP_ACT_DIGEST = frozenset({"release", "dissolve"})
 SENESCHAL_ACTION_COMMANDS = frozenset(
     cmd for cmd in CONTEXTUAL_ACTION_COMMANDS if cmd not in LIFECYCLE_BAR_COMMANDS
 )
@@ -136,7 +138,8 @@ async def try_direct_command(message) -> bool:
             await message.reply(f"Command error: {e}", mention_author=False)
             await log_activity(f"Command `!{cmd}` failed: {e}", "\u274c", channel=message.channel)
             digest = f"Failed: {e}"
-        inject_act_digest(message.channel.id, cmd, digest or COMMAND_ACT_FALLBACK.get(cmd, ""))
+        if cmd not in COMMANDS_SKIP_ACT_DIGEST:
+            inject_act_digest(message.channel.id, cmd, digest or COMMAND_ACT_FALLBACK.get(cmd, ""))
         return True
     return False
 

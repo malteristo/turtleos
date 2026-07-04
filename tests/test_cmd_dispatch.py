@@ -78,6 +78,20 @@ class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(handled)
                 ensure.assert_not_called()
 
+    async def test_release_skips_act_digest(self) -> None:
+        message = MagicMock()
+        message.channel = MagicMock()
+        message.channel.id = 888001
+        message.content = "!release"
+        handler = AsyncMock(return_value=None)
+
+        with patch.dict("commands.DIRECT_COMMANDS", {"release": handler}, clear=False):
+            with patch.object(dispatch, "inject_act_digest") as inject:
+                handled = await dispatch.try_direct_command(message)
+                self.assertTrue(handled)
+                handler.assert_awaited_once()
+                inject.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
