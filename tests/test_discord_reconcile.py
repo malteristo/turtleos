@@ -511,5 +511,96 @@ class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
         log.assert_awaited_once()
 
 
+class TestCollectRegistryAuditIssues(unittest.TestCase):
+    def test_dict_channel_entries_do_not_crash(self) -> None:
+        from runtime.adapters.structural import collect_registry_audit_issues
+
+        everyone = MagicMock(id=1)
+        guild = MagicMock()
+        guild.default_role = everyone
+        guild.get_member.return_value = None
+
+        deny_view = MagicMock()
+        deny_view.pair.return_value = (MagicMock(view_channel=False), MagicMock(view_channel=True))
+        deny_view.view_channel = False
+
+        ch = MagicMock()
+        ch.id = 1479428854513664030
+        ch.name = "river"
+        ch.guild = guild
+        ch.overwrites = {everyone: deny_view}
+
+        guild.get_channel.return_value = ch
+        guild.text_channels = [ch]
+
+        registry = {
+            "channels": {
+                "1479428854513664030": {
+                    "mage": "kermit",
+                    "type": "river",
+                },
+            },
+            "mages": {
+                "kermit": {"discord_id": "123"},
+            },
+        }
+
+        issues = collect_registry_audit_issues(registry, guild)
+        self.assertIsInstance(issues, list)
+
+    def test_orphan_discord_deleted_is_info_tier(self) -> None:
+        from runtime.adapters.structural import collect_registry_audit_issues
+
+        guild = MagicMock()
+        guild.text_channels = []
+        registry = {
+            "channels": {
+                "1520666441983201310": {
+                    "mage": "lukas_play",
+                    "type": "shared-river",
+                    "orphaned": True,
+                    "orphan_reason": "discord_deleted",
+                },
+            },
+        }
+        issues = collect_registry_audit_issues(registry, guild)
+        self.assertEqual(len(issues), 1)
+        self.assertIn("\u2139\ufe0f", issues[0])
+        self.assertIn("prune-orphans", issues[0])
+
+
+class TestPruneOrphanedChannels(unittest.TestCase):
+    def test_dry_run_lists_without_mutating(self) -> None:
+        from space_provisioning import prune_orphaned_channels
+
+        registry = {
+            "channels": {
+                "1": {"mage": "x", "orphaned": True, "orphan_reason": "discord_deleted"},
+                "2": {"mage": "y", "orphaned": True, "orphan_reason": "manual"},
+            },
+        }
+        preview, pruned = prune_orphaned_channels(registry, confirm=False)
+        self.assertEqual(len(preview), 1)
+        self.assertEqual(pruned, [])
+        self.assertIn("1", registry["channels"])
+
+    def test_confirm_removes_discord_deleted_only(self) -> None:
+        from space_provisioning import prune_orphaned_channels
+
+        registry = {
+            "channels": {
+                "1": {"mage": "x", "orphaned": True, "orphan_reason": "discord_deleted"},
+                "2": {"mage": "y", "orphaned": True, "orphan_reason": "manual"},
+            },
+        }
+        with patch("space_provisioning.save_registry") as save:
+            preview, pruned = prune_orphaned_channels(registry, confirm=True)
+        self.assertEqual(preview, [])
+        self.assertEqual(len(pruned), 1)
+        self.assertNotIn("1", registry["channels"])
+        self.assertIn("2", registry["channels"])
+        save.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

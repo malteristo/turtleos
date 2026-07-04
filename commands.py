@@ -816,6 +816,7 @@ async def cmd_admin(message, args):
             "- `!admin channels` — channel topology with permissions\n"
             "- `!admin members` — server membership\n"
             "- `!admin audit` — permission health check\n"
+            "- `!admin registry prune-orphans [--confirm]` — compact discord-deleted orphan rows\n"
             "- `!admin onboard <username> [de|en]` — create hosted river + practitioner workshop\n"
             "- `!admin river-key <name> <emoji> [de|en]` — invite-to-claim room + river key\n"
             "- `!admin space` — shared-river space provisioning (create / close / list / sync)\n",
@@ -878,35 +879,60 @@ async def cmd_admin(message, args):
         await message.reply("\n".join(lines) or "(no members)", mention_author=False)
 
     elif subcmd == "audit":
+        from runtime.adapters.structural import collect_registry_audit_issues
+
         guild = message.guild
-        audit_issues = []
-        registry = get_registry()
-
-        for ch_id, mage_key_val in registry.get("channels", {}).items():
-            ch = guild.get_channel(int(ch_id))
-            if not ch:
-                audit_issues.append(f"\u26a0\ufe0f Registry channel `{ch_id}` ({mage_key_val}) not found in server")
-                continue
-            mage = registry.get("mages", {}).get(mage_key_val, {})
-            if mage and mage.get("discord_id"):
-                overwrites = ch.overwrites
-                everyone_role = guild.default_role
-                if everyone_role not in overwrites or overwrites[everyone_role].pair()[1].view_channel is not True:
-                    audit_issues.append(f"\u26a0\ufe0f `#{ch.name}` — @everyone can view (should be private for {mage_key_val})")
-                else:
-                    mage_member = guild.get_member(int(mage.get("discord_id")))
-                    if mage_member and mage_member not in overwrites:
-                        audit_issues.append(f"\u26a0\ufe0f `#{ch.name}` — {mage_key_val} has no explicit access")
-
-        registered_ids = set(registry.get("channels", {}).keys())
-        for ch in guild.text_channels:
-            if str(ch.id) not in registered_ids:
-                audit_issues.append(f"\u2139\ufe0f `#{ch.name}` — not in mage registry")
+        audit_issues = collect_registry_audit_issues(get_registry(), guild)
 
         if audit_issues:
             await message.reply("**Permission Audit:**\n" + "\n".join(audit_issues), mention_author=False)
         else:
             await message.reply("**Permission Audit:** All clear. Channel permissions match registry.", mention_author=False)
+
+    elif subcmd == "registry":
+        from river_keys import _primary_operator_ids
+        from space_provisioning import prune_orphaned_channels
+
+        if message.author.id not in _primary_operator_ids():
+            await message.reply("Registry commands require the primary operator.", mention_author=False)
+            return
+        if len(args) < 2:
+            await message.reply(
+                "**Registry commands:**\n"
+                "- `!admin registry prune-orphans` — list discord-deleted orphan rows (dry-run)\n"
+                "- `!admin registry prune-orphans --confirm` — remove those rows from registry\n",
+                mention_author=False,
+            )
+            return
+
+        reg_sub = args[1].lower()
+        if reg_sub == "prune-orphans":
+            confirm = "--confirm" in [a.lower() for a in args[2:]]
+            registry = get_registry()
+            preview, pruned = prune_orphaned_channels(registry, confirm=confirm)
+            if confirm:
+                if pruned:
+                    await message.reply(
+                        "**Registry prune:** removed " + str(len(pruned)) + " orphan row(s):\n"
+                        + "\n".join(f"- {line}" for line in pruned),
+                        mention_author=False,
+                    )
+                else:
+                    await message.reply("**Registry prune:** nothing to remove.", mention_author=False)
+            elif preview:
+                await message.reply(
+                    "**Registry prune (dry-run):** would remove " + str(len(preview)) + " row(s):\n"
+                    + "\n".join(f"- {line}" for line in preview)
+                    + "\n\nRe-run with `--confirm` to compact.",
+                    mention_author=False,
+                )
+            else:
+                await message.reply("**Registry prune:** no discord-deleted orphan rows.", mention_author=False)
+        else:
+            await message.reply(
+                f"Unknown registry command: `{reg_sub}`. Try `!admin registry` for help.",
+                mention_author=False,
+            )
 
     elif subcmd == "onboard" and len(args) > 1:
         username = args[1]

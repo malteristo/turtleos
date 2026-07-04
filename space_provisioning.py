@@ -463,6 +463,36 @@ def mark_channel_orphaned(
     return True
 
 
+def list_prunable_orphan_channels(registry: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """Channel rows orphaned because Discord deleted the channel — safe to compact from registry."""
+    out: list[tuple[str, dict[str, Any]]] = []
+    for ch_id, entry in registry.get("channels", {}).items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("orphaned") and entry.get("orphan_reason") == "discord_deleted":
+            out.append((ch_id, entry))
+    return out
+
+
+def prune_orphaned_channels(registry: dict[str, Any], *, confirm: bool = False) -> tuple[list[str], list[str]]:
+    """Remove discord-deleted orphan rows from registry (workshop dirs unchanged)."""
+    prunable = list_prunable_orphan_channels(registry)
+    if not confirm:
+        preview = [
+            f"`{cid}` — mage `{entry.get('mage', '?')}` ({entry.get('type', '?')})"
+            for cid, entry in prunable
+        ]
+        return preview, []
+
+    pruned: list[str] = []
+    for cid, entry in prunable:
+        del registry["channels"][cid]
+        pruned.append(f"`{cid}` — mage `{entry.get('mage', '?')}`")
+    if pruned:
+        save_registry(registry)
+    return [], pruned
+
+
 async def create_shared_space(
     guild: discord.Guild,
     options: SpaceCreateOptions,

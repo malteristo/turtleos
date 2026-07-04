@@ -119,6 +119,45 @@ def _permission_drift_issues(
     return issues
 
 
+def collect_registry_audit_issues(registry: dict, guild) -> list[str]:
+    """Build permission audit lines for `!admin audit` (registry channel entries are dicts)."""
+    audit_issues: list[str] = []
+
+    for ch_id, entry in registry.get("channels", {}).items():
+        if isinstance(entry, str):
+            entry = {"mage": entry, "type": "unknown"}
+        elif not isinstance(entry, dict):
+            continue
+        mage_key_val = entry.get("mage", "?")
+        if entry.get("orphaned"):
+            reason = entry.get("orphan_reason") or "unknown"
+            if reason == "discord_deleted":
+                audit_issues.append(
+                    f"\u2139\ufe0f Registry `{ch_id}` (`{mage_key_val}`) — orphaned at Discord delete; "
+                    f"`!admin registry prune-orphans --confirm` to compact"
+                )
+            else:
+                audit_issues.append(
+                    f"\u26a0\ufe0f Registry channel `{ch_id}` (`{mage_key_val}`) — orphaned ({reason})"
+                )
+            continue
+        ch = guild.get_channel(int(ch_id))
+        if not ch:
+            audit_issues.append(
+                f"\u274c Registry channel `{ch_id}` ({mage_key_val}) not found on server (not marked orphaned)"
+            )
+            continue
+        for issue in _permission_drift_issues(ch, entry, registry):
+            audit_issues.append(f"\u26a0\ufe0f `#{ch.name}` — {issue}")
+
+    registered_ids = set(registry.get("channels", {}).keys())
+    for ch in guild.text_channels:
+        if str(ch.id) not in registered_ids:
+            audit_issues.append(f"\u2139\ufe0f `#{ch.name}` — not in mage registry")
+
+    return audit_issues
+
+
 def _overwrite_snapshot(channel: discord.abc.GuildChannel) -> dict[str, tuple]:
     overwrites = getattr(channel, "overwrites", None) or {}
     snap: dict[str, tuple] = {}
