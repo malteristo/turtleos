@@ -5,6 +5,8 @@
 
 Spirit harvests reports from `desk/craft/automation-reports/latest.md` at `. craft` on Forge.
 
+**Native topology (2026-06+):** Mini writes reports to `{practice_root}/state/notes/automation-reports/` (not a git checkout). `ops_harvest_sync` skips when no `~/workshop` clone exists. Forge pulls via Magic `scripts/sync_practice_root.sh pull`.
+
 ---
 
 ## Philosophy
