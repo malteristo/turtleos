@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 from flow_runner import (
     FlowSpec,
+    ensure_campaign_bootstrap,
     load_flow_spec,
     read_flow_intake_values,
     strip_model_operational_lines,
@@ -237,6 +238,8 @@ async def deliver_flow_bootstrap(
     spec = load_flow_spec(flow_id)
     if not spec:
         return False
+
+    ensure_campaign_bootstrap(spec, get_pd())
 
     try:
         channel = client.get_channel(thread_id) or await client.fetch_channel(thread_id)

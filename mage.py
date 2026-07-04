@@ -403,10 +403,69 @@ def get_workshop_root():
     return _workshop_root_ctx.get() or _resolve_primary_workshop_root()
 
 
+def _parent_id_from_thread_state(thread_id: int) -> int | None:
+    """Resolve parent river channel from eddy thread state on disk."""
+    import json
+    from pathlib import Path
+
+    tid = str(thread_id)
+    for runtime_dir in list_registered_runtime_dirs():
+        base = Path(runtime_dir) / "thread-state"
+        for subdir, key in (
+            ("flow-bootstrap", "parent_id"),
+            ("awaiting-title", "parent_channel_id"),
+        ):
+            path = base / subdir / f"{tid}.json"
+            if not path.is_file():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                parent = data.get(key)
+                if parent:
+                    return int(parent)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+
+    for ch_id_str in _MAGE_REGISTRY.get("channels", {}):
+        try:
+            parent_id = int(ch_id_str)
+        except ValueError:
+            continue
+        runtime_dir = _resolve_runtime_dir_for_channel(parent_id)
+        for subdir in ("awaiting-title", "pending"):
+            path = Path(runtime_dir) / "thread-state" / subdir / f"{tid}.json"
+            if not path.is_file():
+                continue
+            if subdir == "awaiting-title":
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    parent = data.get("parent_channel_id")
+                    if parent:
+                        return int(parent)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
+            return parent_id
+
+    return None
+
+
+def resolve_registry_channel_id(channel_id) -> int:
+    """Parent channel for eddy threads; same id for registered parent channels."""
+    ch_id = int(channel_id)
+    if is_registered_parent_channel(ch_id):
+        return ch_id
+    parent = _parent_id_from_thread_state(ch_id)
+    if parent and is_registered_parent_channel(parent):
+        return parent
+    return ch_id
+
+
 def set_practice_context(message):
     """Set the practice directory context for the current async task."""
     channel = message.channel
-    ch_id = channel.parent_id if hasattr(channel, "parent_id") and channel.parent_id else channel.id
+    ch_id = resolve_registry_channel_id(
+        channel.parent_id if hasattr(channel, "parent_id") and channel.parent_id else channel.id
+    )
     pd = _resolve_practice_dir_for_channel(ch_id)
     _practice_dir_ctx.set(pd)
     _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(ch_id))
@@ -420,13 +479,14 @@ def set_practice_context(message):
 
 def set_practice_context_for_channel(channel_id):
     """Set full practice context from a raw channel ID (for thread creation, session close, etc.)."""
-    pd = _resolve_practice_dir_for_channel(channel_id)
+    registry_id = resolve_registry_channel_id(channel_id)
+    pd = _resolve_practice_dir_for_channel(registry_id)
     _practice_dir_ctx.set(pd)
-    _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(channel_id))
-    mage_name, mage_key = _resolve_mage_info_for_channel(channel_id)
+    _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(registry_id))
+    mage_name, mage_key = _resolve_mage_info_for_channel(registry_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
-    wr = _resolve_workshop_root_for_channel(channel_id)
+    wr = _resolve_workshop_root_for_channel(registry_id)
     _workshop_root_ctx.set(wr)
     return pd
 

@@ -150,6 +150,42 @@ def _safe_practice_path(rel: str, practice_dir: str) -> Path | None:
     return full
 
 
+def _has_flow_checkpoint(spec: FlowSpec, practice_dir: str) -> bool:
+    """True when a non-empty checkpoint exists in flow write paths."""
+    for rel in spec.writes:
+        path = _safe_practice_path(rel, practice_dir)
+        if path and path.is_file() and path.read_text(encoding="utf-8").strip():
+            return True
+    return False
+
+
+def ensure_campaign_bootstrap(spec: FlowSpec, practice_dir: str | None = None) -> list[str]:
+    """Create empty campaign/ scaffold on first flow load (dnd_dm and similar)."""
+    pd = practice_dir or get_pd()
+    if not any(rel.startswith("campaign/") for rel in spec.reads):
+        return []
+    world = _safe_practice_path("campaign/world.md", pd)
+    if world and world.is_file():
+        return []
+
+    skip = frozenset({"campaign/campaign_seed.md", "campaign/checkpoints/latest.md"})
+    created: list[str] = []
+    for rel in spec.reads:
+        if not rel.startswith("campaign/") or rel in skip:
+            continue
+        path = _safe_practice_path(rel, pd)
+        if not path or path.is_file():
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+        created.append(rel)
+
+    cp_dir = _safe_practice_path("campaign/checkpoints/latest.md", pd)
+    if cp_dir:
+        cp_dir.parent.mkdir(parents=True, exist_ok=True)
+    return created
+
+
 def read_state_bundle(spec: FlowSpec, practice_dir: str | None = None) -> dict[str, str]:
     pd = practice_dir or get_pd()
     out: dict[str, str] = {}
@@ -166,18 +202,15 @@ def read_state_bundle(spec: FlowSpec, practice_dir: str | None = None) -> dict[s
 def flow_presence_line(spec: FlowSpec, practice_dir: str | None = None) -> str:
     """Human-readable flow presence for shell injection (not model prose)."""
     pd = practice_dir or get_pd()
-    has_checkpoint = False
-    has_empty_read = False
-    for rel in spec.reads:
-        path = _safe_practice_path(rel, pd)
-        if path and path.is_file():
-            if path.read_text(encoding="utf-8").strip():
-                has_checkpoint = True
-                break
-            has_empty_read = True
-    if has_checkpoint:
+    if _has_flow_checkpoint(spec, pd):
         return f"{spec.title} · continuing from last time"
-    if has_empty_read:
+    has_empty_write = False
+    for rel in spec.writes:
+        path = _safe_practice_path(rel, pd)
+        if path and path.is_file() and not path.read_text(encoding="utf-8").strip():
+            has_empty_write = True
+            break
+    if has_empty_write:
         return f"{spec.title} · starting fresh"
     return spec.title
 
@@ -437,7 +470,7 @@ def _flow_summary_line(spec: FlowSpec) -> str:
 
 
 def _checkpoint_line(spec: FlowSpec, practice_dir: str) -> str:
-    for rel in spec.reads:
+    for rel in spec.writes:
         path = _safe_practice_path(rel, practice_dir)
         if path and path.is_file() and path.stat().st_size > 40:
             return f"Last checkpoint: `{Path(rel).name}`"

@@ -103,6 +103,45 @@ class FlowRunnerTests(unittest.TestCase):
                 "Navigator · continuing from last time",
             )
 
+    def test_flow_presence_line_ignores_campaign_seed(self) -> None:
+        spec = load_flow_spec("dnd_dm")
+        assert spec is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            seed_path = os.path.join(tmp, "campaign", "campaign_seed.md")
+            os.makedirs(os.path.dirname(seed_path), exist_ok=True)
+            with open(seed_path, "w", encoding="utf-8") as fh:
+                fh.write("# Hitchhiker seed\n\nThe universe is absurd.")
+            self.assertEqual(flow_presence_line(spec, tmp), "Dungeon Master")
+
+    def test_checkpoint_line_ignores_campaign_seed(self) -> None:
+        from flow_runner import _checkpoint_line
+
+        spec = load_flow_spec("dnd_dm")
+        assert spec is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            seed_path = os.path.join(tmp, "campaign", "campaign_seed.md")
+            os.makedirs(os.path.dirname(seed_path), exist_ok=True)
+            with open(seed_path, "w", encoding="utf-8") as fh:
+                fh.write("# Hitchhiker seed\n\n" + ("x" * 80))
+            self.assertEqual(_checkpoint_line(spec, tmp), "Fresh start — no prior checkpoint.")
+
+    def test_ensure_campaign_bootstrap_creates_skeleton(self) -> None:
+        from flow_runner import ensure_campaign_bootstrap
+
+        spec = load_flow_spec("dnd_dm")
+        assert spec is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            seed_path = os.path.join(tmp, "campaign", "campaign_seed.md")
+            os.makedirs(os.path.dirname(seed_path), exist_ok=True)
+            with open(seed_path, "w", encoding="utf-8") as fh:
+                fh.write("# seed")
+            created = ensure_campaign_bootstrap(spec, tmp)
+            self.assertIn("campaign/world.md", created)
+            self.assertIn("campaign/current_scene.md", created)
+            self.assertTrue(os.path.isfile(os.path.join(tmp, "campaign", "world.md")))
+            self.assertTrue(os.path.isdir(os.path.join(tmp, "campaign", "checkpoints")))
+            self.assertEqual(ensure_campaign_bootstrap(spec, tmp), [])
+
     def test_strip_model_operational_lines(self) -> None:
         raw = "I'm here.\n\n-# flow: Shelter\n\n-# read state/notes/shelter-last.md\n\nStill here."
         cleaned, stripped = strip_model_operational_lines(raw)

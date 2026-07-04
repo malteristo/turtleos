@@ -294,15 +294,19 @@ async def load_flow_in_eddy(
     """Attach a flow to the current eddy (does not spawn a new thread)."""
     from commands import thread_configs
     from eddy_spawn import prepare_flow_eddy_entry
-    from flow_runner import load_flow_spec
+    from flow_runner import ensure_campaign_bootstrap, load_flow_spec
+    from mage import get_pd, set_practice_context_for_channel
 
     parent_id = thread.parent_id
     if not parent_id:
         return False
 
+    set_practice_context_for_channel(parent_id)
     spec = load_flow_spec(flow_id)
     if not spec:
         return False
+
+    ensure_campaign_bootstrap(spec, get_pd())
 
     lens = is_lens_load(thread, flow_id)
 
