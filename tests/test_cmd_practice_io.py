@@ -92,10 +92,36 @@ class TestCmdLs(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCmdSearch(unittest.IsolatedAsyncioTestCase):
-    async def test_delegates_to_tool(self) -> None:
+    async def test_replies_with_embed_when_hits_found(self) -> None:
+        message = MagicMock()
+        message.channel.id = 123
+        message.reply = AsyncMock()
+        hit = MagicMock(path="turtle.md", line_no=1, line_text="turtle notes")
+
+        class FakeEmbed:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        with patch("artifact_viewer.collect_artifact_search_hits", return_value=[hit]), patch(
+            "artifact_viewer.format_search_results", return_value="match: turtle.md"
+        ), patch("practice_io.artifact_display_name", return_value="turtle.md"), patch(
+            "artifact_presenter.ArtifactPresenterView"
+        ) as view_cls, patch("cmd_practice_io.discord.Embed", FakeEmbed):
+            view_cls.return_value.children = []
+            await cpio.cmd_search(message, ["turtle"])
+
+        message.reply.assert_awaited_once()
+        kwargs = message.reply.await_args.kwargs
+        self.assertIn("embed", kwargs)
+        self.assertEqual(kwargs.get("mention_author"), False)
+        self.assertNotIn("view", kwargs)
+
+    async def test_falls_back_to_tool_when_no_hits(self) -> None:
         message = MagicMock()
         message.reply = AsyncMock()
-        with patch("cmd_practice_io.execute_tos_tool", return_value="match: turtle.md"):
+        with patch("artifact_viewer.collect_artifact_search_hits", return_value=[]), patch(
+            "cmd_practice_io.execute_tos_tool", return_value="match: turtle.md"
+        ):
             await cpio.cmd_search(message, ["turtle"])
         message.reply.assert_awaited_once_with("match: turtle.md", mention_author=False)
 
