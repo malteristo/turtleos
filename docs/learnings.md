@@ -69,6 +69,8 @@ Append to this file after each research cycle — it persists across sessions.
 
 **R4/R5 lifecycle:** `dialogue_store` + `reload_history` + honest release embed already shipped; `shake_lifecycle.py` offline green. Remaining: live Discord re-dogfood. Checkpoint copy now names exchange counts and reflection threshold.
 
+**R4/R5 live (2026-07-04):** `shake_lifecycle.py --live` pass after fixing act-digest re-write on `!release` (`COMMANDS_SKIP_ACT_DIGEST`). **Deploy pitfall:** split-bot deploy must restart **both** `com.turtle.discord` and `com.turtle.river` — River-only code changes silently persist if only Turtle is kickstarted.
+
 **S3 channel create/update:** `on_guild_channel_create` posts dialogue ops notice for unregistered text channels with binding hints (no auto-bind). `on_guild_channel_update` logs rename + permission drift for registry-bound channels; syncs `discord_name`. Blessed creates use `expect_channel_registry_binding()` to skip duplicate notices.
 
 ### 2026-06-25 — Share eddy Slice 1 + flow library on-demand
