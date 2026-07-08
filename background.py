@@ -304,11 +304,11 @@ async def health_canary_loop():
     dead_loops = [name for name, alive in loop_status.items() if not alive]
     checks["loops"] = len(dead_loops) == 0
 
-    # 3. LiveSync: workshop files reachable and not ancient?
+    # 3. Practice files fresh (boom/compass not ancient)?
     pd = get_pd()
     boom_age = file_age_hours(os.path.join(pd, "boom.md"))
     compass_age = file_age_hours(os.path.join(pd, "intentions", "compass.md"))
-    checks["livesync"] = boom_age < 168 and compass_age < 168  # 7 days
+    checks["practice_freshness"] = boom_age < 168 and compass_age < 168  # 7 days
 
     # 4. Tool primitives functional?
     test_path = os.path.join(pd, ".canary_test")
@@ -390,8 +390,8 @@ def _canary_detail(check_name, dead_loops, boom_age, compass_age):
         return "Ollama not responding — local model inference is down"
     elif check_name == "loops":
         return f"Background loops stopped: {', '.join(dead_loops)}"
-    elif check_name == "livesync":
-        return f"Workshop files stale (boom: {format_age(boom_age)}, compass: {format_age(compass_age)}) — LiveSync may be down"
+    elif check_name == "practice_freshness":
+        return f"Practice files stale (boom: {format_age(boom_age)}, compass: {format_age(compass_age)})"
     elif check_name == "file_io":
         return "File read/write test failed — filesystem may be read-only or full"
     elif check_name == "discord":

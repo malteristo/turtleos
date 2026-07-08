@@ -1,71 +1,70 @@
-"""turtleOS self-healing — restart degraded tools and services.
+"""turtleOS self-healing — pre-defined repair actions only.
 
-Provides safe restart primitives for infrastructure components.
-Used by the health canary (INT-027) for auto-recovery and by
-!diagnose for manual intervention.
+Authority model: TURTLE_SPEC.md §20.4. Only registry-listed checks may auto-heal.
+Used by the health canary (INT-027) before alerting and by !diagnose for status.
 """
+
+from __future__ import annotations
 
 import asyncio
 import subprocess
 import os
-
-
-SERVICES = {
-    "livesync-bridge": "com.turtle.livesync-bridge",
-    "livesync-tunnel": "com.turtle.livesync-tunnel",
-    "couchdb": "com.turtle.couchdb",
-    "caddy": "com.turtle.caddy",
-}
+from dataclasses import dataclass
+from typing import Awaitable, Callable
 
 OLLAMA_PATH = "/opt/homebrew/bin/ollama"
 
+# launchd labels for read-only diagnostics (not auto-restart — dyad deploy ritual).
+DIAGNOSTIC_SERVICES = {
+    "discord": "com.turtle.discord",
+    "river": "com.turtle.river",
+    "canary": "com.turtle.canary",
+    "caddy": "com.turtle.caddy",
+}
 
-async def restart_service(name: str) -> tuple[bool, str]:
-    """Restart a launchd service by name. Returns (success, detail)."""
-    service_id = SERVICES.get(name)
-    if not service_id:
-        return False, f"Unknown service: {name}. Known: {', '.join(SERVICES.keys())}"
 
-    try:
-        proc = await asyncio.to_thread(
-            subprocess.run,
-            ["launchctl", "kickstart", "-k", f"user/{os.getuid()}/{service_id}"],
-            capture_output=True, text=True, timeout=15,
-        )
-        if proc.returncode == 0:
-            return True, f"Service {name} ({service_id}) restarted"
-        else:
-            # Try stop + start as fallback
-            await asyncio.to_thread(
-                subprocess.run,
-                ["launchctl", "stop", service_id],
-                capture_output=True, timeout=5,
-            )
-            await asyncio.sleep(2)
-            await asyncio.to_thread(
-                subprocess.run,
-                ["launchctl", "start", service_id],
-                capture_output=True, timeout=5,
-            )
-            return True, f"Service {name} restarted via stop/start"
-    except subprocess.TimeoutExpired:
-        return False, f"Service restart timed out: {name}"
-    except Exception as e:
-        return False, f"Service restart failed: {name} — {e}"
+@dataclass(frozen=True)
+class HealEntry:
+    healable: bool
+    action: str | None = None
+    reason: str = ""
+
+
+# Canonical registry — must match TURTLE_SPEC.md §20.4.
+HEAL_REGISTRY: dict[str, HealEntry] = {
+    "ollama": HealEntry(healable=True, action="restart_ollama"),
+    "loops": HealEntry(
+        healable=False,
+        reason="Background loops require full bot restart — dyad action",
+    ),
+    "practice_freshness": HealEntry(
+        healable=False,
+        reason="Stale boom/compass — practice sync, not infra restart",
+    ),
+    "file_io": HealEntry(
+        healable=False,
+        reason="Filesystem intervention required",
+    ),
+    "discord": HealEntry(
+        healable=False,
+        reason="Discord connection unhealthy — bot restart is dyad action",
+    ),
+}
 
 
 async def restart_ollama() -> tuple[bool, str]:
     """Restart Ollama by killing and letting launchd respawn."""
     try:
-        proc = await asyncio.to_thread(
+        await asyncio.to_thread(
             subprocess.run,
             ["pkill", "-f", "ollama"],
-            capture_output=True, timeout=5,
+            capture_output=True,
+            timeout=5,
         )
         await asyncio.sleep(3)
 
-        # Verify it came back
         import urllib.request
+
         try:
             resp = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=5)
             if resp.status == 200:
@@ -73,7 +72,6 @@ async def restart_ollama() -> tuple[bool, str]:
         except Exception:
             pass
 
-        # If it didn't respawn, try starting manually
         await asyncio.to_thread(
             subprocess.Popen,
             [OLLAMA_PATH, "serve"],
@@ -93,56 +91,81 @@ async def restart_ollama() -> tuple[bool, str]:
         return False, f"Ollama restart failed: {e}"
 
 
+_ACTIONS: dict[str, Callable[[], Awaitable[tuple[bool, str]]]] = {
+    "restart_ollama": restart_ollama,
+}
+
+
 async def check_and_heal(check_name: str) -> tuple[bool, str] | None:
-    """Attempt to heal a specific failing check. Returns (healed, detail) or None if not healable."""
-    if check_name == "ollama":
-        return await restart_ollama()
-    elif check_name == "livesync":
-        ok1, d1 = await restart_service("livesync-bridge")
-        ok2, d2 = await restart_service("livesync-tunnel")
-        return (ok1 and ok2, f"{d1}; {d2}")
-    elif check_name == "loops":
-        # Background loops can only be restarted by restarting the bot
-        return None  # Not self-healable without full restart
-    elif check_name == "discord":
-        return None  # Discord requires full bot restart
-    elif check_name == "file_io":
-        return None  # Filesystem issues need manual intervention
-    return None
+    """Attempt a registry-listed heal. Returns None if check is not healable."""
+    entry = HEAL_REGISTRY.get(check_name)
+    if entry is None or not entry.healable or not entry.action:
+        return None
+
+    action = _ACTIONS.get(entry.action)
+    if action is None:
+        return None
+    return await action()
+
+
+def registry_summary() -> list[dict[str, str | bool]]:
+    """Machine-readable registry for diagnose surfaces."""
+    rows: list[dict[str, str | bool]] = []
+    for name, entry in HEAL_REGISTRY.items():
+        rows.append(
+            {
+                "check": name,
+                "healable": entry.healable,
+                "action": entry.action or "",
+                "reason": entry.reason,
+            }
+        )
+    return rows
 
 
 async def full_diagnostic() -> list[dict]:
-    """Run diagnostic on all services. Returns list of {name, status, pid, detail}."""
-    results = []
+    """Read-only service and Ollama status. Does not restart anything."""
+    results: list[dict] = []
 
-    for name, service_id in SERVICES.items():
-        try:
-            proc = await asyncio.to_thread(
-                subprocess.run,
-                ["launchctl", "list"],
-                capture_output=True, text=True, timeout=5,
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            ["launchctl", "list"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        launchctl_out = proc.stdout
+    except Exception as e:
+        launchctl_out = ""
+        results.append({"name": "launchctl", "status": "error", "pid": None, "detail": str(e)})
+
+    for name, service_id in DIAGNOSTIC_SERVICES.items():
+        found = False
+        for line in launchctl_out.split("\n"):
+            if service_id in line:
+                parts = line.split()
+                pid = parts[0] if parts and parts[0] != "-" else None
+                exit_code = parts[1] if len(parts) > 1 else None
+                status = "running" if pid and pid.isdigit() else "stopped"
+                results.append(
+                    {
+                        "name": name,
+                        "status": status,
+                        "pid": pid,
+                        "detail": f"{service_id} exit: {exit_code}",
+                    }
+                )
+                found = True
+                break
+        if not found and launchctl_out:
+            results.append(
+                {"name": name, "status": "not registered", "pid": None, "detail": service_id}
             )
-            found = False
-            for line in proc.stdout.split("\n"):
-                if service_id in line:
-                    parts = line.split()
-                    pid = parts[0] if parts[0] != "-" else None
-                    exit_code = parts[1] if len(parts) > 1 else None
-                    status = "running" if pid and pid.isdigit() else "stopped"
-                    results.append({
-                        "name": name, "status": status,
-                        "pid": pid, "detail": f"exit: {exit_code}"
-                    })
-                    found = True
-                    break
-            if not found:
-                results.append({"name": name, "status": "not registered", "pid": None, "detail": ""})
-        except Exception as e:
-            results.append({"name": name, "status": "error", "pid": None, "detail": str(e)})
 
-    # Check Ollama
     try:
         import urllib.request
+
         resp = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=3)
         if resp.status == 200:
             results.append({"name": "ollama", "status": "running", "pid": None, "detail": "API responding"})

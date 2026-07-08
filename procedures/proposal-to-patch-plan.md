@@ -18,7 +18,7 @@ This procedure lets Turtle participate in its own development without crossing i
 
 ## Boundaries
 
-- Do not edit, stage, commit, restart services, or deploy.
+- Do not edit, stage, commit, restart services, or deploy (`TURTLE_SPEC.md` §20).
 - Do not ask for widened shell authority as part of the plan.
 - Do not combine patch planning with shakedown. Planning ends with a proposed verification path.
 - If the tree is dirty, name the dirty files and avoid plans that depend on overwriting unrelated work.

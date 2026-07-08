@@ -180,7 +180,7 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 | Module | Approx. lines | Purpose |
 |--------|---------------|---------|
 | `canary.py` | 232 | Standalone mechanical health check run by launchd; state-change alert dedup. |
-| `self_heal.py` | 154 | Self-healing helpers for service restarts and degraded states. |
+| `self_heal.py` | — | Pre-defined self-healing registry per `TURTLE_SPEC.md` §20.4; Ollama auto-heal only |
 | `shell_harness.py` | 366 | Constrained, audited self-development inspection harness for read-only source inspection and syntax verification. |
 | `capabilities.py` | 110 | File-backed registry for Turtle skill/procedure cards used during self-development, diagnostics, and shakedowns. |
 | `spirit_ops.py` | 120 | Spirit-side Discord CLI for reading/sending. Needs import-safety and `--file` mode. |
@@ -259,9 +259,9 @@ Exposure points:
 
 - LLM tool `run_turtleos_shell` in `tos_tools.py`.
 - `/shell` endpoint in `intake_server.py`, restricted to localhost unless `TURTLE_SHELL_TOKEN` is configured; the harness allowlist still applies after endpoint authorization.
-- Procedure card `procedures/self-development-inspection.md`, which instructs Turtle to inspect, diagnose, and hand patch plans to Spirit/Mage unless a future write-authority procedure is explicitly installed.
+- Procedure card `procedures/self-development-inspection.md`, which instructs Turtle to inspect, diagnose, and hand patch plans to Spirit/Mage per `TURTLE_SPEC.md` §20.
 
-Traceability to `TURTLE_SPEC.md` §22.8: this implements the "Before changing code" inspection and classification phase, plus syntax verification. It does not implement the low-risk write/commit/restart path. That authority remains outside the harness until a separate write-authority procedure and runtime guard are designed.
+Traceability to `TURTLE_SPEC.md` §20: this implements the inspect lane (§20.2). It does not implement shell writes, commit, or non-registry restart authority.
 
 ### Turtle Skills and Procedures
 
@@ -624,10 +624,11 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | §18 Boundaries | `identity/soul.md` | Encoded in identity |
 | §19 The Offering | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §20-22 Intake / Outfacing / Shell-Shedding | `boom_thread.py`, `intake_server.py`, `outfacing.py`, `spirit_ops.py`, self-development workflow | Implemented in pieces |
-| §22.8 Self-Development Protocol / native runtime skeleton | `cli.py`, `runtime/events.py`, `runtime/tasks.py`, `runtime/audit.py`, `runtime/handoff.py`, `runtime/policy.py`, `runtime/capabilities/practice.py`, `runtime/readiness.py` | First vertical slice implemented: durable handoff/task/audit/artifact path |
-| §22.8 Self-Development Protocol / live shell update protocol | `cli.py update check/plan`, `runtime/update.py`, `docs/development.md` | Inspection-only slice implemented: source-of-truth checks, git divergence, impact classification, manual apply ritual; no pull/apply/restart authority |
-| §22.8 Self-Development Protocol / inspection harness | `shell_harness.py`, `tos_tools.py:run_turtleos_shell`, `intake_server.py:/shell`, `procedures/self-development-inspection.md` | Inspection-only slice implemented: read-only source inspection, git state checks, syntax verification, audited attempts |
-| §22.8 Self-Development Protocol / skills and procedures | `capabilities.py`, `skills/*.md`, `procedures/*.md`, `prompts.py`, `tos_tools.py`, `tool_result.py`, `canary.py` | Implemented as guidance cards and discovery tools; not an authorization layer |
+| §20 Self-Development / native runtime skeleton | `cli.py`, `runtime/events.py`, `runtime/tasks.py`, `runtime/audit.py`, `runtime/handoff.py`, `runtime/policy.py`, `runtime/capabilities/practice.py`, `runtime/readiness.py` | First vertical slice implemented: durable handoff/task/audit/artifact path |
+| §20 Self-Development / live shell update protocol | `cli.py update check/plan`, `runtime/update.py`, `docs/development.md` | Inspection-only slice implemented: source-of-truth checks, git divergence, impact classification, manual apply ritual; no pull/apply/restart authority |
+| §20 Self-Development / inspection harness | `shell_harness.py`, `tos_tools.py:run_turtleos_shell`, `intake_server.py:/shell`, `procedures/self-development-inspection.md` | Inspection-only slice implemented: read-only source inspection, git state checks, syntax verification, audited attempts |
+| §20 Self-Development / skills and procedures | `capabilities.py`, `skills/*.md`, `procedures/*.md`, `prompts.py`, `tos_tools.py`, `tool_result.py`, `canary.py` | Implemented as guidance cards and discovery tools; not an authorization layer |
+| §20 Self-Development / self-heal registry | `self_heal.py`, `background.py` health canary loop | Ollama auto-heal only; other checks alert Mage |
 | §7 Cognitive Stack / provider comparison | `cli.py probe run`, `runtime/model_probe.py` | Implemented as review artifacts, not automatic model-routing decisions |
 | §23 Architecture & Traceability | This document, TURTLE_SPEC symlink/copy | This document |
 

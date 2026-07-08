@@ -27,7 +27,7 @@ Chapter pattern:
 5. **Verify by consequence** — Run checks proportionate to the blast radius.
 6. **Harvest** — Record what the chapter taught: what pattern should repeat, what remains intentionally deferred, and what future authority would require.
 
-Example chapter: the read-only live update surface. The tension was safe updates for a live shell. The spec now defines the live shell update protocol in `TURTLE_SPEC.md` §22.8. The implemented slice stops at `update check/plan`, with tests and canary source coverage, while automated apply/restart remains deferred until the read-only surface proves itself in real updates.
+Example chapter: the read-only live update surface. The tension was safe updates for a live shell. The spec defines inspect/propose/heal authority in `TURTLE_SPEC.md` §20. The implemented slice stops at `update check/plan`, with tests and canary source coverage, while automated apply/restart remains outside operator default authority.
 
 ## Drift Sweep Ritual
 
@@ -81,7 +81,7 @@ When lineage contains a public lesson, distill the lesson into current docs inst
 
 ## Update Ritual
 
-turtleOS updates are live-service operations governed by `TURTLE_SPEC.md` §22.8. The first supported update surface is read-only awareness:
+turtleOS updates are live-service operations governed by `TURTLE_SPEC.md` §20. The first supported update surface is read-only awareness:
 
 ```bash
 python cli.py update check
@@ -150,7 +150,7 @@ When implementation grows ahead of the spec, add the gap here **and** a row in `
 Done in the first traceability pass:
 
 - `runtime/` and `cli.py` first vertical slice mapped in `ARCHITECTURE.md`: event intake, durable tasks, audit JSONL, bounded practice capabilities, model probes, runtime readiness, registry-driven paths, and the Discord adapter handoff.
-- `runtime/update.py` and `cli.py update check/plan` mapped in `ARCHITECTURE.md`: read-only live shell update awareness from `TURTLE_SPEC.md` §22.8, divergence checks, impact classification, and manual apply ritual guidance.
+- `runtime/update.py` and `cli.py update check/plan` mapped in `ARCHITECTURE.md`: read-only live shell update awareness from `TURTLE_SPEC.md` §20.2, divergence checks, impact classification, and manual apply ritual guidance.
 - `shell_harness.py` self-development inspection slice mapped in `ARCHITECTURE.md`: allowed read-only command families, path/git guardrails, audit log behavior, LLM tool and `/shell` exposure points, and the boundary that write/commit/restart authority is not implemented there.
 - `capabilities.py`, `skills/`, and `procedures/` mapped in `ARCHITECTURE.md`: file-backed guidance cards, prompt summary injection, list/read tools, typed result classification, canary smoke check, and the boundary that cards guide behavior but do not grant permissions.
 

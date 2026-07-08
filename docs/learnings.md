@@ -94,3 +94,11 @@ Append to this file after each research cycle — it persists across sessions.
 **Stripped gates:** `discord_bot.py` (proprioceptor, boom-thread, offer_eddy), `mage.py` (`workshop_root`, `attunement: magic`), `tos_tools.py` (workshop prefixes). Registry `attunement: magic` logs warning and runs native.
 
 **Spec:** TURTLE_SPEC Appendix A marked retired. Native-only is the only deployment mode in code.
+
+### Self-development authority ceiling (2026-07-08)
+
+**Law:** `TURTLE_SPEC.md` §20 — inspect, propose, pre-defined self-healing only.
+
+**Registry fix:** `self_heal.py` had stale LiveSync restart paths wired to a canary check that actually measured practice-file freshness (`boom.md` / `compass.md` age). Renamed check to `practice_freshness`; only `ollama` auto-heals.
+
+**Prompt/runtime alignment:** `global.CLAUDE.md` no longer grants ad-hoc `launchctl` shell healing — must match `HEAL_REGISTRY`.

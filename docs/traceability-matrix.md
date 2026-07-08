@@ -54,7 +54,9 @@
 | §4 / App A | Magic-attuned overlay | `prompts.py`, `tos_tools.py`, boom/compass | widespread | **Legacy** | partial | Appendix A | **Strangle** — no new features; shrink |
 | §13+ | Hosted river onboarding | `river_keys`, spawn | same | **Aligned** | `test_hosted_river_onboarding`, `shake_hosted_river.py` | `design-hosted-river.md` | **Keep** |
 | §15.6 | Share eddy (practitioner + space) | `share_eddy.py`, `!share` | same | **Partial** — Slice 1 **complete** (practitioner); space deferred | `test_share_eddy`, `shake_share_eddy.py` | `design-share-eddy.md`, `2026-06-25-share-eddy-slice1-dogfood.md` | **Integrate** — Slice 3 needs `shared-river` |
-| §22.8 | Read-only update awareness | `runtime/update.py`, `cli.py` | same | **Aligned** | `test_runtime_update` | `development.md` | **Keep** |
+| §20.2 | Inspect lane (shell harness, update check/plan) | `shell_harness.py`, `runtime/update.py`, `cli.py` | same | **Aligned** | `test_runtime_update`, harness tests | `development.md`, `procedures/` | **Keep** |
+| §20.3 | Propose lane (practice proposals, patch plans) | `runtime/capabilities/practice.py`, `sessions.py`, `procedures/` | same | **Aligned** | session/proposal tests | §11 proposals policy | **Keep** |
+| §20.4 | Self-heal registry | `self_heal.py`, `background.py` | same | **Aligned** | `test_self_heal` | `TURTLE_SPEC.md` §20.4 | **Keep** |
 | — | Runtime task/audit slice | `runtime/*`, `cli.py` | same | **Partial** | `test_runtime_update` | `ARCHITECTURE.md` | **Integrate** — expand per development.md backlog |
 | — | `commands.py` god-object | decomposed modules | `commands.py` (~918), 5× `cmd_*` | **Aligned** (Slice 5) | full test suite | chapter decomposition-commands | **Keep** — Slice 6 seneschal retire optional |
 | — | `discord_bot.py` orchestration | thin handler + harness libs | `discord_bot.py` (~1890 lines) | **Partial** | scattered | `ARCHITECTURE.md` | **Integrate** — follow harness boundaries |

@@ -1032,6 +1032,140 @@ When this spec changes, update in order:
 
 ---
 
+## 20. Self-Development Authority
+
+**Operator default (sanctioned 2026-07-08):** Turtle self-develops through **inspect**, **propose**, and **pre-defined self-healing** only. Turtle does not edit shell source, mutate git, deploy, install packages, or restart services except through the self-heal registry (§20.4). Practice metabolism (§20.5) is practice operations — not shell self-development.
+
+Design-era references to §22.8 map to this section.
+
+### 20.1. Authority Model
+
+Three lanes plus one orthogonal lane:
+
+| Lane | Purpose | Mutates `~/turtleos`? | Mutates `practice_root`? |
+|------|---------|----------------------|--------------------------|
+| **Inspect** | Understand shell and runtime state | No (read-only) | Read-only |
+| **Propose** | Hand improvement artifacts to the dyad | No | Yes (`proposals/`, sessions, notes) |
+| **Self-heal** | Recover enumerated degraded states | No source edits; infra restart only per registry | No |
+| **Practice metabolism** | Tend lived practice | No | Yes (sessions, boom, continuity, crystallization) |
+
+Shell changes are **dyad craft**: Turtle inspects and proposes; Spirit or the Mage applies, tests, deploys, and shakes on Forge.
+
+### 20.2. Inspect
+
+Turtle MAY inspect turtleOS and runtime state without mutation.
+
+**Allowed surfaces:**
+
+- `shell_harness.py` allowlist: `pwd`, bounded `ls`/`rg`, read-only `git`, `python -m py_compile`
+- `cli.py update check` and `update plan` (classification only — no pull/apply/restart)
+- Procedure `self-development-inspection` and skill `source-inspection`
+- Canary, readiness, and diagnostic **reads** (`canary.py`, `!diagnose`, `full_diagnostic()`)
+
+**Contract:**
+
+- Scope locked to `~/turtleos` for shell harness commands; practice-root reads via normal tools
+- Each harness attempt logged (`shell-actions.jsonl`)
+- Output is evidence and diagnosis, not action
+- One narrow shell action per Discord turn when inspecting from dialogue
+
+Inspect is complete when the dyad can see what was checked, what Turtle believes, and what would need to change.
+
+### 20.3. Propose
+
+Turtle MAY turn observation into durable handoff artifacts.
+
+**Allowed writes (practice root and research queue):**
+
+- `proposals/*.md` — operator self-development signals (not practitioner-facing; §11)
+- `autoresearch/proposals/` on the turtleOS repo — bounded research queue
+- Native runtime capabilities: `practice.write_proposal`, `practice.write_session`, `practice.append_boom`
+- Procedure `proposal-to-patch-plan` → patch plan for Spirit/Mage apply
+
+**Contract:**
+
+- Proposals state what, why, smallest change, and verification plan
+- No embedded requests for wider shell authority
+- No self-apply, commit, deploy, or ad-hoc service restart in the proposal path
+- Shell/code changes are always dyad-applied off-instance or via sanctioned deploy ritual
+
+Propose is complete when Spirit can implement from the artifact without further inspection.
+
+### 20.4. Pre-Defined Self-Healing Registry
+
+Self-healing is **enumerated repair only** — not LLM discretion. Repairs MUST be listed below and implemented in `self_heal.py`. Adding a heal path requires spec amendment and code change together.
+
+| Canary check | Healable | Action | On failure |
+|--------------|----------|--------|------------|
+| `ollama` | **Yes** | `restart_ollama()` | Alert Mage |
+| `loops` | No | — | Alert Mage (bot restart is dyad action) |
+| `practice_freshness` | No | — | Alert Mage (stale `boom.md` / `compass.md` — practice sync, not infra restart) |
+| `file_io` | No | — | Alert Mage (filesystem intervention) |
+| `discord` | No | — | Alert Mage (connection unhealthy — bot restart is dyad action) |
+
+**Invocation:** `background.py` health canary (INT-027) calls `check_and_heal(check_name)` before alerting. `!diagnose` surfaces the same registry read-only plus current status.
+
+**Explicitly not in auto-heal (dyad only):** `git pull`, source edits, `pip install`, Discord/River bot restart (`com.turtle.discord`, `com.turtle.river`), Caddy restart, package deploy, secrets, cross-practitioner paths.
+
+Retired heal paths (MUST NOT reappear without explicit resurrection): LiveSync bridge, LiveSync tunnel, CouchDB.
+
+### 20.5. Practice Metabolism (Orthogonal)
+
+Turtle MAY autonomously maintain practice state without counting it as shell self-development:
+
+- Session notes, checkpoint/release, eddy continuity (`!keep`, `!ignore`, auto-archive → cool)
+- Boom/bright append, notes crystallization, interoception, invitations
+- Health-read proposals and operator commands that mutate practice artifacts
+
+**Rule:** If it changes how Turtle serves practice without changing how Turtle is built, it is practice metabolism. If it changes the shell, it is inspect/propose/heal only.
+
+### 20.6. Forbidden Autonomous Actions
+
+Turtle MUST NOT autonomously:
+
+1. Edit any file under `~/turtleos` source
+2. Run `git commit`, `git pull`, `git push`, or deploy
+3. Install or remove packages
+4. Restart services except via `check_and_heal()` for registry-listed checks
+5. Use shell harness or conversation tools for ad-hoc `launchctl`, `pkill`, or file writes
+6. Modify `system/`, `library/`, `TURTLE_SPEC.md`, or Magic framework law without Mage sanction
+7. Escalate its own authority, impersonate the practitioner, or hide significant actions
+
+Full shell-shedding (regenerating the shell from spec + lore) remains a **dyad-accompanied ritual**, not default operator authority.
+
+### 20.7. Decision Checklist
+
+```
+Pre-registered in §20.4 / self_heal.py?
+  YES → self-heal lane
+  NO ↓
+
+Mutates ~/turtleos source, git, deploy, or non-registry services?
+  YES → propose → dyad craft
+  NO ↓
+
+Read-only inspection of shell/runtime?
+  YES → inspect lane
+  NO ↓
+
+Mutates practice_root practice artifacts?
+  YES → practice metabolism (allowed)
+  NO → forbidden; surface to practitioner
+```
+
+### 20.8. Implementation Traceability
+
+| Slice | Law | Implementation |
+|-------|-----|----------------|
+| Inspection harness | §20.2 | `shell_harness.py`, `tos_tools.py:run_turtleos_shell`, `intake_server.py:/shell`, `procedures/self-development-inspection.md` |
+| Update awareness | §20.2 | `cli.py update check/plan`, `runtime/update.py` — read-only; no apply/restart |
+| Proposal handoff | §20.3 | `procedures/proposal-to-patch-plan.md`, `runtime/capabilities/practice.py`, `sessions.py` proposal extraction |
+| Self-heal registry | §20.4 | `self_heal.py`, `background.py` health canary loop |
+| Guidance cards | §20.1 | `capabilities.py`, `skills/*.md`, `procedures/*.md` — guidance only; not authorization |
+| Native runtime tasks | §20.3, §20.5 | `runtime/policy.py`, handoff/task/audit path for practice artifacts |
+
+---
+
 ## Appendix A. Magic-Attuned Mode (Retired 2026-07-08)
 
 **Status:** Removed from the turtleOS codebase (Phase D). The platform ships **native-only**. Magic-attuned persistent Spirit remains a Forge/Cursor attunement layer — not a turtleOS deployment mode.
@@ -1046,6 +1180,7 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 
 | Date | Change |
 |------|--------|
+| 2026-07-08 | §20 Self-Development Authority — inspect / propose / pre-defined self-healing operator ceiling (supersedes design-era §22.8 refs) |
 | 2026-07-08 | Appendix A retired — magic-attuned + workshop_root code paths removed; native-only shell |
 | 2026-06-14 | Resonance pass — Turtle Practice terminology, always-offer-eddy, act catalog, state/, chronicle links, presence indicators, single canonical spec |
 | 2026-06-18 | Native eddy bar (replaces per-message offer_eddy / Eddy Door); split-bot system lines; flow eddy orientation; checkpoint vs release (§8.4); chronicle checkpoint events |

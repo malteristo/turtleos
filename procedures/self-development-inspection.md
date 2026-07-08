@@ -22,7 +22,7 @@ When doing this from Discord, keep tool use narrow: one shell action per turn. I
 
 - Do not commit, stage, restart services, install packages, or edit files through the shell harness.
 - Do not infer from memory when source inspection is cheap.
-- If a change is needed, hand the patch plan to Spirit/Mage unless a future write-authority procedure has explicitly been installed.
+- If a change is needed, hand the patch plan to Spirit/Mage. Shell writes are dyad craft per `TURTLE_SPEC.md` §20.
 
 ## Done Means
 
