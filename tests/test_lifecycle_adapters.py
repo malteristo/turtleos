@@ -27,6 +27,29 @@ class TestLifecycleAdapters(unittest.IsolatedAsyncioTestCase):
         dissolve.assert_awaited_once()
         self.assertFalse(dissolve.await_args.kwargs.get("native_close"))
 
+    async def test_close_eddy_keep_passes_retain_memory(self) -> None:
+        from runtime.adapters.lifecycle import close_eddy
+
+        with patch(
+            "runtime.adapters.lifecycle.is_eddy_already_dissolved",
+            return_value=False,
+        ), patch(
+            "thread_registry.get_thread_continuity",
+            return_value="keep",
+        ), patch(
+            "sessions.dissolve_eddy",
+            new_callable=AsyncMock,
+            return_value=MagicMock(thread_name="test"),
+        ) as dissolve:
+            await close_eddy(
+                9001,
+                [{"role": "user", "content": "hi"}],
+                source="command",
+                discord_client=MagicMock(),
+            )
+        dissolve.assert_awaited_once()
+        self.assertTrue(dissolve.await_args.kwargs.get("retain_memory"))
+
     async def test_close_eddy_skips_when_already_dissolved(self) -> None:
         from runtime.adapters.lifecycle import close_eddy
 

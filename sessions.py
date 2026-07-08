@@ -54,6 +54,8 @@ class DissolveResult:
     archive_path: str | None = None
     jump_url: str | None = None
     already_archived: bool = False
+    capture_failed: bool = False
+    retain_memory: bool = False
 
 
 def _trigger_phrase(trigger: str) -> str:
@@ -515,6 +517,10 @@ async def post_eddy_lifecycle_feedback(
     """Post river feedback when an eddy closes."""
     if mode == "light_archive":
         detail = "archived (nothing captured to boom)"
+    elif mode == "cooled":
+        detail = "auto-archived (cooled — use !dissolve to close deliberately)"
+    elif mode == "capture_aborted":
+        detail = "dissolve aborted — essence capture failed; eddy cooled, memory retained"
     elif entry_count:
         detail = f"dissolved ({entry_count} entries captured to boom)"
     else:
@@ -592,6 +598,47 @@ async def light_archive_eddy(
     print(f"Light archived eddy: {resolved_name} ({channel_id})")
 
 
+async def cool_eddy_from_auto_archive(
+    channel_id: int,
+    *,
+    discord_client=None,
+    via_discord_ui: bool = False,
+    thread_name: str | None = None,
+    parent_channel_id: int | None = None,
+) -> None:
+    """Auto-archive path — release in-memory harness, retain history, mark cooled."""
+    import discord
+    from thread_registry import mark_cooled
+    from state import active_sessions, thread_configs, threads_flagged_for_release
+
+    dc = discord_client or client
+    thread = dc.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            thread = None
+
+    resolved_name = thread_name or (getattr(thread, "name", None) if thread else None) or "eddy"
+    parent_id = parent_channel_id or (getattr(thread, "parent_id", None) if thread else None)
+
+    thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
+    active_sessions.pop(channel_id, None)
+    mark_cooled(channel_id)
+
+    if parent_id:
+        await post_eddy_lifecycle_feedback(
+            parent_id,
+            thread_name=resolved_name,
+            mode="cooled",
+            via_discord_ui=via_discord_ui,
+            jump_url=getattr(thread, "jump_url", None) if thread else None,
+        )
+
+    print(f"Cooled eddy (auto-archive): {resolved_name} ({channel_id})")
+
+
 async def dissolve_eddy(
     channel_id: int,
     history: list[dict] | None = None,
@@ -599,6 +646,7 @@ async def dissolve_eddy(
     discord_client=None,
     native_close: bool = False,
     parent_channel_id: int | None = None,
+    retain_memory: bool = False,
 ) -> DissolveResult | None:
     """Archive an eddy — essence capture, file archive, chronicle, parent act."""
     import discord
@@ -632,6 +680,7 @@ async def dissolve_eddy(
     ]
     essence = ""
     entry_count = 0
+    capture_failed = False
     if len(msgs) >= 2:
         conversation = "\n".join(msgs)
         try:
@@ -647,10 +696,38 @@ async def dissolve_eddy(
                 boom_path = os.path.join(get_pd(), "boom.md")
                 timestamp = local_now().strftime("%Y-%m-%d %H:%M")
                 with open(boom_path, "a") as f:
-                    f.write(f"\n\n## Thread dissolved: {thread_name} ({timestamp})\n{essence}\n")
+                    f.write(
+                        f"\n\n## Thread dissolved: {thread_name} ({timestamp})\n"
+                        f"thread_id: {channel_id}\n{essence}\n"
+                    )
                 entry_count = sum(1 for line in essence.split("\n") if line.strip().startswith("-"))
         except Exception as e:
-            print(f"Dissolve essence capture failed for {thread_name}: {e}")
+            capture_failed = True
+            import traceback
+            print(
+                f"Dissolve essence capture failed for {thread_name} ({channel_id}): "
+                f"{type(e).__name__}: {e}"
+            )
+            traceback.print_exc()
+
+    if capture_failed:
+        from thread_registry import mark_cooled
+
+        mark_cooled(channel_id)
+        parent_id = parent_channel_id or getattr(thread, "parent_id", None)
+        if parent_id:
+            await post_eddy_lifecycle_feedback(
+                parent_id,
+                thread_name=thread_name,
+                mode="capture_aborted",
+                via_discord_ui=native_close,
+                jump_url=jump_url,
+            )
+        return DissolveResult(
+            thread_name=thread_name,
+            jump_url=jump_url,
+            capture_failed=True,
+        )
 
     archive_dir = Path(get_pd()) / "thread-archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -683,7 +760,16 @@ async def dissolve_eddy(
 
     thread_configs.pop(channel_id, None)
     threads_flagged_for_release.pop(channel_id, None)
-    mark_dissolved(channel_id)
+    if not retain_memory:
+        mark_dissolved(channel_id)
+    else:
+        from thread_registry import load_registry, save_registry
+
+        registry = load_registry()
+        tid = str(channel_id)
+        if tid in registry["threads"]:
+            registry["threads"][tid]["harvest_status"] = "kept"
+            save_registry(registry, force=True)
 
     parent_id = parent_channel_id or getattr(thread, "parent_id", None)
     if parent_id:
@@ -708,6 +794,7 @@ async def dissolve_eddy(
         entry_count=entry_count,
         archive_path=str(archive_path),
         jump_url=jump_url,
+        retain_memory=retain_memory,
     )
 
 

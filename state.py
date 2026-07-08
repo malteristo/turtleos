@@ -132,6 +132,7 @@ EDDY_TYPES = {
 }
 EDDY_DEFAULT = "standard"
 threads_flagged_for_release: dict[int, dict] = {}
+pending_ignore_confirm: dict[tuple[int, int], bool] = {}
 
 # Session reflection cooldown
 SESSION_REFLECTION_COOLDOWN = 2 * 3600

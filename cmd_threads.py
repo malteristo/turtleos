@@ -524,6 +524,23 @@ async def cmd_threads(message, args):
         parts.append("\n\u2500\u2500\u2500 archived \u2500\u2500\u2500")
         parts.extend(archived_threads)
 
+    from thread_registry import load_registry
+
+    parent_id = str(source.id) if source else None
+    cooled_lines = []
+    for tid, info in load_registry().get("threads", {}).items():
+        if info.get("harvest_status") != "cooled":
+            continue
+        if parent_id and info.get("parent_channel") and info.get("parent_channel") != getattr(source, "name", None):
+            continue
+        keep_tag = " · 📌" if info.get("continuity") == "keep" else ""
+        cooled_lines.append(
+            f"\U0001f9ca **{info.get('name', 'unknown')}** — auto-archived{keep_tag} · id:{tid}"
+        )
+    if cooled_lines:
+        parts.append("\n\u2500\u2500\u2500 cooled (auto-archived) \u2500\u2500\u2500")
+        parts.extend(cooled_lines)
+
     title = f"\U0001f9f5 Threads \u2014 {len(active_threads)} active"
     if dormant_threads:
         title += f" \u00b7 {len(dormant_threads)} dormant"
@@ -535,7 +552,7 @@ async def cmd_threads(message, args):
         description="\n".join(parts),
         color=EMBED_COLORS["help"],
     )
-    footer = "!thread-type <type> to change | !eddy-check to scan for dissolution"
+    footer = "!thread-type <type> to change | !eddy-check to scan for dissolution | !keep / !ignore"
     if not show_all and archived_threads:
         footer += f" | !threads --all to show {len(archived_threads)} archived"
     embed.set_footer(text=footer)

@@ -191,6 +191,68 @@ def update_thread_context_type(thread_id: int, context_type: str | None) -> None
     save_registry(registry)
 
 
+CONTINUITY_DEFAULT = "default"
+CONTINUITY_KEEP = "keep"
+CONTINUITY_IGNORE = "ignore"
+_VALID_CONTINUITY = {CONTINUITY_DEFAULT, CONTINUITY_KEEP, CONTINUITY_IGNORE}
+
+
+def get_thread_continuity(thread_id: int | str) -> str:
+    registry = load_registry()
+    entry = registry.get("threads", {}).get(str(thread_id))
+    if not entry:
+        return CONTINUITY_DEFAULT
+    value = entry.get("continuity", CONTINUITY_DEFAULT)
+    return value if value in _VALID_CONTINUITY else CONTINUITY_DEFAULT
+
+
+def update_thread_continuity(thread_id: int, continuity: str) -> None:
+    if continuity not in _VALID_CONTINUITY:
+        raise ValueError(f"invalid continuity: {continuity}")
+    registry = load_registry()
+    tid = str(thread_id)
+    if tid not in registry["threads"]:
+        register_thread(thread_id, name="unknown")
+        registry = load_registry()
+    entry = registry["threads"][tid]
+    if continuity == CONTINUITY_DEFAULT:
+        entry.pop("continuity", None)
+    else:
+        entry["continuity"] = continuity
+    save_registry(registry, force=True)
+
+
+def is_eddy_cooled(thread_id: int | str) -> bool:
+    registry = load_registry()
+    entry = registry.get("threads", {}).get(str(thread_id))
+    return bool(entry and entry.get("harvest_status") == "cooled")
+
+
+def mark_cooled(thread_id: int) -> None:
+    registry = load_registry()
+    tid = str(thread_id)
+    if tid not in registry["threads"]:
+        return
+    entry = registry["threads"][tid]
+    entry["harvest_status"] = "cooled"
+    entry["auto_archived_at"] = datetime.now(timezone.utc).isoformat()
+    save_registry(registry, force=True)
+
+
+def clear_cooled_status(thread_id: int) -> None:
+    """Clear cooled state when a practitioner resumes an auto-archived eddy."""
+    registry = load_registry()
+    tid = str(thread_id)
+    if tid not in registry["threads"]:
+        return
+    entry = registry["threads"][tid]
+    if entry.get("harvest_status") != "cooled":
+        return
+    entry["harvest_status"] = "pending"
+    entry.pop("auto_archived_at", None)
+    save_registry(registry, force=True)
+
+
 def update_thread_locked(thread_id: int, locked: bool) -> None:
     """Sync Discord Lock Thread state into registry."""
     registry = load_registry()
@@ -243,6 +305,8 @@ def _age_label(dt: datetime | None, now: datetime | None = None) -> str:
 def thread_activity_status(info: dict, now: datetime | None = None) -> str:
     if info.get("harvest_status") == "dissolved":
         return "dissolved"
+    if info.get("harvest_status") == "cooled":
+        return "cooled"
     now = now or datetime.now(timezone.utc)
     last_dt = _parse_dt(info.get("last_activity"))
     if not last_dt:
@@ -265,10 +329,17 @@ def format_thread_awareness_line(thread_id: str, info: dict, now: datetime | Non
     eddy = info.get("eddy_type") or "fast"
     messages = info.get("message_count", 0)
     lock_tag = " · 🔒locked" if info.get("locked") else ""
+    continuity = info.get("continuity", CONTINUITY_DEFAULT)
+    continuity_tag = ""
+    if continuity == CONTINUITY_KEEP:
+        continuity_tag = " · 📌keep"
+    elif continuity == CONTINUITY_IGNORE:
+        continuity_tag = " · 🚫ignore"
+    cooled_tag = " · 🧊cooled" if status == "cooled" else ""
     return (
         f"- **{info.get('name', 'unknown')}** — `{model}` / `{attunement}` · "
         f"`{eddy}` · status:{status} · created:{created} ago · last:{last} ago · "
-        f"messages:{messages}{lock_tag} · id:{thread_id}"
+        f"messages:{messages}{lock_tag}{continuity_tag}{cooled_tag} · id:{thread_id}"
     )
 
 

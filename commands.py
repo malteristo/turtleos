@@ -89,7 +89,7 @@ from cmd_dispatch import (
     send_with_actions,
     try_direct_command,
 )
-from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_release
+from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_ignore, cmd_keep, cmd_release
 from share_eddy import cmd_share
 from cmd_practice_io import cmd_artifacts, cmd_export, cmd_ls, cmd_read, cmd_search
 from cmd_threads import (
@@ -1296,6 +1296,8 @@ DIRECT_COMMANDS = {
     "checkpoint": lambda msg, args: cmd_checkpoint(msg),
     "release": lambda msg, args: cmd_release(msg),
     "dissolve": lambda msg, args: cmd_dissolve(msg, args),
+    "keep": lambda msg, args: cmd_keep(msg, args),
+    "ignore": lambda msg, args: cmd_ignore(msg, args),
     "flows": lambda msg, args: cmd_flows(msg, args),
     "flow": lambda msg, args: cmd_flows(msg, args),
     "pin": lambda msg, args: cmd_pin(msg, args),

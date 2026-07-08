@@ -199,19 +199,93 @@ async def cmd_dissolve(message, args):
         await message.reply("Could not dissolve — thread not found.", mention_author=False)
         return
 
-    clear_history(channel_id)
-    active_sessions.pop(channel_id, None)
+    if not result.capture_failed and not result.retain_memory:
+        clear_history(channel_id)
+        active_sessions.pop(channel_id, None)
 
     lines = [f"**{result.thread_name}** archived."]
-    if result.already_archived:
+    if result.capture_failed:
+        lines = [
+            f"**{result.thread_name}** — dissolve aborted (essence capture failed).",
+            "Eddy cooled; memory retained. Try again with `!dissolve`.",
+        ]
+    elif result.already_archived:
         lines = [f"**{result.thread_name}** is archived — still readable in Discord's thread list."]
     elif result.entry_count:
         lines.append(f"{result.entry_count} entries captured to boom.")
-    if result.jump_url and not result.already_archived:
+    if result.retain_memory and not result.capture_failed:
+        lines.append("Memory retained (📌 keep).")
+    if result.jump_url and not result.already_archived and not result.capture_failed:
         lines.append(f"Chronicle: {result.jump_url}")
     embed = discord.Embed(
-        title="Eddy archived" if result.already_archived else "Eddy dissolved",
+        title=(
+            "Eddy cooled"
+            if result.capture_failed
+            else ("Eddy archived" if result.already_archived else "Eddy dissolved")
+        ),
         description="\n".join(lines),
         color=0x2ECC71,
     )
     await message.reply(embed=embed, mention_author=False)
+
+
+async def cmd_keep(message, args):
+    """Mark eddy continuity: keep — memory retained on deliberate close."""
+    if not isinstance(message.channel, discord.Thread):
+        await message.reply("Use `!keep` inside an eddy thread.", mention_author=False)
+        return
+    if not is_practice_channel(message):
+        await message.reply("Use `!keep` in your practice eddies.", mention_author=False)
+        return
+
+    from thread_registry import CONTINUITY_KEEP, update_thread_continuity
+
+    update_thread_continuity(message.channel.id, CONTINUITY_KEEP)
+    await message.reply(
+        "📌 **Keep** — this eddy will retain memory on deliberate close. "
+        "Auto-archive will cool it without dissolving.",
+        mention_author=False,
+    )
+
+
+async def cmd_ignore(message, args):
+    """Mark eddy continuity: ignore — purge on confirm, no trace kept."""
+    if not isinstance(message.channel, discord.Thread):
+        await message.reply("Use `!ignore` inside an eddy thread.", mention_author=False)
+        return
+    if not is_practice_channel(message):
+        await message.reply("Use `!ignore` in your practice eddies.", mention_author=False)
+        return
+
+    from state import pending_ignore_confirm
+    from thread_registry import CONTINUITY_IGNORE, update_thread_continuity
+    from runtime.adapters.lifecycle import purge_ignored_eddy
+
+    key = (message.author.id, message.channel.id)
+    if args and args[0] in ("--confirm", "confirm"):
+        if not pending_ignore_confirm.pop(key, False):
+            await message.reply(
+                "No pending ignore. Run `!ignore` first.",
+                mention_author=False,
+            )
+            return
+        update_thread_continuity(message.channel.id, CONTINUITY_IGNORE)
+        await purge_ignored_eddy(
+            message.channel.id,
+            discord_client=getattr(message, "discord_client", None),
+            parent_channel_id=message.channel.parent_id,
+            thread_name=message.channel.name,
+        )
+        await message.reply(
+            "🚫 **Ignored** — eddy purged from Turtle memory. "
+            "Workshop copies (if synced) need Mage-side deletion.",
+            mention_author=False,
+        )
+        return
+
+    pending_ignore_confirm[key] = True
+    await message.reply(
+        "This eddy will leave **no trace** in Turtle memory. "
+        "Confirm with `!ignore confirm`.",
+        mention_author=False,
+    )

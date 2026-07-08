@@ -78,7 +78,34 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
             result = await handle_thread_archive_transition(before, after, discord_client=MagicMock())
         self.assertEqual(result, {"skipped": "already_dissolved", "thread_id": 9001})
 
-    async def test_full_dissolve_when_registered_and_substantive(self) -> None:
+    async def test_cools_when_registered_and_substantive(self) -> None:
+        from discord_reconcile import handle_thread_archive_transition
+
+        before = _thread(archived=False)
+        after = _thread(archived=True)
+        history = [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]
+
+        with patch("mage.is_registered_parent_channel", return_value=True), patch(
+            "runtime.adapters.lifecycle._registry_entry",
+            return_value={"harvest_status": "pending", "message_count": 2},
+        ), patch(
+            "runtime.adapters.lifecycle._load_history_for_thread",
+            new_callable=AsyncMock,
+            return_value=history,
+        ), patch(
+            "runtime.adapters.lifecycle._archive_transition_is_deliberate",
+            new_callable=AsyncMock,
+            return_value=False,
+        ), patch(
+            "sessions.cool_eddy_from_auto_archive",
+            new_callable=AsyncMock,
+        ) as cool:
+            result = await handle_thread_archive_transition(before, after, discord_client=MagicMock())
+
+        self.assertTrue(result["cooled"])
+        cool.assert_awaited_once()
+
+    async def test_full_dissolve_when_deliberate_archive(self) -> None:
         from discord_reconcile import handle_thread_archive_transition
         from sessions import DissolveResult
 
@@ -94,6 +121,10 @@ class TestHandleThreadArchiveTransition(unittest.IsolatedAsyncioTestCase):
             "runtime.adapters.lifecycle._load_history_for_thread",
             new_callable=AsyncMock,
             return_value=history,
+        ), patch(
+            "runtime.adapters.lifecycle._archive_transition_is_deliberate",
+            new_callable=AsyncMock,
+            return_value=True,
         ), patch(
             "sessions.dissolve_eddy",
             new_callable=AsyncMock,
@@ -291,6 +322,25 @@ class TestThreadRegistryLock(unittest.TestCase):
         entry = tr.load_registry()["threads"]["7"]
         self.assertNotIn("locked", entry)
         self.assertNotIn("locked_at", entry)
+
+    def test_continuity_and_cooled_state(self) -> None:
+        import thread_registry as tr
+
+        tr.clear_registry_cache_for_tests()
+        tr.load_registry()["threads"]["9"] = {"name": "arc", "harvest_status": "pending"}
+        tr.update_thread_continuity(9, tr.CONTINUITY_KEEP)
+        entry = tr.load_registry()["threads"]["9"]
+        self.assertEqual(entry.get("continuity"), "keep")
+        tr.mark_cooled(9)
+        entry = tr.load_registry()["threads"]["9"]
+        self.assertEqual(entry.get("harvest_status"), "cooled")
+        self.assertIn("auto_archived_at", entry)
+        self.assertTrue(tr.is_eddy_cooled(9))
+        tr.clear_cooled_status(9)
+        entry = tr.load_registry()["threads"]["9"]
+        self.assertEqual(entry.get("harvest_status"), "pending")
+        tr.update_thread_continuity(9, tr.CONTINUITY_DEFAULT)
+        self.assertNotIn("continuity", tr.load_registry()["threads"]["9"])
 
 
 class TestHandleThreadDelete(unittest.IsolatedAsyncioTestCase):

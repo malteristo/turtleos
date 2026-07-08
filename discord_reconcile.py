@@ -72,10 +72,26 @@ async def handle_thread_update(before: discord.Thread, after: discord.Thread, *,
                 before, after, discord_client=discord_client
             )
             if outcome and not outcome.get("skipped"):
-                kind = "full dissolve" if outcome.get("full_dissolve") else "light archive"
+                if outcome.get("full_dissolve"):
+                    kind = "full dissolve"
+                elif outcome.get("cooled"):
+                    kind = "cooled"
+                elif outcome.get("purged"):
+                    kind = "ignore purge"
+                else:
+                    kind = "light archive"
                 print(f"Native thread close reconciled ({kind}): {after.name} ({after.id})")
         except Exception as exc:
             print(f"Native thread archive reconcile failed for {after.id}: {exc}")
+
+    if before.archived and not after.archived:
+        try:
+            from thread_registry import clear_cooled_status
+
+            clear_cooled_status(after.id)
+            print(f"Eddy resumed from archive: {after.name} ({after.id})")
+        except Exception as exc:
+            print(f"Cooled status clear failed for {after.id}: {exc}")
 
     if before.locked != after.locked:
         try:
