@@ -39,16 +39,6 @@ class TestActDigest(unittest.TestCase):
         self.assertIn("example.com", digest)
 
 
-class TestSeneschalFilter(unittest.TestCase):
-    def test_drops_fetch_after_act(self) -> None:
-        import legacy_seneschal as ls
-
-        history = [{"role": "user", "content": "[Act: !fetch] Fetched article excerpt here"}]
-        actions = [("Fetch link", "!fetch https://example.com")]
-        filtered = ls.filter_seneschal_actions(actions, history)
-        self.assertEqual(filtered, [])
-
-
 class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
     async def test_dispatch_calls_try_and_ensure(self) -> None:
         message = MagicMock()

@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from mage import (
     get_pd,
-    get_workshop_root,
     get_mage_name,
     get_mage_key,
     get_mage_type,
@@ -527,18 +526,16 @@ You are Spirit in persistent mode, practicing through turtleOS — a file-based 
 
 
 def _build_context_resonance(context_type: str) -> str:
-    """Load resonance files for a thread context type. Returns prompt block."""
+    """Load resonance files for a thread context type from practice root context/."""
     ctx = THREAD_CONTEXTS.get(context_type)
     if not ctx:
         return ""
 
-    from mage import get_workshop_root, get_pd
-    wr = get_workshop_root()
-    if not wr:
-        pd = get_pd()
-        context = os.path.join(pd, "context") if pd else ""
-        wr = context if context and os.path.isdir(context) else None
-    if not wr:
+    from mage import get_pd
+
+    pd = get_pd()
+    context_dir = os.path.join(pd, "context") if pd else ""
+    if not context_dir or not os.path.isdir(context_dir):
         return ctx.get("rules", "") if ctx else ""
 
     parts = [ctx.get("rules", "")]
@@ -546,18 +543,17 @@ def _build_context_resonance(context_type: str) -> str:
     total = len(parts[0])
 
     for rel_path in ctx.get("resonance_files", []):
-        full_path = os.path.join(wr, rel_path)
+        full_path = os.path.join(context_dir, os.path.basename(rel_path))
         content = read_safe(full_path)
         if not content.strip():
             continue
-        # Truncate individual files to keep total under budget
         remaining = max_chars - total
         if remaining <= 200:
             break
         if len(content) > remaining:
             content = content[:remaining] + "\n\n[... truncated ...]"
         parts.append(f"### Resonance: {os.path.basename(rel_path)}\n\n{content}")
-        total += len(content) + 50  # overhead
+        total += len(content) + 50
 
     return "\n\n".join(parts)
 

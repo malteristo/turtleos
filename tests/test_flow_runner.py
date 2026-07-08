@@ -426,17 +426,5 @@ class FlowPresenceTests(unittest.IsolatedAsyncioTestCase):
         sent.clear()
         self.assertFalse(await post_flow_presence_if_needed(channel, cfg))
 
-    async def test_post_flow_presence_skips_non_native(self) -> None:
-        from eddy_spawn import post_flow_presence_if_needed
-
-        channel = MagicMock()
-        channel.id = 999002
-        channel.send = unittest.mock.AsyncMock()
-        cfg = {"context_type": "navigator", "flow_presence_posted": False}
-        with unittest.mock.patch("mage.get_attunement_profile", return_value="magic"):
-            self.assertFalse(await post_flow_presence_if_needed(channel, cfg))
-        channel.send.assert_not_called()
-
-
 if __name__ == "__main__":
     unittest.main()

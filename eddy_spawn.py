@@ -993,13 +993,10 @@ async def wait_for_native_eddy_handoff(thread) -> None:
 
 
 async def post_flow_presence_if_needed(channel, cfg) -> bool:
-    """Post shell-injected flow presence once before first Turtle reply (native only)."""
+    """Post shell-injected flow presence once before first Turtle reply."""
     from commands import thread_configs
     from flow_runner import flow_presence_line, load_flow_spec
-    from mage import get_attunement_profile
 
-    if get_attunement_profile() != "native":
-        return False
     if not cfg or cfg.get("flow_presence_posted"):
         return False
     flow_id = cfg.get("context_type")
@@ -1023,12 +1020,10 @@ async def post_flow_presence_if_needed(channel, cfg) -> bool:
 async def ensure_native_presence(thread: discord.Thread) -> bool:
     """Native presence — split-bot uses River add_user; single-bot uses thread.join()."""
     from commands import thread_configs
-    from mage import get_attunement_profile, river_bot_enabled
+    from mage import river_bot_enabled
 
     cfg = thread_configs.get(thread.id)
     if not cfg:
-        if get_attunement_profile() != "native":
-            return False
         cfg = {
             "native_vanilla": True,
             "presence_posted": False,
@@ -1036,8 +1031,6 @@ async def ensure_native_presence(thread: discord.Thread) -> bool:
         }
         thread_configs[thread.id] = cfg
     elif not cfg.get("native_vanilla"):
-        if get_attunement_profile() != "native":
-            return False
         cfg["native_vanilla"] = True
 
     if cfg.get("presence_posted"):

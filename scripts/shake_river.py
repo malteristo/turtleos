@@ -70,7 +70,7 @@ def check_mage_routing() -> list[str]:
         from mage import get_attunement_profile, uses_native_river
 
         profile = get_attunement_profile()
-        if profile not in ("native", "magic"):
+        if profile != "native":
             errors.append(f"unexpected attunement profile: {profile}")
     except Exception as exc:
         errors.append(f"mage routing import failed: {exc}")

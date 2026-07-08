@@ -5,7 +5,7 @@ import os
 import re
 import time
 
-from mage import get_pd, get_workshop_root
+from mage import get_pd
 from practice_io import (
     read_safe, extract_section, list_headings, is_readable, is_writable,
 )
@@ -22,43 +22,16 @@ from tool_result import (
 )
 
 
-# ─── Workshop Path Resolution ────────────────────────────────────
-
-# Paths that resolve against workshop_root (read-only) instead of practice_dir
-WORKSHOP_PREFIXES = ("library/", "system/", "archive/")
-WORKSHOP_ROOT_FILES = ("AGENTS.md", "MAGIC_SPEC.md", "CLAUDE.md", "README.md",
-                       "ONBOARDING.md", "FAQ.md", "TROUBLESHOOTING.md")
-
-
-def _is_workshop_readable(filename: str) -> bool:
-    wr = get_workshop_root()
-    if not wr:
-        return False
-    if any(filename.startswith(p) for p in WORKSHOP_PREFIXES):
-        return True
-    return filename in WORKSHOP_ROOT_FILES
+# ─── Practice Path Resolution ────────────────────────────────────
 
 
 def _resolve_read_path(filename):
-    """Resolve a filename to its absolute path for reading.
-    Workshop-level paths (library/, system/, root .md files) resolve against
-    workshop_root if available. Practice paths resolve against practice_dir."""
-    wr = get_workshop_root()
-    if wr:
-        if any(filename.startswith(p) for p in WORKSHOP_PREFIXES):
-            return os.path.join(wr, filename), True
-        if filename in WORKSHOP_ROOT_FILES:
-            return os.path.join(wr, filename), True
+    """Resolve a filename to its absolute path for reading (practice root only)."""
     return os.path.join(get_pd(), filename), False
 
 
 def _resolve_search_base(directory):
-    """Resolve a search directory, returning (abs_path, rel_base).
-    Workshop-level dirs resolve against workshop_root."""
-    wr = get_workshop_root()
-    if wr and directory:
-        if any(directory.startswith(p.rstrip("/")) for p in WORKSHOP_PREFIXES):
-            return os.path.join(wr, directory), wr
+    """Resolve a search directory under practice root."""
     base = os.path.join(get_pd(), directory) if directory else get_pd()
     return base, get_pd()
 
@@ -71,11 +44,10 @@ TOS_TOOLS = [
         "function": {
             "name": "read_practice_file",
             "description": (
-                "Read an allowlisted practice artifact or workshop lore file (internal context). "
+                "Read an allowlisted practice artifact (internal context). "
                 "In Discord replies: quote at most ~3 lines from an artifact; point to `!read <path>` for the full note — do not paste full bodies (§11.5.5). "
                 "Practice artifacts: sessions/, state/notes/, thread-archive/, chronicle/surface.md, "
-                "intentions/, box/intake/, surface files (boom.md, bright.md, …). "
-                "Workshop files (read-only, operator/Turtle tools): library/, system/, AGENTS.md, …"
+                "intentions/, box/intake/, surface files (boom.md, bright.md, …)."
             ),
             "parameters": {
                 "type": "object",
@@ -286,7 +258,7 @@ TOS_TOOLS = [
 def _execute_tos_tool_raw(name, arguments):
     if name == "read_practice_file":
         filename = arguments.get("filename", "")
-        if not (_is_workshop_readable(filename) or is_readable(filename)):
+        if not is_readable(filename):
             return f"Cannot read {filename} — not a readable practice file"
         section = arguments.get("section", "")
         path, is_workshop = _resolve_read_path(filename)
@@ -310,35 +282,7 @@ def _execute_tos_tool_raw(name, arguments):
         hits = collect_artifact_search_hits(query, directory=directory or "")
         if hits:
             return format_search_results(hits, query)
-        # Workshop-only fallback when no artifact hits (operator tooling paths)
-        try:
-            pattern = re.compile(query, re.IGNORECASE)
-        except re.error:
-            pattern = re.compile(re.escape(query), re.IGNORECASE)
-        results = []
-        search_files = []
-        base, rel_root = _resolve_search_base(directory)
-        if os.path.isdir(base):
-            for root, dirs, files in os.walk(base):
-                dirs[:] = [d for d in dirs if not d.startswith(".")]
-                for f in files:
-                    if f.endswith(".md"):
-                        rel = os.path.relpath(os.path.join(root, f), rel_root)
-                        rel = rel.replace("\\", "/")
-                        if _is_workshop_readable(rel) and not is_readable(rel):
-                            search_files.append(rel)
-        for filepath in sorted(search_files):
-            content = read_safe(os.path.join(rel_root, filepath))
-            for i, line in enumerate(content.split("\n"), 1):
-                if pattern.search(line):
-                    results.append(f"{filepath}:{i}: {line.strip()[:120]}")
-                    if len(results) >= 15:
-                        break
-            if len(results) >= 15:
-                break
-        if not results:
-            return f"No matches for '{query}'"
-        return f"Workshop matches ({len(results)}):\n" + "\n".join(results)
+        return f"No matches for '{query}'"
 
     if name == "list_practice_files":
         directory = arguments.get("directory", "")

@@ -5,9 +5,8 @@
 # Native topology (2026-06-29): practice_dir and runtime_dir colocate at
 # ~/workshops/<name>/. No workshop_root — Magic framework stays on Forge only.
 
-# Attunement profile (TURTLE_SPEC §4, Appendix A):
-#   native  — vanilla platform law (target default)
-#   magic   — legacy magic-attuned persistent Spirit (operator instances during migration)
+# Attunement profile (TURTLE_SPEC §4):
+#   native  — vanilla platform law (only supported profile)
 # attunement: native
 #
 # Channel types:

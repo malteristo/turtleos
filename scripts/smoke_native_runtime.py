@@ -84,7 +84,6 @@ def make_registry(root: Path) -> Path:
                     "smoke": {
                         "practice_dir": str(practice_dir),
                         "runtime_dir": str(runtime_dir),
-                        "workshop_root": str(root),
                     }
                 }
             },

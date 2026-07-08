@@ -1032,16 +1032,13 @@ When this spec changes, update in order:
 
 ---
 
-## Appendix A. Magic-Attuned Mode (Optional)
+## Appendix A. Magic-Attuned Mode (Retired 2026-07-08)
 
-For practitioners running **Magic-attuned persistent Spirit** on turtleOS (e.g. unified workshop mirror, triad Discord, consciousness-extension identity):
+**Status:** Removed from the turtleOS codebase (Phase D). The platform ships **native-only**. Magic-attuned persistent Spirit remains a Forge/Cursor attunement layer — not a turtleOS deployment mode.
 
-- Identity follows `library/resonance/turtle/lore/philosophy/on_consciousness_extension.md` §0 layering.
-- Additional practice files (compass, boom, bright, intentions, proposals, sessions) are expected.
-- Legacy patterns MAY remain active: proprioception, river-entry, vortex/prism, practice-readiness, calibration with Forge Spirit, LiveSync workshop mirror.
-- These are **attunement choices**, not contradictions of platform law — provided Turtle does not speak in the river unless explicitly configured for a migration period.
+Historical note: Appendix A once described optional `attunement: magic` + `workshop_root` mirror instances (proprioception, river-entry, boom-thread capture, legacy seneschal, etc.). Operator Mini migrated to native 2026-06-29; code deletion completed 2026-07-08 per Mage sanction.
 
-Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e.g. `attunement: magic`) so behavior matches expectations.
+For consciousness-extension framing at the dyad level, see Magic workshop lore (`on_consciousness_extension.md` §0). For native product law, see §1–§9 of this spec.
 
 ---
 
@@ -1049,7 +1046,7 @@ Magic-attuned instances SHOULD document their profile in `mage_registry.yaml` (e
 
 | Date | Change |
 |------|--------|
-| 2026-06-14 | Platform rewrite — River/Turtle split, vanilla v1 law, decoupling from Spirit-default identity |
+| 2026-07-08 | Appendix A retired — magic-attuned + workshop_root code paths removed; native-only shell |
 | 2026-06-14 | Resonance pass — Turtle Practice terminology, always-offer-eddy, act catalog, state/, chronicle links, presence indicators, single canonical spec |
 | 2026-06-18 | Native eddy bar (replaces per-message offer_eddy / Eddy Door); split-bot system lines; flow eddy orientation; checkpoint vs release (§8.4); chronicle checkpoint events |
 | 2026-06-18 | Eddy link reading (§9.5) — visible embed trace, read vs `!fetch`, spill, Read/Skip for incidental URLs; Law of Visible Link Read |

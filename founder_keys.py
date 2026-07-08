@@ -17,13 +17,14 @@ try:
 except Exception:  # pragma: no cover - turtleOS runtime has yaml via mage registry
     yaml = None
 
-from mage import get_registry
+from mage import get_registry, get_pd
 
 
-REGISTRY_PATH = Path(os.environ.get(
-    "FOUNDER_KEY_REGISTRY",
-    "~/workshop/desk/magic_ev/founding_key_registry.yaml",
-)).expanduser()
+def _registry_path() -> Path:
+    explicit = os.environ.get("FOUNDER_KEY_REGISTRY")
+    if explicit:
+        return Path(explicit).expanduser()
+    return Path(get_pd()) / "state" / "magic_ev" / "founding_key_registry.yaml"
 
 _PENDING: dict[int, dict] = {}
 _CONFIRM_RE = re.compile(
@@ -33,10 +34,11 @@ _CONFIRM_RE = re.compile(
 
 
 def _load_registry() -> dict:
-    if not REGISTRY_PATH.exists():
+    path = _registry_path()
+    if not path.exists():
         return {"founders": {}, "bindings": []}
     try:
-        text = REGISTRY_PATH.read_text()
+        text = path.read_text()
         if yaml:
             return yaml.safe_load(text) or {"founders": {}, "bindings": []}
     except Exception as e:
@@ -45,15 +47,16 @@ def _load_registry() -> dict:
 
 
 def _save_registry(data: dict) -> None:
-    REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    path = _registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     if yaml:
         text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
     else:
         import json
         text = json.dumps(data, indent=2, ensure_ascii=False)
-    tmp = REGISTRY_PATH.with_suffix(REGISTRY_PATH.suffix + ".tmp")
+    tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text)
-    tmp.replace(REGISTRY_PATH)
+    tmp.replace(path)
 
 
 def _channel_entry(channel_id: int) -> dict | str | None:

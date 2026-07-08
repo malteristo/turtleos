@@ -86,3 +86,11 @@ Append to this file after each research cycle — it persists across sessions.
 **Fixes:** Remove bar re-anchor from `log_activity` (callers own it); run idle checkpoint in a background task so `session_monitor` never blocks the event loop on reflection LLM; registry writes debounced + fsync + retry.
 
 **Design:** Contextual River offers stay timeline-anchored. Standing flow library bar was retired 2026-06-25 — on-demand `!flows` keeps contextual rows uncluttered (share dogfood).
+
+### Phase D — magic-attuned code retirement (2026-07-08)
+
+**Deleted modules:** `legacy_seneschal.py`, `proprioceptor.py`, `pulse.py`, `attunement.py`, `load_command.py`, `boom_thread.py`.
+
+**Stripped gates:** `discord_bot.py` (proprioceptor, boom-thread, offer_eddy), `mage.py` (`workshop_root`, `attunement: magic`), `tos_tools.py` (workshop prefixes). Registry `attunement: magic` logs warning and runs native.
+
+**Spec:** TURTLE_SPEC Appendix A marked retired. Native-only is the only deployment mode in code.

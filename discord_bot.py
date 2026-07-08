@@ -103,14 +103,12 @@ from helpers import (
 )
 
 from sessions import session_monitor, checkpoint_session, close_session, maybe_reflect
-from boom_thread import handle_boom_thread_message
 from eddy_spawn import (
-    should_offer_eddy, make_eddy_spawn_view, handle_eddy_spawn_interaction,
-    is_intake_thread, handle_intake_message, generate_topic, ensure_native_presence,
+    handle_eddy_spawn_interaction,
+    is_intake_thread, handle_intake_message, ensure_native_presence,
     post_flow_presence_if_needed,
 )
 from intake_server import start_intake_server
-from proprioceptor import prepare_context_brief
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
 from founder_keys import try_founder_key_entry
 from river_keys import try_river_key_claim
@@ -138,7 +136,6 @@ from link_read import (
 )
 
 # Boom thread fetched content cache (message.id -> content string)
-_boom_fetched_content = {}
 
 
 # Discord permalink parsing — discord_ref_read.py
@@ -649,22 +646,11 @@ async def handle_dialogue(message):
 
     if native_eddy:
         triage = {"category": "practice", "needs_state": False}
-        proprioceptor_task = None
         triage_cat = "practice"
     else:
-        triage_task = asyncio.create_task(triage_message(visible_content))
-        proprioceptor_task = None
-        if not isinstance(message.channel, discord.Thread) and get_attunement_profile() == "magic":
-            from mage import is_river_message
-
-            if not is_river_message(message):
-                proprioceptor_task = asyncio.create_task(prepare_context_brief(visible_content))
-        triage = await triage_task
+        triage = await triage_message(visible_content)
         triage_cat = triage.get("category", "practice")
         print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {visible_content[:80]}")
-        if proprioceptor_task and triage_cat not in ("practice", "deep", "link"):
-            proprioceptor_task.cancel()
-            proprioceptor_task = None
 
     history = get_history(channel_id)
 
@@ -681,28 +667,23 @@ async def handle_dialogue(message):
 
     attachment_extracted = False
     urls = []
-    url_content = _boom_fetched_content.pop(message.id, "")
+    url_content = ""
     url_source_count = 0
-    content_from_boom_capture = False
     pending_incidental_urls: list[str] = []
-    if url_content:
-        attachment_note += " [content from boom capture]"
-        content_from_boom_capture = True
-    else:
-        urls = await _extract_urls(visible_content)
-        external = external_urls(urls)
-        from link_read import plan_dialogue_urls
+    urls = await _extract_urls(visible_content)
+    external = external_urls(urls)
+    from link_read import plan_dialogue_urls
 
-        auto_fetch, urls, pending_incidental_urls = plan_dialogue_urls(
-            visible_content, external, native_eddy=native_eddy
-        )
-        if auto_fetch:
-            fetch_results, url_content = await fetch_urls_with_status(message.channel, urls)
-            if url_content:
-                url_source_count = len(urls)
-                attachment_note += f" [fetched {url_source_count} URL(s)]"
-                if isinstance(message.channel, discord.Thread):
-                    await maybe_refine_thread_name_from_fetch(message.channel, fetch_results)
+    auto_fetch, urls, pending_incidental_urls = plan_dialogue_urls(
+        visible_content, external, native_eddy=native_eddy
+    )
+    if auto_fetch:
+        fetch_results, url_content = await fetch_urls_with_status(message.channel, urls)
+        if url_content:
+            url_source_count = len(urls)
+            attachment_note += f" [fetched {url_source_count} URL(s)]"
+            if isinstance(message.channel, discord.Thread):
+                await maybe_refine_thread_name_from_fetch(message.channel, fetch_results)
 
     dereferenced_context = ""
     dereferenced_count = 0
@@ -759,13 +740,11 @@ async def handle_dialogue(message):
         attachment_extracted=attachment_extracted,
         raw_attachments=raw_attachments,
         url_content=url_content,
-        content_from_boom_capture=content_from_boom_capture,
         url_source_count=url_source_count,
         urls=urls,
         forwarded_context=forwarded_context,
         dereferenced_context=dereferenced_context,
         dereferenced_count=dereferenced_count,
-        proprioceptor_task=proprioceptor_task,
         pending_incidental_urls=pending_incidental_urls,
     )
 
@@ -807,13 +786,11 @@ async def run_link_read_followup(
         attachment_extracted=False,
         raw_attachments=[],
         url_content=url_content,
-        content_from_boom_capture=False,
         url_source_count=len(urls),
         urls=urls,
         forwarded_context="",
         dereferenced_context="",
         dereferenced_count=0,
-        proprioceptor_task=None,
         pending_incidental_urls=[],
     )
 
@@ -830,13 +807,11 @@ async def _continue_dialogue_turn(
     attachment_extracted: bool,
     raw_attachments=None,
     url_content: str,
-    content_from_boom_capture: bool,
     url_source_count: int,
     urls: list,
     forwarded_context: str,
     dereferenced_context: str,
     dereferenced_count: int,
-    proprioceptor_task,
     pending_incidental_urls: list[str] | None = None,
 ):
     channel_id = message.channel.id
@@ -941,10 +916,7 @@ async def _continue_dialogue_turn(
 
     source_flags = []
     if url_content:
-        if content_from_boom_capture:
-            source_flags.append("boom-captured fetched content")
-        else:
-            source_flags.append(f"bot-fetched URL content ({url_source_count or len(urls)} URL(s))")
+        source_flags.append(f"bot-fetched URL content ({url_source_count or len(urls)} URL(s))")
     if attachments:
         source_flags.append(f"attachment metadata ({', '.join(attachment_names)})")
     elif raw_attachments:
@@ -955,47 +927,6 @@ async def _continue_dialogue_turn(
         source_flags.append("forwarded message snapshot")
     if dereferenced_context:
         source_flags.append(f"read Discord context ({dereferenced_count})")
-
-    # Proprioceptor — retired for native eddies (TURTLE_SPEC §8.1)
-    context_brief = None
-    proprioceptor_time = None
-    if proprioceptor_task:
-        _t0 = asyncio.get_event_loop().time()
-        try:
-            context_brief = await asyncio.wait_for(proprioceptor_task, timeout=8.0)
-            proprioceptor_time = asyncio.get_event_loop().time() - _t0
-            if context_brief:
-                print(f"Proprioceptor: {len(context_brief)} chars ({proprioceptor_time:.1f}s)")
-        except asyncio.TimeoutError:
-            proprioceptor_time = asyncio.get_event_loop().time() - _t0
-            print(f"Proprioceptor: timed out ({proprioceptor_time:.1f}s)")
-        except Exception as e:
-            print(f"Proprioceptor: failed ({type(e).__name__})")
-
-    # Parse proprioceptor output: REFLEX (visible micro-expression) + BRIEF (for dialogue model)
-    _reflex = None
-    _tissue_brief = context_brief  # fallback: use raw output
-    if context_brief:
-        for _pi, _pline in enumerate(context_brief.strip().splitlines()):
-            if _pline.strip().upper().startswith("REFLEX:"):
-                _raw_reflex = _pline.split(":", 1)[1].strip()
-                if _raw_reflex and _raw_reflex != "—" and _raw_reflex != "-":
-                    _reflex = _raw_reflex
-            elif _pline.strip().upper().startswith("BRIEF:"):
-                _rest = context_brief.strip().splitlines()[_pi:]
-                _tissue_brief = " ".join(l.strip() for l in _rest).replace("BRIEF:", "", 1).strip()
-                break
-
-    # Inject proprioceptor brief (Magic-attuned legacy path only)
-    if not native_eddy and get_attunement_profile() == "magic":
-        if _tissue_brief and context_brief:
-            source_flags.append("practice-state context brief")
-            proprioceptor_block = (
-                "## Proprioceptive Context (connective tissue model)\n\n"
-                f"{_tissue_brief}\n\n"
-            )
-            system_prompt = proprioceptor_block + system_prompt
-
 
     messages_for_llm = list(history)
     contexts = absorbed_contexts.get(channel_id, [])
@@ -1327,40 +1258,22 @@ async def on_ready():
         except Exception:
             pass
         if should_post and not suppress_turtle_river_voice():
-            from pulse import scan_pulse, compose_river_entry, save_river_state
-            try:
-                set_practice_context_for_channel(dialogue.id)
-                pulse_data = scan_pulse()
-                entry_title, entry_desc = compose_river_entry(pulse_data, thread_count)
-                embed = discord.Embed(
-                    title=entry_title,
-                    description=entry_desc,
-                    color=0x2ECC71,
-                )
-                embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
-                await dialogue.send(embed=embed, silent=True)
-                save_river_state(entry_title, entry_desc)
-            except Exception as e:
-                print(f"River-entry failed, falling back: {e}")
-                import traceback; traceback.print_exc()
-                readiness = startup_readiness_check()
-                embed = discord.Embed(
-                    title="\U0001f422 Turtle online",
-                    description=f"**Threads:** {thread_count}\n{readiness}",
-                    color=0x2ECC71,
-                )
-                embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
-                await dialogue.send(embed=embed, silent=True)
+            readiness = startup_readiness_check()
+            embed = discord.Embed(
+                title="\U0001f422 Turtle online",
+                description=f"**Threads:** {thread_count}\n{readiness}",
+                color=0x2ECC71,
+            )
+            embed.set_footer(text=local_now().strftime("%Y-%m-%d %H:%M"))
+            await dialogue.send(embed=embed, silent=True)
 
     asyncio.get_event_loop().create_task(prewarm_triage())
 
     try:
         from flow_bootstrap import start_flow_bootstrap_watcher
-        from mage import get_attunement_profile
 
-        if get_attunement_profile() == "native":
-            start_flow_bootstrap_watcher(client)
-            print("Flow bootstrap watcher started")
+        start_flow_bootstrap_watcher(client)
+        print("Flow bootstrap watcher started")
     except Exception as exc:
         print(f"Intake handoff watcher failed to start: {exc}")
 
@@ -1776,21 +1689,6 @@ async def on_message(message):
                 await handle_intake_message(message)
             return
 
-        # Boom thread (Magic-attuned legacy): capture URLs/attachments; plain text also converses
-        if (get_attunement_profile() == "magic"
-                and isinstance(message.channel, discord.Thread)
-                and message.channel.name.lower() == "boom"
-                and not message.content.strip().startswith("!")):
-            has_urls = "http://" in message.content or "https://" in message.content
-            has_attachments = bool(message.attachments)
-            # All boom messages: capture to boom, then fall through to dialogue
-            lock = get_channel_lock(message.channel.id)
-            async with lock:
-                fetched_content = await handle_boom_thread_message(message)
-            if fetched_content:
-                _boom_fetched_content[message.id] = fetched_content
-            # Fall through to handle_dialogue below
-
         # Native river: acts only — River bot when configured, else Turtle fallback
         if river_bot_enabled() and uses_native_river(message):
             return
@@ -1824,13 +1722,6 @@ async def on_message(message):
                 await _route_practice_dialogue(message)
                 return
 
-        # Auto-detect thread-worthy content in main channel (Magic-attuned legacy only)
-        offer_eddy = (
-            get_attunement_profile() == "magic"
-            and not isinstance(message.channel, discord.Thread)
-            and should_offer_eddy(message)
-        )
-
         lock = get_channel_lock(message.channel.id)
         async with lock:
             if is_craft_intake_channel(message):
@@ -1838,18 +1729,6 @@ async def on_message(message):
                 return
 
         await _route_practice_dialogue(message)
-
-        if offer_eddy:
-            try:
-                topic = await generate_topic(_visible_message_content(message)[0])
-                view = make_eddy_spawn_view(message, topic=topic)
-                await message.channel.send(
-                    f'-# **Open eddy: "{topic}"** `local` · `semi`',
-                    view=view,
-                    silent=True,
-                )
-            except Exception as e:
-                print(f"Eddy offer failed: {e}")
 
 
 # ─── Main ────────────────────────────────────────────────────────

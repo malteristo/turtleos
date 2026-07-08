@@ -43,21 +43,23 @@ Eddy (thread) message
 
 ---
 
-## Migration Status (2026-06-14)
+## Migration Status (2026-07-04)
 
-The shell **still implements much of the legacy magic-attuned stack** below. Ripple updated docs and template; code migration is the next implementation slice.
+**Platform law** (TURTLE_SPEC 2026-06 rewrite) defines native turtle as the default product. **Operator instance (Kermit Mini) migrated 2026-06-29:** `attunement: native`, practice root `~/workshops/kermit/`, no `~/workshop/` Magic clone. Magic framework stays on Forge; Turtle outputs sync via `sync_practice_root.sh pull`.
 
-| Target (spec) | Current shell | Status |
-|---------------|---------------|--------|
-| River acts only | Turtle/proprio dialogue in main channel | **Slice 1 shipped** (`river_handler.py`; gated by `attunement: native`) |
-| Always offer eddy | Standing eddy bar at channel bottom | **Slice 2.7** — bar replaces per-message + pinned door |
-| Eddy-only Turtle | Dialogue in river + threads | **Partial** — river gated; threads still legacy Turtle |
-| Two local models | Triage + proprio + cloud dialogue + reflection | **Gap** |
-| `state/` practice infrastructure | compass/boom/bright-centric tools | **Gap** |
-| Chronicle jump URLs | Thread logging partial | **Partial** |
-| Magic-attuned mode | Default on operator instances | **Appendix A profile** |
+The shell is **native-only** (Phase D, 2026-07-08). Legacy magic-attuned Appendix A code paths removed. Strangle archive: Magic repo `floor/research/native-migration-strangle-checklist.md`.
 
-Operator instances SHOULD set `attunement: magic` in registry until vanilla profile ships.
+| Target (spec) | Operator Mini (native) | Codebase (dual-stack) |
+|---------------|------------------------|------------------------|
+| River acts only | **Live** — `river_handler.py` + `river_bot.py` | Gated `attunement: native` |
+| Always offer eddy | **Live** — standing eddy bar | Aligned |
+| Eddy-only Turtle | **Live** — native `character/` in eddies | Legacy magic prompts remain for Appendix A |
+| Two local models (River 4–9B / Turtle ~30B) | Partial — triage still in tree | **Gap** on model routing cleanup |
+| `state/` + CE practice infrastructure | **Live** — CE Slice 0+1a, `!focus` | Legacy compass/boom tools in `tos_tools` for magic |
+| Chronicle jump URLs | Partial | **Integrate** |
+| Magic-attuned mode | **Removed** (Phase D) | Appendix A retired from codebase |
+
+**Default attunement in code:** `mage.py` defaults to `native` when registry omits `attunement` (2026-07-04).
 
 ---
 
@@ -573,14 +575,19 @@ URL detected in message
 
 ## Workshop Sync
 
-The bot does NOT implement sync — it reads and writes files directly on Turtle's filesystem. Cross-substrate sync is handled externally:
+The bot reads and writes **practice roots** directly on the host (`~/workshops/<name>/`). It does not implement cross-substrate sync.
 
-- **Obsidian LiveSync** (CouchDB) — bidirectional sync between Mage's devices and Turtle for practice directories that are configured as CouchDB databases
-- **Shared workshop mirror** — deployed instances can point a mage practice directory at a LiveSync-backed workshop path such as `~/workshop/desk`
-- **SSH diagnostics and operations** — Spirit (on Cursor/Claude Code) checks logs, model availability, and service state via SSH
-- **Code deployment** — shell updates are deployed through the operator's chosen git/SSH workflow; practice state does not require manual copy
+**Native operator topology (2026-06-29+):**
 
-The bot's perspective is simple: files appear in `~/workshops/<name>/`, the bot reads and writes them. How they got there is not the bot's concern.
+- **Forge → Mini (framework):** `git push turtle main` → bare `~/repos/magic.git` (not checked out on Mini)
+- **Mini → Forge (Turtle outputs):** `scripts/sync_practice_root.sh pull` — `sessions/`, `proposals/`, `state/notes/navigator-*.md`
+- **No `~/workshop/` clone** on Mini for the operator; Magic `library/`, `system/`, `desk/` live on Forge only
+
+**Appendix A (magic-attuned instances):** MAY still set `workshop_root` in registry for a full Magic mirror — not the operator default.
+
+**Retired:** CouchDB / LiveSync bridge (2026-06-19).
+
+See `docs/architecture.md` for Mac Mini filesystem layout.
 
 ## Spec Traceability
 

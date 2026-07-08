@@ -61,9 +61,9 @@ class SharedRiverHarnessTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(mage._channel_is_river(self.FAMILY_CHANNEL))
 
-    def test_shared_river_uses_harness_under_magic_attunement(self) -> None:
+    def test_shared_river_uses_native_harness(self) -> None:
         self._set_registry(
-            attunement="magic",
+            attunement="native",
             channels={
                 str(self.FAMILY_CHANNEL): {
                     "type": "shared-river",
@@ -77,14 +77,14 @@ class SharedRiverHarnessTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(mage.uses_native_river(msg))
                 self.assertTrue(mage.turtle_handles_native_river(msg))
 
-    def test_operator_river_still_dialogue_under_magic(self) -> None:
+    def test_operator_river_uses_native_harness(self) -> None:
         self._set_registry(
-            attunement="magic",
+            attunement="native",
             channels={str(self.RIVER_CHANNEL): {"type": "river", "mage": "kermit"}},
         )
         msg = self._parent_message(self.RIVER_CHANNEL)
         with patch.object(mage, "is_river_message", return_value=True):
-            self.assertFalse(mage.uses_native_river(msg))
+            self.assertTrue(mage.uses_native_river(msg))
 
     def test_iter_river_channels_includes_shared_river(self) -> None:
         self._set_registry(

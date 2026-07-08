@@ -19,7 +19,6 @@ _practice_dir_ctx = contextvars.ContextVar("practice_dir", default=None)
 _runtime_dir_ctx = contextvars.ContextVar("runtime_dir", default=None)
 _mage_name_ctx = contextvars.ContextVar("mage_name", default="Practitioner")
 _mage_key_ctx = contextvars.ContextVar("mage_key", default="default")
-_workshop_root_ctx = contextvars.ContextVar("workshop_root", default=None)
 
 
 # ─── Registry Loading ────────────────────────────────────────────
@@ -83,21 +82,24 @@ def get_registry():
 
 
 def get_attunement_profile() -> str:
-    """Return global attunement profile: native (vanilla platform law) or magic (legacy)."""
-    profile = (_MAGE_REGISTRY.get("attunement") or "magic").strip().lower()
-    if profile not in ("native", "magic"):
-        return "magic"
+    """Return global attunement profile (native only — magic-attuned Appendix A retired)."""
+    profile = (_MAGE_REGISTRY.get("attunement") or "native").strip().lower()
+    if profile == "magic":
+        print("WARN: attunement: magic is retired; using native")
+        return "native"
+    if profile != "native":
+        return "native"
     return profile
 
 
 def get_channel_attunement(channel_id) -> str | None:
-    """Per-channel attunement override from mage_registry (native, magic, craft)."""
+    """Per-channel attunement override from mage_registry (native or craft)."""
     entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
     if isinstance(entry, dict):
         att = entry.get("attunement")
         if att:
             normalized = att.strip().lower()
-            if normalized in ("native", "magic", "craft"):
+            if normalized in ("native", "craft"):
                 return normalized
     return None
 
@@ -165,11 +167,7 @@ def is_river_message(message) -> bool:
 
 def uses_native_river(message) -> bool:
     """True when this message should use the River act harness (not Turtle dialogue)."""
-    if not is_river_message(message):
-        return False
-    if _get_channel_type(message.channel.id) == "shared-river":
-        return True
-    return get_attunement_profile() == "native"
+    return is_river_message(message)
 
 
 def river_bot_enabled() -> bool:
@@ -186,7 +184,7 @@ def turtle_handles_native_river(message) -> bool:
 
 def suppress_turtle_river_voice() -> bool:
     """True when Turtle must not post proactive voice in the parent river channel."""
-    return get_attunement_profile() == "native"
+    return True
 
 
 def _get_channel_mage(channel_id):
@@ -255,13 +253,6 @@ def _resolve_primary_runtime_dir():
     return os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(key))
 
 
-def _resolve_primary_workshop_root():
-    key = _primary_mage_key()
-    mage = _MAGE_REGISTRY.get("mages", {}).get(key, {}) if key else {}
-    root = mage.get("workshop_root")
-    return os.path.expanduser(root) if root else None
-
-
 def _resolve_practice_dir_for_channel(channel_id):
     """Resolve canonical writable practice directory from channel ID via registry."""
     mage_name = _get_channel_mage(channel_id)
@@ -304,18 +295,6 @@ def _resolve_mage_info_for_channel(channel_id):
     key = _primary_mage_key() or "default"
     mage = _MAGE_REGISTRY.get("mages", {}).get(key, {})
     return mage.get("address", key.capitalize()), key
-
-
-def _resolve_workshop_root_for_channel(channel_id):
-    """Resolve workshop root from channel ID via registry."""
-    ch_str = str(channel_id)
-    mage_name = _get_channel_mage(channel_id)
-    if not mage_name:
-        return None
-    mage = _MAGE_REGISTRY.get("mages", {}).get(mage_name, {})
-    if mage and mage.get("workshop_root"):
-        return os.path.expanduser(mage["workshop_root"])
-    return None
 
 
 def _resolve_mage_from_author(author):
@@ -392,15 +371,8 @@ def get_topology():
     return {
         "mage_key": get_mage_key(),
         "practice_dir": get_pd(),
-        "workshop_root": get_workshop_root(),
         "runtime_dir": get_runtime_dir(),
     }
-
-
-def get_workshop_root():
-    """Get the workshop root for the current context (read-only wider access).
-    Returns None if no workshop_root is configured."""
-    return _workshop_root_ctx.get() or _resolve_primary_workshop_root()
 
 
 def _parent_id_from_thread_state(thread_id: int) -> int | None:
@@ -472,8 +444,6 @@ def set_practice_context(message):
     mage_name, mage_key = _resolve_mage_info_for_channel(ch_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
-    wr = _resolve_workshop_root_for_channel(ch_id)
-    _workshop_root_ctx.set(wr)
     return pd
 
 
@@ -486,8 +456,6 @@ def set_practice_context_for_channel(channel_id):
     mage_name, mage_key = _resolve_mage_info_for_channel(registry_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
-    wr = _resolve_workshop_root_for_channel(registry_id)
-    _workshop_root_ctx.set(wr)
     return pd
 
 
@@ -500,12 +468,10 @@ def set_practice_context_for_mage_key(mage_key: str) -> bool:
     if mage:
         pd = os.path.expanduser(mage.get("practice_dir") or _default_runtime_dir_for_key(mage_key))
         rd = os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(mage_key))
-        wr = mage.get("workshop_root")
         _practice_dir_ctx.set(pd)
         _runtime_dir_ctx.set(rd)
         _mage_name_ctx.set(mage.get("address", mage_key.capitalize()))
         _mage_key_ctx.set(mage_key)
-        _workshop_root_ctx.set(os.path.expanduser(wr) if wr else None)
         return True
     space = _MAGE_REGISTRY.get("spaces", {}).get(mage_key)
     if space:
@@ -515,7 +481,6 @@ def set_practice_context_for_mage_key(mage_key: str) -> bool:
         _runtime_dir_ctx.set(rd)
         _mage_name_ctx.set(mage_key.capitalize())
         _mage_key_ctx.set(mage_key)
-        _workshop_root_ctx.set(None)
         return True
     return False
 

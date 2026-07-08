@@ -142,47 +142,8 @@ RECENT SESSIONS:
 
 @tasks.loop(hours=3)
 async def interoception_loop():
-    if _state.interoception_startup:
-        _state.interoception_startup = False
-        return
-
-    from mage import suppress_turtle_river_voice
-
-    if suppress_turtle_river_voice():
-        return
-
-    dialogue = get_channel("dialogue")
-    if dialogue:
-        set_practice_context_for_channel(dialogue.id)
-
-    from pulse import scan_pulse, compose_interoception, save_river_state
-    try:
-        pulse_data = scan_pulse()
-        signals = compose_interoception(pulse_data, prev_pulse=_state.last_pulse)
-        _state.last_pulse = pulse_data
-    except Exception as e:
-        print(f"Pulse scan failed in interoception: {e}")
-        return
-
-    if not signals:
-        print("Interoception: no delta, suppressed")
-        return
-
-    new_signals = signals
-
-    ch = get_channel("dialogue")
-    if not ch:
-        return
-
-    lines_out = [f"{emoji} {text}" for emoji, text in new_signals]
-    description = "\n".join(lines_out)
-    embed = discord.Embed(
-        title="\U0001f9e0 Interoception",
-        description=description,
-        color=OPS_EMBED_COLOR,
-    )
-    await ch.send(embed=embed, silent=True)
-    save_river_state("\U0001f9e0 Interoception", description)
+    """Retired — pulse/interoception removed with magic-attuned Appendix A."""
+    return
 
 
 @tasks.loop(hours=1)

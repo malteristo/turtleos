@@ -15,7 +15,6 @@ class RuntimePaths:
     principal: str
     practice_dir: Path
     runtime_dir: Path
-    workshop_root: Path | None
     native_runtime_dir: Path
     tasks_dir: Path
     audit_dir: Path
@@ -29,14 +28,11 @@ class RuntimePaths:
         entry = mages[principal]
         practice_dir = _expand(entry["practice_dir"])
         runtime_dir = _expand(entry.get("runtime_dir", entry["practice_dir"]))
-        workshop_root_value = entry.get("workshop_root")
-        workshop_root = _expand(workshop_root_value) if workshop_root_value else None
         native_runtime_dir = runtime_dir / "native-runtime"
         return cls(
             principal=principal,
             practice_dir=practice_dir,
             runtime_dir=runtime_dir,
-            workshop_root=workshop_root,
             native_runtime_dir=native_runtime_dir,
             tasks_dir=native_runtime_dir / "tasks",
             audit_dir=native_runtime_dir / "audit",

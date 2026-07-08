@@ -149,7 +149,7 @@ Bot should connect. User sends a test message in the river channel.
 | Button press | New thread; seed message; Turtle reply in thread |
 | Chronicle | River records eddy open with thread link (when implemented) |
 
-**Note:** Shell may still run legacy behavior during migration. If Turtle replies in the main channel, flag as migration gap — target law is TURTLE_SPEC 2026-06.
+**Note:** Default install uses `attunement: native` — identity from `practice_root/character/`, not legacy `identity/soul.md` (Appendix A magic-attuned only).
 
 ---
 

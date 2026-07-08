@@ -445,22 +445,10 @@ async def eddy_dissolution_check():
 
 
 async def cmd_eddy_check(message, args):
-    if get_attunement_profile() != "magic":
-        await message.reply(
-            "`!eddy-check` is Magic-attuned legacy (metabolic sweep). "
-            "Vanilla v1: use `!dissolve` in an eddy when you're done — no auto-dissolve (TURTLE_SPEC §9.2).",
-            mention_author=False,
-        )
-        return
-    async with message.channel.typing():
-        flagged = await eddy_dissolution_check()
-    if flagged:
-        await message.reply(
-            f"🌀 Flagged {len(flagged)} thread(s) for dissolution: {', '.join(f'**{n}**' for n in flagged)}",
-            mention_author=False,
-        )
-    else:
-        await message.reply("✅ No threads ready for dissolution.", mention_author=False)
+    await message.reply(
+        "`!eddy-check` is retired. Use `!dissolve` in an eddy when you're done.",
+        mention_author=False,
+    )
 
 
 async def cmd_threads(message, args):

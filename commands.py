@@ -31,7 +31,7 @@ from state import (
 )
 
 from mage import (
-    get_pd, get_runtime_dir, get_workshop_root, get_topology, get_mage_name, get_mage_key, get_mage_type,
+    get_pd, get_runtime_dir, get_topology, get_mage_name, get_mage_key, get_mage_type,
     get_attunement_profile,
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel, is_river_message,
@@ -270,8 +270,6 @@ async def cmd_diagnose(message):
         f"practice: `{topology['practice_dir']}`",
         f"runtime: `{topology['runtime_dir']}`",
     ]
-    if topology.get("workshop_root"):
-        topology_lines.append(f"workshop: `{topology['workshop_root']}`")
     embed.add_field(name="Topology", value="\n".join(topology_lines), inline=False)
 
     if overall != "green":

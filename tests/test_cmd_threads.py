@@ -33,12 +33,11 @@ class TestBuildConfigLine(unittest.TestCase):
 
 
 class TestCmdEddyCheck(unittest.IsolatedAsyncioTestCase):
-    async def test_vanilla_rejects(self) -> None:
+    async def test_retired_message(self) -> None:
         message = MagicMock()
         message.reply = AsyncMock()
-        with patch("cmd_threads.get_attunement_profile", return_value="native"):
-            await ct.cmd_eddy_check(message, [])
-        self.assertIn("Magic-attuned legacy", message.reply.await_args[0][0])
+        await ct.cmd_eddy_check(message, [])
+        self.assertIn("retired", message.reply.await_args[0][0].lower())
 
 
 class TestCmdRename(unittest.IsolatedAsyncioTestCase):

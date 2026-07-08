@@ -27,7 +27,6 @@ LIVESYNC_ERR_RECENT_SECONDS = 10 * 60
 SOURCE_MODULES = [
     "discord_bot.py",
     "commands.py",
-    "pulse.py",
     "canary.py",
     "sessions.py",
     "eddy_spawn.py",
@@ -159,26 +158,7 @@ def _load_module_from_path(name, path):
 def check_behavior_smoke():
     try:
         base = Path(__file__).parent
-        pulse = _load_module_from_path("canary_pulse_smoke", base / "pulse.py")
-        pulse_data = pulse.scan_pulse()
-        title, body = pulse.compose_river_entry(pulse_data)
-        if not title or not body.strip():
-            return "red", "river entry composer returned empty output"
-        signals = pulse.compose_interoception(pulse_data, prev_pulse=None)
-        if not isinstance(signals, list):
-            return "red", "interoception composer did not return a list"
-    except Exception as e:
-        return "red", f"pulse smoke failed: {type(e).__name__}: {e}"
-
-    try:
         bot = _load_module_from_path("canary_discord_bot_smoke", base / "discord_bot.py")
-        import legacy_seneschal as ls
-
-        actions = ls.extract_contextual_actions(
-            'Try `!thread "canary smoke" --model local --attunement semi`.'
-        )
-        if not actions or actions[0][1] != '!thread "canary smoke" --model local --attunement semi':
-            return "red", "contextual action extraction failed"
 
         class Snapshot:
             created_at = None
@@ -199,7 +179,7 @@ def check_behavior_smoke():
     except Exception as e:
         return "red", f"discord_bot smoke failed: {type(e).__name__}: {e}"
 
-    return "green", "pulse + contextual action + forwarded snapshot smoke passed"
+    return "green", "forwarded snapshot smoke passed"
 
 
 def check_tool_smoke():

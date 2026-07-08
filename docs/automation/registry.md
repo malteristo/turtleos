@@ -37,8 +37,8 @@ Spirit harvests reports from `desk/craft/automation-reports/latest.md` at `. cra
 
 | Path | What |
 |------|------|
-| `~/workshop/desk/craft/automation-reports/latest.md` | Spirit Ops Report (Forge harvest) |
-| `~/workshop/desk/craft/automation-reports/YYYY-MM-DD-HHMM-{job}.md` | Dated archive |
+| `{practice_root}/state/notes/automation-reports/latest.md` | Spirit Ops Report (Forge harvest via `sync_practice_root.sh pull`) |
+| `{practice_root}/state/notes/automation-reports/YYYY-MM-DD-HHMM-{job}.md` | Dated archive |
 | `~/turtleos/test-runs/ops-report-latest.json` | Machine bundle |
 | `~/turtleos/test-runs/shake-report-latest.json` | Shake dashboard JSON |
 | `~/turtleos/logs/ops-gate.log` | launchd log |
