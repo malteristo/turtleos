@@ -1044,8 +1044,6 @@ async def _continue_dialogue_turn(
         reply, guard_notes = apply_flow_reply_guard(reply, flow_id, history)
         if guard_notes:
             print(f"Flow reply guard: {guard_notes}")
-    if _reflex and not native_eddy:
-        reply = f"-# {_reflex}\n\n{reply}"
     if tool_report:
         reply = f"{reply}\n\n-# ⚙️ {tool_report}"
     if attachment_extracted:
