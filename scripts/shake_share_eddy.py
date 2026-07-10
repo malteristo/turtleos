@@ -40,6 +40,7 @@ def check_module() -> list[str]:
         "check_share_dissolve_authority",
         "cmd_share",
         "ShareContinueView",
+        "SharePickerView",
     ):
         if not hasattr(share_eddy, name):
             errors.append(f"share_eddy missing: {name}")
@@ -71,7 +72,7 @@ def check_commands() -> list[str]:
 def check_tests() -> list[str]:
     errors: list[str] = []
     pytest = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/test_share_eddy.py", "-q"],
+        [sys.executable, "-m", "pytest", "tests/test_share_ui.py", "-q"],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -79,14 +80,14 @@ def check_tests() -> list[str]:
     if pytest.returncode == 0:
         return errors
     unittest = subprocess.run(
-        [sys.executable, "-m", "unittest", "tests.test_share_eddy", "-q"],
+        [sys.executable, "-m", "unittest", "tests.test_share_ui", "-q"],
         cwd=REPO,
         capture_output=True,
         text=True,
     )
     if unittest.returncode != 0:
         errors.append(
-            "test_share_eddy failed:\n"
+            "test_share_ui failed:\n"
             f"{pytest.stdout}\n{pytest.stderr}\n"
             f"unittest fallback:\n{unittest.stdout}\n{unittest.stderr}"
         )

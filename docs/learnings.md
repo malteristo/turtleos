@@ -47,6 +47,36 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Next:** Slice 4 — `share_policy.py` (shared-eddy response + dissolve authority).
 
+### 2026-07-10 — `share_eddy` decomposition Slice 4 (`share_policy.py`)
+
+**Extract:** Context scaffolding, mention-gate, dissolve authority, witness/skip, and `_received_eddy_notify_config` moved to `share_policy.py` (369 lines). `share_eddy.py` now ~1,323 lines; `discord_bot.py` callers unchanged via re-export.
+
+**Tests:** New `tests/test_share_policy.py` (16 tests). Registry patches must target `share_policy.get_registry` for `sharer_is_space_member` / `space_member_addresses`.
+
+**Gate:** `spirit_verify.sh` 443 OK.
+
+**Next:** Slice 5 — `share_delivery.py` (async delivery + notify; first slice with potential Mini deploy).
+
+### 2026-07-10 — `share_eddy` decomposition Slice 5 (`share_delivery.py`)
+
+**Extract:** Async delivery/materialize/notify paths + `ShareContinueView` moved to `share_delivery.py` (619 lines). `share_eddy.py` now ~766 lines (UI + `cmd_share` only).
+
+**Tests:** New `tests/test_share_delivery.py`; `test_share_eddy.py` reduced to client smoke.
+
+**Gate:** `spirit_verify.sh` 444 OK.
+
+**Next:** Slice 6 — `share_ui.py` (final extraction; then chapter close + optional Mini deploy).
+
+### 2026-07-10 — `share_eddy` decomposition Slice 6 (`share_ui.py`)
+
+**Extract:** All `discord.ui` views/selects/modals, `get_share_bot_client`, `register_persistent_share_views`, and `cmd_share` moved to `share_ui.py` (~653 lines). `share_eddy.py` is now a thin re-export shim (~170 lines) — callers unchanged.
+
+**Tests:** New `tests/test_share_ui.py`; retired `test_share_eddy.py`. `test_eddy_flow_library` dismiss-bar assertion targets `share_ui.py`.
+
+**Gate:** `spirit_verify.sh` 445 OK.
+
+**Chapter close (Forge):** decomposition complete. **Deploy:** dyad approval → restart Turtle + River; `shake_share_eddy.py --live`; Mage dogfood S1.
+
 **Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share`. Bar re-anchor deferred for `!artifacts` and `!share`. On **artifacts** bar press: bar **edits in place** (artifacts highlighted, others greyed) instead of delete+repost — avoids "deleted message" confusion and shows which flow started.
 
 **Public read:** `ARTIFACT_READ_TOKEN` + `PRACTICE_WEB_BASE=https://…` — Open URLs carry `?t=`; see `deploy/caddy-practice-viewer.snippet`.

@@ -1,7 +1,7 @@
 # Chapter — Decomposition: `share_eddy.py`
 
 **Date:** 2026-07-10  
-**Status:** In progress — Slice 3 **complete**; Slice 4 next  
+**Status:** Complete — all 6 slices landed (Forge); Mini deploy pending dyad approval  
 **Deciders:** Kermit + Spirit (dyadic maintainer)  
 **Builds on:** Spirit maintainability sweep (`674888e`), `commands.py` decomposition chapter
 
@@ -34,9 +34,9 @@ Same as `2026-06-20-decomposition-commands.md`:
 | **1** | `share_targets.py` — registry targets, dataclasses | ~176 | §15.6 addressing | **Low** | ✅ complete |
 | **2** | `share_transcript.py` — history filter, digest, export bundle | ~283 | §15.6 export shape | Low | ✅ complete |
 | **3** | `share_storage.py` — inbox/pending/received paths + JSON I/O | ~195 | §15.6 persistence | Low | ✅ complete |
-| **4** | `share_policy.py` — shared-eddy response, dissolve authority | ~200 | §15.6 + space policy | Medium | ⏳ next |
-| **5** | `share_delivery.py` — deliver + materialize async paths | ~400 | §15.6 delivery | Medium | pending |
-| **6** | `share_ui.py` — views, modals, `cmd_share` entry | ~500 | §15.6 UX | Medium-high | pending |
+| **4** | `share_policy.py` — shared-eddy response, dissolve authority | ~369 | §15.6 + space policy | Medium | ✅ complete |
+| **5** | `share_delivery.py` — deliver + materialize async paths | ~619 | §15.6 delivery | Medium | ✅ complete |
+| **6** | `share_ui.py` — views, modals, `cmd_share` entry | ~653 | §15.6 UX | Medium-high | ✅ complete |
 
 **Deferred (separate chapter):** space Slice 3a (`materialize_space_shared_eddy` full dogfood) — needs `shared-river` topology; do not expand scope inside decomposition slices.
 
@@ -141,71 +141,19 @@ from share_targets import (
 
 ---
 
-## Slice 4 — `share_policy.py` ⏳ ready to execute
+## Slice 4 — `share_policy.py` ✅ complete (2026-07-10)
 
-**Risk:** Medium — touches live dialogue path via `discord_bot.py` lazy imports (`maybe_skip_shared_eddy_dialogue`, context line builders). Re-export from `share_eddy` avoids caller churn.
+**Extracted:** `share_policy.py` (369 lines) — thread cfg merge, context scaffolding, mention gate, dissolve authority, witness/skip. `share_eddy.py` now ~1,323 lines (re-exports).
 
-### Extract (~365 lines from `share_eddy.py`)
+**Tests:** `tests/test_share_policy.py` (16 tests); policy tests lifted from `test_share_eddy.py`. Registry patches target `share_policy.get_registry`.
 
-| Group | Symbols |
-|-------|---------|
-| **Thread cfg merge** | `resolve_eddy_thread_cfg`, `_received_eddy_notify_config` |
-| **Prompt scaffolding** | `received_eddy_context_lines`, `shared_eddy_context_lines`, `shared_eddy_source_for_thread` |
-| **Space membership (policy)** | `sharer_is_space_member`, `space_member_addresses` |
-| **Mention gate** | `SharedEddyResponseDecision`, `_message_guild`, `_turtle_user_id_for_message`, `message_mentions_turtle`, `message_mentions_other_humans`, `message_is_reply_to_turtle`, `content_explicitly_invokes_turtle`, `content_looks_like_peer_thanks`, `_EXPLICIT_TURTLE_INVOKE_RE`, `_PEER_THANKS_RE`, `shared_eddy_response_decision` |
-| **Dissolve authority** | `ShareDissolveDecision`, `share_dissolve_denial_message`, `check_share_dissolve_authority` |
-| **Witness / skip** | `append_shared_eddy_witness_turn`, `maybe_skip_shared_eddy_dialogue` |
+**Verified:** `spirit_verify.sh` — 443 tests OK. `discord_bot.py` callers unchanged via re-export.
 
-**Leave in `share_eddy.py` (later slices):**
-
-- `post_reshare_transparency_act` → Slice 5 (delivery)
-- `should_notify_*`, `maybe_notify_*`, `notify_sharer_*` → Slice 5
-- All `discord.ui` views + `cmd_share` → Slice 6
-
-### Dependencies
-
-```python
-# share_policy.py imports
-from share_storage import load_received_thread_config
-from share_targets import mage_is_space_member, mage_key_for_discord_id
-from mage import get_registry, set_practice_context_for_channel, get_runtime_dir
-```
-
-`_received_eddy_notify_config` moves with policy — it merges `thread_configs` with `load_received_thread_config` (split River/Turtle bots).
-
-### Callers (re-export sufficient)
-
-| Caller | Imports today |
-|--------|----------------|
-| `discord_bot.py` | `resolve_eddy_thread_cfg`, `received_eddy_context_lines`, `shared_eddy_context_lines`, `maybe_skip_shared_eddy_dialogue` |
-| `cmd_threads.py`, `cmd_sessions.py` | `check_share_dissolve_authority` |
-| `test_cmd_sessions.py` | patches `share_eddy.check_share_dissolve_authority` — keep working via re-export |
-| `scripts/shake_share_eddy.py` | `shared_eddy_response_decision`, `check_share_dissolve_authority` |
-
-### Tests to add/move → `tests/test_share_policy.py`
-
-Lift from `test_share_eddy.py`:
-
-- `ShareReceivedContextTests`
-- `ShareSharedEddyContextTests` (patch `share_eddy.get_registry` → `share_policy.get_registry` for `sharer_is_space_member` / `space_member_addresses`)
-- `ShareEddyMentionGateTests` (patch `share_eddy._turtle_user_id_for_message` → `share_policy._turtle_user_id_for_message`)
-- `ShareDissolveAuthorityTests` (dual-patch `share_eddy.get_registry` + `share_targets.get_registry` unchanged)
-- Re-export smoke test
-
-**Keep in `test_share_eddy.py`:** `ShareNotifyPolicyTests`, `ShareNotifyTests` (notify flow → Slice 5).
-
-### Acceptance
-
-1. `./scripts/spirit_verify.sh` green
-2. `python scripts/shake_share_eddy.py` offline import smoke
-3. No behavior change in mention-gate or dissolve paths
-4. Matrix §15.6 note: decomposition Slice 4 complete
-
-**Deploy:** Forge-only repo edit; no Mini restart until delivery/UI slices land.
+**Deploy:** Forge-only — no Mini restart.
 
 ---
 
-## Slice 4 — `share_policy.py` (reference)
+## Slice 4 — `share_policy.py` (reference — executed 2026-07-10)
 
 **Extract:** `SharedEddyResponseDecision`, `shared_eddy_response_decision`, mention/reply heuristics, `check_share_dissolve_authority`, `shared_eddy_context_lines`, witness turn append, `maybe_skip_shared_eddy_dialogue`.
 
@@ -215,7 +163,54 @@ Lift from `test_share_eddy.py`:
 
 ---
 
-## Slice 5 — `share_delivery.py`
+---
+
+## Slice 5 — `share_delivery.py` ✅ complete (2026-07-10)
+
+**Extracted:** `share_delivery.py` (619 lines) — deliver/materialize/notify/rename + `ShareContinueView` (delivery-coupled). `share_eddy.py` now ~766 lines (UI + `cmd_share` remain).
+
+**Tests:** `tests/test_share_delivery.py` (11 tests); delivery tests lifted from `test_share_eddy.py`.
+
+**Verified:** `spirit_verify.sh` — 444 tests OK. `discord_bot.py` notify import unchanged via re-export.
+
+**Deploy:** Forge-only until dyad approves Mini deploy + restart both Turtle + River.
+
+---
+
+## Slice 6 — `share_ui.py` ✅ complete (2026-07-10)
+
+**Extracted:** `share_ui.py` (~653 lines) — picker/select/modal views, `get_share_bot_client`, `register_persistent_share_views`, `cmd_share`. `share_eddy.py` now a thin re-export shim (~170 lines).
+
+**Tests:** `tests/test_share_ui.py` (client smoke + re-export); `test_share_eddy.py` retired. `test_eddy_flow_library` flow-bar dismiss assertion now targets `share_ui.py`.
+
+**Verified:** `./scripts/spirit_verify.sh` — 445 tests OK.
+
+**Deploy:** Dyad approval → restart **both** `com.turtle.discord` and `com.turtle.river`; `shake_share_eddy.py --live`; Mage async dogfood S1.
+
+---
+
+## Slice 6 — `share_ui.py` ⏳ ready to execute
+
+**Risk:** Medium-high — `cmd_share`, persistent views, all `discord.ui` classes (~600 lines).
+
+### Extract from `share_eddy.py`
+
+| Group | Symbols |
+|-------|---------|
+| **Picker / confirm** | `ShareTargetSelect`, `ShareSpaceSelect`, `ShareEditModal`, `SharePreviewView`, `ShareConfirmView`, `SharePickerView` |
+| **Entry + registration** | `get_share_bot_client`, `register_persistent_share_views`, `cmd_share` |
+
+**Leave:** Thin `share_eddy.py` re-export shim only (or retire module name after callers migrate).
+
+### Acceptance
+
+1. `spirit_verify.sh` green
+2. `shake_share_eddy.py --live` on Mini after deploy
+3. Mage async dogfood S1 scenario
+
+---
+
+## Slice 5 — `share_delivery.py` (reference — executed 2026-07-10)
 
 **Extract:** `deliver_practitioner_share`, `deliver_space_share`, `materialize_received_eddy`, `materialize_space_shared_eddy`, `continue_received_share`, notify/post helpers that touch Discord API.
 

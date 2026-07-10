@@ -39,7 +39,7 @@ class EddyFlowLibraryTests(unittest.TestCase):
         self.assertNotIn("touch_eddy_flow_library_bar", dispatch_src)
         lib_src = (REPO / "eddy_flow_library.py").read_text(encoding="utf-8")
         self.assertIn("retire_standing_flow_library_bars", lib_src)
-        share_src = (REPO / "share_eddy.py").read_text(encoding="utf-8")
+        share_src = (REPO / "share_ui.py").read_text(encoding="utf-8")
         self.assertIn("dismiss_eddy_flow_library_bar", share_src)
 
     def test_prepare_flow_uses_bootstrap(self) -> None:
