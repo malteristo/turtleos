@@ -29,6 +29,41 @@ Chapter pattern:
 
 Example chapter: the read-only live update surface. The tension was safe updates for a live shell. The spec defines inspect/propose/heal authority in `TURTLE_SPEC.md` §20. The implemented slice stops at `update check/plan`, with tests and canary source coverage, while automated apply/restart remains outside operator default authority.
 
+## Agent-Driven Development Workflow
+
+*Adopted 2026-07-10. turtleOS is developed almost entirely by AI agents directed by a human who defines problems and reviews artifacts. This section codifies how that factory runs. It refines — does not replace — the chapter pattern above: a chapter is the narrative unit; this workflow is its production mechanics.*
+
+### Principles
+
+1. **Task sizing for the smart zone.** Agent quality degrades as context fills (~100K tokens regardless of window size). Size every task to complete well within a fresh context. Prefer clearing context and starting fresh over compacting; a session that must be compacted twice was scoped too large.
+2. **Alignment before artifacts.** The valuable output of planning is a *shared design concept* between human and agent, reached by the agent interviewing the human (questions one at a time, recommended answer attached) — not a spec the human writes alone. Destination documents summarize alignment already reached; they do not substitute for it.
+3. **Two task classes.** **HITL** (human-in-the-loop): alignment, design judgment, QA, taste, live-Mini operations. **AFK** (away-from-keyboard): implementation against a well-specified issue with working feedback loops. Planning is always HITL; implementation should almost always be AFK-able — if it isn't, the issue isn't specified well enough yet.
+4. **Vertical slices (tracer bullets).** Break destinations into thin slices that cross all layers and produce something testable/visible, not horizontal layers. A slice's completion is observable by consequence, per the chapter pattern's "verify by consequence."
+5. **Feedback loops are the ceiling.** Agent output quality is capped by the quality of the feedback loops it runs against — the unit gate, shakes, type/lint checks. A red or untrustworthy gate is a factory-stops defect (see issues 009/027/028). TDD (red → green → refactor) is the default implementation discipline: it instruments the code before writing it, which prevents test-cheating.
+6. **Review in a fresh context.** Never have the implementing session review its own work — by review time it is deep in the dumb zone. Reviews run in fresh contexts (separate agents), with coding standards **pushed** to reviewers and **pullable** by implementers. The 2026-07-10 dual review (two independent models, same checkout) validated cross-model review diversity: each found critical issues the other missed.
+7. **Deep modules, delegated interiors.** Design module interfaces deliberately (HITL); delegate implementations (AFK). Small interface, deep functionality — testable from the outside as a unit. This is how the human retains a working map of the codebase while agents write nearly all the code. Shallow-module sprawl is what unwatched agents produce by default.
+8. **QA is where taste enters.** Human QA of the running system is not optional polish — it is the mechanism by which the operator's judgment shapes the product. QA findings become new backlog issues; the Kanban absorbs them continuously.
+9. **Doc-rot policy.** Issue files and PRD-like artifacts are working memory, not documentation. Delete them when done (the chronicle records the fix). Durable knowledge goes to `TURTLE_SPEC.md`, `docs/architecture.md`, or `docs/learnings.md`.
+
+### The pipeline
+
+```
+idea/friction ──HITL──► grilling session (agent interviews human → design concept)
+              ──HITL──► destination doc (problem, stories, module map, out-of-scope)
+              ──HITL──► vertical-slice issues with blocking relations (issues/, gitignored)
+              ──AFK───► implementation loops (TDD, gate green, one issue per fresh context;
+                        parallel agents on unblocked issues)
+              ──fresh──► automated review (standards pushed, separate context)
+              ──HITL──► QA on the running system → new issues → repeat
+              ──gate──► chapter close per the pattern above (matrix, shakes, harvest)
+```
+
+### Backlog conventions
+
+- `issues/` (gitignored — may contain unfixed security detail): `NNN-slug.md`, each with severity, tranche, **Mode: AFK/HITL**, **Blocked-by**, finding, fix sketch, acceptance criteria. Unblocked issues in a tranche are parallelizable.
+- An issue is ready for AFK dispatch when a fresh agent could complete it from the file alone plus repo exploration — acceptance criteria testable, feedback loop named.
+- Live-Mini actions inside any issue stay HITL per the live-runtime boundaries in `AGENTS.md`, regardless of the issue's mode tag.
+
 ## Drift Sweep Ritual
 
 Run this before pushing any change that affects topology, runtime behavior, autonomy, model routing, practice files, channels, or operator workflow.

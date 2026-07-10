@@ -32,6 +32,9 @@ scout/bot.log
 # Practitioner data (per-practitioner, stays local)
 workshops/
 
+# Local issue backlog (contains unfixed security detail; public repo)
+issues/
+
 # Private lineage and generated attunement state
 identity/deprecated/
 identity/attunement_digest.md

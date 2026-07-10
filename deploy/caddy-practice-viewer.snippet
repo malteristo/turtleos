@@ -17,12 +17,9 @@ your-hostname.example.com {
         reverse_proxy localhost:8742
     }
 
-    handle /files/* {
-        root * /Users/turtle/workshops
-        uri strip_prefix /files
-        file_server
-        header Access-Control-Allow-Origin *
-    }
+    # NOTE: never add a raw file_server over the workshops tree here.
+    # All artifact reads must go through the allowlisted /read endpoint —
+    # a bare /files/* route bypasses the tier policy entirely.
 
     handle {
         root * /Users/turtle/turtleos/static/practice_viewer
