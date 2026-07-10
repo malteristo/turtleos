@@ -83,7 +83,7 @@ class AdminSpaceRegistryTests(unittest.TestCase):
         self.assertEqual(rows[0]["space_key"], "family")
 
     def test_shared_river_channel_for_space_skips_archived(self) -> None:
-        with patch("share_eddy.get_registry", return_value=self.REGISTRY):
+        with patch("share_targets.get_registry", return_value=self.REGISTRY):
             self.assertEqual(shared_river_channel_for_space("family"), 100)
             self.assertIsNone(shared_river_channel_for_space("old"))
 

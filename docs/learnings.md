@@ -17,6 +17,15 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Matrix:** §8.4 checkpoint/release → **Aligned** (2026-07-04 live shake); test count ~437; `discord_bot.py` line estimate refreshed.
 
+### 2026-07-10 — `share_eddy` decomposition Slice 1 (`share_targets.py`)
+
+**Extract:** Registry addressing (`ShareTarget`, `SpaceShareTarget`, `list_*_targets`, river/runtime paths, space membership) moved to `share_targets.py` (~176 lines). `share_eddy.py` re-exports for backward compatibility — `commands.py` and existing tests unchanged at import sites.
+
+**Tests:** New `tests/test_share_targets.py`; target tests removed from `test_share_eddy.py`. Patches for extracted functions must target `share_targets.get_registry` (not `share_eddy.get_registry`).
+
+**Gate:** `spirit_verify.sh` 439 OK after Forge `venv` install. `shake_share_eddy.py` still invokes system `python3` when pytest absent — use venv for share-only unittest if shake flakes locally.
+
+**Next:** Slice 2 — `share_transcript.py` (pure export/digest helpers).
 
 **Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share`. Bar re-anchor deferred for `!artifacts` and `!share`. On **artifacts** bar press: bar **edits in place** (artifacts highlighted, others greyed) instead of delete+repost — avoids "deleted message" confusion and shows which flow started.
 

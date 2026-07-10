@@ -13,104 +13,6 @@ sys.modules.setdefault("discord", __import__("unittest.mock").mock.MagicMock())
 sys.modules.setdefault("discord.ui", sys.modules["discord"])
 
 
-class ShareEddyTargetTests(unittest.TestCase):
-    def test_list_practitioner_targets_excludes_self(self) -> None:
-        from share_eddy import list_practitioner_targets
-
-        registry = {
-            "mages": {
-                "kermit": {
-                    "discord_id": "111",
-                    "address": "Kermit",
-                    "type": "mage",
-                },
-                "nesrine": {
-                    "discord_id": "222",
-                    "address": "Nesrine",
-                    "type": "practitioner",
-                },
-            },
-            "channels": {
-                "1001": {"mage": "kermit", "type": "river"},
-                "1002": {"mage": "nesrine", "type": "hosted-river"},
-            },
-        }
-        with patch("share_eddy.get_registry", return_value=registry):
-            targets = list_practitioner_targets("kermit", "111")
-        self.assertEqual(len(targets), 1)
-        self.assertEqual(targets[0].mage_key, "nesrine")
-        self.assertEqual(targets[0].channel_id, 1002)
-
-
-class ShareEddySpaceTargetTests(unittest.TestCase):
-    FAMILY_CHANNEL = 1491163697278881836
-
-    def test_list_space_targets_all_practitioners(self) -> None:
-        from share_eddy import list_space_targets
-
-        registry = {
-            "mages": {
-                "kermit": {"discord_id": "111", "address": "Kermit", "type": "mage"},
-                "nesrine": {"discord_id": "222", "address": "Nesrine", "type": "practitioner"},
-                "alex": {"discord_id": "333", "address": "Alex", "type": "practitioner"},
-            },
-            "spaces": {
-                "family": {
-                    "members": ["kermit", "nesrine"],
-                    "share_policy": "all_practitioners",
-                }
-            },
-            "channels": {
-                str(self.FAMILY_CHANNEL): {
-                    "type": "shared-river",
-                    "mage": "family",
-                }
-            },
-        }
-        with patch("share_eddy.get_registry", return_value=registry):
-            targets = list_space_targets("alex")
-        self.assertEqual(len(targets), 1)
-        self.assertEqual(targets[0].space_key, "family")
-        self.assertEqual(targets[0].channel_id, self.FAMILY_CHANNEL)
-
-    def test_list_space_targets_members_only_excludes_guest(self) -> None:
-        from share_eddy import list_space_targets
-
-        registry = {
-            "mages": {
-                "kermit": {"discord_id": "111"},
-                "nesrine": {"discord_id": "222"},
-                "alex": {"discord_id": "333", "type": "practitioner"},
-            },
-            "spaces": {
-                "family": {
-                    "members": ["kermit", "nesrine"],
-                    "share_policy": "members_only",
-                }
-            },
-            "channels": {
-                "9001": {"type": "shared-river", "mage": "family"},
-            },
-        }
-        with patch("share_eddy.get_registry", return_value=registry):
-            self.assertEqual(list_space_targets("alex"), [])
-            self.assertEqual(len(list_space_targets("kermit")), 1)
-
-    def test_space_member_discord_ids_excludes_sharer(self) -> None:
-        from share_eddy import space_member_discord_ids
-
-        registry = {
-            "mages": {
-                "kermit": {"discord_id": "111"},
-                "nesrine": {"discord_id": "222"},
-            },
-            "spaces": {"family": {"members": ["kermit", "nesrine"]}},
-        }
-        with patch("share_eddy.get_registry", return_value=registry):
-            ids = space_member_discord_ids("family", exclude_id="111")
-        self.assertEqual(ids, ["222"])
-
-
 class SharePreviewEmbedSpaceTests(unittest.TestCase):
     def test_preview_embed_space_mentions_shared_eddy(self) -> None:
         from share_eddy import SpaceShareTarget, build_preview_embed
@@ -174,21 +76,6 @@ class ShareEddyBundleTests(unittest.TestCase):
             assert loaded is not None
             self.assertEqual(loaded["title"], "test")
             self.assertEqual(loaded["sharer_key"], "a")
-
-
-class ShareEddyRiverChannelTests(unittest.TestCase):
-    def test_river_channel_for_mage(self) -> None:
-        from share_eddy import river_channel_for_mage
-
-        registry = {
-            "channels": {
-                "42": {"mage": "guest", "type": "hosted-river"},
-                "43": {"mage": "guest", "type": "craft"},
-            }
-        }
-        with patch("share_eddy.get_registry", return_value=registry):
-            self.assertEqual(river_channel_for_mage("guest"), 42)
-            self.assertIsNone(river_channel_for_mage("missing"))
 
 
 class ShareEddyFilterTests(unittest.TestCase):
@@ -652,6 +539,9 @@ class ShareNotifyTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             save_received_thread_config(tmp, 888, cfg)
             with patch("share_eddy.get_registry", return_value=registry), patch(
+                "share_targets.get_registry",
+                return_value=registry,
+            ), patch(
                 "eddy_lifecycle_bar.is_practitioner_input",
                 return_value=True,
             ), patch("commands.thread_configs", {}), patch(
@@ -869,14 +759,6 @@ class ShareEddyMentionGateTests(unittest.TestCase):
 
 
 class ShareReshareTransparencyTests(unittest.TestCase):
-    def test_mage_is_space_member(self) -> None:
-        from share_eddy import mage_is_space_member
-
-        registry = {"spaces": {"family": {"members": ["kermit", "nesrine"]}}}
-        with patch("share_eddy.get_registry", return_value=registry):
-            self.assertTrue(mage_is_space_member("kermit", "family"))
-            self.assertFalse(mage_is_space_member("lukas", "family"))
-
     def test_transparency_embed_names_actor_and_recipient(self) -> None:
         from share_eddy import ShareTarget, build_reshare_transparency_embed
 
@@ -938,7 +820,10 @@ class ShareDissolveAuthorityTests(unittest.TestCase):
             "from_sharer": "Kermit",
             "space_key": "family",
         }
-        with patch("share_eddy.get_registry", return_value=self.FAMILY_REGISTRY):
+        with patch("share_eddy.get_registry", return_value=self.FAMILY_REGISTRY), patch(
+            "share_targets.get_registry",
+            return_value=self.FAMILY_REGISTRY,
+        ):
             decision = check_share_dissolve_authority(888, 9001, "222", cfg)
         self.assertFalse(decision.allowed)
         self.assertIn("Kermit", decision.reason or "")
@@ -953,7 +838,10 @@ class ShareDissolveAuthorityTests(unittest.TestCase):
             "from_sharer": "Lukas",
             "space_key": "family",
         }
-        with patch("share_eddy.get_registry", return_value=self.FAMILY_REGISTRY):
+        with patch("share_eddy.get_registry", return_value=self.FAMILY_REGISTRY), patch(
+            "share_targets.get_registry",
+            return_value=self.FAMILY_REGISTRY,
+        ):
             decision = check_share_dissolve_authority(888, 9001, "222", cfg)
         self.assertTrue(decision.allowed)
 
@@ -1007,7 +895,7 @@ class ShareNotifyPolicyTests(unittest.TestCase):
             "share_creator": "111",
             "space_key": "family",
         }
-        with patch("share_eddy.get_registry", return_value=registry):
+        with patch("share_targets.get_registry", return_value=registry):
             self.assertTrue(should_notify_sharer_on_first_peer_reply(cfg, "222"))
             self.assertFalse(should_notify_sharer_on_first_peer_reply(cfg, "111"))
             self.assertFalse(should_notify_sharer_on_first_peer_reply(cfg, "999"))

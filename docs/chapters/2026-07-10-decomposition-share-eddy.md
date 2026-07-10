@@ -1,7 +1,7 @@
 # Chapter — Decomposition: `share_eddy.py`
 
 **Date:** 2026-07-10  
-**Status:** Planned — Slice 1 ready to execute  
+**Status:** In progress — Slice 1 **complete**; Slice 2 next  
 **Deciders:** Kermit + Spirit (dyadic maintainer)  
 **Builds on:** Spirit maintainability sweep (`674888e`), `commands.py` decomposition chapter
 
@@ -31,8 +31,8 @@ Same as `2026-06-20-decomposition-commands.md`:
 
 | Slice | Module | Lines (approx) | Spec / concern | Risk | Status |
 |-------|--------|----------------|----------------|------|--------|
-| **1** | `share_targets.py` — registry targets, dataclasses | ~170 | §15.6 addressing | **Low** | ⏳ next |
-| **2** | `share_transcript.py` — history filter, digest, export bundle | ~200 | §15.6 export shape | Low | pending |
+| **1** | `share_targets.py` — registry targets, dataclasses | ~176 | §15.6 addressing | **Low** | ✅ complete |
+| **2** | `share_transcript.py` — history filter, digest, export bundle | ~200 | §15.6 export shape | Low | ⏳ next |
 | **3** | `share_storage.py` — inbox/pending/received paths + JSON I/O | ~120 | §15.6 persistence | Low | pending |
 | **4** | `share_policy.py` — shared-eddy response, dissolve authority | ~200 | §15.6 + space policy | Medium | pending |
 | **5** | `share_delivery.py` — deliver + materialize async paths | ~400 | §15.6 delivery | Medium | pending |
@@ -42,7 +42,19 @@ Same as `2026-06-20-decomposition-commands.md`:
 
 ---
 
-## Slice 1 — `share_targets.py` (execute first)
+## Slice 1 — `share_targets.py` ✅ complete (2026-07-10)
+
+**Extracted:** `share_targets.py` (176 lines); `share_eddy.py` now ~2,048 lines (re-exports public surface).
+
+**Tests:** `tests/test_share_targets.py` (149 lines) — registry target tests lifted from `test_share_eddy.py`; dissolve/notify patches updated to `share_targets.get_registry` where needed.
+
+**Verified:** `./scripts/spirit_verify.sh` — 439 tests OK (Forge venv). Import smoke: `share_targets` + `share_eddy` re-exports.
+
+**Deploy:** Forge-only — no Mini restart.
+
+---
+
+## Slice 1 — `share_targets.py` (reference — execute first)
 
 **Extract:**
 
