@@ -1,7 +1,7 @@
 # Chapter — Decomposition: `share_eddy.py`
 
 **Date:** 2026-07-10  
-**Status:** In progress — Slice 1 **complete**; Slice 2 next  
+**Status:** In progress — Slice 3 **complete**; Slice 4 next  
 **Deciders:** Kermit + Spirit (dyadic maintainer)  
 **Builds on:** Spirit maintainability sweep (`674888e`), `commands.py` decomposition chapter
 
@@ -32,9 +32,9 @@ Same as `2026-06-20-decomposition-commands.md`:
 | Slice | Module | Lines (approx) | Spec / concern | Risk | Status |
 |-------|--------|----------------|----------------|------|--------|
 | **1** | `share_targets.py` — registry targets, dataclasses | ~176 | §15.6 addressing | **Low** | ✅ complete |
-| **2** | `share_transcript.py` — history filter, digest, export bundle | ~200 | §15.6 export shape | Low | ⏳ next |
-| **3** | `share_storage.py` — inbox/pending/received paths + JSON I/O | ~120 | §15.6 persistence | Low | pending |
-| **4** | `share_policy.py` — shared-eddy response, dissolve authority | ~200 | §15.6 + space policy | Medium | pending |
+| **2** | `share_transcript.py` — history filter, digest, export bundle | ~283 | §15.6 export shape | Low | ✅ complete |
+| **3** | `share_storage.py` — inbox/pending/received paths + JSON I/O | ~195 | §15.6 persistence | Low | ✅ complete |
+| **4** | `share_policy.py` — shared-eddy response, dissolve authority | ~200 | §15.6 + space policy | Medium | ⏳ next |
 | **5** | `share_delivery.py` — deliver + materialize async paths | ~400 | §15.6 delivery | Medium | pending |
 | **6** | `share_ui.py` — views, modals, `cmd_share` entry | ~500 | §15.6 UX | Medium-high | pending |
 
@@ -97,11 +97,39 @@ from share_targets import (
 
 ---
 
+---
+
+## Slice 2 — `share_transcript.py` ✅ complete (2026-07-10)
+
+**Extracted:** `share_transcript.py` (283 lines) — `filter_share_history`, digest/bundle builders, LLM enrich, embed builders, `label_shared_history`. `share_eddy.py` now ~1,805 lines (re-exports).
+
+**Tests:** `tests/test_share_transcript.py` — bundle/filter/preview/enrich/label tests lifted from `test_share_eddy.py`.
+
+**Verified:** `spirit_verify.sh` — 440 tests OK. Export bundle schema unchanged.
+
+**Deploy:** Forge-only — no Mini restart.
+
+---
+
 ## Slice 2 — `share_transcript.py`
 
 **Extract:** `filter_share_history`, `_transcript_from_history`, `label_shared_history`, `build_digest`, `build_export_bundle`, `build_export_bundle_from_draft`, `enrich_export_bundle`, `share_label`, `is_placeholder_eddy_title`, embed builders that are pure (`build_received_share_embed`, `build_space_share_embed`, `build_preview_embed` if no discord client deps).
 
 **Acceptance:** Existing `test_share_eddy.py` bundle/digest tests green; export bundle schema unchanged.
+
+---
+
+---
+
+## Slice 3 — `share_storage.py` ✅ complete (2026-07-10)
+
+**Extracted:** `share_storage.py` (~193 lines) — path helpers, inbox/pending/received JSON I/O, active river acts, `supersede_stale_share_acts`. `share_eddy.py` now ~1,652 lines (re-exports).
+
+**Tests:** `tests/test_share_storage.py` — inbox round-trip, received config, pending draft, active acts lifted from `test_share_eddy.py`.
+
+**Verified:** `spirit_verify.sh` green.
+
+**Deploy:** Forge-only — no Mini restart.
 
 ---
 

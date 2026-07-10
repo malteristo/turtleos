@@ -27,6 +27,26 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Next:** Slice 2 — `share_transcript.py` (pure export/digest helpers).
 
+### 2026-07-10 — `share_eddy` decomposition Slice 2 (`share_transcript.py`)
+
+**Extract:** History filter, digest, export bundle builders, LLM enrich (`synthesize_share_metadata`), embed builders, and `label_shared_history` moved to `share_transcript.py` (~283 lines). `share_eddy.py` re-exports; export JSON schema unchanged.
+
+**Tests:** New `tests/test_share_transcript.py`; transcript tests removed from `test_share_eddy.py`. Mock patches for enrich must target `share_transcript.synthesize_share_metadata`.
+
+**Gate:** `spirit_verify.sh` 440 OK.
+
+**Next:** Slice 3 — `share_storage.py` (inbox/pending/received paths).
+
+### 2026-07-10 — `share_eddy` decomposition Slice 3 (`share_storage.py`)
+
+**Extract:** Inbox/pending/received path helpers, JSON read/write, active river acts tracking, and `supersede_stale_share_acts` moved to `share_storage.py` (~193 lines). `share_eddy.py` now ~1,652 lines; re-exports preserve caller imports.
+
+**Tests:** New `tests/test_share_storage.py`; storage tests removed from `test_share_eddy.py`.
+
+**Gate:** `spirit_verify.sh` 442 OK.
+
+**Next:** Slice 4 — `share_policy.py` (shared-eddy response + dissolve authority).
+
 **Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share`. Bar re-anchor deferred for `!artifacts` and `!share`. On **artifacts** bar press: bar **edits in place** (artifacts highlighted, others greyed) instead of delete+repost — avoids "deleted message" confusion and shows which flow started.
 
 **Public read:** `ARTIFACT_READ_TOKEN` + `PRACTICE_WEB_BASE=https://…` — Open URLs carry `?t=`; see `deploy/caddy-practice-viewer.snippet`.
