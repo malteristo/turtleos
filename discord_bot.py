@@ -485,7 +485,7 @@ async def on_ready():
             try:
                 from river_handler import _iter_river_channels
 
-                for ch in _iter_river_channels(client):
+                for ch in await _iter_river_channels(client):
                     await _retire_legacy_river_chrome(ch)
             except Exception as exc:
                 print(f"Legacy river chrome retirement failed: {exc}")

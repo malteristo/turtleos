@@ -478,8 +478,19 @@ def _save_eddy_bar_message(channel_id: int, message_id: int) -> None:
         json.dump(state, fh)
 
 
-def _iter_river_channels(client) -> list:
-    from mage import get_registry, get_channel, get_attunement_profile
+async def _resolve_client_channel(client, channel_id: int):
+    ch = client.get_channel(channel_id)
+    if ch is not None:
+        return ch
+    try:
+        return await client.fetch_channel(channel_id)
+    except discord.HTTPException:
+        return None
+
+
+async def _iter_river_channels(client) -> list:
+    from mage import get_attunement_profile, get_registry
+    from state import CHANNELS
 
     channels = []
     seen: set[int] = set()
@@ -493,13 +504,21 @@ def _iter_river_channels(client) -> list:
                 ch_id = int(ch_id_str)
             except (ValueError, TypeError):
                 continue
-            ch = client.get_channel(ch_id)
+            ch = await _resolve_client_channel(client, ch_id)
             if ch and ch_id not in seen:
                 channels.append(ch)
                 seen.add(ch_id)
-    dialogue = get_channel("dialogue")
-    if dialogue and get_attunement_profile() == "native" and dialogue.id not in seen:
-        channels.append(dialogue)
+    dialogue_id = CHANNELS.get("dialogue")
+    if dialogue_id and get_attunement_profile() == "native":
+        try:
+            ch_id = int(dialogue_id)
+        except (ValueError, TypeError):
+            ch_id = None
+        if ch_id is not None and ch_id not in seen:
+            ch = await _resolve_client_channel(client, ch_id)
+            if ch:
+                channels.append(ch)
+                seen.add(ch_id)
     return channels
 
 
@@ -570,7 +589,7 @@ async def ensure_bar_at_bottom(channel, client) -> None:
 
 async def ensure_river_eddy_bar(client) -> None:
     """Deploy the standing eddy bar at the bottom of each river channel."""
-    for channel in _iter_river_channels(client):
+    for channel in await _iter_river_channels(client):
         await _remove_legacy_eddy_door(channel)
         await ensure_bar_at_bottom(channel, client)
         print(f"Eddy bar ready in #{getattr(channel, 'name', channel.id)}")

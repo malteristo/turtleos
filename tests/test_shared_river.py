@@ -86,7 +86,7 @@ class SharedRiverHarnessTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(mage, "is_river_message", return_value=True):
             self.assertTrue(mage.uses_native_river(msg))
 
-    def test_iter_river_channels_includes_shared_river(self) -> None:
+    async def test_iter_river_channels_includes_shared_river(self) -> None:
         self._set_registry(
             channels={
                 str(self.FAMILY_CHANNEL): {
@@ -99,8 +99,8 @@ class SharedRiverHarnessTests(unittest.IsolatedAsyncioTestCase):
         mock_ch.id = self.FAMILY_CHANNEL
         client = MagicMock()
         client.get_channel.return_value = mock_ch
-        with patch("mage.get_channel", return_value=None):
-            channels = _iter_river_channels(client)
+        with patch("state.CHANNELS", {}):
+            channels = await _iter_river_channels(client)
         self.assertEqual(len(channels), 1)
         self.assertEqual(channels[0].id, self.FAMILY_CHANNEL)
 

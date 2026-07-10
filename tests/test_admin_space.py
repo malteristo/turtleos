@@ -1,6 +1,6 @@
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 
@@ -88,7 +88,7 @@ class AdminSpaceRegistryTests(unittest.TestCase):
             self.assertIsNone(shared_river_channel_for_space("old"))
 
 
-class AdminSpaceArchivedHarnessTests(unittest.TestCase):
+class AdminSpaceArchivedHarnessTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self._saved = dict(mage._MAGE_REGISTRY)
 
@@ -111,7 +111,7 @@ class AdminSpaceArchivedHarnessTests(unittest.TestCase):
         )
         self.assertFalse(mage._channel_is_river(555))
 
-    def test_iter_river_channels_skips_archived(self) -> None:
+    async def test_iter_river_channels_skips_archived(self) -> None:
         mage._MAGE_REGISTRY.clear()
         mage._MAGE_REGISTRY.update(
             {
@@ -126,7 +126,9 @@ class AdminSpaceArchivedHarnessTests(unittest.TestCase):
         active.id = 556
         client = MagicMock()
         client.get_channel.side_effect = lambda cid: active if cid == 556 else None
-        channels = _iter_river_channels(client)
+        client.fetch_channel = AsyncMock(return_value=None)
+        with patch("state.CHANNELS", {}):
+            channels = await _iter_river_channels(client)
         self.assertEqual([c.id for c in channels], [556])
 
 

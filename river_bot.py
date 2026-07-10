@@ -15,6 +15,7 @@ import fcntl
 import logging
 import os
 import sys
+import asyncio
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 if REPO_ROOT not in sys.path:
@@ -90,17 +91,20 @@ async def on_ready():
     print(f"River online: {name}#{getattr(user, 'discriminator', '0')}")
     print(f"Attunement profile: {get_attunement_profile()}")
     if get_attunement_profile() == "native":
-        try:
-            await ensure_river_eddy_bar(river_client)
-            await ensure_hosted_river_onboarding(river_client)
-            from share_eddy import register_persistent_share_views
+        async def _setup_native_river() -> None:
+            try:
+                await ensure_river_eddy_bar(river_client)
+                await ensure_hosted_river_onboarding(river_client)
+                from share_eddy import register_persistent_share_views
 
-            register_persistent_share_views(river_client)
-            from eddy_flow_library import retire_standing_flow_library_bars
+                register_persistent_share_views(river_client)
+                from eddy_flow_library import retire_standing_flow_library_bars
 
-            await retire_standing_flow_library_bars(river_client)
-        except Exception as exc:
-            print(f"River startup setup failed: {exc}")
+                await retire_standing_flow_library_bars(river_client)
+            except Exception as exc:
+                print(f"River startup setup failed: {exc}")
+
+        asyncio.create_task(_setup_native_river())
         try:
             from mage import sync_shared_river_channel_access
 
