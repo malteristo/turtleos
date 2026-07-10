@@ -196,7 +196,7 @@ Practitioners need not type `!dissolve` — **Close Thread** in Discord's thread
 Practitioner: right-click eddy → Close Thread
   → Discord archives thread (sidebar)
   → Gateway archive transition → turtleOS policy C
-  → if registered + ≥2 messages: full dissolve (essence → boom, chronicle, registry)
+  → if registered + ≥2 messages: full dissolve (essence → thread-archive, chronicle, registry)
   → else: light archive + river act ("nothing captured")
   → idempotent if !dissolve or lifecycle bar already ran
 ```

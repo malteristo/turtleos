@@ -55,7 +55,7 @@ on_guild_channel_* (S2–S3)       ──► discord_reconcile
 3. If thread in registry and message count ≥ 2 → `dissolve_eddy(..., native_close=True)`.
 4. Else → `light_archive_eddy()` (mark dissolved, clear configs/history, no essence) + **river act** via `log_activity`.
 
-**River feedback:** Native close posts a silent 🍃 embed on the parent river (via the River bot in split mode) — same path as other lifecycle acts. Light archive: `closed via Discord — eddy archived (nothing captured)`. Full dissolve: `dissolved via Discord — N entries captured to boom`.
+**River feedback:** Native close posts a silent 🍃 embed on the parent river (via the River bot in split mode) — same path as other lifecycle acts. Light archive: `closed via Discord — eddy archived (nothing captured)`. Full dissolve: `dissolved via Discord — N insights archived`.
 
 **Lock transition:** logged only in S1; registry flag deferred.
 

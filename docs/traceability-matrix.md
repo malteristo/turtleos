@@ -48,10 +48,10 @@
 | §9.5 | Seneschal via Turtle prose → buttons | — (retired runtime path) | `legacy_seneschal.py` (tests/canary only) | **Retired** | `test_legacy_seneschal` | harness-split ch. | **Retired** — River Save offer replaces fetch seneschal |
 | §9.5 | Act digest as context bridge | `commands.py` inject | same | **Partial** | `test_command_dispatch` | handoff doc | **Strangle** — replace with cleaner harness contract |
 | §10.3 | Flow front matter `reads:`/`writes:` | `flow_runner.py` | same | **Aligned** | `test_flow_runner`, `shake_flow.py` | `template/flows/` | **Keep** |
-| §11.1 | Vanilla practice root `state/` | `flow_runner`, `practice_io` | same + legacy compass/boom tools | **Partial** | `test_flow_runner` | `PRACTICE.md` | **Integrate** — legacy tools still default for magic |
+| §11.1 | Vanilla practice root `state/` | `flow_runner`, `practice_io`, `practice_freshness` | same | **Aligned** | `test_flow_runner`, `test_practice_freshness` | `PRACTICE.md` | **Keep** |
 | §12 | River act catalog + JSON enforcement | `river_handler.py` | same | **Aligned** | `test_river_handler` | §12 | **Keep** |
 | §4 | Attunement `native` / `craft` / `magic` | `mage.py`, `attunement.py` | same | **Partial** | `test_craft_attunement`, `test_flow_runner` | `mage_registry.example.yaml` | **Integrate** — operator instance attunement truth |
-| §4 / App A | Magic-attuned overlay | `prompts.py`, `tos_tools.py`, boom/compass | widespread | **Legacy** | partial | Appendix A | **Strangle** — no new features; shrink |
+| §4 / App A | Magic-attuned overlay | — (retired 2026-07-08/10) | removed | **Retired** | — | Appendix A | **Done** |
 | §13+ | Hosted river onboarding | `river_keys`, spawn | same | **Aligned** | `test_hosted_river_onboarding`, `shake_hosted_river.py` | `design-hosted-river.md` | **Keep** |
 | §15.6 | Share eddy (practitioner + space) | `share_eddy.py`, `!share` | same | **Partial** — Slice 1 **complete** (practitioner); space deferred | `test_share_eddy`, `shake_share_eddy.py` | `design-share-eddy.md`, `2026-06-25-share-eddy-slice1-dogfood.md` | **Integrate** — Slice 3 needs `shared-river` |
 | §20.2 | Inspect lane (shell harness, update check/plan) | `shell_harness.py`, `runtime/update.py`, `cli.py` | same | **Aligned** | `test_runtime_update`, harness tests | `development.md`, `procedures/` | **Keep** |
@@ -88,7 +88,7 @@
 | Item | Rationale |
 |------|-----------|
 | Magic main-channel dialogue | Operator instance still may need until native complete |
-| compass/boom/bright-centric `tos_tools` | Appendix A; native uses `state/` |
+| legacy portable surfaces (`boom`/`compass`/`bright`) | Retired 2026-07-10; native uses `state/` + `sessions/` |
 | `!thread` legacy spawn | Magic overlay in turtle-talk |
 | triage + proprio on magic path | Legacy stack |
 | interoception / pulse river posts | Magic-attuned texture |

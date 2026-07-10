@@ -52,7 +52,7 @@ cp -r template/character template/flows template/chronicle template/state "$PRAC
 echo "practice root at $PRACTICE_ROOT"
 ```
 
-Optional: copy legacy portable files (`compass.md`, `boom.md`, etc.) only if user wants them for specific flows.
+Native install seeds `state/current.yaml` only — legacy portable files (`compass.md`, `boom.md`, etc.) are retired.
 
 ---
 

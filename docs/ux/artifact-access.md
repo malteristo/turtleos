@@ -25,9 +25,8 @@ The artifact viewer is **shelves of your practice** — not a filesystem tree, n
 | **Archives** | Dissolved thread captures | `thread-archive/` |
 | **Chronicle** | Human-readable practice timeline | `chronicle/surface.md` |
 | **Saved links** | URLs you saved or fetched | `link-resonance/` + fetch cache (summary UI) |
+| **State** | Continuity engine and flow notes | `state/current.yaml`, `state/notes/` |
 | **Intake** | Your pasted captures | `box/intake/` |
-
-Hosted practitioners with portable surface files also see shelves backed by `boom.md`, `bright.md`, `compass.md`, etc. — still as **named shelves**, not filenames in a tree.
 
 **Not artifacts (hidden):** proposals, runtime JSON, dialogue logs, signals, share metadata, other people's practice, anything under `~/turtleos/`.
 

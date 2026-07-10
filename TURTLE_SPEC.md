@@ -565,7 +565,7 @@ A fresh install MUST NOT require compass, boom, bright, or intentions.
 | `flows/` | Yes | Shipped + user flows (Turtle Practice) |
 | `chronicle/` | Yes | Deep event log |
 | `state/` | Yes | Platform practice infrastructure (§11.4) |
-| `compass.md`, `boom.md`, … | No | Loaded when a flow declares `reads:` |
+| Legacy `compass.md`, `boom.md`, … | No | Retired 2026-07-10 — use `state/` + `sessions/` only |
 
 ### 11.2. Three-Root Topology (Advanced)
 
@@ -624,7 +624,7 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 
 | Tier | Paths / sources | Viewer presentation |
 |------|-----------------|---------------------|
-| **1 — Practitioner corpus** | `state/notes/*`; `sessions/`; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); hosted-only surface files (`boom.md`, `bright.md`, `compass.md`, `mirror.md`, `resonance.md`, `intentions/`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
+| **1 — Practitioner corpus** | `state/current.yaml`; `state/notes/*`; `sessions/`; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
 | **2 — Summary UI only** | Active eddy list from `thread-state/registry.yaml`; `!fetch` cache | "Active eddies", "Saved links" — no YAML or cache path browser |
 | **3 — Never** | `proposals/`; `thread-state/` innards; `dialogue/`; `signals/`; `share/*.json`; `native-runtime/`; logs; `~/turtleos/`; other practitioners' practice roots; operator craft/automation reports (unless operator role) | Hidden; `!read`/`!ls`/`!search` MUST reject |
 
@@ -1047,7 +1047,7 @@ Three lanes plus one orthogonal lane:
 | **Inspect** | Understand shell and runtime state | No (read-only) | Read-only |
 | **Propose** | Hand improvement artifacts to the dyad | No | Yes (`proposals/`, sessions, notes) |
 | **Self-heal** | Recover enumerated degraded states | No source edits; infra restart only per registry | No |
-| **Practice metabolism** | Tend lived practice | No | Yes (sessions, boom, continuity, crystallization) |
+| **Practice metabolism** | Tend lived practice | No | Yes (sessions, state/, continuity, crystallization) |
 
 Shell changes are **dyad craft**: Turtle inspects and proposes; Spirit or the Mage applies, tests, deploys, and shakes on Forge.
 
@@ -1079,7 +1079,7 @@ Turtle MAY turn observation into durable handoff artifacts.
 
 - `proposals/*.md` — operator self-development signals (not practitioner-facing; §11)
 - `autoresearch/proposals/` on the turtleOS repo — bounded research queue
-- Native runtime capabilities: `practice.write_proposal`, `practice.write_session`, `practice.append_boom`
+- Native runtime capabilities: `practice.write_proposal`, `practice.write_session`, `practice.append_note`
 - Procedure `proposal-to-patch-plan` → patch plan for Spirit/Mage apply
 
 **Contract:**
@@ -1099,7 +1099,7 @@ Self-healing is **enumerated repair only** — not LLM discretion. Repairs MUST 
 |--------------|----------|--------|------------|
 | `ollama` | **Yes** | `restart_ollama()` | Alert Mage |
 | `loops` | No | — | Alert Mage (bot restart is dyad action) |
-| `practice_freshness` | No | — | Alert Mage (stale practice state — native: `state/current.yaml`; legacy desk: boom/compass) |
+| `practice_freshness` | No | — | Alert Mage (stale practice state — `state/current.yaml` or latest session) |
 | `file_io` | No | — | Alert Mage (filesystem intervention) |
 | `discord` | No | — | Alert Mage (connection unhealthy — bot restart is dyad action) |
 
@@ -1114,7 +1114,7 @@ Retired heal paths (MUST NOT reappear without explicit resurrection): LiveSync b
 Turtle MAY autonomously maintain practice state without counting it as shell self-development:
 
 - Session notes, checkpoint/release, eddy continuity (`!keep`, `!ignore`, auto-archive → cool)
-- Boom/bright append, notes crystallization, interoception, invitations
+- Session notes, state/notes crystallization, invitations
 - Health-read proposals and operator commands that mutate practice artifacts
 
 **Rule:** If it changes how Turtle serves practice without changing how Turtle is built, it is practice metabolism. If it changes the shell, it is inspect/propose/heal only.

@@ -38,7 +38,7 @@ The first slice deliberately avoids the risky moves: no dialogue-loop migration,
 
 For each practitioner, `mage_registry.yaml` provides:
 
-- `practice_dir`: daily practice artifacts (`boom.md`, `sessions/`, `proposals/`, notes)
+- `practice_dir`: daily practice artifacts (`state/`, `sessions/`, `proposals/`)
 - `workshop_root`: optional wider Magic workshop, read-mostly
 - `runtime_dir`: Turtle-local operational state
 
@@ -86,7 +86,7 @@ This runtime is the concrete substrate for NLnet-facing commitments:
 - The river and eddies as proven practice topology.
 - Inline transparency as trust mechanism.
 - Practice files as operating system.
-- Session notes, proposals, boom, bright, intentions as the metabolic substrate.
+- Session notes, proposals, `state/notes/` as the metabolic substrate.
 - Turtle's care texture: slow, continuous, honest, practice-serving.
 
 
@@ -117,7 +117,7 @@ Each governed capability has:
 
 The current low-risk practice capabilities are:
 
-- `practice.append_boom`
+- `practice.append_note`
 - `practice.write_session`
 - `practice.write_proposal`
 
@@ -134,7 +134,7 @@ It reports:
 - Ollama reachability and available local models
 - runtime task totals, recent tasks, and recent failed tasks
 - configured practice/runtime paths
-- practice artifact surfaces (`boom.md`, `sessions/`, `proposals/`)
+- practice artifact surfaces (`state/`, `sessions/`, `proposals/`)
 - whether recent task artifact references are visible on disk
 
 Overall status is intentionally conservative: missing required services, unreachable models, or missing artifact references impair readiness; recent failed tasks degrade readiness while leaving the failure inspectable.

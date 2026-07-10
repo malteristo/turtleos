@@ -55,7 +55,7 @@ The shell is **native-only** (Phase D, 2026-07-08). Legacy magic-attuned Appendi
 | Always offer eddy | **Live** — standing eddy bar | Aligned |
 | Eddy-only Turtle | **Live** — native `character/` in eddies | Legacy magic prompts remain for Appendix A |
 | Two local models (River 4–9B / Turtle ~30B) | Partial — triage still in tree | **Gap** on model routing cleanup |
-| `state/` + CE practice infrastructure | **Live** — CE Slice 0+1a, `!focus` | Legacy compass/boom tools in `tos_tools` for magic |
+| `state/` + CE practice infrastructure | **Live** — CE Slice 0+1a, `!focus` | **Aligned** (2026-07-10 purge) |
 | Chronicle jump URLs | Partial | **Integrate** |
 | Magic-attuned mode | **Removed** (Phase D) | Appendix A retired from codebase |
 
@@ -81,7 +81,7 @@ Discord message
     │       ├─ session tracking                 ← open/update active_sessions
     │       ├─ get_system_prompt (prompts.py)   ← build identity + practice state prompt
     │       │   ├─ read identity (soul.md)
-    │       │   ├─ read practice files (compass, boom, bright, mirror, resonance)
+    │       │   ├─ read practice files (state/, sessions/, character/)
     │       │   ├─ detect cold-start
     │       │   ├─ build mage or practitioner prompt
     │       │   └─ inject session continuity, relationship context
@@ -97,9 +97,7 @@ Discord message
     │       │   ├─ write sessions/*.md (session note)
     │       │   └─ write proposals/*.md (if proposal emerged)
     │       ├─ _extract_practice_state           ← practitioners only
-    │       │   ├─ update boom.md (captured insights)
-    │       │   ├─ update compass.md (life landscape)
-    │       │   └─ update mirror.md (observations)
+    │       │   └─ append state/notes/ + practitioner-profile
     │       └─ assess_readiness (readiness.py)
     │
     ├─ practice_health_loop (background.py)     ← @tasks.loop(1h), runs weekly
@@ -206,7 +204,7 @@ Task (runtime/tasks.py) + Audit JSONL (runtime/audit.py)
     +--> Capability policy check (runtime/policy.py)
     |
     +--> Governed capability call
-          - practice.append_boom
+          - practice.append_note
           - practice.write_session
           - practice.write_proposal
           - model.run_probe
@@ -223,7 +221,7 @@ Artifact reference + task state for later inspection
 | `runtime/audit.py` | Append-only JSONL audit trail for events, task transitions, policy checks, capability calls, artifact validation, and provider results. |
 | `runtime/handoff.py` | Practice handoff execution path: event -> task -> policy -> practice artifact capability -> audit/task completion. |
 | `runtime/policy.py` | Capability registry and artifact path validation. Current policies are per-principal and root-bounded. |
-| `runtime/capabilities/practice.py` | Governed practice artifact writes: append boom, write session note, write proposal. |
+| `runtime/capabilities/practice.py` | Governed practice artifact writes: append note, write session, write proposal. |
 | `runtime/model_probe.py` | Provider-neutral model probe tasks for comparable outputs across Ollama, Anthropic, Gemini, and stub providers. |
 | `runtime/readiness.py` | Native runtime readiness sensorium: service state, model availability, task failures, and artifact visibility. |
 | `runtime/update.py` | Read-only turtleOS repository update awareness: git divergence, remote tracking freshness, changed-file impact classification, approval tier, and manual apply guidance. |
@@ -348,22 +346,16 @@ Each mage/practitioner has a practice directory with:
 
 ```
 ~/workshops/<name>/
-├── system.md          # Practice partner configuration
-├── compass.md         # Life landscape (domains, directions, seeds)
-├── boom.md            # Capture buffer (raw thoughts)
-├── bright.md          # Curated mind surface (actions, alive, waiting)
-├── mirror.md          # Turtle's observations about this person (practitioners)
-├── resonance.md       # Relationship history / trust context
-├── sessions/          # Session notes (auto-generated on timeout)
-│   └── 2026-03-29.md
-├── proposals/         # Autonomous proposals (from reflection)
-│   └── 2026-03-29-reflection.md
-├── intentions/        # Active goals/intentions
-│   └── active/
-├── threads/           # Thread state files
-│   └── thread_name.md
-└── readiness/         # Readiness assessment trails
-    └── 2026-03-29.json
+├── character/         # soul.md, conduct.md (native attunement)
+├── state/
+│   ├── current.yaml   # Continuity engine snapshot
+│   └── notes/         # Flow outcomes, extracted insights
+├── sessions/          # Session notes (checkpoint/release)
+├── thread-archive/    # Dissolved eddy captures
+├── chronicle/         # Practice timeline
+├── proposals/         # Autonomous proposals (operator / host)
+├── box/intake/        # Pasted captures
+└── thread-state/      # Eddy registry metadata (runtime-adjacent)
 ```
 
 ## Tool System
@@ -424,9 +416,8 @@ Message received → active_sessions[channel_id] updated
     │       │   ├─ ---SESSION_NOTE--- → sessions/*.md
     │       │   └─ ---PROPOSAL--- → proposals/*.md (optional)
     │       ├─ If practitioner: _extract_practice_state()
-    │       │   ├─ ---BOOM_ITEMS--- → append to boom.md
-    │       │   ├─ ---COMPASS_UPDATE--- → overwrite compass.md
-    │       │   └─ ---MIRROR_UPDATE--- → overwrite mirror.md
+    │       │   ├─ ---NOTE_ITEMS--- → append state/notes/
+    │       │   └─ ---PROFILE_UPDATE--- → state/notes/practitioner-profile.md
     │       └─ assess_readiness → readiness trail
     │
     └─ Next message resets the timer
@@ -532,9 +523,9 @@ The `!admin onboard <username>` command creates a complete practitioner environm
    - Add channel→mage mapping
    - Reload registry in memory
 4. **Initialize workshop** at `~/workshops/<username>/`:
-   - Create directories: `sessions/`, `intentions/`, `proposals/`, `thread-state/`
-   - Create empty files: `compass.md`, `boom.md`, `bright.md`, `mirror.md`
-   - Copy `system.md` template from an existing practitioner workshop
+   - Create directories: `sessions/`, `state/notes/`, `proposals/`, `thread-state/`, `character/`, `chronicle/`, `thread-archive/`, `box/intake/`
+   - Seed `state/current.yaml` (empty continuity scaffold)
+   - Copy `character/` templates from `template/practitioner/`
 5. **Confirm** with channel link and workshop path
 
 **What's NOT automated:**

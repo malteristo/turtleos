@@ -35,7 +35,7 @@ Tier 1 stays entirely in Discord. Tiers 2–3 converge on the same adapter funct
 
 | Condition | Behavior |
 |-----------|----------|
-| Thread in `thread_registry` **and** ≥2 messages | Full **`dissolve_eddy()`** — essence → boom, file archive, chronicle, registry mark |
+| Thread in `thread_registry` **and** ≥2 messages | Full **`dissolve_eddy()`** — essence → thread-archive, chronicle, registry mark |
 | Otherwise | **Light archive** — registry + in-memory cleanup only; river act notes nothing substantive captured |
 
 **Equivalent paths:** `!dissolve`, lifecycle bar **Dissolve** (after confirm), native **Close Thread** (policy C applies only to native close).
@@ -54,7 +54,7 @@ Tier 1 stays entirely in Discord. Tiers 2–3 converge on the same adapter funct
 
 **turtleOS:** Registry entry removed, in-memory harness state cleared, ops notice on parent river. Essence/chronicle only if history was already loaded or a prior close captured it.
 
-**Guidance:** For practice eddies you want in boom/chronicle, **Close Thread** (or `!dissolve`) before delete, or use dissolve paths explicitly.
+**Guidance:** For practice eddies you want in chronicle/thread-archive, **Close Thread** (or `!dissolve`) before delete, or use dissolve paths explicitly.
 
 ---
 
