@@ -295,8 +295,10 @@ async def checkpoint_session(
     except Exception as e:
         print(f"Post-checkpoint readiness check failed: {e}")
 
+    # TURTLE_SPEC §8.4: idle/manual checkpoints pause with history retained.
+    # Only an explicit release may dissolve a manual eddy (issue 001).
     cfg = thread_configs.get(channel_id)
-    if cfg and cfg.get("eddy_type") == "manual":
+    if trigger == "release" and cfg and cfg.get("eddy_type") == "manual":
         await _manual_release_dissolve(channel_id, history)
 
     _append_resonance_chronicle(channel_id, result)
