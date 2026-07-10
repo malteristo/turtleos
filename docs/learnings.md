@@ -252,3 +252,13 @@ Append to this file after each research cycle — it persists across sessions.
 **Native freshness (2026-07-10):** Aggressive purge — `magic_desk`/`hosted` topology branches removed. All rivers use `state/current.yaml` + `sessions/` only. Boom/compass/bright portable files, workshop_survey bridge, control panel auto-deploy, and `practice.append_boom` retired.
 
 **Prompt/runtime alignment:** `global.CLAUDE.md` no longer grants ad-hoc `launchctl` shell healing — must match `HEAL_REGISTRY`.
+
+### Dual-review merge + workflow adoption (2026-07-10)
+
+**Two independent full-codebase reviews** (different frontier models, same checkout) merged into a 30-issue backlog (`issues/`, gitignored). Cross-model diversity validated: each review found Critical issues the other missed (idle-dissolve data loss vs. flow-ID traversal). Recommend repeating dual review at major milestones.
+
+**Convergent verdict:** happy path solid; edges not hardened. Four structural weaknesses: split-bot concurrency (per-process locks + non-atomic writes on shared files), fail-open trust boundaries (`get_pd()` default fallback, unauthenticated intake, token-optional auth), unreliable evidence (red gate, tests overwriting ops artifacts, SHA-less shake verdicts), residual legacy + god modules.
+
+**Workflow shift:** `docs/development.md` now codifies agent-driven production mechanics (grill-first alignment, vertical-slice issues, HITL/AFK split, TDD default, fresh-context review, deep-module boundaries). Chapter pattern unchanged; this is its factory floor.
+
+**Fixed same-day (TDD):** unit gate red+noisy → 480 green; manual-eddy dissolve gated on explicit release (spec §8.4 — idle checkpoint was silently deleting threads); flow-ID confinement (strict slug + realpath, symlink-safe). Pattern note: the dissolve bug was invisible to short-history tests because `checkpoint_session` early-returns below `MIN_EXCHANGES_FOR_REFLECTION` — reaching deep branches needs realistic fixtures.
