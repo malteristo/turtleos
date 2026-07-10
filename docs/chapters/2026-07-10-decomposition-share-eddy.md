@@ -141,7 +141,71 @@ from share_targets import (
 
 ---
 
-## Slice 4 — `share_policy.py`
+## Slice 4 — `share_policy.py` ⏳ ready to execute
+
+**Risk:** Medium — touches live dialogue path via `discord_bot.py` lazy imports (`maybe_skip_shared_eddy_dialogue`, context line builders). Re-export from `share_eddy` avoids caller churn.
+
+### Extract (~365 lines from `share_eddy.py`)
+
+| Group | Symbols |
+|-------|---------|
+| **Thread cfg merge** | `resolve_eddy_thread_cfg`, `_received_eddy_notify_config` |
+| **Prompt scaffolding** | `received_eddy_context_lines`, `shared_eddy_context_lines`, `shared_eddy_source_for_thread` |
+| **Space membership (policy)** | `sharer_is_space_member`, `space_member_addresses` |
+| **Mention gate** | `SharedEddyResponseDecision`, `_message_guild`, `_turtle_user_id_for_message`, `message_mentions_turtle`, `message_mentions_other_humans`, `message_is_reply_to_turtle`, `content_explicitly_invokes_turtle`, `content_looks_like_peer_thanks`, `_EXPLICIT_TURTLE_INVOKE_RE`, `_PEER_THANKS_RE`, `shared_eddy_response_decision` |
+| **Dissolve authority** | `ShareDissolveDecision`, `share_dissolve_denial_message`, `check_share_dissolve_authority` |
+| **Witness / skip** | `append_shared_eddy_witness_turn`, `maybe_skip_shared_eddy_dialogue` |
+
+**Leave in `share_eddy.py` (later slices):**
+
+- `post_reshare_transparency_act` → Slice 5 (delivery)
+- `should_notify_*`, `maybe_notify_*`, `notify_sharer_*` → Slice 5
+- All `discord.ui` views + `cmd_share` → Slice 6
+
+### Dependencies
+
+```python
+# share_policy.py imports
+from share_storage import load_received_thread_config
+from share_targets import mage_is_space_member, mage_key_for_discord_id
+from mage import get_registry, set_practice_context_for_channel, get_runtime_dir
+```
+
+`_received_eddy_notify_config` moves with policy — it merges `thread_configs` with `load_received_thread_config` (split River/Turtle bots).
+
+### Callers (re-export sufficient)
+
+| Caller | Imports today |
+|--------|----------------|
+| `discord_bot.py` | `resolve_eddy_thread_cfg`, `received_eddy_context_lines`, `shared_eddy_context_lines`, `maybe_skip_shared_eddy_dialogue` |
+| `cmd_threads.py`, `cmd_sessions.py` | `check_share_dissolve_authority` |
+| `test_cmd_sessions.py` | patches `share_eddy.check_share_dissolve_authority` — keep working via re-export |
+| `scripts/shake_share_eddy.py` | `shared_eddy_response_decision`, `check_share_dissolve_authority` |
+
+### Tests to add/move → `tests/test_share_policy.py`
+
+Lift from `test_share_eddy.py`:
+
+- `ShareReceivedContextTests`
+- `ShareSharedEddyContextTests` (patch `share_eddy.get_registry` → `share_policy.get_registry` for `sharer_is_space_member` / `space_member_addresses`)
+- `ShareEddyMentionGateTests` (patch `share_eddy._turtle_user_id_for_message` → `share_policy._turtle_user_id_for_message`)
+- `ShareDissolveAuthorityTests` (dual-patch `share_eddy.get_registry` + `share_targets.get_registry` unchanged)
+- Re-export smoke test
+
+**Keep in `test_share_eddy.py`:** `ShareNotifyPolicyTests`, `ShareNotifyTests` (notify flow → Slice 5).
+
+### Acceptance
+
+1. `./scripts/spirit_verify.sh` green
+2. `python scripts/shake_share_eddy.py` offline import smoke
+3. No behavior change in mention-gate or dissolve paths
+4. Matrix §15.6 note: decomposition Slice 4 complete
+
+**Deploy:** Forge-only repo edit; no Mini restart until delivery/UI slices land.
+
+---
+
+## Slice 4 — `share_policy.py` (reference)
 
 **Extract:** `SharedEddyResponseDecision`, `shared_eddy_response_decision`, mention/reply heuristics, `check_share_dissolve_authority`, `shared_eddy_context_lines`, witness turn append, `maybe_skip_shared_eddy_dialogue`.
 
