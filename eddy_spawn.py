@@ -652,6 +652,20 @@ def _awaiting_title_path(thread_id: int, parent_channel_id: int) -> Path:
     return awaiting_dir / f"{thread_id}.json"
 
 
+def _find_awaiting_title_path(thread_id: int, parent_channel_id: int) -> Path | None:
+    """Locate awaiting-title state across workshop roots (split-runtime recovery)."""
+    primary = _awaiting_title_path(thread_id, parent_channel_id)
+    if primary.is_file():
+        return primary
+    from mage import workshop_runtime_roots
+
+    for runtime_dir in workshop_runtime_roots():
+        candidate = Path(runtime_dir) / "thread-state" / "awaiting-title" / f"{thread_id}.json"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def write_awaiting_title(thread_id: int, parent_channel_id: int, extra: dict | None = None) -> None:
     path = _awaiting_title_path(thread_id, parent_channel_id)
     payload = {
@@ -663,8 +677,8 @@ def write_awaiting_title(thread_id: int, parent_channel_id: int, extra: dict | N
 
 
 def read_awaiting_title(thread_id: int, parent_channel_id: int) -> dict | None:
-    path = _awaiting_title_path(thread_id, parent_channel_id)
-    if not path.exists():
+    path = _find_awaiting_title_path(thread_id, parent_channel_id)
+    if not path:
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -688,12 +702,12 @@ def is_awaiting_flow_intake(thread_id: int, parent_channel_id: int) -> bool:
 
 
 def is_awaiting_title(thread_id: int, parent_channel_id: int) -> bool:
-    return _awaiting_title_path(thread_id, parent_channel_id).exists()
+    return _find_awaiting_title_path(thread_id, parent_channel_id) is not None
 
 
 def pop_awaiting_title(thread_id: int, parent_channel_id: int) -> dict | None:
-    path = _awaiting_title_path(thread_id, parent_channel_id)
-    if not path.exists():
+    path = _find_awaiting_title_path(thread_id, parent_channel_id)
+    if not path:
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -1079,6 +1093,8 @@ async def spawn_river_eddy(
     topic: str | None = None,
     flow_id: str | None = None,
     eddy_type: str = "standard",
+    *,
+    initiator_id: int | None = None,
 ):
     """Materialize eddy from River act — thread on source message; rename on first in-eddy post."""
     from commands import thread_configs
@@ -1139,9 +1155,19 @@ async def spawn_river_eddy(
         from mage import set_practice_context_for_channel
 
         set_practice_context_for_channel(parent_id)
+        member_ids = list(get_thread_member_ids(parent_id))
+        author = getattr(message, "author", None)
+        if author and not getattr(author, "bot", True):
+            sid = str(author.id)
+            if sid not in member_ids:
+                member_ids.append(sid)
+        if initiator_id is not None:
+            sid = str(initiator_id)
+            if sid not in member_ids:
+                member_ids.append(sid)
         await ensure_shared_river_parent_access(message.channel)
         await add_users_to_thread(
-            thread, get_thread_member_ids(parent_id), label="add_user"
+            thread, member_ids, label="add_user"
         )
         write_pending_native_eddy(
             thread.id,

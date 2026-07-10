@@ -171,12 +171,14 @@ async def _spawn_eddy_from_anchor(
     channel: discord.abc.Messageable,
     *,
     flow_id: str | None = None,
+    initiator: discord.abc.User | None = None,
 ) -> discord.Thread | None:
     """Spawn blank eddy via anchor message so Discord renders the thread list embed."""
     from eddy_spawn import spawn_river_eddy
 
     anchor = await channel.send("\u200b", silent=True)
-    return await spawn_river_eddy(anchor, flow_id=flow_id)
+    initiator_id = initiator.id if initiator else None
+    return await spawn_river_eddy(anchor, flow_id=flow_id, initiator_id=initiator_id)
 
 
 async def _materialize_from_bar(
@@ -195,7 +197,9 @@ async def _materialize_from_bar(
     except discord.HTTPException as exc:
         print(f"Eddy bar delete failed: {exc}")
     try:
-        thread = await _spawn_eddy_from_anchor(channel, flow_id=flow_id)
+        thread = await _spawn_eddy_from_anchor(
+            channel, flow_id=flow_id, initiator=interaction.user
+        )
     except Exception as exc:
         print(f"Eddy bar spawn failed: {type(exc).__name__}: {exc}")
         await post_river_eddy_bar(channel, client)
@@ -451,23 +455,32 @@ async def render_acts(
 
 
 def _eddy_bar_state_path() -> str:
-    from mage import get_runtime_dir
+    from mage import _resolve_primary_runtime_dir
 
-    river_dir = os.path.join(get_runtime_dir(), "thread-state", "river")
+    river_dir = os.path.join(_resolve_primary_runtime_dir(), "thread-state", "river")
     os.makedirs(river_dir, exist_ok=True)
     return os.path.join(river_dir, "eddy_bar.json")
 
 
 def _load_eddy_bar_state() -> dict[str, int]:
-    path = _eddy_bar_state_path()
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-        return {str(k): int(v) for k, v in data.items()}
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return {}
+    from mage import workshop_runtime_roots
+
+    merged: dict[str, int] = {}
+    for runtime_dir in workshop_runtime_roots():
+        path = os.path.join(runtime_dir, "thread-state", "river", "eddy_bar.json")
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            for key, val in data.items():
+                sk = str(key)
+                iv = int(val)
+                if sk not in merged or iv > merged[sk]:
+                    merged[sk] = iv
+        except (json.JSONDecodeError, TypeError, ValueError, OSError):
+            continue
+    return merged
 
 
 def _save_eddy_bar_message(channel_id: int, message_id: int) -> None:
@@ -559,13 +572,27 @@ async def post_river_eddy_bar(channel, client) -> discord.Message | None:
     return msg
 
 
-async def ensure_bar_at_bottom(channel, client) -> None:
+async def ensure_bar_at_bottom(
+    channel,
+    client,
+    *,
+    after_message_id: int | None = None,
+) -> None:
     """Keep the eddy bar as the last message in the river channel."""
     from bar_anchor import channel_for_client
 
     ch = await channel_for_client(channel, client)
     state = _load_eddy_bar_state()
     bar_id = state.get(str(ch.id))
+    if after_message_id and after_message_id != bar_id:
+        if bar_id:
+            try:
+                stale = await ch.fetch_message(bar_id)
+                await stale.delete()
+            except discord.HTTPException:
+                pass
+        await post_river_eddy_bar(ch, client)
+        return
     if bar_id:
         try:
             bar_msg = await ch.fetch_message(bar_id)
@@ -680,7 +707,9 @@ async def handle_river_message(message: discord.Message) -> None:
     # Continuation breath — re-anchor bar without River model round-trip.
     if content in {".", "..", "...", "go", "continue", "next"}:
         if bar_client:
-            await ensure_bar_at_bottom(message.channel, bar_client)
+            await ensure_bar_at_bottom(
+                message.channel, bar_client, after_message_id=message.id
+            )
         return
 
     acts = await classify_river_acts(content)
@@ -688,4 +717,4 @@ async def handle_river_message(message: discord.Message) -> None:
     print(f"River [{message.author.display_name}]: {summary['acts']} views={summary['views']}")
 
     if bar_client:
-        await ensure_bar_at_bottom(message.channel, bar_client)
+        await ensure_bar_at_bottom(message.channel, bar_client, after_message_id=message.id)

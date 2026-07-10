@@ -5,7 +5,9 @@ for multi-mage practice directory routing.
 """
 
 import contextvars
+import json
 import os
+from pathlib import Path
 
 import discord
 
@@ -206,7 +208,7 @@ def suppress_turtle_river_voice() -> bool:
 
 def _get_channel_mage(channel_id):
     """Extract mage key from channel entry (supports both string and dict formats)."""
-    entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
+    entry = (_MAGE_REGISTRY.get("channels") or {}).get(str(channel_id))
     if entry is None:
         return None
     if isinstance(entry, dict):
@@ -242,6 +244,55 @@ def get_channel_default_context(channel_id):
 
 # ─── Resolution Functions ────────────────────────────────────────
 
+def _env_workshop_dir(*var_names: str) -> str | None:
+    """Resolve an existing workshop directory from environment (RUNTIME_DIR, PRACTICE_DIR)."""
+    for name in var_names:
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            continue
+        expanded = os.path.expanduser(raw)
+        if os.path.isdir(expanded):
+            return expanded
+    return None
+
+
+def _infer_primary_workshop_dir() -> str | None:
+    """Best-effort operator workshop when registry is empty (Mini without mage_registry.yaml)."""
+    dialogue_id = _resolve_dialogue_channel_id()
+    workshops = Path.home() / "workshops"
+    if not workshops.is_dir():
+        return None
+
+    best_path: str | None = None
+    best_score = -1
+    for entry in sorted(workshops.iterdir()):
+        if not entry.is_dir() or entry.name.startswith("."):
+            continue
+        score = 0
+        bar_path = entry / "thread-state" / "river" / "eddy_bar.json"
+        if bar_path.is_file():
+            score += 10
+            if dialogue_id:
+                try:
+                    data = json.loads(bar_path.read_text(encoding="utf-8"))
+                    if str(dialogue_id) in data:
+                        score += 100
+                except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                    pass
+        ts = entry / "thread-state"
+        if ts.is_dir():
+            try:
+                score += min(sum(1 for _ in ts.rglob("*.json")), 50)
+            except OSError:
+                pass
+        if (entry / "state").is_dir():
+            score += 20
+        if score > best_score:
+            best_score = score
+            best_path = str(entry)
+    return best_path if best_score > 0 else None
+
+
 def _primary_mage_key():
     """Return the mage key used for context-free/background tasks."""
     configured = _MAGE_REGISTRY.get("default_mage")
@@ -259,15 +310,56 @@ def _default_runtime_dir_for_key(key):
 
 
 def _resolve_primary_practice_dir():
+    env_dir = _env_workshop_dir("PRACTICE_DIR", "RUNTIME_DIR")
+    if env_dir:
+        return env_dir
     key = _primary_mage_key()
     mage = _MAGE_REGISTRY.get("mages", {}).get(key, {}) if key else {}
-    return os.path.expanduser(mage.get("practice_dir") or _default_runtime_dir_for_key(key))
+    if key and mage:
+        return os.path.expanduser(mage.get("practice_dir") or _default_runtime_dir_for_key(key))
+    inferred = _infer_primary_workshop_dir()
+    if inferred:
+        return inferred
+    return _default_runtime_dir_for_key(key)
 
 
 def _resolve_primary_runtime_dir():
+    env_dir = _env_workshop_dir("RUNTIME_DIR", "PRACTICE_DIR")
+    if env_dir:
+        return env_dir
     key = _primary_mage_key()
     mage = _MAGE_REGISTRY.get("mages", {}).get(key, {}) if key else {}
-    return os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(key))
+    if key and mage:
+        return os.path.expanduser(mage.get("runtime_dir") or _default_runtime_dir_for_key(key))
+    inferred = _infer_primary_workshop_dir()
+    if inferred:
+        return inferred
+    return _default_runtime_dir_for_key(key)
+
+
+def workshop_runtime_roots() -> list[str]:
+    """Workshop dirs that may hold thread-state (primary, registry, on-disk scan)."""
+    seen: set[str] = set()
+    roots: list[str] = []
+
+    def _add(path: str | None) -> None:
+        if not path:
+            return
+        expanded = os.path.expanduser(path)
+        if expanded in seen or not os.path.isdir(expanded):
+            return
+        seen.add(expanded)
+        roots.append(expanded)
+
+    _add(_resolve_primary_runtime_dir())
+    for runtime_dir in list_registered_runtime_dirs():
+        _add(runtime_dir)
+    workshops = Path.home() / "workshops"
+    if workshops.is_dir():
+        for entry in sorted(workshops.iterdir()):
+            if entry.is_dir() and not entry.name.startswith("."):
+                _add(str(entry))
+    return roots
 
 
 def _resolve_practice_dir_for_channel(channel_id):
@@ -541,6 +633,10 @@ def get_thread_member_ids(channel_id):
     ch_str = str(channel_id)
     mage_key = _get_channel_mage(channel_id)
     if not mage_key:
+        if _channel_is_river(channel_id):
+            raw = os.environ.get("DISCORD_USER_ID", "").strip()
+            if raw:
+                return [raw]
         return []
 
     # Check if it maps to a space (e.g. family)

@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-10 — Split-bot regression: runtime-dir fragmentation
+
+**Symptom:** After discord_bot deploy, River parent messages arrived (`River inbound` logged) but bar did not re-anchor; fresh eddies materialized without practitioner add/rename/turtle-add system lines.
+
+**Root cause:** Mini has no `mage_registry.yaml`. Primary runtime fell back to `~/workshops/default` while operator state (eddy bar, dialogue history) lives in `~/workshops/kermit`. Bar state and `awaiting-title` files diverged across roots. Bar spawn from anchor message had River as author — `get_thread_member_ids()` returned `[]`, so practitioners were never added at materialize.
+
+**Fix:** (1) Infer primary workshop from on-disk signals when registry empty. (2) Merge `eddy_bar.json` across workshop roots; canonical save to primary. (3) Re-anchor with `after_message_id` so practitioner posts always repost bar below. (4) Cross-root `awaiting-title` lookup. (5) Pass bar-button `interaction.user` as eddy initiator for `add_user`. (6) `DISCORD_USER_ID` env fallback for member ids.
+
+**Operator follow-up:** Restore `mage_registry.yaml` on Mini (or set `PRACTICE_DIR=~/workshops/kermit`) for long-term clarity.
+
 ### 2026-07-10 — `discord_bot.py` decomposition Slice 6 (`practice_dispatch.py`)
 
 **Extract:** `on_message` branch tree → `practice_dispatch.dispatch_incoming_message`. Thin `@client.event` wrapper in `discord_bot.py`.

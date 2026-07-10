@@ -27,11 +27,14 @@ class MageChannelResolutionTests(unittest.TestCase):
         self._tmpdir.cleanup()
 
     def _write_registry(self, channels: dict, mages: dict | None = None) -> None:
-        lines = ["channels:"]
-        for ch_id, entry in channels.items():
-            lines.append(f"  '{ch_id}':")
-            for key, val in entry.items():
-                lines.append(f"    {key}: {val}")
+        if channels:
+            lines = ["channels:"]
+            for ch_id, entry in channels.items():
+                lines.append(f"  '{ch_id}':")
+                for key, val in entry.items():
+                    lines.append(f"    {key}: {val}")
+        else:
+            lines = ["channels: {}"]
         if mages:
             lines.append("mages:")
             for key, entry in mages.items():
@@ -98,6 +101,65 @@ class MageChannelResolutionTests(unittest.TestCase):
         )
         pd = mage.set_practice_context_for_channel(thread_id)
         self.assertEqual(pd, lukas_pd)
+
+    def test_infer_primary_workshop_prefers_dialogue_bar_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workshops = Path(tmp) / "workshops"
+            kermit = workshops / "kermit"
+            default = workshops / "default"
+            for path in (kermit, default):
+                (path / "state").mkdir(parents=True)
+            dialogue_id = 1479428854513664030
+            kermit_bar = kermit / "thread-state" / "river" / "eddy_bar.json"
+            kermit_bar.parent.mkdir(parents=True)
+            kermit_bar.write_text(json.dumps({str(dialogue_id): 1}), encoding="utf-8")
+            for i in range(5):
+                (kermit / "thread-state" / "awaiting-title").mkdir(parents=True, exist_ok=True)
+                (kermit / "thread-state" / "awaiting-title" / f"{i}.json").write_text("{}", encoding="utf-8")
+            default_bar = default / "thread-state" / "river" / "eddy_bar.json"
+            default_bar.parent.mkdir(parents=True)
+            default_bar.write_text(json.dumps({str(dialogue_id): 2}), encoding="utf-8")
+
+            orig_home = Path.home
+            try:
+                Path.home = lambda: Path(tmp)  # type: ignore[method-assign]
+                mage.reload_mage_registry()
+                from state import CHANNELS
+
+                old_dialogue = CHANNELS.get("dialogue")
+                CHANNELS["dialogue"] = str(dialogue_id)
+                inferred = mage._infer_primary_workshop_dir()
+                self.assertEqual(inferred, str(kermit))
+                runtime = mage._resolve_primary_runtime_dir()
+                self.assertEqual(runtime, str(kermit))
+            finally:
+                Path.home = orig_home  # type: ignore[method-assign]
+                if old_dialogue is None:
+                    CHANNELS.pop("dialogue", None)
+                else:
+                    CHANNELS["dialogue"] = old_dialogue
+                mage.reload_mage_registry()
+
+    def test_get_thread_member_ids_env_fallback_for_dialogue_river(self) -> None:
+        self._write_registry({}, mages={})
+        from state import CHANNELS
+
+        old_dialogue = CHANNELS.get("dialogue")
+        CHANNELS["dialogue"] = "999"
+        old_env = os.environ.get("DISCORD_USER_ID")
+        os.environ["DISCORD_USER_ID"] = "123456789"
+        try:
+            ids = mage.get_thread_member_ids(999)
+            self.assertEqual(ids, ["123456789"])
+        finally:
+            if old_env is None:
+                os.environ.pop("DISCORD_USER_ID", None)
+            else:
+                os.environ["DISCORD_USER_ID"] = old_env
+            if old_dialogue is None:
+                CHANNELS.pop("dialogue", None)
+            else:
+                CHANNELS["dialogue"] = old_dialogue
 
 
 if __name__ == "__main__":
