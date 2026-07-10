@@ -675,10 +675,17 @@ async def handle_river_message(message: discord.Message) -> None:
     if message.attachments and not content:
         content = f"(attachment: {message.attachments[0].filename})"
 
+    bar_client = _river_client_for_channel(message.channel)
+
+    # Continuation breath — re-anchor bar without River model round-trip.
+    if content in {".", "..", "...", "go", "continue", "next"}:
+        if bar_client:
+            await ensure_bar_at_bottom(message.channel, bar_client)
+        return
+
     acts = await classify_river_acts(content)
     summary = await render_acts(message, acts)
     print(f"River [{message.author.display_name}]: {summary['acts']} views={summary['views']}")
 
-    bar_client = _river_client_for_channel(message.channel)
     if bar_client:
         await ensure_bar_at_bottom(message.channel, bar_client)

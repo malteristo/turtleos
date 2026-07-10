@@ -1,7 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Pure-function tests should not require discord.py installed.
 sys.modules.setdefault("discord", MagicMock())
@@ -9,6 +9,7 @@ sys.modules.setdefault("discord.ui", MagicMock())
 
 from river_handler import (
     finalize_parent_river_acts,
+    handle_river_message,
     parse_river_output,
     list_installed_flows,
 )
@@ -142,6 +143,22 @@ class NativeRiverEddyRoutingTests(unittest.TestCase):
         thread.id = 556
         thread.parent_id = 999
         self.assertTrue(is_intake_thread(thread))
+
+
+class HandleRiverMessageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dot_reanchors_without_classify(self) -> None:
+        message = MagicMock()
+        message.content = "."
+        message.attachments = []
+        message.author.display_name = "Kermit"
+        message.channel = MagicMock()
+
+        with patch("river_handler.classify_river_acts", new_callable=AsyncMock) as classify, patch(
+            "river_handler._river_client_for_channel", return_value=MagicMock()
+        ), patch("river_handler.ensure_bar_at_bottom", new_callable=AsyncMock) as ensure:
+            await handle_river_message(message)
+            classify.assert_not_awaited()
+            ensure.assert_awaited_once()
 
 
 if __name__ == "__main__":

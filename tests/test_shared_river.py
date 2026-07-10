@@ -61,6 +61,12 @@ class SharedRiverHarnessTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(mage._channel_is_river(self.FAMILY_CHANNEL))
 
+    def test_channel_is_river_uses_dialogue_env_without_discord_client(self) -> None:
+        self._set_registry(attunement="native", channels={})
+        with patch("state.CHANNELS", {"dialogue": str(self.RIVER_CHANNEL)}):
+            with patch("mage.get_channel", return_value=None):
+                self.assertTrue(mage._channel_is_river(self.RIVER_CHANNEL))
+
     def test_shared_river_uses_native_harness(self) -> None:
         self._set_registry(
             attunement="native",

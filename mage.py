@@ -134,14 +134,32 @@ def uses_native_eddy(channel_id) -> bool:
     return get_effective_attunement(channel_id) == "native"
 
 
+def _resolve_dialogue_channel_id() -> int | None:
+    """Configured dialogue/river channel id — works without a live Discord client."""
+    from state import CHANNELS
+
+    raw = CHANNELS.get("dialogue")
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _channel_is_river(ch_id: int) -> bool:
     """True when channel id is a parent river, hosted-river, or shared-river surface."""
     if is_channel_archived(ch_id):
         return False
     if str(ch_id) not in _MAGE_REGISTRY.get("channels", {}):
-        dialogue = get_channel("dialogue")
-        if not dialogue or ch_id != dialogue.id:
-            return False
+        dialogue_id = _resolve_dialogue_channel_id()
+        if dialogue_id is not None:
+            if ch_id != dialogue_id:
+                return False
+        else:
+            dialogue = get_channel("dialogue")
+            if not dialogue or ch_id != dialogue.id:
+                return False
     ch_type = _get_channel_type(ch_id)
     if ch_type in ("river", "hosted-river", "shared-river"):
         return True
