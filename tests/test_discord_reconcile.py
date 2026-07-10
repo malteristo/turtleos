@@ -487,7 +487,7 @@ class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
         kwargs = act.await_args.kwargs
         self.assertEqual(kwargs["action"], "Closed eddy")
         self.assertEqual(kwargs["thread_name"], "what makes jokes work")
-        self.assertIn("1 entries", kwargs["detail"])
+        self.assertIn("1 insights archived", kwargs["detail"])
 
     async def test_open_delegates_action_first(self) -> None:
         from sessions import post_eddy_opened_feedback

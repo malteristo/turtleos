@@ -9,7 +9,14 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
-### 2026-06-30 — Generative UI E1.1 dogfood: artifact browse + export UX
+### 2026-07-10 — Spirit maintainability sweep
+
+**Test drift:** `test_close_delegates_action_first` expected legacy copy `1 entries`; `post_eddy_lifecycle_feedback` now reports `dissolved (N insights archived)`. Test updated to match product copy — not a runtime regression.
+
+**Spirit verify:** `./scripts/spirit_verify.sh` — one-command unit gate for Forge/Mini chapters. Full deploy suite remains `docs/automation/functional-gate-protocol.md`.
+
+**Matrix:** §8.4 checkpoint/release → **Aligned** (2026-07-04 live shake); test count ~437; `discord_bot.py` line estimate refreshed.
+
 
 **Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share`. Bar re-anchor deferred for `!artifacts` and `!share`. On **artifacts** bar press: bar **edits in place** (artifacts highlighted, others greyed) instead of delete+repost — avoids "deleted message" confusion and shows which flow started.
 

@@ -24,7 +24,7 @@ Chapter pattern:
 2. **Check the spec** — If `TURTLE_SPEC.md` already governs the behavior, trace to it. If not, draft the smallest amendment and get sanction before treating it as canonical.
 3. **Implement the slice** — Prefer the lowest-risk useful slice. Keep authority narrower than the eventual vision until it has earned trust.
 4. **Document operation** — Update `ARCHITECTURE.md`, operator docs, prompts, skills, or procedures so the implementation can be used and rebuilt.
-5. **Verify by consequence** — Run checks proportionate to the blast radius.
+5. **Verify by consequence** — Run checks proportionate to the blast radius. **Spirit quick gate:** `./scripts/spirit_verify.sh` (full unit suite). Chapter-close: relevant `shake_*.py` per [functional-gate-protocol.md](automation/functional-gate-protocol.md).
 6. **Harvest** — Record what the chapter taught: what pattern should repeat, what remains intentionally deferred, and what future authority would require.
 
 Example chapter: the read-only live update surface. The tension was safe updates for a live shell. The spec defines inspect/propose/heal authority in `TURTLE_SPEC.md` §20. The implemented slice stops at `update check/plan`, with tests and canary source coverage, while automated apply/restart remains outside operator default authority.

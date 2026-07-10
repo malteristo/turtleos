@@ -38,8 +38,8 @@
 | §7.7 | Presence indicators | `eddy_lifecycle`, spawn | mixed legacy + native | **Partial** | `test_flow_runner` presence | `docs/ux/` | **Integrate** |
 | §8.1 | Two-stack local models (River 4–9B, Turtle ~30B) | `models.py` | same + `triage.py`, `proprioceptor.py` | **Partial** | `models` via integration | §8.1 | **Strangle** triage/proprio on native; **Retire** as vanilla default |
 | §8.1 | Proprioception pipeline | — (retired vanilla) | `proprioceptor.py`, `pulse.py`, `discord_bot.py` | **Retire-pending** | none dedicated | §8.1 | **Strangle** behind `attunement: magic` |
-| §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same + `dialogue_store.py` | **Partial** | `shake_lifecycle.py` live green (2026-07-04) | `docs/ux/eddy-lifecycle-bar.md` | **Integrate** — live dogfood pass; matrix/doc refresh |
-| §8.4 | Release (checkpoint + clear) | `sessions.py`, `cmd_sessions.py`, `cmd_dispatch.py` | same | **Partial** | `shake_lifecycle.py` live green; act-digest skip on release | same | **Integrate** — live pass; deploy must restart **both** Turtle + River |
+| §8.4 | Checkpoint (save, keep history) | `sessions.py`, lifecycle bar | same + `dialogue_store.py` | **Aligned** | `shake_lifecycle.py` live green (2026-07-04); `test_cmd_sessions`, `test_sessions` | `docs/ux/eddy-lifecycle-bar.md` | **Keep** — deploy: restart **both** Turtle + River when lifecycle modules change |
+| §8.4 | Release (checkpoint + clear) | `sessions.py`, `cmd_sessions.py`, `cmd_dispatch.py` | same | **Aligned** | `shake_lifecycle.py` live green (2026-07-04); act-digest skip on `!release` | same | **Keep** — same deploy rule |
 | §9.2 | No auto-dissolve eddies | `sessions.py`, lifecycle | same | **Aligned** | `test_eddy_lifecycle_bar` | §9.2 | **Keep** |
 | §9.6 | Discord native UI reconciliation | `discord_reconcile.py`, `runtime/adapters/lifecycle.py`, `runtime/adapters/structural.py` | same | **Aligned** (S1–S5) | `test_discord_reconcile`, `test_lifecycle_adapters` | `docs/ux/discord-native-ui.md`, design chapter | **Keep** |
 | §9.4 | Attachment preprocessing | `content_fetch.py`, pipeline | same | **Aligned** | `test_attachment_pipeline` | — | **Keep** |
@@ -59,7 +59,7 @@
 | §20.4 | Self-heal registry | `self_heal.py`, `background.py` | same | **Aligned** | `test_self_heal` | `TURTLE_SPEC.md` §20.4 | **Keep** |
 | — | Runtime task/audit slice | `runtime/*`, `cli.py` | same | **Partial** | `test_runtime_update` | `ARCHITECTURE.md` | **Integrate** — expand per development.md backlog |
 | — | `commands.py` god-object | decomposed modules | `commands.py` (~918), 5× `cmd_*` | **Aligned** (Slice 5) | full test suite | chapter decomposition-commands | **Keep** — Slice 6 seneschal retire optional |
-| — | `discord_bot.py` orchestration | thin handler + harness libs | `discord_bot.py` (~1890 lines) | **Partial** | scattered | `ARCHITECTURE.md` | **Integrate** — follow harness boundaries |
+| — | `discord_bot.py` orchestration | thin handler + harness libs | `discord_bot.py` (~1740 lines) | **Partial** | scattered | `ARCHITECTURE.md` | **Integrate** — follow harness boundaries; next slice: extract dialogue routing |
 | — | Dialogue queue (reliability) | `dialogue_queue.py` | same | **Aligned** | `test_dialogue_queue` | handoff doc | **Keep** |
 | — | SSRF / URL safety | `url_validate.py` | same | **Aligned** | `test_url_validate` | — | **Keep** |
 | — | Craft intake channel | `craft_intake.py` | same | **Aligned** | `test_craft_intake` | `design-craft-channel.md` | **Keep** (craft attunement) |
@@ -124,7 +124,7 @@ Rows marked **Aligned** above. Priority: link-read, river handler, flow_runner, 
 | **docs/architecture.md** | **No** — stale (2026-03-21) | Replace with pointer to ARCHITECTURE + matrix |
 | **docs/turtle-talk.md** | **Mostly** | Update after harness green |
 | **docs/chapters/** | **Yes** for acceptance | Needs `docs/acceptance/` index (created) |
-| **tests/** | **Partial** — 147 unit tests | Not spec-indexed; dogfood scenarios separate |
+| **tests/** | **Aligned** — ~437 unit tests (`python -m unittest discover -s tests`) | Not spec-indexed per row; dogfood scenarios in `docs/acceptance/` |
 | **library/resonance/turtle/** | **Partial** | Freshness labels; product law = turtleos repo |
 
 **Verdict:** Top-down rewrite is viable **after** harness chapter closes and decomposition chapter splits monoliths — not before. Spec is adequate; **module boundaries + acceptance catalog** were the missing pieces (now started).

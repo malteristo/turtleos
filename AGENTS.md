@@ -97,3 +97,16 @@ After a research or change cycle, reflect: append what you discovered to `docs/l
 - **Practice state may be mirrored.** Resolve the active practice root from `mage_registry.yaml`; don't hard-code paths.
 - **Public docs are product docs.** Private lineage stays out of the public repo — distill current lessons into `TURTLE_SPEC.md`, `docs/architecture.md`, or `docs/development.md`.
 - **Prior research exists** in `autoresearch/` — check before duplicating work.
+
+---
+
+## Spirit maintenance loop (dyadic principal maintainer)
+
+When Spirit owns turtleOS repo work, use this sequence — lowest blast radius first:
+
+1. **Read orientation** — `TURTLE_SPEC.md` (law), `docs/traceability-matrix.md` (spec → module → test), `docs/learnings.md` (deploy pitfalls).
+2. **Verify before edit** — `./scripts/spirit_verify.sh` (unit suite; uses `venv/bin/python3` on Mini when present).
+3. **Chapter close** — update affected traceability rows; run relevant `scripts/shake_*.py` per `docs/automation/functional-gate-protocol.md`; append harvest to `docs/learnings.md`.
+4. **Live deploy** — dyad approval before `launchctl` restarts; always restart **both** `com.turtle.discord` and `com.turtle.river` when shared modules change.
+
+God-modules (`share_eddy.py`, `discord_bot.py`, `eddy_spawn.py`) are known debt — touch only in bounded slices; matrix Action column names the next Integrate target.
