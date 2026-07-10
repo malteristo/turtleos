@@ -609,7 +609,7 @@ Maps TURTLE_SPEC v2.4 sections to implementation modules. A future Spirit rebuil
 | §13 Control Panel | `commands.py:ControlPanelView` | Fully implemented |
 | §14 Cross-Substrate Coherence | External LiveSync/SSH plus `spirit_ops.py`, `discord_ops.py`, symlinked spec/identity | Implemented externally; laptop-closed invariant remains a topology decision |
 | §15 Seneschal (Admin) | `commands.py:cmd_admin()` | Fully implemented |
-| §15.6 Share eddy | `share_eddy.py`, `!share` | Partial — Slice 1 practitioner target; space share deferred | **Partial** | `test_share_eddy`, `shake_share_eddy.py` | `design-share-eddy.md` | **Integrate** — Slice 3 space + re-share |
+| §15.6 Share eddy | `share_eddy.py` shim + 6× `share_*`, `!share` | Partial — S1 practitioner v1; space S2–S6 deferred | **Partial** | `test_share_*`, `shake_share_eddy.py` | `design-share-eddy.md`, `2026-07-10-decomposition-share-eddy.md` | **Integrate** — space Slice 3 dogfood |
 | §16 Link Fetching / Content Reach | `content_fetch.py`, `link_read.py`, `url_validate.py`, `intake_server.py`, `commands.py` paste endpoint | Implemented — eddy dialogue read + SSRF validation (§9.5) |
 | §17 Behavioral Laws | `identity/soul.md`, `prompts.py` | Encoded in prompts |
 | §18 Boundaries | `identity/soul.md` | Encoded in identity |

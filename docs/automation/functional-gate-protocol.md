@@ -44,7 +44,7 @@ cd ~/turtleos && git pull origin main
 | Link read / content fetch | `shake_link_read.py --live` |
 | Discord permalink self-feed | `shake_discord_ref.py --live` |
 | Lifecycle checkpoint/release | `shake_lifecycle.py --live` |
-| Share eddy | `shake_share_eddy.py --live` |
+| Share eddy | `shake_share_eddy.py` (offline) + Mage S1 dogfood on Mini (`--live` not implemented) |
 | Hosted river onboarding | `shake_hosted_river.py --live` |
 | River acts / classification only | `shake_river.py` (offline usually enough) |
 

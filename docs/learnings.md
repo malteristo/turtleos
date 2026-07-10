@@ -75,7 +75,13 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Gate:** `spirit_verify.sh` 445 OK.
 
-**Chapter close (Forge):** decomposition complete. **Deploy:** dyad approval → restart Turtle + River; `shake_share_eddy.py --live`; Mage dogfood S1.
+**Chapter close (Forge):** decomposition complete. **Deploy:** Mini `03139c8`; restarted Turtle + River; offline shake PASS. Live gate: Mage S1 dogfood (`shake_share_eddy.py --live` not implemented).
+
+### 2026-07-10 — `share_eddy` decomposition chapter released
+
+**Close-out:** Doc drift fixed (acceptance, ARCHITECTURE, matrix, functional-gate-protocol). Chapter status → Released. §15.6 matrix row stays **Partial** until space S2–S6 dogfood — that is separate scope.
+
+**Next chapter candidate:** `discord_bot.py` dialogue routing extraction.
 
 **Bars:** River bar = `new eddy` · `artifacts` · `help`. Eddy bar = `flows` · `checkpoint` · `share`. Bar re-anchor deferred for `!artifacts` and `!share`. On **artifacts** bar press: bar **edits in place** (artifacts highlighted, others greyed) instead of delete+repost — avoids "deleted message" confusion and shows which flow started.
 

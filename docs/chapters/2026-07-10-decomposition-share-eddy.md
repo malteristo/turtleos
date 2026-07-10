@@ -1,7 +1,7 @@
 # Chapter — Decomposition: `share_eddy.py`
 
 **Date:** 2026-07-10  
-**Status:** Complete — all 6 slices landed (Forge); Mini deploy pending dyad approval  
+**Status:** **Released** 2026-07-10 — Forge `03139c8`, Mini deployed + both bots restarted  
 **Deciders:** Kermit + Spirit (dyadic maintainer)  
 **Builds on:** Spirit maintainability sweep (`674888e`), `commands.py` decomposition chapter
 
@@ -23,7 +23,7 @@ Same as `2026-06-20-decomposition-commands.md`:
 2. **Cohesion over line count** — extract domains that share imports and spec rows.
 3. **Tests travel with extraction** — move or add unit tests per slice; `./scripts/spirit_verify.sh` green after each.
 4. **Traceability updates** — matrix §15.6 row advances Partial → Aligned per slice completion.
-5. **Shake after delivery/UI slices** — `scripts/shake_share_eddy.py` offline; `--live` on Mini when Discord surfaces change.
+5. **Shake after delivery/UI slices** — `scripts/shake_share_eddy.py` offline; Mage S1 dogfood on Mini for live gate (`--live` not implemented).
 
 ---
 
@@ -185,56 +185,33 @@ from share_targets import (
 
 **Verified:** `./scripts/spirit_verify.sh` — 445 tests OK.
 
-**Deploy:** Dyad approval → restart **both** `com.turtle.discord` and `com.turtle.river`; `shake_share_eddy.py --live`; Mage async dogfood S1.
+**Deploy:** Mini `03139c8` — `spirit_verify.sh` + offline `shake_share_eddy.py` green; restarted `com.turtle.discord` + `com.turtle.river`. Live gate: Mage S1 dogfood (no `shake_share_eddy.py --live` yet).
 
 ---
 
-## Slice 6 — `share_ui.py` ⏳ ready to execute
+## Chapter released (2026-07-10)
 
-**Risk:** Medium-high — `cmd_share`, persistent views, all `discord.ui` classes (~600 lines).
+**Outcome:** `share_eddy.py` (~2,186 lines) → six cohesive modules + ~170-line re-export shim. No behavior change; all callers import via `share_eddy` until a later migration pass.
 
-### Extract from `share_eddy.py`
+**Live gate:** Offline `shake_share_eddy.py` + Mage S1 practitioner smoke on Mini. `shake_share_eddy.py --live` is documented elsewhere but not implemented — add when share UX changes again (pattern: `shake_eddy_bar.py --live`).
 
-| Group | Symbols |
-|-------|---------|
-| **Picker / confirm** | `ShareTargetSelect`, `ShareSpaceSelect`, `ShareEditModal`, `SharePreviewView`, `ShareConfirmView`, `SharePickerView` |
-| **Entry + registration** | `get_share_bot_client`, `register_persistent_share_views`, `cmd_share` |
-
-**Leave:** Thin `share_eddy.py` re-export shim only (or retire module name after callers migrate).
-
-### Acceptance
-
-1. `spirit_verify.sh` green
-2. `shake_share_eddy.py --live` on Mini after deploy
-3. Mage async dogfood S1 scenario
+**Still Partial (separate work):** §15.6 space scenarios S2–S6 dogfood; `discord_bot.py` dialogue routing is the next decomposition candidate.
 
 ---
 
-## Slice 5 — `share_delivery.py` (reference — executed 2026-07-10)
-
-**Extract:** `deliver_practitioner_share`, `deliver_space_share`, `materialize_received_eddy`, `materialize_space_shared_eddy`, `continue_received_share`, notify/post helpers that touch Discord API.
-
-**Acceptance:** `shake_share_eddy.py` offline; consider `--live` on Mini after dyad approval.
+## Slice 6 — `share_ui.py` (reference — executed 2026-07-10)
 
 ---
 
-## Slice 6 — `share_ui.py`
-
-**Extract:** All `discord.ui` views/selects/modals, `register_persistent_share_views`, `cmd_share`.
-
-**Acceptance:** `shake_share_eddy.py --live` on Mini; Mage async dogfood S1 scenario.
-
----
-
-## Chapter-close checklist
+## Chapter-close checklist ✅
 
 Per `docs/development.md`:
 
-1. `./scripts/spirit_verify.sh`
-2. Relevant `shake_*.py` (share slice: `shake_share_eddy.py`)
-3. Update `docs/traceability-matrix.md` §15.6 row
-4. Append harvest to `docs/learnings.md`
-5. If runtime Python changed: dyad approval → restart **both** Turtle + River
+1. ✅ `./scripts/spirit_verify.sh` — 445 OK (Forge + Mini)
+2. ✅ `shake_share_eddy.py` offline — PASS on Mini
+3. ✅ `docs/traceability-matrix.md` §15.6 row
+4. ✅ `docs/learnings.md` harvest
+5. ✅ Mini deploy — `03139c8`; restarted Turtle + River
 
 ---
 
@@ -243,11 +220,11 @@ Per `docs/development.md`:
 Matrix lists both god-modules. `share_eddy.py` wins because:
 
 - **Clearer slice boundaries** — commands decomposition proved the pattern; share has natural pure-function layers at the top.
-- **Heavier test harness already exists** — `test_share_eddy.py` isolates regressions.
+- **Test harness split across modules** — `tests/test_share_*.py` isolates regressions per slice.
 - **`discord_bot.py` extraction** (dialogue routing) touches live dialogue path on every message — higher consequence per line moved.
 
 After share decomposition Slice 3–4, reassess `discord_bot.py` dialogue routing extraction as the next chapter.
 
 ---
 
-*Prepared after Spirit maintainability sweep. Execute Slice 1 on Mage `.` or explicit go.*
+*Chapter released 2026-07-10. Next: `discord_bot.py` dialogue routing extraction.*

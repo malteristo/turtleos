@@ -115,7 +115,7 @@ python scripts/shake_lifecycle.py
 ## Share eddy (thinking together)
 
 **Spec:** §15.6  
-**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md) · **Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](../chapters/2026-06-25-share-eddy-slice1-dogfood.md) · **Continue v1:** [2026-06-25-share-eddy-continue-handoff.md](../chapters/2026-06-25-share-eddy-continue-handoff.md)  
+**Chapter:** [design-share-eddy.md](../chapters/design-share-eddy.md) · **Decomposition:** [2026-07-10-decomposition-share-eddy.md](../chapters/2026-07-10-decomposition-share-eddy.md) · **Dogfood:** [2026-06-25-share-eddy-slice1-dogfood.md](../chapters/2026-06-25-share-eddy-slice1-dogfood.md) · **Continue v1:** [2026-06-25-share-eddy-continue-handoff.md](../chapters/2026-06-25-share-eddy-continue-handoff.md)  
 **Depends on:** Share to **space** requires `shared-river` ([design-family-shared-river.md](../chapters/design-family-shared-river.md))  
 **Status:** Slice 1 **S1 accepted (v1)** — sibling-thread Continue, digest inside eddy · sender + Continue UX dogfooded 2026-06-25 · Mini `ab75b11` · chip-on-digest **parked** · S2–S6 after shared-river
 
@@ -128,7 +128,7 @@ python scripts/shake_lifecycle.py
 | S5 | Picker `share_policy` | Non-member practitioner shares to Family via picker; no Discord channel join required |
 | S6 | Dissolve | Only share creator can dissolve shared/received eddy |
 
-**Verification:** `test_share_eddy`, `scripts/shake_share_eddy.py` · live Mini dogfood (Slice 1 practitioner; space scenarios S2–S5 after shared-river)
+**Verification:** `tests/test_share_*.py`, `scripts/shake_share_eddy.py` (offline) · live Mini dogfood S1 for deploy gates · space scenarios S2–S6 after shared-river
 
 ---
 
