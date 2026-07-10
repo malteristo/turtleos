@@ -5,9 +5,9 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-sys.modules.setdefault("discord", MagicMock())
+import discord
 
 import mage
 
@@ -167,7 +167,7 @@ class MageChannelResolutionTests(unittest.TestCase):
 
         old_dialogue = CHANNELS.get("dialogue")
         CHANNELS["dialogue"] = "888"
-        thread = MagicMock()
+        thread = MagicMock(spec=discord.Thread)
         thread.id = 777
         thread.parent_id = 888
         with patch.object(client, "get_channel", return_value=None):

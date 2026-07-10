@@ -42,6 +42,7 @@ class SessionMonitorTests(unittest.IsolatedAsyncioTestCase):
         ) as create_task_mock:
             sess._scan_idle_sessions()
             create_task_mock.assert_called_once()
+            create_task_mock.call_args[0][0].close()
 
         active_sessions.clear()
         sess._idle_checkpoint_running.clear()

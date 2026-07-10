@@ -32,7 +32,8 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             sessions = os.path.join(tmp, "sessions")
             os.makedirs(sessions)
-            open(os.path.join(sessions, "note.md"), "w").write("# hi")
+            with open(os.path.join(sessions, "note.md"), "w") as fh:
+                fh.write("# hi")
             request = MagicMock()
             request.match_info = {"mage_key": "kermit", "path": "sessions/note.md"}
             with patch("mage.set_practice_context_for_mage_key", return_value=True), patch(
@@ -50,7 +51,8 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
     async def test_denies_proposals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "proposals"))
-            open(os.path.join(tmp, "proposals", "secret.md"), "w").write("nope")
+            with open(os.path.join(tmp, "proposals", "secret.md"), "w") as fh:
+                fh.write("nope")
             request = MagicMock()
             request.match_info = {"mage_key": "kermit", "path": "proposals/secret.md"}
             with patch("mage.set_practice_context_for_mage_key", return_value=True), patch(
