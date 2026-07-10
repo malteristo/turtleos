@@ -1180,6 +1180,7 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 
 | Date | Change |
 |------|--------|
+| 2026-07-10 | Native-only practice surfaces — boom/compass/bright portable files retired; `practice.append_note`; INT-027 uses `state/current.yaml` only |
 | 2026-07-08 | §20 Self-Development Authority — inspect / propose / pre-defined self-healing operator ceiling (supersedes design-era §22.8 refs) |
 | 2026-07-08 | Appendix A retired — magic-attuned + workshop_root code paths removed; native-only shell |
 | 2026-06-14 | Resonance pass — Turtle Practice terminology, always-offer-eddy, act catalog, state/, chronicle links, presence indicators, single canonical spec |
