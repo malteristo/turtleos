@@ -9,6 +9,68 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-10 — `discord_bot.py` decomposition Slice 6 (`practice_dispatch.py`)
+
+**Extract:** `on_message` branch tree → `practice_dispatch.dispatch_incoming_message`. Thin `@client.event` wrapper in `discord_bot.py`.
+
+**Tests:** New `tests/test_practice_dispatch.py`.
+
+**Gate:** `spirit_verify.sh` green. Forge-only until Mini deploy.
+
+**Next:** Mini deploy (Slices 3–6) + offline shakes + Mage eddy dogfood; optional lifecycle-event slice as follow-on chapter.
+
+### 2026-07-10 — `discord_bot.py` decomposition Slice 5 (`dialogue_runtime.py`)
+
+**Extract:** Runtime env + thread cards → `dialogue_runtime.py` (~257 lines). Re-export from `discord_bot.py`. `dialogue_turn.py` fully decoupled from `discord_bot` — no lazy import.
+
+**Tests:** New `tests/test_dialogue_runtime.py`; resume-eddy patch target updated.
+
+**Gate:** `spirit_verify.sh` green. Forge-only until Mini deploy.
+
+**Next:** Slice 6 — `practice_dispatch.py` (`on_message` branch tree).
+
+### 2026-07-10 — `discord_bot.py` decomposition Slice 4 (`dialogue_attachments.py`)
+
+**Extract:** Attachment pipeline → `dialogue_attachments.py` (~90 lines). Re-export from `discord_bot.py`. `dialogue_turn.py` now imports attachments directly — lazy `_discord_bot()` coupling removed for attachment path.
+
+**Tests:** New `tests/test_dialogue_attachments.py`.
+
+**Gate:** `spirit_verify.sh` green. Forge-only until Mini deploy.
+
+**Next:** Slice 5 — runtime env builders or `on_message` dispatch tree.
+
+### 2026-07-10 — `discord_bot.py` decomposition Slice 3 (`dialogue_turn.py`)
+
+**Extract:** Turn execution → `dialogue_turn.py` (~580 lines). `handle_dialogue`, `continue_dialogue_turn`, `run_link_read_followup` moved; re-export from `discord_bot.py`. `dialogue_routing` now resolves handler via `dialogue_turn.handle_dialogue`.
+
+**Coupling:** Lazy `_discord_bot()` for attachment gatherers + runtime-env builders — Slice 4 removes this.
+
+**Tests:** Fixed `test_dialogue_routing` thread mocks (`spec=discord.Thread`) so `isinstance(..., discord.Thread)` passes.
+
+**Gate:** `spirit_verify.sh` green. **Forge-only until Mini deploy** — restart both `com.turtle.discord` and `com.turtle.river` when shipped.
+
+**Next:** Slice 4 — `dialogue_attachments.py`.
+
+### 2026-07-10 — `discord_bot.py` decomposition Slice 2 (`dialogue_message.py`)
+
+**Extract:** Message surface helpers → `dialogue_message.py` (~145 lines). Re-export from `discord_bot` preserves `craft_intake`, `canary`, test patch paths.
+
+**Tests:** New `tests/test_dialogue_message.py`.
+
+**Gate:** `spirit_verify.sh` green. Forge-only — no Mini deploy.
+
+**Next:** Slice 3 — `handle_dialogue` + `_continue_dialogue_turn` (deploy consequence when shipped).
+
+### 2026-07-10 — `discord_bot.py` decomposition Slice 1 (`dialogue_routing.py`)
+
+**Extract:** `route_practice_dialogue`, `should_skip_native_starter`, `touch_flow_library_after_dialogue` → `dialogue_routing.py`. Lazy import of `discord_bot.handle_dialogue` at enqueue time avoids circular load.
+
+**Tests:** New `tests/test_dialogue_routing.py`.
+
+**Gate:** `spirit_verify.sh` green. Forge-only — no Mini deploy (routing-only).
+
+**Next:** Slice 2 — `dialogue_message.py` (visible content + forward snapshot helpers).
+
 ### 2026-07-10 — Spirit maintainability sweep
 
 **Test drift:** `test_close_delegates_action_first` expected legacy copy `1 entries`; `post_eddy_lifecycle_feedback` now reports `dissolved (N insights archived)`. Test updated to match product copy — not a runtime regression.

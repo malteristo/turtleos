@@ -59,7 +59,7 @@
 | §20.4 | Self-heal registry | `self_heal.py`, `background.py` | same | **Aligned** | `test_self_heal` | `TURTLE_SPEC.md` §20.4 | **Keep** |
 | — | Runtime task/audit slice | `runtime/*`, `cli.py` | same | **Partial** | `test_runtime_update` | `ARCHITECTURE.md` | **Integrate** — expand per development.md backlog |
 | — | `commands.py` god-object | decomposed modules | `commands.py` (~918), 5× `cmd_*` | **Aligned** (Slice 5) | full test suite | chapter decomposition-commands | **Keep** — Slice 6 seneschal retire optional |
-| — | `discord_bot.py` orchestration | thin handler + harness libs | `discord_bot.py` (~1740 lines) | **Partial** | scattered | `ARCHITECTURE.md` | **Integrate** — follow harness boundaries; next slice: extract dialogue routing |
+| — | `discord_bot.py` orchestration | thin handler + harness libs | `discord_bot.py` (~730) + 5× `dialogue_*` + `practice_dispatch` (Slices 1–6) | **Partial** | `test_dialogue_*`, `test_practice_dispatch`, scattered | `docs/chapters/2026-07-10-decomposition-discord-bot.md` | **Integrate** — Slices 1–6 on Forge; deploy + dogfood to close chapter |
 | — | Dialogue queue (reliability) | `dialogue_queue.py` | same | **Aligned** | `test_dialogue_queue` | handoff doc | **Keep** |
 | — | SSRF / URL safety | `url_validate.py` | same | **Aligned** | `test_url_validate` | — | **Keep** |
 | — | Craft intake channel | `craft_intake.py` | same | **Aligned** | `test_craft_intake` | `design-craft-channel.md` | **Keep** (craft attunement) |

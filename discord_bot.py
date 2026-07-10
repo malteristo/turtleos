@@ -15,7 +15,9 @@ Modular architecture (2026-03-29 refactor):
   background.py — background tasks (health, interoception)
   commands.py — 28 commands, views, control panel, dispatch
 
-This file: event handlers, handle_dialogue, main().
+This file: Discord lifecycle events, main().
+  Message dispatch: practice_dispatch.py (Slice 6).
+  Dialogue stack: dialogue_* modules (Slices 1–5).
 """
 
 import asyncio
@@ -47,8 +49,8 @@ load_env()
 # ─── Module Imports ───────────────────────────────────────────────
 
 from state import (
-    client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS, _processed_messages,
-    get_channel_lock, get_channel, SPIRIT_BOT_ID, unmark_processed_message,
+    client, CHANNELS, OPS_EMBED_COLOR, EMBED_COLORS,
+    get_channel, SPIRIT_BOT_ID, unmark_processed_message,
     IDENTITY_DIR, DIALOGUE_MODEL, REFLECTION_MODEL, TRIAGE_MODEL, USE_API, TURTLE_MODEL,
     RIVER_MODEL,
     HAS_GEMINI, GOOGLE_API_KEY,
@@ -64,7 +66,7 @@ from mage import (
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
     get_registry, _resolve_mage_from_author,
-    get_thread_member_ids, uses_native_river, river_bot_enabled, turtle_handles_native_river,
+    get_thread_member_ids, river_bot_enabled,
     suppress_turtle_river_voice, get_attunement_profile,
     maybe_reload_mage_registry, reload_mage_registry,
 )
@@ -91,7 +93,6 @@ from triage import triage_message, prewarm_triage
 
 from prompts import (
     get_system_prompt, get_thread_prompt, build_thread_summary,
-    get_native_eddy_prompt, get_craft_channel_prompt, uses_native_turtle_prompt,
 )
 
 from readiness import startup_readiness_check
@@ -99,31 +100,20 @@ from readiness import startup_readiness_check
 from helpers import (
     local_now, get_history, log_activity, split_message, sync_history,
     load_thread_history, summarize_thread_context,
-    preprocess_attachments,
 )
 
 from sessions import session_monitor, checkpoint_session, close_session, maybe_reflect
-from eddy_spawn import (
-    handle_eddy_spawn_interaction,
-    is_intake_thread, handle_intake_message, ensure_native_presence,
-    post_flow_presence_if_needed,
-)
+from eddy_spawn import handle_eddy_spawn_interaction
 from intake_server import start_intake_server
 from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
-from founder_keys import try_founder_key_entry
-from river_keys import try_river_key_claim
-from mage import _get_channel_type, resolve_dialogue_channel_id
-from craft_intake import is_craft_intake_channel, schedule_craft_intake
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
     ThreadConfigView,
-    dispatch_direct_command,
 )
 
 from content_fetch import (
     extract_urls as _extract_urls,
-    extract_attachments as _extract_attachments,
 )
 
 from link_read import (
@@ -135,87 +125,50 @@ from link_read import (
     post_link_offer,
 )
 
+from dialogue_routing import (
+    route_practice_dialogue as _route_practice_dialogue,
+    should_skip_native_starter as _should_skip_native_starter,
+    touch_flow_library_after_dialogue as _touch_flow_library_after_dialogue,
+)
+
+from dialogue_message import (
+    visible_message_content as _visible_message_content,
+    extract_forwarded_context as _extract_forwarded_context,
+    summarize_message_snapshot as _summarize_message_snapshot,
+    forward_source_ref as _forward_source_ref,
+    snapshot_has_readable_content as _snapshot_has_readable_content,
+    extract_discord_message_refs as _extract_discord_message_refs,
+    forwarded_snapshot_is_partial as _forwarded_snapshot_is_partial,
+    format_dereferenced_message as _format_dereferenced_message,
+    fetch_discord_message_context as _fetch_discord_message_context,
+)
+
+from dialogue_turn import (
+    handle_dialogue,
+    continue_dialogue_turn as _continue_dialogue_turn,
+    run_link_read_followup,
+)
+
+from dialogue_attachments import (
+    attachment_display_names as _attachment_display_names,
+    gather_dialogue_attachments as _gather_dialogue_attachments,
+    attachments_from_forward_chain as _attachments_from_forward_chain,
+)
+
+from dialogue_runtime import (
+    build_runtime_env as _build_runtime_env,
+    build_native_runtime_env as _build_native_runtime_env,
+    build_source_trace as _build_source_trace,
+    update_thread_state as _update_thread_state,
+)
+
 # Boom thread fetched content cache (message.id -> content string)
 
 
 # Discord permalink parsing — discord_ref_read.py
 
 
-# ─── handle_dialogue ─────────────────────────────────────────────
-
-def _build_runtime_env(message, cfg):
-    channel = message.channel
-    mage_name = get_mage_name()
-    mage_key = get_mage_key()
-
-    is_thread = isinstance(channel, discord.Thread)
-    if is_thread:
-        parent = channel.parent
-        channel_name = parent.name if parent else "(unknown)"
-        thread_name = channel.name
-    else:
-        channel_name = channel.name if hasattr(channel, "name") else "(DM)"
-        thread_name = None
-
-    if cfg:
-        model = cfg.get("model_label", cfg.get("model", "unknown"))
-        attunement = cfg.get("attunement", "semi")
-    else:
-        model = DIALOGUE_MODEL if USE_API else REFLECTION_MODEL
-        attunement = "orchestrator"
-
-    lines = [
-        "## Runtime Environment",
-        f"- **Channel:** #{channel_name}",
-    ]
-    if thread_name:
-        awareness = get_thread_awareness(channel.id)
-        lines.append(f"- **Current thread:** {thread_name} ({awareness})")
-        thread_card = read_thread_state(thread_name)
-        if thread_card:
-            lines.append("")
-            lines.append("## Current Thread Card")
-            lines.append(thread_card)
-        related = get_related_thread_awareness(thread_name, current_thread_id=channel.id)
-        if related:
-            lines.append("")
-            lines.append(related)
-        lines.append("- **Thread-state rule:** This is the conversation you are currently inside. Do not recommend creating a new thread for this same topic; continue here or reference related threads from the live registry.")
-        lines.append("- **Externalized persistence rule:** Treat the thread card as your durable memory for this eddy. Use it quietly; do not announce context limits unless they materially affect the conversation.")
-    lines.append(f"- **Mage:** {mage_name}")
-    lines.append(f"- **Model:** {model}")
-    lines.append(f"- **Attunement:** {attunement}")
-
-    if mage_key == "family":
-        lines.append(f"- **Message from:** {message.author.display_name}")
-        space = get_registry().get("spaces", {}).get("family", {})
-        members = space.get("members", [])
-        if members:
-            lines.append(f"- **Space members:** {', '.join(m.capitalize() for m in members)}")
-
-        speaking_mage, personal_pd = _resolve_mage_from_author(message.author)
-        if speaking_mage and personal_pd:
-            lines.append(f"- **Speaking mage workspace:** {personal_pd}")
-            compass_path = os.path.join(personal_pd, "compass.md")
-            if os.path.exists(compass_path):
-                compass = read_safe(compass_path)
-                if compass.strip():
-                    lines.append("")
-                    lines.append(f"**{speaking_mage.capitalize()}'s personal compass** (from their sovereign workspace):")
-                    lines.append(compass[:3000])
-
-        lines.append("")
-        lines.append("**Context:** Shared family space. Keep responses accessible and warm. "
-                      "You have access to the speaking member's personal practice state "
-                      "via their workspace above. Reference it naturally when relevant. "
-                      "Each member's data is sovereign — only share what the speaker asks about.")
-    elif thread_name and cfg and cfg.get("attunement") == "raw":
-        lines.append("")
-        lines.append("**Context boundary:** Raw attunement. "
-                      "Be direct and focused on the topic at hand.")
-
-    return "\n".join(lines) + "\n\n"
-
+# ─── Legacy river chrome ─────────────────────────────────────────
 
 async def _retire_legacy_river_chrome(channel) -> int:
     """Remove pinned Spirit Control Panel and other magic-era river chrome (native mode)."""
@@ -264,876 +217,9 @@ async def _retire_legacy_river_chrome(channel) -> int:
     return removed
 
 
-def _build_native_runtime_env(message, cfg, history: list[dict] | None = None):
-    """Minimal runtime block for vanilla native eddies."""
-    channel = message.channel
-    parent = channel.parent if isinstance(channel, discord.Thread) else None
-    channel_name = parent.name if parent else (channel.name if hasattr(channel, "name") else "(DM)")
-    thread_name = channel.name if isinstance(channel, discord.Thread) else None
-    history = history or []
-
-    lines = [
-        "## Eddy Context",
-        f"- **River channel:** #{channel_name}",
-    ]
-    if thread_name:
-        lines.append(f"- **Eddy:** {thread_name}")
-        prior_user_turns = sum(1 for m in history if m.get("role") == "user")
-        if prior_user_turns > 1:
-            lines.append(
-                "- **Resume:** This thread has prior conversation in your working history — "
-                "continue naturally from where you left off. Do not ask them to recap or claim "
-                "you lack earlier messages in this eddy."
-            )
-        thread_card = read_thread_state(thread_name)
-        if thread_card:
-            lines.append("")
-            lines.append("## Thread continuity")
-            lines.append(thread_card)
-    if isinstance(channel, discord.Thread):
-        from share_eddy import (
-            received_eddy_context_lines,
-            resolve_eddy_thread_cfg,
-            shared_eddy_context_lines,
-        )
-
-        parent_id = channel.parent_id
-        cfg = resolve_eddy_thread_cfg(channel.id, parent_id, cfg)
-        if cfg and cfg.get("origin") == "received":
-            lines.extend(received_eddy_context_lines(cfg))
-        elif cfg and cfg.get("origin") == "shared":
-            speaker_key, _ = _resolve_mage_from_author(message.author)
-            lines.extend(
-                shared_eddy_context_lines(
-                    cfg,
-                    speaker_display=message.author.display_name,
-                    speaker_mage_key=speaker_key,
-                )
-            )
-    if (cfg or {}).get("blank_eddy") or (cfg or {}).get("awaiting_title"):
-        lines.append(
-            "- **Entry:** Blank eddy — the practitioner's first message is what they brought; "
-            "engage it directly (not a UI test unless they clearly mean Discord)."
-        )
-    if cfg and cfg.get("origin") == "shared":
-        space_label = (cfg.get("space_key") or get_mage_name() or "space").replace("_", " ").title()
-        lines.append(f"- **Space:** {space_label} (multi-member shared river)")
-    else:
-        lines.append(f"- **Practitioner:** {get_mage_name()}")
-    lines.append(f"- **Model:** {TURTLE_MODEL} (local Turtle)")
-    flow_id = (cfg or {}).get("context_type")
-    if flow_id:
-        lines.append(f"- **Flow:** {flow_id}")
-    lines.append("")
-    return "\n".join(lines) + "\n\n"
-
-
-def _build_source_trace(source_flags: list[str]) -> str:
-    """Compact visible epistemic trace for context injected before the reply."""
-    seen = []
-    for flag in source_flags:
-        if flag and flag not in seen:
-            seen.append(flag)
-    if not seen:
-        return ""
-    return "Sources: " + "; ".join(seen)
-
-
-async def _update_thread_state(thread: discord.Thread, cfg: dict | None, history: list[dict]):
-    """Write the thread card Turtle will return to on future context windows."""
-    os.makedirs(get_thread_state_dir(), exist_ok=True)
-    safe_name = re.sub(r'[^\w\-]', '_', thread.name.lower())
-    state_path = os.path.join(get_thread_state_dir(), f"{safe_name}.md")
-
-    model_label = (cfg or {}).get("model_label", "default")
-    attunement = (cfg or {}).get("attunement", "semi")
-    msg_count = len(history)
-    now = local_now().strftime("%Y-%m-%d %H:%M")
-
-    last_user = ""
-    last_assistant = ""
-    for m in reversed(history):
-        if m["role"] == "assistant" and not last_assistant:
-            last_assistant = _thread_card_excerpt(m["content"])
-        elif m["role"] == "user" and not last_user:
-            last_user = _thread_card_excerpt(m["content"])
-        if last_user and last_assistant:
-            break
-
-    eddy_type = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
-    eddy_info = EDDY_TYPES.get(eddy_type, EDDY_TYPES[EDDY_DEFAULT])
-    flagged = threads_flagged_for_release.get(thread.id)
-    flag_line = f"\n**Flagged for release:** {flagged['reason']}\n" if flagged else ""
-
-    continuity = "Return by reading this card before simulating memory."
-    if last_user:
-        continuity = "Resume from the last user move and update this card after the next meaningful reply."
-
-    content = (
-        f"# Thread Card: {thread.name}\n\n"
-        f"**Thread ID:** {thread.id}\n"
-        f"**Config:** `{model_label}` / `{attunement}`\n"
-        f"**Eddy:** {eddy_info['emoji']} `{eddy_type}` ({eddy_info['days'] or '∞'}d)\n"
-        f"**Messages in working history:** {msg_count}\n"
-        f"**Last active:** {now}\n"
-        f"**Continuity cue:** {continuity}\n"
-        f"{flag_line}\n"
-        "## Last User Move\n"
-        f"{last_user or '(none captured yet)'}\n\n"
-        "## Last Turtle Move\n"
-        f"{last_assistant or '(none captured yet)'}\n\n"
-        "## Return Rule\n"
-        "Use this card as externalized persistence: check it before continuing the thread, "
-        "then overwrite it with the newest durable state after the exchange.\n"
-    )
-
-    try:
-        with open(state_path, "w") as f:
-            f.write(content)
-    except Exception as e:
-        print(f"Thread card write failed for {thread.name}: {e}")
-
-
-def _thread_card_excerpt(value: str, limit: int = 700) -> str:
-    text = re.sub(r"\s+", " ", (value or "")).strip()
-    if len(text) <= limit:
-        return text
-    return text[:limit].rsplit(" ", 1)[0] + " ..."
-
-
-def _summarize_message_snapshot(snapshot, index: int) -> str:
-    parts = [f"[Forwarded message {index}]"]
-    created = getattr(snapshot, "created_at", None)
-    if created:
-        parts.append(f"created: {created.isoformat()}")
-    msg_type = getattr(snapshot, "type", None)
-    if msg_type:
-        parts.append(f"type: {msg_type}")
-
-    content = (getattr(snapshot, "content", "") or "").strip()
-    if content:
-        parts.append(f"content:\n{content}")
-
-    embeds = getattr(snapshot, "embeds", []) or []
-    if embeds:
-        embed_lines = []
-        for embed in embeds[:3]:
-            bits = []
-            if getattr(embed, "title", None):
-                bits.append(f"title={embed.title}")
-            if getattr(embed, "url", None):
-                bits.append(f"url={embed.url}")
-            if getattr(embed, "description", None):
-                bits.append(f"description={embed.description[:500]}")
-            if bits:
-                embed_lines.append("; ".join(bits))
-        if embed_lines:
-            parts.append("embeds:\n" + "\n".join(f"- {line}" for line in embed_lines))
-
-    attachments = getattr(snapshot, "attachments", []) or []
-    if attachments:
-        attachment_lines = []
-        for att in attachments[:5]:
-            name = getattr(att, "filename", "attachment")
-            content_type = getattr(att, "content_type", None) or "unknown type"
-            url = getattr(att, "url", None)
-            attachment_lines.append(f"{name} ({content_type})" + (f" {url}" if url else ""))
-        parts.append("attachments:\n" + "\n".join(f"- {line}" for line in attachment_lines))
-
-    if len(parts) == 1:
-        parts.append("no readable content in snapshot")
-    return "\n".join(parts)
-
-
-def _snapshot_has_readable_content(snapshot) -> bool:
-    if (getattr(snapshot, "content", "") or "").strip():
-        return True
-    embeds = getattr(snapshot, "embeds", []) or []
-    if any((getattr(embed, "title", None) or getattr(embed, "description", None)) for embed in embeds):
-        return True
-    return bool(getattr(snapshot, "attachments", []) or [])
-
-
-def _forward_source_ref(message) -> tuple[int | None, int, int] | None:
-    snapshots = getattr(message, "message_snapshots", None) or []
-    if not snapshots:
-        return None
-    ref = getattr(message, "reference", None)
-    channel_id = getattr(ref, "channel_id", None)
-    message_id = getattr(ref, "message_id", None)
-    if not channel_id or not message_id:
-        return None
-    return getattr(ref, "guild_id", None), int(channel_id), int(message_id)
-
-
-def _extract_forwarded_context(message) -> str:
-    snapshots = getattr(message, "message_snapshots", None) or []
-    if not snapshots:
-        return ""
-    blocks = [_summarize_message_snapshot(snapshot, idx) for idx, snapshot in enumerate(snapshots, 1)]
-    source_ref = _forward_source_ref(message)
-    if source_ref:
-        guild_id, channel_id, message_id = source_ref
-        ref_bits = []
-        if guild_id:
-            ref_bits.append(f"guild_id={guild_id}")
-        ref_bits.append(f"channel_id={channel_id}")
-        ref_bits.append(f"message_id={message_id}")
-        blocks.append("[Forward source] " + " ".join(ref_bits))
-    return "\n\n".join(blocks)
-
-
-def _visible_message_content(message) -> tuple[str, str]:
-    content = message.content or ""
-    forwarded_context = _extract_forwarded_context(message)
-    if forwarded_context:
-        if content.strip():
-            return f"{content}\n\n{forwarded_context}", forwarded_context
-        return forwarded_context, forwarded_context
-    return content, ""
-
-
-def _extract_discord_message_refs(text: str) -> list[tuple[int | None, int, int]]:
-    from discord_ref_read import extract_discord_message_refs
-
-    return extract_discord_message_refs(text)
-
-
-def _forwarded_snapshot_is_partial(message) -> bool:
-    snapshots = getattr(message, "message_snapshots", None) or []
-    return bool(snapshots) and not all(_snapshot_has_readable_content(snapshot) for snapshot in snapshots)
-
-
-def _format_dereferenced_message(source_message, *, label: str) -> str:
-    from discord_ref_read import format_dereferenced_message
-
-    block = format_dereferenced_message(source_message, label=label)
-    forwarded = _extract_forwarded_context(source_message)
-    if forwarded:
-        block = f"{block}\n{forwarded}"
-    return block
-
-
-async def _fetch_discord_message_context(refs: list[tuple[int | None, int, int]], *, label: str, limit: int = 3) -> tuple[str, int]:
-    from discord_ref_read import fetch_discord_message_context
-
-    normalized = [(g or 0, c, m) for g, c, m in refs]
-    return await fetch_discord_message_context(client, normalized, label=label, limit=limit)
-
-
-def _attachment_display_names(raw_attachments) -> str:
-    names = []
-    for att in raw_attachments[:5]:
-        ct = getattr(att, "content_type", None) or "unknown"
-        names.append(f"{getattr(att, 'filename', 'attachment')} ({ct})")
-    return ", ".join(names)
-
-
-async def _gather_dialogue_attachments(message):
-    """Collect downloadable attachments from the message or its reply parent."""
-    raw_attachments = list(message.attachments or [])
-    source_label = ""
-
-    ref = getattr(message, "reference", None)
-    if not raw_attachments and ref:
-        ref_msg = getattr(ref, "resolved", None)
-        if ref_msg is None and ref.message_id:
-            try:
-                ref_msg = await message.channel.fetch_message(ref.message_id)
-            except Exception as e:
-                print(f"Reply parent fetch failed: {e}")
-                ref_msg = None
-        if ref_msg and ref_msg.attachments:
-            raw_attachments = list(ref_msg.attachments)
-            source_label = "reply parent"
-
-    if not raw_attachments:
-        return [], [], "", raw_attachments, source_label
-
-    class _AttachmentCarrier:
-        attachments = raw_attachments
-
-    extracted = await _extract_attachments(_AttachmentCarrier())
-    names = [fn for _, _, fn in extracted]
-    note_parts = []
-    if names:
-        prefix = " [attached"
-        if source_label:
-            prefix += f" from {source_label}"
-        note_parts.append(f"{prefix}: {', '.join(names)}]")
-    unsupported = [
-        att.filename
-        for att in raw_attachments
-        if att.filename not in names
-    ]
-    if unsupported:
-        note_parts.append(f" [unsupported attachment: {', '.join(unsupported)}]")
-    return extracted, names, "".join(note_parts), raw_attachments, source_label
-
-
-async def _attachments_from_forward_chain(source_ref: tuple) -> tuple[list, list[str], str]:
-    """When a partial forward hides attachments, walk reply parent of the source message."""
-    _guild_id, channel_id, message_id = source_ref
-    try:
-        channel = await client.fetch_channel(channel_id)
-        source_message = await channel.fetch_message(message_id)
-        candidates = [source_message]
-        ref = getattr(source_message, "reference", None)
-        if ref and ref.message_id:
-            try:
-                candidates.append(await channel.fetch_message(ref.message_id))
-            except Exception as e:
-                print(f"Forward chain parent fetch failed: {e}")
-        for candidate in candidates:
-            if not candidate.attachments:
-                continue
-            class _AttachmentCarrier:
-                attachments = list(candidate.attachments)
-            extracted = await _extract_attachments(_AttachmentCarrier())
-            if extracted:
-                names = [fn for _, _, fn in extracted]
-                label = "forward source" if candidate.id == source_message.id else "forward trigger"
-                return extracted, names, f" [attached from {label}: {', '.join(names)}]"
-    except Exception as e:
-        print(f"Forward chain attachment fetch failed: {e}")
-    return [], [], ""
-
-
-async def handle_dialogue(message):
-    try:
-        from share_eddy import maybe_notify_sharer_on_first_peer_reply
-
-        await maybe_notify_sharer_on_first_peer_reply(message)
-    except Exception as exc:
-        print(f"Share notify hook failed: {type(exc).__name__}: {exc}")
-
-    visible_content, forwarded_context = _visible_message_content(message)
-
-    try:
-        from share_eddy import maybe_skip_shared_eddy_dialogue
-
-        skip = await maybe_skip_shared_eddy_dialogue(message, visible_content)
-        if skip is not None:
-            print(
-                f"Shared eddy witness ({skip.reason}) "
-                f"[{message.author.display_name}]: {visible_content[:80]}"
-            )
-            return
-    except Exception as exc:
-        print(f"Shared eddy gate failed: {type(exc).__name__}: {exc}")
-
-    if isinstance(message.channel, discord.Thread):
-        from thread_registry import is_eddy_locked
-
-        if is_eddy_locked(
-            message.channel.id,
-            discord_locked=getattr(message.channel, "locked", False),
-        ):
-            print(
-                f"Dialogue skipped — thread locked: "
-                f"{message.channel.name} ({message.channel.id})"
-            )
-            return
-
-    channel_id = message.channel.id
-    attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (
-        await _gather_dialogue_attachments(message)
-    )
-    if not visible_content.strip() and raw_attachments:
-        visible_content = f"(attachment: {_attachment_display_names(raw_attachments)})"
-    parent_ch_id = resolve_dialogue_channel_id(message)
-    native_eddy = isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt(parent_ch_id)
-
-    if native_eddy:
-        triage = {"category": "practice", "needs_state": False}
-        triage_cat = "practice"
-    else:
-        triage = await triage_message(visible_content)
-        triage_cat = triage.get("category", "practice")
-        print(f"Triage [{message.author.display_name}]: {triage_cat} (state={triage.get('needs_state', True)}) — {visible_content[:80]}")
-
-    history = get_history(channel_id)
-
-    if not history and isinstance(message.channel, discord.Thread):
-        loaded = await load_thread_history(message.channel)
-        if loaded:
-            dialogue_histories[channel_id] = loaded
-            history = dialogue_histories[channel_id]
-            sync_history(channel_id)
-            print(f"Thread memory restored: {message.channel.name} ({len(loaded)} messages)")
-            summary = summarize_thread_context(loaded, message.channel.name)
-            # Internal log only — operational noise, not surfaced to channel (016 principle)
-            print(f"Thread memory context: {message.channel.name} ({len(loaded)} msgs) — {summary[:100]}")
-
-    attachment_extracted = False
-    urls = []
-    url_content = ""
-    url_source_count = 0
-    pending_incidental_urls: list[str] = []
-    urls = await _extract_urls(visible_content)
-    external = external_urls(urls)
-    from link_read import plan_dialogue_urls
-
-    auto_fetch, urls, pending_incidental_urls = plan_dialogue_urls(
-        visible_content, external, native_eddy=native_eddy
-    )
-    if auto_fetch:
-        fetch_results, url_content = await fetch_urls_with_status(message.channel, urls)
-        if url_content:
-            url_source_count = len(urls)
-            attachment_note += f" [fetched {url_source_count} URL(s)]"
-            if isinstance(message.channel, discord.Thread):
-                await maybe_refine_thread_name_from_fetch(message.channel, fetch_results)
-
-    dereferenced_context = ""
-    dereferenced_count = 0
-    ref_text = message.content or ""
-    if _forwarded_snapshot_is_partial(message):
-        source_ref = _forward_source_ref(message)
-        if source_ref:
-            g, c, m = source_ref
-            from discord_ref_read import permalink_for
-
-            ref_text = f"{permalink_for(g or 0, c, m)}\n{ref_text}"
-    if ref_text.strip():
-        from discord_ref_read import extract_all_discord_refs, fetch_all_discord_refs_with_status
-
-        if extract_all_discord_refs(ref_text):
-            _ref_results, dereferenced_context = await fetch_all_discord_refs_with_status(
-                message.channel, client, ref_text
-            )
-            dereferenced_count = sum(1 for r in _ref_results if r.ok)
-            if dereferenced_context:
-                thread_reads = sum(1 for r in _ref_results if r.ok and r.scope == "thread")
-                if thread_reads:
-                    attachment_note += f" [read {thread_reads} Discord thread(s)]"
-                else:
-                    attachment_note += f" [read {dereferenced_count} Discord message(s)]"
-
-    if not attachments and _forwarded_snapshot_is_partial(message):
-        source_ref = _forward_source_ref(message)
-        if source_ref:
-            chain_attachments, chain_names, chain_note = await _attachments_from_forward_chain(source_ref)
-            if chain_attachments:
-                attachments = chain_attachments
-                attachment_names = chain_names
-                attachment_note += chain_note
-
-    # Include fetched content in history so it persists across turns
-    user_entry = f"[{message.author.display_name}]: {visible_content}{attachment_note}"
-    if url_content:
-        user_entry += f"\n\n[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
-    if dereferenced_context:
-        user_entry += f"\n\n{dereferenced_context[:6000]}"
-    history.append({"role": "user", "content": user_entry})
-    if len(history) > MAX_DIALOGUE_HISTORY:
-        history.pop(0)
-
-    await _continue_dialogue_turn(
-        message,
-        history,
-        triage_cat=triage_cat,
-        native_eddy=native_eddy,
-        attachments=attachments,
-        attachment_names=attachment_names,
-        attachment_note=attachment_note,
-        attachment_extracted=attachment_extracted,
-        raw_attachments=raw_attachments,
-        url_content=url_content,
-        url_source_count=url_source_count,
-        urls=urls,
-        forwarded_context=forwarded_context,
-        dereferenced_context=dereferenced_context,
-        dereferenced_count=dereferenced_count,
-        pending_incidental_urls=pending_incidental_urls,
-    )
-
-
-async def run_link_read_followup(
-    interaction: discord.Interaction,
-    source_message_id: int,
-    urls: list[str],
-) -> None:
-    """Second turn after Read article on an incidental link."""
-    channel = interaction.channel
-    if not isinstance(channel, discord.Thread):
-        return
-    source = await channel.fetch_message(source_message_id)
-    fetch_results, url_content = await fetch_urls_with_status(channel, urls)
-    await maybe_refine_thread_name_from_fetch(channel, fetch_results)
-    history = get_history(channel.id)
-    history.append(
-        {
-            "role": "user",
-            "content": (
-                f"[Link read requested: {urls[0]}]\n\n"
-                f"[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
-            ),
-        }
-    )
-    if len(history) > MAX_DIALOGUE_HISTORY:
-        history.pop(0)
-    sync_history(channel.id)
-    native_eddy = uses_native_turtle_prompt(resolve_dialogue_channel_id(source))
-    await _continue_dialogue_turn(
-        source,
-        history,
-        triage_cat="link",
-        native_eddy=native_eddy,
-        attachments=[],
-        attachment_names=[],
-        attachment_note=" [link read followup]",
-        attachment_extracted=False,
-        raw_attachments=[],
-        url_content=url_content,
-        url_source_count=len(urls),
-        urls=urls,
-        forwarded_context="",
-        dereferenced_context="",
-        dereferenced_count=0,
-        pending_incidental_urls=[],
-    )
-
-
-async def _continue_dialogue_turn(
-    message,
-    history,
-    *,
-    triage_cat: str,
-    native_eddy: bool,
-    attachments,
-    attachment_names,
-    attachment_note: str,
-    attachment_extracted: bool,
-    raw_attachments=None,
-    url_content: str,
-    url_source_count: int,
-    urls: list,
-    forwarded_context: str,
-    dereferenced_context: str,
-    dereferenced_count: int,
-    pending_incidental_urls: list[str] | None = None,
-):
-    channel_id = message.channel.id
-    now = datetime.now(timezone.utc)
-    is_new_session = channel_id not in active_sessions or active_sessions[channel_id]["closed"]
-    if channel_id not in active_sessions:
-        active_sessions[channel_id] = {"started": now, "last_message": now, "closed": False}
-    active_sessions[channel_id]["last_message"] = now
-    active_sessions[channel_id]["closed"] = False
-
-    if is_new_session and not isinstance(message.channel, discord.Thread):
-        pd = get_pd()
-        sdir = os.path.join(pd, "sessions")
-        session_files = [f for f in os.listdir(sdir) if f.endswith(".md")] if os.path.isdir(sdir) else []
-        flows_dir = os.path.join(pd, "flows")
-        flow_files = (
-            [f for f in os.listdir(flows_dir) if f.endswith(".md") or f.endswith(".flow.md")]
-            if os.path.isdir(flows_dir)
-            else []
-        )
-        ctx_parts = [f"{len(session_files)} sessions", f"{len(flow_files)} flows"]
-        if session_files:
-            last_session = max(session_files, key=lambda f: os.path.getmtime(os.path.join(sdir, f))).replace(".md", "")
-            ctx_parts.append(f"last session: {last_session}")
-
-        # INT-023: Context loads silently. Healthy state needs no announcement.
-
-    parent_ch_id = resolve_dialogue_channel_id(message)
-    from mage import uses_craft_surface, get_channel_default_context
-
-    craft_surface = uses_craft_surface(parent_ch_id)
-    cfg = thread_configs.get(channel_id)
-    if native_eddy:
-        ctx = (cfg or {}).get("context_type")
-        if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
-            ctx = get_channel_default_context(message.channel.parent_id)
-        system_prompt = get_native_eddy_prompt(ctx)
-        thread_use_api = False
-        thread_model = (cfg or {}).get("model") or TURTLE_MODEL
-    elif craft_surface:
-        ctx = (cfg or {}).get("context_type") if cfg else None
-        if not ctx:
-            ctx = get_channel_default_context(parent_ch_id) or "craft"
-        system_prompt = get_craft_channel_prompt(ctx)
-        thread_use_api = (cfg or {}).get("use_api", USE_API) if cfg else USE_API
-        thread_model = (cfg or {}).get("model", DIALOGUE_MODEL) if cfg else DIALOGUE_MODEL
-    elif cfg:
-        ctx = cfg.get("context_type")
-        if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
-            ctx = get_channel_default_context(message.channel.parent_id)
-        system_prompt = get_thread_prompt(
-            cfg["attunement"], cfg["use_api"], context_type=ctx, channel_id=parent_ch_id
-        )
-        thread_use_api = cfg["use_api"]
-        thread_model = cfg["model"]
-    else:
-        system_prompt = get_system_prompt()
-        thread_use_api = USE_API
-        thread_model = DIALOGUE_MODEL
-
-    # Thread cards are magic-era persistence — native eddies use visible history only.
-    if (
-        isinstance(message.channel, discord.Thread)
-        and not native_eddy
-        and not read_thread_state(message.channel.name)
-    ):
-        await _update_thread_state(message.channel, cfg, history)
-
-    if native_eddy:
-        runtime_env = _build_native_runtime_env(message, cfg, history)
-        system_prompt = runtime_env + system_prompt
-    else:
-        runtime_env = _build_runtime_env(message, cfg)
-        triage_hint = f"- **Message triage:** {triage_cat}"
-        if triage_cat == "deep":
-            triage_hint += " (take your time, go deep)"
-        elif triage_cat in ("greeting", "casual"):
-            triage_hint += " (keep it light and brief)"
-        runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
-        system_prompt = runtime_env + system_prompt
-
-    # Continuity Engine — Slice 0 (current layer) + Slice 1 (alive headers +
-    # per-eddy narrowing). Prepend the substrate packet so Turtle is oriented in
-    # the present and knows what's in motion, without being told. Scope is read
-    # from scopes.yaml (cross-process: !focus runs in the River bot, this reads
-    # it in the Turtle bot). dialogue_model is resolved for THIS turn (hw honesty).
-    try:
-        from continuity_engine import get_scope, render_substrate_packet
-
-        pd = get_pd()
-        scope = get_scope(pd, channel_id)
-        current_block = render_substrate_packet(
-            pd,
-            dialogue_model=thread_model,
-            use_api=thread_use_api,
-            scope=scope,
-        )
-        if current_block:
-            system_prompt = current_block + system_prompt
-    except Exception as exc:
-        print(f"CE substrate packet failed: {type(exc).__name__}: {exc}")
-
-    source_flags = []
-    if url_content:
-        source_flags.append(f"bot-fetched URL content ({url_source_count or len(urls)} URL(s))")
-    if attachments:
-        source_flags.append(f"attachment metadata ({', '.join(attachment_names)})")
-    elif raw_attachments:
-        source_flags.append(
-            f"attachment present but not extracted ({_attachment_display_names(raw_attachments)})"
-        )
-    if forwarded_context:
-        source_flags.append("forwarded message snapshot")
-    if dereferenced_context:
-        source_flags.append(f"read Discord context ({dereferenced_count})")
-
-    messages_for_llm = list(history)
-    contexts = absorbed_contexts.get(channel_id, [])
-    if contexts and not cfg:
-        source_flags.append(f"absorbed thread context ({len(contexts)} thread(s))")
-        digest_parts = []
-        for ctx in contexts:
-            model_info = ctx.get("model_info", "")
-            config_tag = f" `{model_info.strip()}`" if model_info.strip() else ""
-            state_file = read_thread_state(ctx["name"])
-            state_note = f"\n*Thread state:* {state_file}" if state_file else ""
-            digest_parts.append(
-                f"**Thread \"{ctx['name']}\"**{config_tag}:\n{ctx['digest']}{state_note}"
-            )
-        absorbed_block = (
-            "## Absorbed Thread Context\n\n"
-            "The Mage has absorbed the following thread resonances into this conversation. "
-            "Draw on these naturally when relevant — they are part of your working context.\n\n"
-            + "\n\n---\n\n".join(digest_parts)
-        )
-        messages_for_llm = [{"role": "user", "content": absorbed_block},
-                            {"role": "assistant", "content": "I have this thread context. Let's continue."}] + messages_for_llm
-
-    async with message.channel.typing():
-        if native_eddy:
-            try:
-                await ensure_native_presence(message.channel)
-            except Exception as exc:
-                print(f"Native presence failed: {exc}")
-            cfg = thread_configs.get(channel_id) or cfg
-            try:
-                await post_flow_presence_if_needed(message.channel, cfg)
-            except Exception as exc:
-                print(f"Flow presence failed: {exc}")
-        tool_report = ""
-        is_gemini = thread_model.startswith("gemini-")
-        if native_eddy:
-            thread_label = message.channel.name if isinstance(message.channel, discord.Thread) else "eddy"
-            print(f"Native Turtle [{thread_label}]: {thread_model} prompt={len(system_prompt)} chars")
-        try:
-            if is_gemini and HAS_GEMINI and GOOGLE_API_KEY:
-                reply, tools_executed = await chat_gemini(system_prompt, messages_for_llm, model=thread_model, attachments=attachments)
-                tool_report = build_tool_report(tools_executed)
-            elif attachments and not is_gemini:
-                extraction = await preprocess_attachments(attachments) if attachments else ""
-                if extraction:
-                    messages_for_llm[-1] = dict(messages_for_llm[-1])
-                    block = extraction
-                    if extraction.startswith("[Attachment processing failed") and raw_attachments:
-                        url_lines = []
-                        for att in raw_attachments[:3]:
-                            url = getattr(att, "url", None)
-                            if url:
-                                url_lines.append(f"- {att.filename}: {url}")
-                        if url_lines:
-                            block += "\n[Attachment URLs for practitioner]:\n" + "\n".join(url_lines)
-                    messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + block
-                    if not extraction.startswith("[Attachment processing failed"):
-                        attachment_extracted = True
-                if thread_use_api:
-                    reply, tools_executed = await chat_anthropic_with_model(
-                        system_prompt, messages_for_llm, thread_model, use_tools=True,
-                        tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
-                    tool_report = build_tool_report(tools_executed)
-                else:
-                    reply, tools_executed = await chat_ollama_with_tools(
-                        system_prompt, messages_for_llm, model_override=thread_model,
-                        tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
-                    tool_report = build_tool_report(tools_executed)
-            elif thread_use_api:
-                reply, tools_executed = await chat_anthropic_with_model(
-                    system_prompt, messages_for_llm, thread_model, use_tools=True,
-                    tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
-                tool_report = build_tool_report(tools_executed)
-            else:
-                # Direct commands are handled before dialogue. For ordinary
-                # local replies, avoid the conversational tool loop so Qwen
-                # does not spend turns searching or routing while Discord waits.
-                reply = await chat_ollama(
-                    system_prompt, messages_for_llm, model=thread_model,
-                    num_ctx=32768, think=False)
-                tools_executed = []
-
-            if not reply:
-                reply = "(no response generated)"
-        except Exception as e:
-            print(f"Dialogue error ({thread_model}): {type(e).__name__}: {e}")
-            try:
-                reply = await chat_ollama(system_prompt, list(history), model=REFLECTION_MODEL)
-            except Exception as e2:
-                reply = f"[dialogue error: {type(e2).__name__}: {e2}]"
-
-    # Detect and remove repeated paragraphs before sending
-    paragraphs = reply.split("\n\n")
-    if len(paragraphs) > 2:
-        seen = set()
-        deduped = []
-        for p in paragraphs:
-            normalized = p.strip()[:200]
-            if normalized and normalized in seen:
-                continue
-            seen.add(normalized)
-            deduped.append(p)
-        if len(deduped) < len(paragraphs):
-            print(f"Dedup: removed {len(paragraphs) - len(deduped)} repeated paragraphs")
-            reply = "\n\n".join(deduped)
-
-    if native_eddy:
-        from flow_runner import apply_flow_reply_guard, strip_model_operational_lines
-
-        reply, stripped_ops = strip_model_operational_lines(reply)
-        if stripped_ops:
-            print(f"Stripped model operational lines: {stripped_ops}")
-        flow_id = (cfg or {}).get("context_type")
-        reply, guard_notes = apply_flow_reply_guard(reply, flow_id, history)
-        if guard_notes:
-            print(f"Flow reply guard: {guard_notes}")
-    if tool_report:
-        reply = f"{reply}\n\n-# ⚙️ {tool_report}"
-    if attachment_extracted:
-        source_flags.append("extracted attachment text")
-    source_trace = _build_source_trace(source_flags)
-    if source_trace and not native_eddy:
-        reply = f"{reply}\n\n-# {source_trace}"
-    history.append({"role": "assistant", "content": reply})
-    for chunk in split_message(reply):
-        await message.reply(chunk, mention_author=False)
-    if native_eddy:
-        print(f"Native Turtle reply sent [{message.channel.name}]: {len(reply)} chars")
-
-    # Super-ego: think aloud after sustained conversation
-    asyncio.ensure_future(maybe_reflect(message.channel, history))
-
-    if isinstance(message.channel, discord.Thread):
-        await _update_thread_state(message.channel, cfg, history)
-        if native_eddy:
-            from mage import river_bot_enabled
-
-            # Split-bot: River re-anchors bars after each turn (see river_eddy_seneschal).
-            if not river_bot_enabled():
-                from bar_anchor import ensure_channel_bars
-
-                await ensure_channel_bars(message.channel)
-        # Phase 1 Eyes: update thread registry on every exchange
-        if isinstance(message.channel, discord.Thread):
-            try:
-                parent_name = message.channel.parent.name if message.channel.parent else "unknown"
-                model_label = cfg.get("model_label", "default") if cfg else "default"
-                att = cfg.get("attunement", "semi") if cfg else "semi"
-                ctx_type = cfg.get("context_type") if cfg else None
-                eddy = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
-                register_thread(
-                    message.channel.id, message.channel.name,
-                    parent_channel=parent_name, model=model_label,
-                    attunement=att, context_type=ctx_type, eddy_type=eddy,
-                )
-                update_thread_activity(message.channel.id)
-            except Exception as e:
-                print(f"Registry update failed: {e}")
-
-    if pending_incidental_urls:
-        await post_link_offer(
-            message.channel,
-            message.id,
-            pending_incidental_urls,
-            message.client,
-        )
-
-    sync_history(channel_id)
-
-
 # ─── Event Handlers ──────────────────────────────────────────────
 
 _intake_runner = None
-
-
-async def _touch_flow_library_after_dialogue(message: discord.Message) -> None:
-    if isinstance(message.channel, discord.Thread):
-        from mage import river_bot_enabled
-
-        if river_bot_enabled():
-            from river_turn_signal import mark_turtle_turn_complete
-
-            mark_turtle_turn_complete(message.channel.id, message.id)
-
-
-async def _route_practice_dialogue(message: discord.Message) -> None:
-    from dialogue_queue import enqueue_dialogue
-
-    ch = getattr(message.channel, "name", message.channel.id)
-    visible, _ = _visible_message_content(message)
-    print(f"Turtle inbound [{ch}]: {visible[:120]!r}")
-    await enqueue_dialogue(message, handle_dialogue, after_turn=_touch_flow_library_after_dialogue)
-
-
-async def _should_skip_native_starter(message: discord.Message) -> bool:
-    if not isinstance(message.channel, discord.Thread):
-        return False
-    if not uses_native_turtle_prompt(resolve_dialogue_channel_id(message)):
-        return False
-    try:
-        starter = message.channel.starter_message
-        if starter is None:
-            starter = await message.channel.fetch_start_message()
-        return bool(starter and message.id == starter.id)
-    except Exception:
-        return False
 
 
 @client.event
@@ -1585,107 +671,9 @@ async def on_member_remove(member):
 
 @client.event
 async def on_message(message):
-    if message.author == client.user:
-        return
+    from practice_dispatch import dispatch_incoming_message
 
-    if message.type not in (discord.MessageType.default, discord.MessageType.reply) and not getattr(message, "message_snapshots", None):
-        return
-
-    maybe_reload_mage_registry()
-
-    set_practice_context(message)
-
-    if message.author.bot:
-        if message.author.id == SPIRIT_BOT_ID and is_practice_channel(message):
-            # Spirit (dyad partner) — process like a practitioner message
-            pass  # fall through to normal handling below
-        elif client.user in message.mentions and is_practice_channel(message):
-            await _route_practice_dialogue(message)
-            return
-        else:
-            return
-
-    if isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt(
-        resolve_dialogue_channel_id(message)
-    ):
-        if await _should_skip_native_starter(message):
-            return
-
-    if is_practice_channel(message):
-        # Split-bot: River owns all turtle-talk `!` commands (acts, not Turtle prose)
-        if message.content.strip().startswith("!") and river_bot_enabled():
-            return
-
-        if await dispatch_direct_command(message):
-            return
-        # Message-level dedup: skip if already seen (prevents duplicate responses)
-        if message.id in _processed_messages:
-            print(f"Skipping duplicate message {message.id}")
-            return
-        _processed_messages.append(message.id)
-
-        # Founder key entry: bind a founder's self-chosen emoji only after the primary operator confirms.
-        if await try_founder_key_entry(message):
-            return
-
-        # Unclaimed hosted river: river key claim (single-bot fallback when River bot absent)
-        if (
-            not isinstance(message.channel, discord.Thread)
-            and _get_channel_type(message.channel.id) == "unclaimed-river"
-        ):
-            lock = get_channel_lock(message.channel.id)
-            async with lock:
-                if await try_river_key_claim(message, client):
-                    return
-            return
-
-        # Intake thread: auto-spawn new threads from dropped content
-        if is_intake_thread(message.channel) and not message.content.strip().startswith("!"):
-            lock = get_channel_lock(message.channel.id)
-            async with lock:
-                await handle_intake_message(message)
-            return
-
-        # Native river: acts only — River bot when configured, else Turtle fallback
-        if river_bot_enabled() and uses_native_river(message):
-            return
-
-        if turtle_handles_native_river(message):
-            from river_handler import handle_river_message
-
-            lock = get_channel_lock(message.channel.id)
-            async with lock:
-                await handle_river_message(message)
-            return
-
-        # Blank eddy rename (single-bot fallback — River bot handles this when split)
-        if (
-            isinstance(message.channel, discord.Thread)
-            and message.channel.parent_id
-            and not river_bot_enabled()
-        ):
-            from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
-            from river_handler import handle_eddy_first_message
-
-            if is_awaiting_flow_intake(message.channel.id, message.channel.parent_id):
-                return
-            if is_awaiting_title(message.channel.id, message.channel.parent_id):
-                lock = get_channel_lock(message.channel.id)
-                async with lock:
-                    await handle_eddy_first_message(message)
-                    if message.id in _processed_messages:
-                        return
-                    _processed_messages.append(message.id)
-                await _route_practice_dialogue(message)
-                return
-
-        lock = get_channel_lock(message.channel.id)
-        async with lock:
-            if is_craft_intake_channel(message):
-                await schedule_craft_intake(message, client)
-                return
-
-        await _route_practice_dialogue(message)
+    await dispatch_incoming_message(message)
 
 
 # ─── Main ────────────────────────────────────────────────────────

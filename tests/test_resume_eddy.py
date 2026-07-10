@@ -107,7 +107,7 @@ class TestNativeRuntimeResume(unittest.TestCase):
         message.channel = self._thread_channel("saved thread")
 
         card = "# Thread Card: saved thread\n\n## Last User Move\npacking list\n"
-        with patch("discord_bot.read_thread_state", return_value=card):
+        with patch("dialogue_runtime.read_thread_state", return_value=card):
             env = _build_native_runtime_env(message, {}, [{"role": "user", "content": "hi"}])
         self.assertIn("## Thread continuity", env)
         self.assertIn("packing list", env)
