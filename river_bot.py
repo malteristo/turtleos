@@ -121,11 +121,17 @@ async def on_ready():
 
 async def _rejoin_practice_threads(client) -> None:
     """Join active eddy threads so River receives practitioner messages after restart."""
-    from mage import get_channel
+    from mage import _resolve_dialogue_channel_id
 
-    dialogue = get_channel("dialogue")
-    if not dialogue:
+    dialogue_id = _resolve_dialogue_channel_id()
+    if not dialogue_id:
         return
+    dialogue = client.get_channel(dialogue_id)
+    if dialogue is None:
+        try:
+            dialogue = await client.fetch_channel(dialogue_id)
+        except discord.HTTPException:
+            return
     for thread in dialogue.threads:
         try:
             await thread.join()

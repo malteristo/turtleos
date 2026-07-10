@@ -602,11 +602,18 @@ def is_practice_channel(message):
     ch_id = channel.id
     parent_id = channel.parent_id if isinstance(channel, discord.Thread) else None
 
-    registry_channels = set(_MAGE_REGISTRY.get("channels", {}).keys())
+    registry_channels = set((_MAGE_REGISTRY.get("channels") or {}).keys())
     if str(ch_id) in registry_channels:
         return True
     if parent_id and str(parent_id) in registry_channels:
         return True
+
+    dialogue_id = _resolve_dialogue_channel_id()
+    if dialogue_id is not None:
+        if ch_id == dialogue_id:
+            return True
+        if parent_id and parent_id == dialogue_id:
+            return True
 
     dialogue = get_channel("dialogue")
     if dialogue:
@@ -619,8 +626,11 @@ def is_practice_channel(message):
 
 def is_registered_parent_channel(channel_id):
     """Check if a channel ID is registered in the mage registry."""
-    registry_channels = set(_MAGE_REGISTRY.get("channels", {}).keys())
+    registry_channels = set((_MAGE_REGISTRY.get("channels") or {}).keys())
     if str(channel_id) in registry_channels:
+        return True
+    dialogue_id = _resolve_dialogue_channel_id()
+    if dialogue_id is not None and channel_id == dialogue_id:
         return True
     dialogue = get_channel("dialogue")
     return dialogue and channel_id == dialogue.id

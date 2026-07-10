@@ -161,6 +161,26 @@ class MageChannelResolutionTests(unittest.TestCase):
             else:
                 CHANNELS["dialogue"] = old_dialogue
 
+    def test_is_practice_channel_uses_env_dialogue_without_client(self) -> None:
+        self._write_registry({}, mages={})
+        from state import CHANNELS, client
+
+        old_dialogue = CHANNELS.get("dialogue")
+        CHANNELS["dialogue"] = "888"
+        thread = MagicMock()
+        thread.id = 777
+        thread.parent_id = 888
+        with patch.object(client, "get_channel", return_value=None):
+            self.assertTrue(mage.is_practice_channel(MagicMock(channel=thread)))
+            parent = MagicMock()
+            parent.id = 888
+            parent.parent_id = None
+            self.assertTrue(mage.is_practice_channel(MagicMock(channel=parent)))
+        if old_dialogue is None:
+            CHANNELS.pop("dialogue", None)
+        else:
+            CHANNELS["dialogue"] = old_dialogue
+
 
 if __name__ == "__main__":
     unittest.main()

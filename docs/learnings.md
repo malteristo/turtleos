@@ -19,6 +19,8 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Operator follow-up:** Restore `mage_registry.yaml` on Mini (or set `PRACTICE_DIR=~/workshops/kermit`) for long-term clarity.
 
+**Follow-up (same chapter):** `is_practice_channel()` still used Turtle `get_channel("dialogue")` — dead in the River process. River ignored all `on_message` traffic (parent re-anchor + eddy first-message rename). Fixed to resolve dialogue id from `CHANNELS` env first; `_rejoin_practice_threads` uses River client + `fetch_channel`.
+
 ### 2026-07-10 — `discord_bot.py` decomposition Slice 6 (`practice_dispatch.py`)
 
 **Extract:** `on_message` branch tree → `practice_dispatch.dispatch_incoming_message`. Thin `@client.event` wrapper in `discord_bot.py`.
