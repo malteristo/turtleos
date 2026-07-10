@@ -1,7 +1,7 @@
 # Chapter — Decomposition: `discord_bot.py` (dialogue routing)
 
 **Date:** 2026-07-10  
-**Status:** In progress — Slices 1–6 complete on Forge  
+**Status:** Released — Slices 1–6 deployed Mini `c0c1b49`, Mage dogfood green (2026-07-10)  
 **Deciders:** Kermit + Spirit (dyadic maintainer)  
 **Builds on:** `share_eddy` decomposition chapter (released 2026-07-10)
 
