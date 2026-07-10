@@ -37,6 +37,57 @@ def _install_shelter_fixture(practice_dir: str) -> None:
     shutil.copy(SHELTER_ARCHIVE, os.path.join(flows, "shelter.md"))
 
 
+class FlowIdConfinementTests(unittest.TestCase):
+    """Issue 002: user-supplied flow IDs must never resolve outside flows/."""
+
+    def test_traversal_ids_rejected(self) -> None:
+        from flow_runner import resolve_flow_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            proposals = os.path.join(tmp, "proposals")
+            os.makedirs(proposals)
+            with open(os.path.join(proposals, "secret.md"), "w") as fh:
+                fh.write("---\ntitle: Secret\n---\nprivate")
+            os.makedirs(os.path.join(tmp, "flows"), exist_ok=True)
+            for hostile in (
+                "../proposals/secret",
+                "..%2fproposals%2fsecret",
+                "/etc/hostname",
+                "foo/../../proposals/secret",
+                "....//proposals/secret",
+            ):
+                self.assertIsNone(
+                    resolve_flow_path(hostile, practice_dir=tmp),
+                    f"hostile id resolved: {hostile}",
+                )
+                self.assertIsNone(load_flow_spec(hostile, practice_dir=tmp))
+
+    def test_symlinked_flow_outside_flows_rejected(self) -> None:
+        from flow_runner import resolve_flow_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flows = os.path.join(tmp, "flows")
+            proposals = os.path.join(tmp, "proposals")
+            os.makedirs(flows)
+            os.makedirs(proposals)
+            target = os.path.join(proposals, "secret.md")
+            with open(target, "w") as fh:
+                fh.write("---\ntitle: Secret\n---\nprivate")
+            os.symlink(target, os.path.join(flows, "sneaky.md"))
+            self.assertIsNone(resolve_flow_path("sneaky", practice_dir=tmp))
+
+    def test_legitimate_ids_still_resolve(self) -> None:
+        from flow_runner import resolve_flow_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _install_shelter_fixture(tmp)
+            self.assertIsNotNone(resolve_flow_path("shelter", practice_dir=tmp))
+            self.assertIsNotNone(resolve_flow_path("Shelter", practice_dir=tmp))
+            # repo template flows resolve regardless of practice dir
+            self.assertIsNotNone(resolve_flow_path("navigator", practice_dir=tmp))
+            self.assertIsNotNone(resolve_flow_path("dnd dm", practice_dir=tmp))
+
+
 class FlowRunnerTests(unittest.TestCase):
     def test_split_front_matter(self) -> None:
         raw = "---\ntitle: Shelter\nreads: []\nwrites: [state/notes/x.md]\n---\n\nBody here."
@@ -73,7 +124,8 @@ class FlowRunnerTests(unittest.TestCase):
             self.assertEqual(written, ["state/notes/navigator-last.md"])
             path = os.path.join(tmp, "state/notes/navigator-last.md")
             self.assertTrue(os.path.isfile(path))
-            text = open(path).read()
+            with open(path) as fh:
+                text = fh.read()
             self.assertIn("stuck on install", text)
 
     def test_build_flow_prompt_sections(self) -> None:

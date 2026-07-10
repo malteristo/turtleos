@@ -62,16 +62,33 @@ def _flow_search_dirs(practice_dir: str | None = None) -> list[str]:
     return [d for d in dirs if os.path.isdir(d)]
 
 
+# Issue 002: flow IDs are strict identifiers — no path separators, dots, or
+# absolute paths. Anything else can traverse outside flows/ and load arbitrary
+# Markdown as model instructions.
+_FLOW_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
 def _slug_candidates(flow_id: str) -> list[str]:
-    slug = flow_id.strip().lower().replace(" ", "_")
-    return list(dict.fromkeys([slug, slug.replace("_", "-")]))
+    slug = str(flow_id).strip().lower().replace(" ", "_")
+    candidates = dict.fromkeys([slug, slug.replace("_", "-")])
+    return [c for c in candidates if _FLOW_ID_RE.match(c)]
+
+
+def _contained_in(path: str, base: str) -> bool:
+    """Realpath containment — symlink-safe (issue 002 / F-P2.3 pattern)."""
+    real = os.path.realpath(path)
+    base_real = os.path.realpath(base)
+    try:
+        return os.path.commonpath([real, base_real]) == base_real
+    except ValueError:
+        return False
 
 
 def resolve_flow_path(flow_id: str, practice_dir: str | None = None) -> str | None:
     for base in _flow_search_dirs(practice_dir):
         for stem in _slug_candidates(flow_id):
             path = os.path.join(base, f"{stem}.md")
-            if os.path.isfile(path):
+            if os.path.isfile(path) and _contained_in(path, base):
                 return path
     return None
 
