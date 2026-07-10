@@ -85,7 +85,6 @@ def check_practitioner_readiness() -> list[str]:
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
-        open(f"{tmp}/boom.md", "w").close()
         result = assess_practitioner_substrate(tmp)
         if "fresh" not in result["summary"].lower():
             errors.append("empty practitioner substrate should say fresh")

@@ -55,8 +55,8 @@ class CapabilityRegistry:
     def default(cls, paths: RuntimePaths) -> "CapabilityRegistry":
         principals = frozenset({paths.principal})
         policies = {
-            "practice.append_boom": CapabilityPolicy(
-                "practice.append_boom", risk="low", allowed_principals=principals, allowed_root="practice_dir"
+            "practice.append_note": CapabilityPolicy(
+                "practice.append_note", risk="low", allowed_principals=principals, allowed_root="practice_dir"
             ),
             "practice.write_session": CapabilityPolicy(
                 "practice.write_session", risk="low", allowed_principals=principals, allowed_root="practice_dir"

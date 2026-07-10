@@ -11,7 +11,7 @@ from .policy import CapabilityRegistry
 from .tasks import Task, TaskStore
 
 
-ArtifactKind = Literal["boom", "session", "proposal"]
+ArtifactKind = Literal["note", "session", "proposal"]
 
 
 def submit_practice_handoff(
@@ -116,8 +116,8 @@ def submit_practice_handoff(
 
 
 def _capability_id_for_artifact(artifact: str) -> str:
-    if artifact == "boom":
-        return "practice.append_boom"
+    if artifact == "note":
+        return "practice.append_note"
     if artifact == "session":
         return "practice.write_session"
     if artifact == "proposal":

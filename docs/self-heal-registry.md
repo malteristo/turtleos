@@ -10,7 +10,7 @@ Operator default: only registry-listed checks may auto-heal. All other recovery 
 |--------------|----------|--------|------------|
 | `ollama` | **Yes** | `restart_ollama()` | Alert Mage |
 | `loops` | No | — | Alert Mage (bot restart is dyad action) |
-| `practice_freshness` | No | — | Alert Mage (stale `boom.md` / `compass.md`) |
+| `practice_freshness` | No | — | Alert Mage (topology-aware practice state freshness) |
 | `file_io` | No | — | Alert Mage (filesystem intervention) |
 | `discord` | No | — | Alert Mage (connection unhealthy) |
 

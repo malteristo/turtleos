@@ -19,10 +19,11 @@ class TestArtifactAllowlist(unittest.TestCase):
         self.pd = self.tmp.name
         os.makedirs(os.path.join(self.pd, "sessions"), exist_ok=True)
         os.makedirs(os.path.join(self.pd, "proposals"), exist_ok=True)
+        os.makedirs(os.path.join(self.pd, "state", "notes"), exist_ok=True)
         os.makedirs(os.path.join(self.pd, "thread-state"), exist_ok=True)
         open(os.path.join(self.pd, "sessions", "2026-06-29.md"), "w").close()
         open(os.path.join(self.pd, "proposals", "secret.md"), "w").close()
-        open(os.path.join(self.pd, "bright.md"), "w").close()
+        open(os.path.join(self.pd, "state", "notes", "navigator.md"), "w").close()
         open(os.path.join(self.pd, "thread-state", "card.md"), "w").close()
         self.runtime = os.path.join(self.pd, "runtime")
         os.makedirs(os.path.join(self.runtime, "link-resonance"), exist_ok=True)

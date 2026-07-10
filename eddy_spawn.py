@@ -22,6 +22,7 @@ import discord
 from llm import chat_ollama
 from mage import get_pd
 from practice_io import read_safe
+from practice_freshness import detect_topology
 from state import EDDY_TYPES, EDDY_DEFAULT, REFLECTION_MODEL
 from helpers import local_now, split_message
 
@@ -114,41 +115,32 @@ def _practice_state_excerpt(topic: str, limit: int = 1800) -> str:
     pd = get_pd()
     topic_terms = [t for t in re.findall(r"\w+", topic.lower()) if len(t) >= 4]
     sections = []
+    topology = detect_topology(pd)
 
-    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
-    if bright:
-        bright_lines = []
-        for line in bright.splitlines():
-            lower = line.lower()
-            if any(term in lower for term in topic_terms):
-                bright_lines.append(line.strip())
-            if len(bright_lines) >= 3:
-                break
-        if bright_lines:
-            sections.append("Bright:\n" + "\n".join(bright_lines))
-
-    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
-    if compass:
-        sections.append("Compass excerpt:\n" + compass[:700])
-
-    intentions_dir = os.path.join(pd, "intentions", "active")
-    try:
-        intention_hits = []
-        for name in os.listdir(intentions_dir):
-            if not name.endswith(".md"):
-                continue
-            path = os.path.join(intentions_dir, name)
-            text = read_safe(path)
-            lower = (name + "\n" + text).lower()
-            if any(term in lower for term in topic_terms):
-                title = name[:-3].replace("_", " ")
-                intention_hits.append(f"- {title}")
-            if len(intention_hits) >= 3:
-                break
-        if intention_hits:
-            sections.append("Active intentions:\n" + "\n".join(intention_hits))
-    except Exception:
-        pass
+    if topology == "native":
+        current = read_safe(os.path.join(pd, "state", "current.yaml"))
+        if current.strip():
+            sections.append("Current state:\n" + current[:500])
+        sessions_dir = os.path.join(pd, "sessions")
+        if os.path.isdir(sessions_dir):
+            topic_terms = [t for t in re.findall(r"\w+", topic.lower()) if len(t) >= 4]
+            try:
+                md_files = sorted(
+                    [f for f in os.listdir(sessions_dir) if f.endswith(".md")],
+                    key=lambda f: os.path.getmtime(os.path.join(sessions_dir, f)),
+                    reverse=True,
+                )[:3]
+            except OSError:
+                md_files = []
+            hits = []
+            for fname in md_files:
+                text = read_safe(os.path.join(sessions_dir, fname))
+                if any(term in text.lower() for term in topic_terms):
+                    hits.append(f"- {fname}: {text.splitlines()[0][:80]}")
+                if len(hits) >= 2:
+                    break
+            if hits:
+                sections.append("Recent sessions:\n" + "\n".join(hits))
 
     return "\n\n".join(sections)[:limit] if sections else "No matching practice state found."
 

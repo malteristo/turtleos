@@ -106,10 +106,6 @@ ARTIFACT_READ_TOKEN = os.environ.get("ARTIFACT_READ_TOKEN", "").strip()
 PRACTICE_TIMEZONE = os.environ.get("PRACTICE_TIMEZONE", "Europe/Berlin")
 
 
-# ─── Boom Thread ─────────────────────────────────────────────
-
-BOOM_THREAD_NAME = "boom"  # standing thread for universal intake
-boom_thread_id: int | None = None  # set on startup or first creation
 
 # ─── Mutable Shared State ───────────────────────────────────────
 

@@ -103,7 +103,7 @@ class RuntimeReadiness:
         practice_dir = self.paths.practice_dir
         surfaces = {
             "practice_dir": summarize_path(practice_dir),
-            "boom": summarize_path(practice_dir / "boom.md"),
+            "state_current": summarize_path(practice_dir / "state" / "current.yaml"),
             "sessions": summarize_directory(practice_dir / "sessions", "*.md"),
             "proposals": summarize_directory(practice_dir / "proposals", "*.md"),
         }

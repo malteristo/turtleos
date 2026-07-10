@@ -85,8 +85,7 @@ def get_attunement_profile() -> str:
     """Return global attunement profile (native only — magic-attuned Appendix A retired)."""
     profile = (_MAGE_REGISTRY.get("attunement") or "native").strip().lower()
     if profile == "magic":
-        print("WARN: attunement: magic is retired; using native")
-        return "native"
+        raise ValueError("attunement: magic is retired — set attunement: native in mage_registry.yaml")
     if profile != "native":
         return "native"
     return profile

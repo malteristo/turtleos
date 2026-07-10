@@ -135,14 +135,6 @@ async def cmd_release(message):
             inline=False,
         )
 
-    boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    boom_count = count_items(boom)
-    if boom_count > 0:
-        embed.add_field(
-            name="Note",
-            value=f"Boom has **{boom_count}** items. Consider `!sweep` before you go.",
-            inline=False,
-        )
 
     await reply_artifact_surface(
         message,
@@ -212,7 +204,7 @@ async def cmd_dissolve(message, args):
     elif result.already_archived:
         lines = [f"**{result.thread_name}** is archived — still readable in Discord's thread list."]
     elif result.entry_count:
-        lines.append(f"{result.entry_count} entries captured to boom.")
+        lines.append(f"{result.entry_count} insights archived.")
     if result.retain_memory and not result.capture_failed:
         lines.append("Memory retained (📌 keep).")
     if result.jump_url and not result.already_archived and not result.capture_failed:

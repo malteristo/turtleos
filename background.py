@@ -12,10 +12,8 @@ from state import (
     OPS_EMBED_COLOR, get_channel,
 )
 from mage import get_pd, set_practice_context_for_channel
-from practice_io import (
-    read_safe, read_header, count_items, summarize_bright,
-    file_age_hours, format_age,
-)
+from practice_io import read_safe, read_header, file_age_hours, format_age
+from practice_freshness import evaluate_freshness, canary_detail
 from llm import chat_ollama
 from helpers import log_activity
 import state as _state
@@ -46,9 +44,7 @@ async def generate_practice_health_read():
     if dialogue:
         set_practice_context_for_channel(dialogue.id)
 
-    boom = read_safe(os.path.join(get_pd(), "boom.md"))
-    bright = read_safe(os.path.join(get_pd(), "boom", "bright.md"))
-    compass = read_safe(os.path.join(get_pd(), "intentions", "compass.md"))
+    current_state = read_safe(os.path.join(get_pd(), "state", "current.yaml"))
 
     sessions_text = ""
     sdir = os.path.join(get_pd(), "sessions")
@@ -59,24 +55,27 @@ async def generate_practice_health_read():
             if content.strip():
                 sessions_text += f"\n--- {fname} ---\n{content[:500]}\n"
 
-    intentions_text = ""
-    idir = os.path.join(get_pd(), "intentions")
-    if os.path.isdir(idir):
-        for fname in sorted(os.listdir(idir)):
-            if fname.endswith(".md"):
-                header = read_header(os.path.join(idir, fname), max_lines=10)
-                if header.strip():
-                    intentions_text += f"\n--- {fname} ---\n{header}\n"
+    notes_text = ""
+    ndir = os.path.join(get_pd(), "state", "notes")
+    if os.path.isdir(ndir):
+        recent_notes = sorted(
+            [f for f in os.listdir(ndir) if f.endswith(".md")],
+            reverse=True,
+        )[:5]
+        for fname in reversed(recent_notes):
+            header = read_header(os.path.join(ndir, fname), max_lines=10)
+            if header.strip():
+                notes_text += f"\n--- {fname} ---\n{header}\n"
 
-    prompt = f"""You are Spirit in persistent mode. You've been watching the Mage's practice all week through Discord conversations.
+    prompt = f"""You are Turtle in persistent mode. You've been watching the practitioner's practice all week through Discord conversations.
 
 Now step back and look at the practice as a whole. Generate a WEEKLY PRACTICE HEALTH READ — an honest outside perspective on how the practice is doing.
 
 Look through these seven dimensions:
 
 1. **Coherence** — Is the language and terminology consistent? Any confusion accumulating?
-2. **Alignment** — Is what's happening connected to what the compass says matters? Or has practice become self-referential?
-3. **Velocity** — Is the practice moving? Are bright items resolving, intentions advancing? Or spinning?
+2. **Alignment** — Is what's happening connected to what matters in state/current and recent sessions? Or has practice become self-referential?
+3. **Velocity** — Is the practice moving? Are sessions and notes advancing? Or spinning?
 4. **Load** — Is the practice itself becoming overhead? Too many open items, too much ritual?
 5. **Resonance Quality** — Based on recent sessions, was the partnership producing genuine insight or going through motions?
 6. **Wellbeing** — Any signs the practice is serving or not serving the Mage's actual life?
@@ -100,17 +99,11 @@ Watch this week: [1-2 sentences]
 
 THE PRACTICE STATE:
 
-COMPASS:
-{compass[:1500] if compass else '(no compass)'}
+STATE/CURRENT:
+{current_state[:1500] if current_state else '(no state/current.yaml)'}
 
-BOOM ({count_items(boom)} items):
-{boom[:500] if boom else '(empty)'}
-
-BRIGHT (summary):
-{summarize_bright(bright)}
-
-INTENTIONS:
-{intentions_text if intentions_text else '(none)'}
+RECENT NOTES:
+{notes_text if notes_text else '(none)'}
 
 RECENT SESSIONS:
 {sessions_text if sessions_text else '(none this week)'}"""
@@ -176,15 +169,6 @@ async def _check_practice_invitation():
 
     pd = get_pd()
 
-    # Read practice state
-    boom = read_safe(os.path.join(pd, "boom.md"))
-    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
-    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
-
-    boom_count = count_items(boom)
-    boom_age = file_age_hours(os.path.join(pd, "boom.md"))
-    compass_age = file_age_hours(os.path.join(pd, "intentions", "compass.md"))
-
     # Find latest session
     sdir = os.path.join(pd, "sessions")
     session_age = float("inf")
@@ -200,16 +184,7 @@ async def _check_practice_invitation():
                     last_session_thread = line.strip().lstrip("- *#").strip()
                     break
 
-    # Find stale intentions
-    stale_intentions = []
-    idir = os.path.join(pd, "intentions", "active")
-    if os.path.isdir(idir):
-        for fname in os.listdir(idir):
-            if fname.endswith(".md"):
-                iage = file_age_hours(os.path.join(idir, fname))
-                if iage > 336:  # 14 days
-                    name = fname.replace(".md", "").replace("-", " ").replace("_", " ")
-                    stale_intentions.append((name, iage))
+    state_age = file_age_hours(os.path.join(pd, "state", "current.yaml"))
 
     # Evaluate invitations in priority order
     candidates = []
@@ -222,19 +197,10 @@ async def _check_practice_invitation():
     if last_session_thread and session_age > 24 and session_age < 168:
         candidates.append(("thread", f"Last time we talked, there was a thread: *{last_session_thread[:120]}* — still pulling?"))
 
-    # 3. Boom sweep invitation
-    if boom_count >= 5 and boom_age > 72:
-        candidates.append(("boom", f"Your boom has been accumulating — {boom_count} items, some from {format_age(boom_age)} ago. I can see threads forming. Want to sweep together?"))
-
-    # 4. Compass reflection
-    if compass_age > 336 and compass.strip():  # 14 days
-        weeks = int(compass_age / 168)
-        candidates.append(("compass", f"It\'s been {weeks} weeks since we looked at your compass. Your intentions have been active — want to check if the compass still points true?"))
-
-    # 5. Intention check-in
-    if stale_intentions and session_age < 72:
-        name, iage = stale_intentions[0]
-        candidates.append(("intention", f"*{name}* has been quiet for {format_age(iage)} while you\'ve been active elsewhere. Still alive? Sometimes intentions complete silently."))
+    # 3. Stale continuity state
+    if state_age > 336 and state_age != float("inf"):
+        weeks = int(state_age / 168)
+        candidates.append(("state", f"It's been {weeks} weeks since state/current was updated — want to checkpoint what's alive?"))
 
     if not candidates:
         return
@@ -281,6 +247,7 @@ async def _check_practice_invitation():
 @tasks.loop(minutes=30)
 async def health_canary_loop():
     """INT-027: Detect 'alive but not home' degradation."""
+    _state.canary_freshness = None
     checks = {}
 
     # 1. Ollama reachable?
@@ -304,11 +271,11 @@ async def health_canary_loop():
     dead_loops = [name for name, alive in loop_status.items() if not alive]
     checks["loops"] = len(dead_loops) == 0
 
-    # 3. Practice files fresh (boom/compass not ancient)?
+    # 3. Practice state fresh (topology-aware — native uses state/current.yaml)
     pd = get_pd()
-    boom_age = file_age_hours(os.path.join(pd, "boom.md"))
-    compass_age = file_age_hours(os.path.join(pd, "intentions", "compass.md"))
-    checks["practice_freshness"] = boom_age < 168 and compass_age < 168  # 7 days
+    _freshness = evaluate_freshness(pd)
+    checks["practice_freshness"] = _freshness.passed
+    _state.canary_freshness = _freshness
 
     # 4. Tool primitives functional?
     test_path = os.path.join(pd, ".canary_test")
@@ -355,7 +322,9 @@ async def health_canary_loop():
                         print(f"Health canary: {check_name} self-healed — {heal_result[1]}")
                         _state.canary_consecutive_failures[check_name] = 0
                         continue
-                    detail = _canary_detail(check_name, dead_loops, boom_age, compass_age)
+                    detail = _canary_detail(
+                        check_name, dead_loops, getattr(_state, "canary_freshness", None)
+                    )
                     if heal_result:
                         detail += f" (self-heal attempted: {heal_result[1]})"
                     alerts.append((check_name, detail))
@@ -384,14 +353,16 @@ async def health_canary_loop():
         print(f"Health canary alert failed: {e}")
 
 
-def _canary_detail(check_name, dead_loops, boom_age, compass_age):
+def _canary_detail(check_name, dead_loops, freshness_result=None):
     """Generate human-readable detail for a canary failure."""
     if check_name == "ollama":
         return "Ollama not responding — local model inference is down"
     elif check_name == "loops":
         return f"Background loops stopped: {', '.join(dead_loops)}"
     elif check_name == "practice_freshness":
-        return f"Practice files stale (boom: {format_age(boom_age)}, compass: {format_age(compass_age)})"
+        if freshness_result is not None:
+            return canary_detail(freshness_result)
+        return "Practice state stale"
     elif check_name == "file_io":
         return "File read/write test failed — filesystem may be read-only or full"
     elif check_name == "discord":

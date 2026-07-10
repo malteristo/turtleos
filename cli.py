@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     handoff = subparsers.add_parser("handoff", help="submit a handoff as a durable runtime task")
-    handoff.add_argument("--artifact", choices=["boom", "session", "proposal"], required=True)
+    handoff.add_argument("--artifact", choices=["note", "session", "proposal"], required=True)
     handoff.add_argument("--title", required=True)
     body_group = handoff.add_mutually_exclusive_group(required=True)
     body_group.add_argument("--body")

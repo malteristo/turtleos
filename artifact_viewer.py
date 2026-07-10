@@ -9,13 +9,7 @@ from datetime import datetime, timezone
 
 from mage import get_mage_type, get_pd, get_runtime_dir
 
-HOSTED_SURFACE_FILES = (
-    "boom.md",
-    "bright.md",
-    "compass.md",
-    "mirror.md",
-    "resonance.md",
-)
+HOSTED_SURFACE_FILES: tuple[str, ...] = ()
 
 OPERATOR_ONLY_PREFIXES = ("proposals/",)
 
@@ -54,9 +48,8 @@ SHELF_DEFS: tuple[Shelf, ...] = (
     Shelf("notes", "Notes", "Flow outcomes (Navigator, Companion, …)"),
     Shelf("archives", "Archives", "Dissolved thread captures"),
     Shelf("chronicle", "Chronicle", "Practice timeline (summary)"),
+    Shelf("state", "State", "Continuity engine (current.yaml, notes)"),
     Shelf("intake", "Intake", "Your pasted captures"),
-    Shelf("surface", "Surface", "Portable practice surface files"),
-    Shelf("intentions", "Intentions", "Active intention files"),
     Shelf("links", "Saved links", "Distilled URLs from `!fetch`"),
     Shelf("proposals", "Proposals", "Host self-development notes (operator only)"),
 )
@@ -66,7 +59,7 @@ def normalize_rel_path(path: str, *, ensure_md: bool = False) -> str | None:
     path = (path or "").replace("\\", "/").strip().lstrip("./")
     if not path or path.startswith("/") or ".." in path.split("/"):
         return None
-    if ensure_md and not path.endswith(".md"):
+    if ensure_md and not path.endswith((".md", ".yaml", ".yml")):
         path += ".md"
     return path
 
@@ -110,11 +103,9 @@ def is_artifact_readable(rel_path: str, *, mage_type: str | None = None) -> bool
         return True
     if rel == "chronicle/surface.md":
         return True
+    if rel == "state/current.yaml":
+        return True
     if rel.startswith("box/intake/") and rel.endswith(".md"):
-        return True
-    if rel.startswith("intentions/") and rel.endswith(".md"):
-        return True
-    if rel in HOSTED_SURFACE_FILES:
         return True
     if mage_type != "practitioner" and rel.startswith("proposals/") and rel.endswith(".md"):
         return True
@@ -133,7 +124,6 @@ def is_artifact_directory(rel_dir: str, *, mage_type: str | None = None) -> bool
         "state/notes",
         "thread-archive",
         "box/intake",
-        "intentions",
     )
     if rel_dir in allowed_prefixes:
         return True
@@ -188,6 +178,10 @@ def iter_artifact_files(*, mage_type: str | None = None) -> list[str]:
             if name.endswith(".md"):
                 add_if(f"{LINK_RESONANCE_PREFIX}{name}")
 
+    current = os.path.join(pd, "state", "current.yaml")
+    if os.path.isfile(current):
+        add_if("state/current.yaml")
+
     return sorted(set(found))
 
 
@@ -200,10 +194,6 @@ def list_shelves(*, mage_type: str | None = None) -> list[tuple[Shelf, int]]:
     out: list[tuple[Shelf, int]] = []
     for shelf in SHELF_DEFS:
         if shelf.key == "proposals" and mage_type == "practitioner":
-            continue
-        if shelf.key == "surface" and not any(
-            os.path.isfile(os.path.join(get_pd(), name)) for name in HOSTED_SURFACE_FILES
-        ):
             continue
         count = _count_shelf(shelf.key, mage_type=mage_type)
         out.append((shelf, count))
@@ -237,22 +227,21 @@ def list_shelf_artifacts(shelf_key: str, *, mage_type: str | None = None) -> lis
     elif key == "chronicle":
         if os.path.isfile(os.path.join(pd, "chronicle", "surface.md")):
             paths.append("chronicle/surface.md")
+    elif key == "state":
+        current = os.path.join(pd, "state", "current.yaml")
+        if os.path.isfile(current):
+            paths.append("state/current.yaml")
+        notes_base = os.path.join(pd, "state", "notes")
+        if os.path.isdir(notes_base):
+            for name in sorted(os.listdir(notes_base), reverse=True):
+                if name.endswith(".md"):
+                    paths.append(f"state/notes/{name}")
     elif key == "intake":
         base = os.path.join(pd, "box", "intake")
         if os.path.isdir(base):
             for name in sorted(os.listdir(base), reverse=True):
                 if name.endswith(".md"):
                     paths.append(f"box/intake/{name}")
-    elif key == "surface":
-        for name in HOSTED_SURFACE_FILES:
-            if os.path.isfile(os.path.join(pd, name)):
-                paths.append(name)
-    elif key == "intentions":
-        base = os.path.join(pd, "intentions")
-        if os.path.isdir(base):
-            for name in sorted(os.listdir(base)):
-                if name.endswith(".md"):
-                    paths.append(f"intentions/{name}")
     elif key == "links":
         lr = _link_resonance_dir()
         if os.path.isdir(lr):
@@ -284,6 +273,8 @@ def shelf_title_for_path(path: str) -> str:
         return "Sessions"
     if path.startswith("state/notes/"):
         return "Notes"
+    if path == "state/current.yaml":
+        return "State"
     if path.startswith("thread-archive/"):
         return "Archives"
     if path == "chronicle/surface.md":
@@ -294,10 +285,6 @@ def shelf_title_for_path(path: str) -> str:
         return "Saved links"
     if path.startswith("proposals/"):
         return "Proposals"
-    if path.startswith("intentions/"):
-        return "Intentions"
-    if path in HOSTED_SURFACE_FILES:
-        return "Surface"
     return "Artifact"
 
 

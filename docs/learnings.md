@@ -101,4 +101,6 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Registry fix:** `self_heal.py` had stale LiveSync restart paths wired to a canary check that actually measured practice-file freshness (`boom.md` / `compass.md` age). Renamed check to `practice_freshness`; only `ollama` auto-heals.
 
+**Native freshness (2026-07-10):** Aggressive purge — `magic_desk`/`hosted` topology branches removed. All rivers use `state/current.yaml` + `sessions/` only. Boom/compass/bright portable files, workshop_survey bridge, control panel auto-deploy, and `practice.append_boom` retired.
+
 **Prompt/runtime alignment:** `global.CLAUDE.md` no longer grants ad-hoc `launchctl` shell healing — must match `HEAL_REGISTRY`.

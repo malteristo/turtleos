@@ -7,7 +7,7 @@ from runtime.handoff import submit_practice_handoff
 from runtime.tasks import Task
 
 
-ArtifactKind = Literal["boom", "session", "proposal"]
+ArtifactKind = Literal["note", "session", "proposal"]
 
 
 def submit_discord_practice_handoff(

@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from mage import get_pd, get_runtime_dir
-from practice_io import read_safe, count_items, file_age_hours, format_age
+from practice_io import read_safe, file_age_hours, format_age
+from practice_freshness import (
+    readiness_freshness_issues,
+    readiness_context_detail,
+    readiness_workshop_visibility,
+)
 from state import (
     IDENTITY_DIR, DIALOGUE_MODEL, TURTLE_MODEL, RIVER_MODEL, USE_API,
     thread_configs, active_sessions,
@@ -18,7 +23,7 @@ def _resolve_default_pd():
     """Resolve practice dir from registry for background contexts where
     message-based context isn't set."""
     pd = get_pd()
-    if pd and os.path.exists(os.path.join(pd, "boom", "bright.md")):
+    if pd and os.path.isdir(os.path.join(pd, "state")):
         return pd
     try:
         from mage import _load_mage_registry
@@ -41,18 +46,17 @@ def _resolve_default_pd():
 def assess_practitioner_substrate(pd=None) -> dict:
     """Honest check for hosted practitioners — not operator 8-dimension readiness."""
     pd = pd or _resolve_default_pd()
-    boom = read_safe(os.path.join(pd, "boom.md"))
-    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
-    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
-    boom_count = count_items(boom)
-    bright_count = count_items(bright)
-    has_compass = bool(compass.strip())
     sessions_dir = os.path.join(pd, "sessions")
+    notes_dir = os.path.join(pd, "state", "notes")
     session_count = 0
+    note_count = 0
     if os.path.isdir(sessions_dir):
         session_count = len([f for f in os.listdir(sessions_dir) if f.endswith(".md")])
+    if os.path.isdir(notes_dir):
+        note_count = len([f for f in os.listdir(notes_dir) if f.endswith(".md")])
+    has_state = os.path.isfile(os.path.join(pd, "state", "current.yaml"))
 
-    empty = boom_count == 0 and bright_count == 0 and not has_compass and session_count == 0
+    empty = session_count == 0 and note_count == 0 and not has_state
     if empty:
         summary = (
             "**Your space is fresh.** Nothing is broken — there is nothing to score yet. "
@@ -62,14 +66,12 @@ def assess_practitioner_substrate(pd=None) -> dict:
         return {"dimensions": dims, "summary": summary, "highest_leverage": None}
 
     parts = []
-    if boom_count:
-        parts.append(f"boom ({boom_count})")
-    if bright_count:
-        parts.append(f"bright ({bright_count})")
-    if has_compass:
-        parts.append("compass")
+    if has_state:
+        parts.append("state/current")
     if session_count:
         parts.append(f"{session_count} session(s)")
+    if note_count:
+        parts.append(f"{note_count} note(s)")
     detail = ", ".join(parts) if parts else "light activity"
     summary = f"**Practice substrate:** {detail}."
     dims = [{"name": "Practice substrate", "status": "ready", "detail": detail}]
@@ -119,41 +121,18 @@ def assess_readiness(pd=None) -> dict:
     pd = pd or _resolve_default_pd()
     dims = []
 
-    # 1. State Freshness — are practice files current?
-    freshness_issues = []
-    for name, fname in [("boom", "boom.md"), ("bright", os.path.join("boom", "bright.md")),
-                        ("compass", os.path.join("intentions", "compass.md"))]:
-        age = file_age_hours(os.path.join(pd, fname))
-        if age == float("inf"):
-            freshness_issues.append(f"{name} missing")
-        elif age > 48:
-            freshness_issues.append(f"{name} {format_age(age)}")
+    # 1. State Freshness — topology-aware (native: state/current.yaml)
+    freshness_issues = readiness_freshness_issues(pd)
     if not freshness_issues:
-        dims.append({"name": "State Freshness", "status": "ready", "detail": "all files < 48h"})
+        dims.append({"name": "State Freshness", "status": "ready", "detail": "practice state < 48h"})
     elif any("missing" in i for i in freshness_issues):
         dims.append({"name": "State Freshness", "status": "impaired", "detail": ", ".join(freshness_issues)})
     else:
         dims.append({"name": "State Freshness", "status": "degraded", "detail": ", ".join(freshness_issues)})
 
     # 2. Context Coherence
-    boom = read_safe(os.path.join(pd, "boom.md"))
-    bright = read_safe(os.path.join(pd, "boom", "bright.md"))
-    compass = read_safe(os.path.join(pd, "intentions", "compass.md"))
-    present = sum(1 for t in [boom, bright, compass] if t.strip())
-    if present == 3:
-        boom_count = count_items(boom)
-        bright_count = count_items(bright)
-        if boom_count > 15 and bright_count > 50:
-            dims.append({"name": "Context Coherence", "status": "degraded",
-                         "detail": f"boom({boom_count}) and bright({bright_count}) both heavy — integration lag likely"})
-        else:
-            dims.append({"name": "Context Coherence", "status": "ready",
-                         "detail": f"boom({boom_count}), bright({bright_count})"})
-    elif present == 0:
-        dims.append({"name": "Context Coherence", "status": "impaired", "detail": "no practice files found"})
-    else:
-        dims.append({"name": "Context Coherence", "status": "degraded",
-                     "detail": f"{present}/3 practice surfaces present"})
+    ctx_status, ctx_detail = readiness_context_detail(pd)
+    dims.append({"name": "Context Coherence", "status": ctx_status, "detail": ctx_detail})
 
     # 3. Thread Awareness
     tc_count = len(thread_configs)
@@ -187,27 +166,9 @@ def assess_readiness(pd=None) -> dict:
     else:
         dims.append({"name": "Session Continuity", "status": "impaired", "detail": "no sessions directory"})
 
-    # 5. Workshop Visibility — check if LiveSync mirror is reachable via practice files
-    sync_markers = [("boom", "boom.md"), ("compass", os.path.join("intentions", "compass.md"))]
-    sync_ages = []
-    for name, fname in sync_markers:
-        age = file_age_hours(os.path.join(pd, fname))
-        if age != float("inf"):
-            sync_ages.append((name, age))
-    if sync_ages:
-        freshest_name, freshest_age = min(sync_ages, key=lambda x: x[1])
-        if freshest_age < 24:
-            dims.append({"name": "Workshop Visibility", "status": "ready",
-                         "detail": f"workshop synced ({freshest_name} {format_age(freshest_age)} ago)"})
-        elif freshest_age < 72:
-            dims.append({"name": "Workshop Visibility", "status": "degraded",
-                         "detail": f"workshop {format_age(freshest_age)} old"})
-        else:
-            dims.append({"name": "Workshop Visibility", "status": "impaired",
-                         "detail": f"workshop stale ({format_age(freshest_age)})"})
-    else:
-        dims.append({"name": "Workshop Visibility", "status": "impaired",
-                     "detail": "no practice files reachable"})
+    # 5. Workshop Visibility — native continuity or legacy desk mirror
+    vis_status, vis_detail = readiness_workshop_visibility(pd)
+    dims.append({"name": "Workshop Visibility", "status": vis_status, "detail": vis_detail})
 
     # 6. Substrate Health
     substrate_issues = []

@@ -1099,7 +1099,7 @@ Self-healing is **enumerated repair only** — not LLM discretion. Repairs MUST 
 |--------------|----------|--------|------------|
 | `ollama` | **Yes** | `restart_ollama()` | Alert Mage |
 | `loops` | No | — | Alert Mage (bot restart is dyad action) |
-| `practice_freshness` | No | — | Alert Mage (stale `boom.md` / `compass.md` — practice sync, not infra restart) |
+| `practice_freshness` | No | — | Alert Mage (stale practice state — native: `state/current.yaml`; legacy desk: boom/compass) |
 | `file_io` | No | — | Alert Mage (filesystem intervention) |
 | `discord` | No | — | Alert Mage (connection unhealthy — bot restart is dyad action) |
 

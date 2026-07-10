@@ -175,16 +175,18 @@ def seed_practitioner_workshop(mage_key: str, *, locale: str = "en") -> str:
 
     workshop = os.path.expanduser(f"~/workshops/{mage_key}")
     os.makedirs(os.path.join(workshop, "sessions"), exist_ok=True)
-    os.makedirs(os.path.join(workshop, "intentions"), exist_ok=True)
+    os.makedirs(os.path.join(workshop, "state", "notes"), exist_ok=True)
     os.makedirs(os.path.join(workshop, "proposals"), exist_ok=True)
     os.makedirs(os.path.join(workshop, "thread-state"), exist_ok=True)
     os.makedirs(os.path.join(workshop, "character"), exist_ok=True)
     os.makedirs(os.path.join(workshop, "chronicle"), exist_ok=True)
+    os.makedirs(os.path.join(workshop, "thread-archive"), exist_ok=True)
+    os.makedirs(os.path.join(workshop, "box", "intake"), exist_ok=True)
 
-    for fname in ("compass.md", "boom.md", "bright.md", "mirror.md"):
-        fpath = os.path.join(workshop, fname)
-        if not os.path.exists(fpath):
-            open(fpath, "w").close()
+    current_path = os.path.join(workshop, "state", "current.yaml")
+    if not os.path.exists(current_path):
+        with open(current_path, "w") as f:
+            f.write("version: 1\n")
 
     char_src = os.path.join(REPO_ROOT, "template", "practitioner", "character")
     for name in ("soul.md", "conduct.md"):

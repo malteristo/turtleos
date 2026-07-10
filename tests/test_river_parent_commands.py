@@ -58,7 +58,6 @@ class SpaceReadinessTests(unittest.TestCase):
         import os
 
         with tempfile.TemporaryDirectory() as tmp:
-            open(os.path.join(tmp, "boom.md"), "w").close()
             result = assess_space_substrate(tmp, space_key="family")
             self.assertIn("family is fresh", result["summary"].lower())
             self.assertIsNone(result["highest_leverage"])

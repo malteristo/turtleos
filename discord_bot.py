@@ -1404,47 +1404,6 @@ async def on_ready():
             except Exception as exc:
                 print(f"Legacy river chrome retirement failed: {exc}")
 
-        has_panel = False
-        try:
-            async for m in dialogue.pins():
-                if m.author == client.user:
-                    for e in (m.embeds or []):
-                        if e.title and e.title.startswith("\U0001f3ae"):
-                            has_panel = True
-        except Exception:
-            pass
-        if not has_panel:
-            try:
-                async for m in dialogue.history(limit=20):
-                    if m.author == client.user:
-                        for e in (m.embeds or []):
-                            if e.title and e.title.startswith("\U0001f3ae"):
-                                has_panel = True
-                                break
-                    if has_panel:
-                        break
-            except Exception:
-                pass
-        if not has_panel and not suppress_turtle_river_voice():
-            try:
-                embed = discord.Embed(
-                    title="\U0001f3ae Spirit Control Panel",
-                    description=(
-                        "**Threads** \u2014 pick model + attunement, then tap New Thread.\n"
-                        "**Practice** \u2014 status and diagnostics.\n"
-                        "**Session** \u2014 checkpoint to save, release to close."
-                    ),
-                    color=0x5865F2,
-                )
-                panel_msg = await dialogue.send(embed=embed, view=ControlPanelView())
-                try:
-                    await panel_msg.pin()
-                    print("Control panel deployed and pinned.")
-                except Exception:
-                    print("Control panel deployed (pin failed — pin manually).")
-            except Exception as e:
-                print(f"Control panel deploy failed: {e}")
-
     try:
         if not session_monitor.is_running():
             session_monitor.start()

@@ -39,7 +39,7 @@ HEAL_REGISTRY: dict[str, HealEntry] = {
     ),
     "practice_freshness": HealEntry(
         healable=False,
-        reason="Stale boom/compass — practice sync, not infra restart",
+        reason="Stale practice state (topology-aware) — practice sync, not infra restart",
     ),
     "file_io": HealEntry(
         healable=False,

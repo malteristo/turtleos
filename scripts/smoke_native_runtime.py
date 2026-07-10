@@ -75,7 +75,8 @@ def make_registry(root: Path) -> Path:
     practice_dir.mkdir(parents=True)
     (practice_dir / "sessions").mkdir()
     (practice_dir / "proposals").mkdir()
-    (practice_dir / "boom.md").write_text("# Boom\n", encoding="utf-8")
+    (practice_dir / "state").mkdir()
+    (practice_dir / "state" / "current.yaml").write_text("version: 1\n", encoding="utf-8")
     registry = root / "mage_registry.yaml"
     registry.write_text(
         yaml.safe_dump(

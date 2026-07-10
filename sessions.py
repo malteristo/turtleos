@@ -353,45 +353,35 @@ async def maybe_reflect(channel, history: list[dict]):
 
 
 async def _extract_practice_state(conversation: str, mage_name: str):
-    """Silently extract practice state from conversation for practitioners.
-
-    Updates compass, boom, and mirror based on what emerged in conversation.
-    The practitioner never sees these files — they're Turtle's memory."""
+    """Silently extract practice notes from conversation for practitioners."""
     pd = get_pd()
-    compass = read_safe(os.path.join(pd, "compass.md"))
-    mirror = read_safe(os.path.join(pd, "mirror.md"))
+    notes_dir = os.path.join(pd, "state", "notes")
+    os.makedirs(notes_dir, exist_ok=True)
+    profile_path = os.path.join(notes_dir, "practitioner-profile.md")
+    profile = read_safe(profile_path)
 
-    extraction_prompt = f"""You just finished a conversation with {mage_name}. Extract practice state updates from it.
+    extraction_prompt = f"""You just finished a conversation with {mage_name}. Extract practice notes from it.
 
-CURRENT COMPASS (life landscape):
-{compass[:1000] if compass.strip() else '(empty — build from scratch)'}
-
-CURRENT MIRROR (observations about this person):
-{mirror[:1000] if mirror.strip() else '(empty — build from scratch)'}
+CURRENT PROFILE (observations about this person):
+{profile[:1000] if profile.strip() else '(empty — build from scratch)'}
 
 THE CONVERSATION:
 {conversation}
 
 Extract updates in this format. Only include sections where you have something to add. Output NOTHING if the conversation was too brief or shallow to extract from.
 
----BOOM_ITEMS---
-- item 1 (thoughts, insights, or action items worth remembering)
-- item 2
----END_BOOM_ITEMS---
+---NOTE_ITEMS---
+- insight or action item worth remembering
+---END_NOTE_ITEMS---
 
----COMPASS_UPDATE---
-(If {mage_name}'s life landscape needs updating — new domains, changed priorities, important context.
-Write the FULL compass content, merging existing with new. If nothing to add, skip this section entirely.)
----END_COMPASS_UPDATE---
-
----MIRROR_UPDATE---
+---PROFILE_UPDATE---
 (Observations about {mage_name} — how they think, what they care about, communication style, patterns.
-Write the FULL mirror content, merging existing with new. If nothing to add, skip this section entirely.)
----END_MIRROR_UPDATE---"""
+Write the FULL profile content, merging existing with new. If nothing to add, skip this section entirely.)
+---END_PROFILE_UPDATE---"""
 
     try:
         result = await chat_ollama(
-            f"You are Spirit, maintaining practice state for {mage_name}. Extract only what's genuinely worth remembering.",
+            f"You are Turtle, maintaining practice notes for {mage_name}. Extract only what's genuinely worth remembering.",
             [{"role": "user", "content": extraction_prompt}],
             model=REFLECTION_MODEL, num_ctx=8192,
         )
@@ -401,30 +391,22 @@ Write the FULL mirror content, merging existing with new. If nothing to add, ski
         today = local_now().strftime("%Y-%m-%d %H:%M")
         updated = []
 
-        if "---BOOM_ITEMS---" in result and "---END_BOOM_ITEMS---" in result:
-            items = result.split("---BOOM_ITEMS---")[1].split("---END_BOOM_ITEMS---")[0].strip()
+        if "---NOTE_ITEMS---" in result and "---END_NOTE_ITEMS---" in result:
+            items = result.split("---NOTE_ITEMS---")[1].split("---END_NOTE_ITEMS---")[0].strip()
             if items and items != "- ":
-                boom_path = os.path.join(pd, "boom.md")
-                with open(boom_path, "a") as f:
+                note_path = os.path.join(notes_dir, f"extracted-{today[:10]}.md")
+                with open(note_path, "a", encoding="utf-8") as f:
                     f.write(f"\n\n## Extracted ({today})\n{items}\n")
-                updated.append("boom")
+                updated.append("notes")
 
-        if "---COMPASS_UPDATE---" in result and "---END_COMPASS_UPDATE---" in result:
-            new_compass = result.split("---COMPASS_UPDATE---")[1].split("---END_COMPASS_UPDATE---")[0].strip()
-            if new_compass and len(new_compass) > 20:
-                compass_path = os.path.join(pd, "compass.md")
-                Path(compass_path).write_text(new_compass + "\n")
-                updated.append("compass")
-
-        if "---MIRROR_UPDATE---" in result and "---END_MIRROR_UPDATE---" in result:
-            new_mirror = result.split("---MIRROR_UPDATE---")[1].split("---END_MIRROR_UPDATE---")[0].strip()
-            if new_mirror and len(new_mirror) > 20:
-                mirror_path = os.path.join(pd, "mirror.md")
-                Path(mirror_path).write_text(new_mirror + "\n")
-                updated.append("mirror")
+        if "---PROFILE_UPDATE---" in result and "---END_PROFILE_UPDATE---" in result:
+            new_profile = result.split("---PROFILE_UPDATE---")[1].split("---END_PROFILE_UPDATE---")[0].strip()
+            if new_profile and len(new_profile) > 20:
+                Path(profile_path).write_text(new_profile + "\n", encoding="utf-8")
+                updated.append("profile")
 
         if updated:
-            print(f"Practice state extracted for {mage_name}: {', '.join(updated)}")
+            print(f"Practice notes extracted for {mage_name}: {', '.join(updated)}")
 
     except Exception as e:
         print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
@@ -516,13 +498,13 @@ async def post_eddy_lifecycle_feedback(
 ) -> None:
     """Post river feedback when an eddy closes."""
     if mode == "light_archive":
-        detail = "archived (nothing captured to boom)"
+        detail = "archived (nothing captured)"
     elif mode == "cooled":
         detail = "auto-archived (cooled — use !dissolve to close deliberately)"
     elif mode == "capture_aborted":
         detail = "dissolve aborted — essence capture failed; eddy cooled, memory retained"
     elif entry_count:
-        detail = f"dissolved ({entry_count} entries captured to boom)"
+        detail = f"dissolved ({entry_count} insights archived)"
     else:
         detail = "dissolved"
 
@@ -686,20 +668,13 @@ async def dissolve_eddy(
         try:
             result = await chat_ollama(
                 f"This thread \"{thread_name}\" is dissolving. "
-                "Extract the essential insights worth keeping. Write as boom entries (- prefix). "
+                "Extract the essential insights worth keeping as bullet points (- prefix). "
                 "If nothing worth keeping: output (nothing to capture)",
                 [{"role": "user", "content": conversation}],
                 model=REFLECTION_MODEL, num_ctx=8192,
             )
             if result and "(nothing to capture)" not in result.lower():
                 essence = result
-                boom_path = os.path.join(get_pd(), "boom.md")
-                timestamp = local_now().strftime("%Y-%m-%d %H:%M")
-                with open(boom_path, "a") as f:
-                    f.write(
-                        f"\n\n## Thread dissolved: {thread_name} ({timestamp})\n"
-                        f"thread_id: {channel_id}\n{essence}\n"
-                    )
                 entry_count = sum(1 for line in essence.split("\n") if line.strip().startswith("-"))
         except Exception as e:
             capture_failed = True
@@ -752,7 +727,7 @@ async def dissolve_eddy(
                 "thread_id": str(channel_id),
                 "jump_url": jump_url,
                 "archive": str(archive_path),
-                "boom_entries": entry_count,
+                "insight_count": entry_count,
             },
         )
     except Exception as exc:
@@ -788,7 +763,7 @@ async def dissolve_eddy(
         except Exception:
             pass
 
-    print(f"Dissolved eddy: {thread_name} ({entry_count} boom entries)")
+    print(f"Dissolved eddy: {thread_name} ({entry_count} insights archived)")
     return DissolveResult(
         thread_name=thread_name,
         entry_count=entry_count,

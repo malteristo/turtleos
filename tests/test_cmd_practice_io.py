@@ -27,8 +27,8 @@ class TestCmdRead(unittest.IsolatedAsyncioTestCase):
             "cmd_practice_io.is_readable", return_value=True
         ), patch("cmd_practice_io.get_pd", return_value="/practice"), patch(
             "cmd_practice_io.read_safe", return_value="# Hello\n"
-        ), patch("cmd_practice_io.obsidian_link", return_value="[[bright.md]]"):
-            await cpio.cmd_read(message, ["bright.md"])
+        ), patch("cmd_practice_io.obsidian_link", return_value="[[sessions/2026-07-09.md]]"):
+            await cpio.cmd_read(message, ["sessions/2026-07-09.md"])
         body = message.reply.await_args[0][0]
         self.assertIn("Hello", body)
 
@@ -50,13 +50,13 @@ class TestCmdRead(unittest.IsolatedAsyncioTestCase):
         with patch("cmd_practice_io.discord.Embed", FakeEmbed), patch(
             "cmd_practice_io.PRACTICE_WEB_BASE", "http://127.0.0.1:8080"
         ), patch("cmd_practice_io.is_readable", return_value=True), patch(
-            "cmd_practice_io.resolve_artifact_path", return_value="/practice/bright.md"
+            "cmd_practice_io.resolve_artifact_path", return_value="/practice/sessions/2026-07-09.md"
         ), patch("cmd_practice_io.read_safe", return_value="# Hello\nworld"), patch(
             "cmd_practice_io.obsidian_link",
-            return_value="http://127.0.0.1:8080/kermit/bright.md",
+            return_value="http://127.0.0.1:8080/kermit/sessions/2026-07-09.md",
         ):
-            await cpio.cmd_read(message, ["bright.md"])
-        self.assertEqual(captured.get("url"), "http://127.0.0.1:8080/kermit/bright.md")
+            await cpio.cmd_read(message, ["sessions/2026-07-09.md"])
+        self.assertEqual(captured.get("url"), "http://127.0.0.1:8080/kermit/sessions/2026-07-09.md")
         self.assertIn("browser", (captured.get("description") or "").lower())
         message.reply.assert_awaited_once()
         self.assertIn("embed", message.reply.await_args.kwargs)
@@ -67,7 +67,8 @@ class TestCmdLs(unittest.IsolatedAsyncioTestCase):
         message = MagicMock()
         message.reply = AsyncMock()
         with tempfile.TemporaryDirectory() as tmp:
-            open(os.path.join(tmp, "bright.md"), "w").close()
+            os.makedirs(os.path.join(tmp, "sessions"), exist_ok=True)
+            open(os.path.join(tmp, "sessions", "2026-07-09.md"), "w").close()
             with patch("cmd_practice_io.get_pd", return_value=tmp), patch(
                 "cmd_practice_io.get_mage_type", return_value="practitioner"
             ), patch(
@@ -79,7 +80,7 @@ class TestCmdLs(unittest.IsolatedAsyncioTestCase):
             ):
                 await cpio.cmd_ls(message, [])
         body = message.reply.await_args[0][0]
-        self.assertIn("bright.md", body)
+        self.assertIn("sessions/", body)
 
     async def test_denied_directory(self) -> None:
         message = MagicMock()

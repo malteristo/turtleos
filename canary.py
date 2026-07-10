@@ -61,15 +61,15 @@ def format_age(seconds):
     return f"{hours // 24}d"
 
 
-def check_magic_bare_repo():
-    """Forge canonical repo on Mini — bare host, no working-tree clone required."""
-    bare = Path.home() / "repos" / "magic.git"
-    if not bare.is_dir():
-        return "red", f"missing bare repo at {bare}"
-    rc, out, _ = run(["git", "-C", str(bare), "rev-parse", "--short", "HEAD"])
+def check_turtleos_repo():
+    """turtleOS checkout on Mini — verify HEAD is readable."""
+    repo = Path.home() / "turtleos"
+    if not repo.is_dir():
+        return "red", f"missing turtleos checkout at {repo}"
+    rc, out, _ = run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"])
     if rc != 0:
-        return "yellow", f"bare HEAD unreadable: {out.strip()}"
-    return "green", f"magic.git @ {out.strip()}"
+        return "yellow", f"turtleos HEAD unreadable: {out.strip()}"
+    return "green", f"turtleos @ {out.strip()}"
 
 
 def check_couchdb():
@@ -231,7 +231,7 @@ def check_topology_drift():
         return "green", f"tOS-only topology: practice/runtime share {practice}"
 
     duplicate_dirs = []
-    for rel in ("proposals", "sessions", "boom.md", "boom/bright.md", "intentions"):
+    for rel in ("proposals", "sessions", "state/current.yaml", "state/notes"):
         if (practice / rel).exists() and (runtime / rel).exists():
             duplicate_dirs.append(rel)
     if duplicate_dirs:
@@ -270,7 +270,7 @@ def check_triage_fallback_count():
 
 
 CHECKS = [
-    ("infra", "magic_bare_repo", check_magic_bare_repo, "high"),
+    ("infra", "turtleos_repo", check_turtleos_repo, "high"),
     ("infra", "discord_bot_alive", lambda: check_launchd_label("com.turtle.discord"), "high"),
     ("models", "ollama_reachable", check_ollama, "high"),
     ("models", "triage_fallback_count", check_triage_fallback_count, "medium"),

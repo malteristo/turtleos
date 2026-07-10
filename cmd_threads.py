@@ -333,9 +333,9 @@ class EddyDissolutionView(discord.ui.View):
 
         summary = f"📦 **{result.thread_name}** archived"
         if result.entry_count:
-            summary += f" — {result.entry_count} entries captured to boom"
+            summary += f" — {result.entry_count} insights archived"
         await interaction.followup.send(summary)
-        print(f"Thread dissolved & archived: {result.thread_name} ({result.entry_count} boom entries)")
+        print(f"Thread dissolved & archived: {result.thread_name} ({result.entry_count} insights archived)")
 
         for child in self.children:
             child.disabled = True

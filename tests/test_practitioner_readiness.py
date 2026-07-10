@@ -12,7 +12,6 @@ from readiness import assess_practitioner_substrate
 class PractitionerReadinessTests(unittest.TestCase):
     def test_empty_substrate_is_fresh_not_scored(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            open(os.path.join(tmp, "boom.md"), "w").close()
             result = assess_practitioner_substrate(tmp)
             self.assertIn("fresh", result["summary"].lower())
             self.assertIsNone(result["highest_leverage"])

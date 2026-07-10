@@ -13,7 +13,7 @@ Categories:
 - "command" — starts with ! (already handled, skip)
 - "greeting" — casual hello, hey, good morning
 - "casual" — brief, light, social (emoji reactions, short comments, banter)
-- "practice" — about boom, bright, compass, intentions, practice state, sessions
+- "practice" — about practice state, sessions, notes, flows, continuity
 - "deep" — philosophical, emotional, complex reasoning, life questions
 - "link" — shares a URL for discussion
 - "continuation" — single dot "." or brief continuation of prior topic
@@ -21,7 +21,7 @@ Categories:
 
 Output format: {"category": "<category>", "needs_state": <true/false>}
 
-needs_state = true when the response benefits from loading practice files (boom, bright, compass).
+needs_state = true when the response benefits from loading practice files (state/current, sessions, notes).
 needs_state = false for greetings, casual chat, simple tasks.
 
 Message: """

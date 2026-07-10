@@ -46,15 +46,14 @@ TOS_TOOLS = [
             "description": (
                 "Read an allowlisted practice artifact (internal context). "
                 "In Discord replies: quote at most ~3 lines from an artifact; point to `!read <path>` for the full note — do not paste full bodies (§11.5.5). "
-                "Practice artifacts: sessions/, state/notes/, thread-archive/, chronicle/surface.md, "
-                "intentions/, box/intake/, surface files (boom.md, bright.md, …)."
+                "Practice artifacts: sessions/, state/notes/, state/current.yaml, thread-archive/, chronicle/surface.md, box/intake/."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "filename": {
                         "type": "string",
-                        "description": "File path relative to practice dir, e.g. 'bright.md', 'intentions/turtle.md'",
+                        "description": "File path relative to practice dir, e.g. 'state/notes/navigator-2026.md', 'sessions/2026-07-09.md'",
                     },
                     "section": {
                         "type": "string",
@@ -93,7 +92,7 @@ TOS_TOOLS = [
             "description": (
                 "Append content to the end of a practice file. "
                 "PREFERRED over write_practice_file for adding entries. "
-                "Use for adding boom items, bright items, new sections."
+                "Use for surgical edits to practice notes, session files, or state/notes."
             ),
             "parameters": {
                 "type": "object",
@@ -157,7 +156,7 @@ TOS_TOOLS = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Text or regex pattern to search for (case-insensitive)"},
-                    "directory": {"type": "string", "description": "Limit to any subdirectory path, e.g. 'intentions', 'sessions', or '' for all"},
+                    "directory": {"type": "string", "description": "Limit to any subdirectory path, e.g. 'state/notes', 'sessions', or '' for all"},
                 },
                 "required": ["query"],
             },
@@ -171,7 +170,7 @@ TOS_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "directory": {"type": "string", "description": "Directory path: '' (practice root), 'sessions', 'intentions', 'library', 'system', 'system/flows'"},
+                    "directory": {"type": "string", "description": "Directory path: '' (practice root), 'sessions', 'state/notes', 'state', 'chronicle'"},
                 },
                 "required": ["directory"],
             },

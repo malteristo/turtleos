@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 
-ArtifactKind = Literal["boom", "session", "proposal"]
+ArtifactKind = Literal["note", "session", "proposal"]
 
 
 @dataclass(frozen=True)
@@ -30,24 +30,23 @@ class PracticeCapabilities:
         self.practice_dir = practice_dir
 
     def write_artifact(self, kind: ArtifactKind, title: str, body: str, task_id: str) -> CapabilityResult:
-        if kind == "boom":
-            return self.append_boom(body)
+        if kind == "note":
+            return self.append_note(body)
         if kind == "session":
             return self.write_session(title, body)
         if kind == "proposal":
             return self.write_proposal(title, body, task_id)
         raise ValueError(f"Unsupported practice artifact kind: {kind}")
 
-    def append_boom(self, body: str) -> CapabilityResult:
-        path = self.practice_dir / "boom.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        existing = path.read_text(encoding="utf-8") if path.exists() else ""
-        separator = "" if existing.endswith("\n") or not existing else "\n"
+    def append_note(self, body: str) -> CapabilityResult:
+        notes_dir = self.practice_dir / "state" / "notes"
+        notes_dir.mkdir(parents=True, exist_ok=True)
+        path = self._next_dated_path(notes_dir, suffix="md", prefix="handoff")
         entry = body.strip()
         if not entry.startswith("-"):
             entry = f"- {entry}"
-        path.write_text(f"{existing}{separator}\n{entry}\n", encoding="utf-8")
-        return CapabilityResult("practice.append_boom", "ok", str(path), "boom entry appended")
+        path.write_text(f"# Handoff note\n\n{entry}\n", encoding="utf-8")
+        return CapabilityResult("practice.append_note", "ok", str(path), "note appended")
 
     def write_session(self, title: str, body: str) -> CapabilityResult:
         path = self._next_dated_path(self.practice_dir / "sessions", suffix="md")
@@ -65,10 +64,11 @@ class PracticeCapabilities:
         path.write_text(content, encoding="utf-8")
         return CapabilityResult("practice.write_proposal", "ok", str(path), "proposal artifact written")
 
-    def _next_dated_path(self, directory: Path, suffix: str) -> Path:
+    def _next_dated_path(self, directory: Path, suffix: str, prefix: str | None = None) -> Path:
         directory.mkdir(parents=True, exist_ok=True)
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return _unique_path(directory / f"{date}.{suffix}")
+        stem = f"{date}-{prefix}" if prefix else date
+        return _unique_path(directory / f"{stem}.{suffix}")
 
 
 def _unique_path(path: Path) -> Path:
