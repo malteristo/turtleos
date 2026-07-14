@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-06-25 (Share eddy Slice 1; flow library on-demand via `!flows`)  
+**Version:** 2026-07-14 (Story Layer — relational identity, story surfaces §6.5, Fresh Eyes + Quest flows)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -70,6 +70,8 @@ This rewrite supersedes the prior **"Law of the Persistent Spirit"** framing as 
 - **Prompt programs as the practice layer** — Turtle Practice flows run on the platform; users may author and share their own.
 
 The narrative for early adopters: *local AI made accessible* — not cloud chat with extra steps, not a Magic installation requirement.
+
+turtleOS is a **relational** practice space: it develops shared context with the practitioner over time — writing the context that tells their story while they live it (§6.5), and applying what it knows to help in the moment. The practitioner's story stays on their hardware. *Local AI made accessible* is the door; the story layer is why practitioners stay. (Direction: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md).)
 
 ### 3.2. Three Layers
 
@@ -269,9 +271,30 @@ The River accumulates **events**, not conversation. The chronicle is how the sys
 
 **Principle:** The river runs deep; users normally see the surface.
 
-### 6.4. Sediment (Deferred)
+### 6.4. Sediment (Direction Set, Implementation Deferred)
 
-Cross-eddy memory, curated distillates, and what Turtle/River may read across time — **out of scope for vanilla v1** (§16). v1 eddies are self-contained via thread history.
+Cross-eddy memory remains **out of scope for vanilla v1** (§16); v1 eddies are self-contained via thread history. The direction is now set: sediment is the **story layer's long-term retrieval policy** — durable themes surfaced on relevance rather than always, never in the holistic default. Design: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md) + [docs/design/continuity-engine-and-substrate.md](docs/design/continuity-engine-and-substrate.md) §5.3 (CE Slice 3).
+
+### 6.5. Story Surfaces
+
+The platform's narrative artifact family — prose the practitioner **reads**, written by Turtle from practice as it happens:
+
+| Surface | Written at | Reads from |
+|---------|-----------|------------|
+| **Eddy note** | Checkpoint (§8.4) | The eddy + its relation to neighboring eddies |
+| **Daily note** | End of day | Eddy notes, in context of recent days |
+| **Period notes** (week / month / year) | Period close | The scale below, in context of recent periods — never raw transcripts |
+| **Thread arcs** | Thread confirm/update (CE Slice 2) | Confirmed active threads, as readable narrative |
+
+**Laws:**
+
+- Each scale reads the scale below it — bounded, composable, honest about aging out detail (trajectory, not database).
+- Story surfaces are **Tier-1 practitioner corpus** (§11.5): browsable, exportable, theirs.
+- The practice root is **git-versioned, one repo per practitioner** (hosted practitioners included). The chronicle (§6.2) is the event skeleton; story surfaces are the flesh.
+- Practitioner-facing vocabulary stays plain — "your story," "threads" — never internal jargon.
+- Story content lives on the practitioner's hardware. Cloud models may converse (§8.3); they never own memory.
+
+This section answers the deferred "MV practice surface files" design chapter (§11.4): the story surfaces ARE the minimum viable practice surface. Sequencing: story-surface writes multiply shared-state writes and MUST use the transaction-safe write path (hardening tranche T1) or sequence behind it.
 
 ---
 
@@ -410,6 +433,7 @@ Practitioners leave sessions without announcing closure. The platform MUST captu
 |--------|-----------|-------|
 | Flow `writes` paths (e.g. `state/notes/navigator-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from thread registry `context_type`, thread config, thread name, or flow signals |
 | Session notes (`sessions/YYYY-MM-DD.md`) | ≥4 exchanges | LLM reflection; cooldown applies |
+| **Eddy note** (story surface, §6.5) | ≥2 exchanges | Short relational description: what the eddy held + relation to neighboring eddies; written to story surfaces under practice root |
 | Proposals / practice extraction | Per attunement | Magic-attuned and practitioner profiles as implemented |
 
 Idle checkpoint marks the session **paused** so the monitor does not re-fire; the next practitioner message reopens it. Manual `!checkpoint` does **not** pause — the practitioner continues.
@@ -418,7 +442,7 @@ Successful checkpoints append a **chronicle** line (`💾 checkpoint …`) — R
 
 **Release** runs checkpoint first, then clears in-memory dialogue history and confirms to the practitioner. **Never** auto-release on idle.
 
-**Regular eddies (no flow):** session notes only at checkpoint thresholds today. **Sediment** (cross-eddy curated memory) remains deferred (§16).
+**Regular eddies (no flow):** session notes only at checkpoint thresholds today. **Sediment** (cross-eddy curated memory) remains implementation-deferred; direction set in §6.4.
 
 **Magic-attuned:** `sessions/`, `proposals/`, and extended practice files remain expected; checkpoint law applies equally.
 
@@ -511,7 +535,12 @@ turtleOS is an **execution layer for prompt programs**. Flows are markdown files
 
 ### 10.2. Shipped Flows (Flow Library)
 
-The repository ships a **flow library** — optional prompt programs (Navigator, Thread, Companion). They are not identity defaults and not required for Layer 1 (blank eddy + Turtle). Flows MUST ship with front matter + state hooks before release. **Shelter** is archived (`template/flows/_archive/`); blank eddy + Turtle identity holds presence without a dedicated flow.
+The repository ships a **flow library** — optional prompt programs (Navigator, Thread, Companion, Fresh Eyes, Quest). They are not identity defaults and not required for Layer 1 (blank eddy + Turtle). Flows MUST ship with front matter + state hooks before release. **Shelter** is archived (`template/flows/_archive/`); blank eddy + Turtle identity holds presence without a dedicated flow.
+
+**Practice-move flows (story-layer additions, §6.5):**
+
+- **Fresh Eyes** — Turtle reads the practitioner's story surfaces (active threads, recent period notes) and offers a first-arrival perspective: what's moving, what's stalled, what pattern the practitioner may have normalized. Illumination, not accusation.
+- **Quest** — Turtle assembles a priority read from threads + confirmed intentions, picks one quest, and presents it with **reward framing**: what tackling it would achieve, unblock, or reveal. **The no-pressure clause is law for this flow:** never urgency framing, never pressure to act immediately — practitioners for whom pressure collapses executive function are the design case.
 
 Users run a flow by:
 
@@ -624,7 +653,7 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 
 | Tier | Paths / sources | Viewer presentation |
 |------|-----------------|---------------------|
-| **1 — Practitioner corpus** | `state/current.yaml`; `state/notes/*`; `sessions/`; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
+| **1 — Practitioner corpus** | `state/current.yaml`; `state/notes/*`; `sessions/`; **story surfaces (§6.5): eddy/daily/period notes + thread arcs ("Story" shelf)**; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
 | **2 — Summary UI only** | Active eddy list from `thread-state/registry.yaml`; `!fetch` cache | "Active eddies", "Saved links" — no YAML or cache path browser |
 | **3 — Never** | `proposals/`; `thread-state/` innards; `dialogue/`; `signals/`; `share/*.json`; `native-runtime/`; logs; `~/turtleos/`; other practitioners' practice roots; operator craft/automation reports (unless operator role) | Hidden; `!read`/`!ls`/`!search` MUST reject |
 
@@ -747,6 +776,7 @@ Acts are structured outputs. The catalog is **extensible**; v1 implements the su
     { "type": "chronicle", "surface": "🌀 opened: …", "jump_url": "...", "deep": { } },
     { "type": "dissolve_eddy", "thread_id": "..." },
     { "type": "pin", "message_id": "..." },
+    { "type": "offer_capture", "target": "dates", "value": "...", "button_label": "Add to your dates?" },
     { "type": "error", "embed": { "title": "...", "description": "..." } }
   ]
 }
@@ -764,6 +794,7 @@ Acts are structured outputs. The catalog is **extensible**; v1 implements the su
 | `chronicle` | Yes | Includes jump URLs for eddy open |
 | `dissolve_eddy` | Yes | |
 | `pin` | Yes | |
+| `offer_capture` | **Deferred** (story-layer Act Two) | Contextual life-artifact offer — e.g. a date mentioned mid-eddy offers one-tap capture to the practitioner's dates artifact; image-sourced capture follows |
 | `error` | Yes | Embed only — no prose |
 
 ### 12.3. Enforcement
@@ -943,14 +974,16 @@ A node MAY implement **Share eddy** — sender-initiated export of an eddy conve
 
 | Topic | Status |
 |-------|--------|
-| **Sediment** — cross-eddy memory governance | Design chapter |
+| **Sediment** — cross-eddy memory governance | **Direction set** (§6.4, story layer); implementation = CE Slice 3 |
 | **Semantic eddy routing** — merge into existing threads | v2+ |
 | **Standing system eddies** — vortex, boom thread | Not at install |
 | **Proprioception stack** | Retired from vanilla |
 | **River conversational mode** | Prohibited |
 | **Auto-dissolve / metabolic sweep** | Deferred |
 | **Idle exit reflection** — exit note on Turtle step-out | v1.1 (checkpoint is v1 — §8.4) |
-| **MV practice surface files** — capture/compass analog | v1.1 design chapter (§11.4) |
+| **MV practice surface files** — capture/compass analog | **Answered** by story surfaces (§6.5) |
+| **Timing-aware surfacing** — time-contextual reminders/deferrals | Deferred (story-layer Act Three; needs story surfaces first) |
+| **Life-domain corpora + prefilled-form assistance** | Deferred (story-layer Act Three; sovereign tier only until hosted-privacy story proven) |
 | **Read-only practice file web view** | v1.1 optional |
 | **Portable PRACTICE.md path** | Paused (§13.2) |
 | **OPN / federation** | Adjacent; flow sharing later |
