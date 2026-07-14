@@ -44,17 +44,20 @@ Example chapter: the read-only live update surface. The tension was safe updates
 7. **Deep modules, delegated interiors.** Design module interfaces deliberately (HITL); delegate implementations (AFK). Small interface, deep functionality — testable from the outside as a unit. This is how the human retains a working map of the codebase while agents write nearly all the code. Shallow-module sprawl is what unwatched agents produce by default.
 8. **QA is where taste enters.** Human QA of the running system is not optional polish — it is the mechanism by which the operator's judgment shapes the product. QA findings become new backlog issues; the Kanban absorbs them continuously.
 9. **Doc-rot policy.** Issue files and PRD-like artifacts are working memory, not documentation. Delete them when done (the chronicle records the fix). Durable knowledge goes to `TURTLE_SPEC.md`, `docs/architecture.md`, or `docs/learnings.md`.
+10. **Definition-of-good travels with the artifact.** Every artifact that reaches a HITL review gate (destination doc, design chapter, QA pass) carries review criteria written at alignment time — a meaningful share of bad agent output is an evaluation problem, not a model problem. But humans can rarely specify "good" upfront, because they don't yet know what is possible: so the agent drafts the criteria *from the grilling conversation*, phrased at value-altitude as recognition tests ("this succeeded if, a week in, you reach for X without thinking about it"), never as solution specs. The human reacts and corrects rather than authoring from scratch. Before surfacing any artifact for review, the agent checks it against the stated criteria and reports deviations as flags — human review becomes judging flagged trade-offs, not hunting for problems.
 
 ### The pipeline
 
 ```
 idea/friction ──HITL──► grilling session (agent interviews human → design concept)
-              ──HITL──► destination doc (problem, stories, module map, out-of-scope)
+              ──HITL──► destination doc (problem, stories, module map, out-of-scope,
+                        value criteria drafted by agent, human reacts)
               ──HITL──► vertical-slice issues with blocking relations (issues/, gitignored)
               ──AFK───► implementation loops (TDD, gate green, one issue per fresh context;
                         parallel agents on unblocked issues)
               ──fresh──► automated review (standards pushed, separate context)
-              ──HITL──► QA on the running system → new issues → repeat
+              ──HITL──► QA on the running system against the value criteria
+                        (artifacts arrive pre-checked, deviations flagged) → new issues → repeat
               ──gate──► chapter close per the pattern above (matrix, shakes, harvest)
 ```
 
