@@ -7,13 +7,13 @@ harvest tracking, and river stewardship.
 
 from __future__ import annotations
 
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
+from atomic_io import atomic_write_text
 from mage import get_runtime_dir
 
 _REGISTRY_CACHE: dict | None = None
@@ -51,44 +51,17 @@ def load_registry() -> dict:
 
 
 def _persist_registry(registry: dict) -> None:
-    path = _registry_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = yaml.dump(
         registry,
         default_flow_style=False,
         sort_keys=False,
         allow_unicode=True,
     )
-    fd, tmp_path = None, None
     try:
-        fd, tmp_path = _mkstemp_in(path.parent)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            fd = None
-            f.write(payload)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, path)
-        tmp_path = None
+        atomic_write_text(_registry_path(), payload)
     except Exception as e:
         print(f"Registry save failed: {e}")
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
         raise
-    finally:
-        if fd is not None:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-
-
-def _mkstemp_in(directory: Path) -> tuple[int, str]:
-    import tempfile
-
-    return tempfile.mkstemp(dir=directory, suffix=".tmp")
 
 
 def save_registry(registry: dict, *, force: bool = False) -> None:

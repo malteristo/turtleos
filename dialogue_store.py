@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
+from atomic_io import atomic_write_json
 from state import MAX_DIALOGUE_HISTORY
 
 
@@ -47,21 +46,7 @@ def read_shared(channel_id: int) -> list[dict] | None:
 
 def write_shared(channel_id: int, history: list[dict]) -> None:
     trimmed = history[-MAX_DIALOGUE_HISTORY:] if len(history) > MAX_DIALOGUE_HISTORY else list(history)
-    path = _path_for(channel_id)
-    payload = json.dumps(trimmed, ensure_ascii=False, indent=0)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(payload)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+    atomic_write_json(_path_for(channel_id), trimmed, ensure_ascii=False, indent=0)
 
 
 def clear_shared(channel_id: int) -> None:
