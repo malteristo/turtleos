@@ -1,5 +1,7 @@
 # Continuity Engine & Practice Substrate
 
+> **Companion:** [story-layer-vision.md](story-layer-vision.md) (2026-07-14) — the story layer is CE's narrative complement; CE Slice 2 doubles as story-layer Act One, sediment (Slice 3) is the story's long-term retrieval policy.
+
 **Status:** Draft v4  
 **Date:** 2026-07-02  
 **Spec trace:** TURTLE_SPEC §6.4 (Sediment deferred), §16; §8.4 (checkpoint); §11.4 (practice surface files)  

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-14
 **Spec reference:** TURTLE_SPEC §3.1, §6.4, §8.4, §10.2, §11.4, §11.5, §16
-**Status:** Draft — awaiting Mage sanction
+**Status:** Applied — sanctioned 2026-07-14, all eight deltas landed in TURTLE_SPEC (version 2026-07-14, commit `61b3496`)
 **Companion:** `docs/design/story-layer-vision.md` (direction), `docs/design/continuity-engine-and-substrate.md` (CE v4)
 
 ## Finding
