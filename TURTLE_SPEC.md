@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-07-14 (Story Layer — relational identity, story surfaces §6.5, Fresh Eyes + Quest flows)  
+**Version:** 2026-07-14b (Story Layer Act One grill — eddy note absorbs session-note reflection §8.4; relations point at alive threads/intentions §6.5)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -281,7 +281,7 @@ The platform's narrative artifact family — prose the practitioner **reads**, w
 
 | Surface | Written at | Reads from |
 |---------|-----------|------------|
-| **Eddy note** | Checkpoint (§8.4) | The eddy + its relation to neighboring eddies |
+| **Eddy note** | Checkpoint (§8.4) | The eddy + its relation to the practitioner's alive threads and intentions (same practice root only; never other eddies' transcripts; no forced relations — when nothing alive connects, the note says what the eddy held and stops) |
 | **Daily note** | End of day | Eddy notes, in context of recent days |
 | **Period notes** (week / month / year) | Period close | The scale below, in context of recent periods — never raw transcripts |
 | **Thread arcs** | Thread confirm/update (CE Slice 2) | Confirmed active threads, as readable narrative |
@@ -432,9 +432,13 @@ Practitioners leave sessions without announcing closure. The platform MUST captu
 | Target | Threshold | Notes |
 |--------|-----------|-------|
 | Flow `writes` paths (e.g. `state/notes/navigator-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from thread registry `context_type`, thread config, thread name, or flow signals |
-| Session notes (`sessions/YYYY-MM-DD.md`) | ≥4 exchanges | LLM reflection; cooldown applies |
-| **Eddy note** (story surface, §6.5) | ≥2 exchanges | Short relational description: what the eddy held + relation to neighboring eddies; written to story surfaces under practice root |
+| **Eddy note** (story surface, §6.5) | ≥4 exchanges | **The** reflection artifact at checkpoint — absorbs the former session-note reflection (one reflection-class LLM call per checkpoint). What the eddy held + relation to alive threads/intentions. Reflection cooldown applies to **idle** triggers only; a manual `!checkpoint` bypasses the cooldown, weights the note toward exchanges since the last checkpoint, and is marked `trigger: manual`. Written to story surfaces under the practice root via the transaction-safe write path |
+| Session-day file (`sessions/YYYY-MM-DD.md`) | — | **Transitional:** assembled mechanically from the day's eddy notes (no separate reflection call). Retires as a genre when the daily note (§6.5) ships; the daily note replaces it as the day-scale surface |
 | Proposals / practice extraction | Per attunement | Magic-attuned and practitioner profiles as implemented |
+
+**Capture duty:** idle checkpoints carry the duty — practitioners are never required to capture manually. A manual checkpoint is a significance signal the pipeline honors (cooldown bypass + recency weighting), never a duty. A deliberate `!checkpoint` MUST NOT be silently declined by cooldown.
+
+**Checkpoint visibility:** the practitioner SHOULD see the eddy note at checkpoint via the artifact-viewer pattern — inline preview (expandable) + browser link (mobile path) — so they can verify the capture covered what moved them to checkpoint.
 
 Idle checkpoint marks the session **paused** so the monitor does not re-fire; the next practitioner message reopens it. Manual `!checkpoint` does **not** pause — the practitioner continues.
 
@@ -442,7 +446,7 @@ Successful checkpoints append a **chronicle** line (`💾 checkpoint …`) — R
 
 **Release** runs checkpoint first, then clears in-memory dialogue history and confirms to the practitioner. **Never** auto-release on idle.
 
-**Regular eddies (no flow):** session notes only at checkpoint thresholds today. **Sediment** (cross-eddy curated memory) remains implementation-deferred; direction set in §6.4.
+**Regular eddies (no flow):** eddy notes at checkpoint thresholds. **Sediment** (cross-eddy curated memory) remains implementation-deferred; direction set in §6.4.
 
 **Magic-attuned:** `sessions/`, `proposals/`, and extended practice files remain expected; checkpoint law applies equally.
 
