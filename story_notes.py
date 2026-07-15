@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -86,6 +88,22 @@ class EddyNoteResult:
     note_path: Path
     entry_text: str
     preview_text: str
+
+
+@dataclass
+class EddyEntry:
+    """One checkpoint entry from an eddy note file, ready for daily synthesis."""
+
+    thread: str
+    title: str
+    trigger: str
+    timestamp: datetime
+    related_topics: list[str]
+    body: str
+    source_path: Path
+
+
+_ENTRY_FRONT_RE = re.compile(r"---\n(.*?)---\n\n", re.S)
 
 
 async def write_eddy_note(
@@ -404,3 +422,95 @@ def _compose_preview(held: str, relation: str | None) -> str:
     if relation:
         return f"{relation.strip()} {_first_sentences(held, 2)}".strip()
     return _first_sentences(held, 3)
+
+
+# ─── Eddy file parsing + daily collector (issue 038) ───────────────
+
+
+def read_alive_snapshot(practice_dir: Path) -> dict:
+    """Read-only alive layer for story synthesis — shared with the eddy writer."""
+    return read_alive(practice_dir) or {}
+
+
+def parse_eddy_file_entries(content: str) -> list[tuple[dict, str]]:
+    """Split an eddy note file into (front_matter, body) per checkpoint entry."""
+    matches = list(_ENTRY_FRONT_RE.finditer(content))
+    entries: list[tuple[dict, str]] = []
+    for i, match in enumerate(matches):
+        try:
+            front = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            continue
+        if not isinstance(front, dict):
+            continue
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        body = content[match.end() : end].strip()
+        entries.append((front, body))
+    return entries
+
+
+def _entry_from_front(
+    front: dict, body: str, source_path: Path, tz: ZoneInfo
+) -> EddyEntry | None:
+    timestamp_raw = front.get("timestamp")
+    if not timestamp_raw:
+        return None
+    try:
+        parsed_ts = datetime.fromisoformat(str(timestamp_raw).strip())
+        if parsed_ts.tzinfo is None:
+            parsed_ts = parsed_ts.replace(tzinfo=tz)
+        else:
+            parsed_ts = parsed_ts.astimezone(tz)
+    except (TypeError, ValueError):
+        return None
+
+    topics = front.get("related-topics") or []
+    if not isinstance(topics, list):
+        topics = []
+    related_topics = [str(t).strip() for t in topics if str(t).strip()]
+
+    return EddyEntry(
+        thread=str(front.get("thread") or "").strip(),
+        title=str(front.get("title") or "").strip(),
+        trigger=str(front.get("trigger") or "").strip(),
+        timestamp=parsed_ts,
+        related_topics=related_topics,
+        body=body.strip(),
+        source_path=source_path,
+    )
+
+
+def collect_eddy_entries_for_date(
+    target_date: date,
+    *,
+    practice_dir: Path | None = None,
+) -> list[EddyEntry]:
+    """Collect eddy-note entries whose local calendar date matches ``target_date``.
+
+    Scans ``story/eddies/*.md`` under the practice root. Entries with missing
+    or malformed front matter are **skipped** (not raised) so one bad checkpoint
+    does not block daily synthesis. Returns an empty list when the eddies
+    directory is missing or no entries match. Sorted chronologically within the
+    day.
+    """
+    from state import PRACTICE_TIMEZONE
+
+    root = practice_dir if practice_dir is not None else Path(get_pd())
+    eddies_dir = root / EDDIES_SUBDIR
+    if not eddies_dir.is_dir():
+        return []
+
+    tz = ZoneInfo(PRACTICE_TIMEZONE)
+    collected: list[EddyEntry] = []
+    for note_path in sorted(eddies_dir.glob("*.md")):
+        content = note_path.read_text(encoding="utf-8")
+        for front, body in parse_eddy_file_entries(content):
+            entry = _entry_from_front(front, body, note_path, tz)
+            if entry is None:
+                continue
+            if entry.timestamp.astimezone(tz).date() != target_date:
+                continue
+            collected.append(entry)
+
+    collected.sort(key=lambda e: e.timestamp)
+    return collected

@@ -13,7 +13,6 @@ from discord.ext import tasks
 import re
 
 import story_notes
-from atomic_io import atomic_write_text, file_lock
 from state import (
     active_sessions, SESSION_TIMEOUT_SECONDS, MIN_EXCHANGES_FOR_REFLECTION,
     MIN_EXCHANGES_FOR_CHECKPOINT, SESSION_REFLECTION_COOLDOWN, last_reflection_time,
@@ -97,28 +96,6 @@ def _practice_relative(path: Path) -> str:
         return str(path)
 
 
-def _append_session_day_entry(entry_text: str) -> str:
-    """Mechanically assemble ``sessions/YYYY-MM-DD.md`` from the day's
-    eddy-note entries — no LLM call (TURTLE_SPEC §8.4, transitional genre).
-
-    Markdown with the session-day heading so the magic-side arrival reader
-    keeps working until the daily note (slice 2) retires the genre.
-    Multi-writer file (River + Turtle) — locked read-append-atomic-write.
-    """
-    today = local_now().strftime("%Y-%m-%d")
-    session_path = Path(get_pd()) / "sessions" / f"{today}.md"
-    with file_lock(session_path):
-        if session_path.exists():
-            existing = session_path.read_text(encoding="utf-8")
-            if not existing.endswith("\n"):
-                existing += "\n"
-            content = f"{existing}\n{entry_text}"
-        else:
-            content = f"# Session — {today}\n\n{entry_text}"
-        atomic_write_text(session_path, content)
-    return session_path.name
-
-
 def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> None:
     """River-side structural memory — act, not eddy dialogue."""
     if not result.captured_anything:
@@ -133,11 +110,7 @@ def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> No
         if result.flow_writes:
             parts.append(result.flow_writes[0])
         if eddy_note_rel:
-            # Always name the note when one was written — even if the
-            # sessions/ day-file assembly failed afterwards.
             parts.append(eddy_note_rel)
-        if result.session_note:
-            parts.append(f"sessions/{result.session_note}")
         label = ", ".join(parts) or "resonance captured"
         _append_chronicle(
             get_pd(),
@@ -147,7 +120,6 @@ def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> No
                 "trigger": result.trigger,
                 "flow_writes": result.flow_writes,
                 "eddy_note": eddy_note_rel,
-                "session_note": result.session_note,
             },
         )
     except Exception as exc:
@@ -285,16 +257,16 @@ async def checkpoint_session(
             print(f"Eddy note failed for {channel_id}: {type(e).__name__}: {e}")
 
         if result.eddy_note:
+            eddy_rel = _practice_relative(result.eddy_note.note_path)
+            print(f"Eddy note: {result.eddy_note.note_path}")
             try:
-                result.session_note = _append_session_day_entry(result.eddy_note.entry_text)
-                print(f"Eddy note: {result.eddy_note.note_path} → sessions/{result.session_note}")
                 await log_activity(
-                    f"Eddy note: `sessions/{result.session_note}`",
+                    f"Eddy note: `{eddy_rel}`",
                     "\U0001f4dd",
                     channel=client.get_channel(channel_id),
                 )
             except Exception as e:
-                print(f"Session day assembly failed for {channel_id}: {type(e).__name__}: {e}")
+                print(f"Eddy note activity post failed for {channel_id}: {type(e).__name__}: {e}")
 
     if get_mage_type() == "practitioner" and len(history) >= 4:
         await _extract_practice_state(conversation, mage_name)

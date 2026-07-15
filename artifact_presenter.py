@@ -482,6 +482,54 @@ class ArtifactPresenterView(discord.ui.View):
         return callback
 
 
+async def send_artifact_surface(
+    channel_id: int,
+    surface: ArtifactSurface,
+    *,
+    silent: bool = False,
+) -> None:
+    """Post artifact surface on a channel (scheduled river acts, not command replies)."""
+    from mage import river_bot_enabled
+    from river_state import river_bot_token
+    from state import client
+
+    kwargs: dict = {"silent": silent}
+    if surface.embed is not None:
+        kwargs["embed"] = surface.embed
+    if surface.content:
+        kwargs["content"] = surface.content
+    if not surface.embed and not surface.content:
+        kwargs["content"] = "\u200b"
+
+    view = None
+    if surface.open_actions or surface.export_paths:
+        view = ArtifactPresenterView(
+            channel_id,
+            surface.open_actions,
+            export_paths=surface.export_paths,
+        )
+        if view.children:
+            kwargs["view"] = view
+
+    if river_bot_enabled():
+        token = river_bot_token()
+        if token:
+            intents = discord.Intents.default()
+            ephemeral = discord.Client(intents=intents)
+            try:
+                await ephemeral.login(token)
+                ch = await ephemeral.fetch_channel(channel_id)
+                await ch.send(**kwargs)
+                return
+            finally:
+                await ephemeral.close()
+
+    target = client.get_channel(channel_id)
+    if target is None:
+        target = await client.fetch_channel(channel_id)
+    await target.send(**kwargs)
+
+
 async def reply_artifact_surface(message, surface: ArtifactSurface) -> None:
     """Send composed artifact surface as a Discord reply."""
     kwargs: dict = {"mention_author": False}

@@ -233,39 +233,23 @@ class CheckpointConvergenceTests(_CheckpointHarness):
             self.assertTrue(result.eddy_note.note_path.exists())
             self.assertIn("rough night of sleep", result.eddy_note.entry_text)
 
-    async def test_session_day_file_assembles_days_eddy_note_entries(self) -> None:
-        """sessions/YYYY-MM-DD.md is a mechanical assembly of the day's
-        eddy-note entries — one file per day, appended, no LLM call."""
+    async def test_checkpoint_does_not_write_sessions_day_file(self) -> None:
+        """sessions/YYYY-MM-DD.md assembly retired (issue 041) — checkpoints
+        write eddy notes only; no mechanical session-day file."""
         with tempfile.TemporaryDirectory() as tmp:
-            first_note = _fake_note(tmp, "First conversation body.")
-            second_note = _fake_note(tmp, "Second conversation body.")
-            writer = AsyncMock(side_effect=[first_note, second_note])
-            sessions_llm = AsyncMock()
+            note = _fake_note(tmp, "First conversation body.")
+            writer = AsyncMock(return_value=note)
             with self._patched(tmp, HISTORY_4), patch(
                 "story_notes.write_eddy_note", writer
-            ), patch("sessions.chat_ollama", sessions_llm):
-                first = await checkpoint_session(
-                    self.CHANNEL_ID, trigger="idle", mark_paused=True
-                )
-            with self._patched(tmp, HISTORY_6), patch(
-                "story_notes.write_eddy_note", writer
-            ), patch("sessions.chat_ollama", sessions_llm):
-                second = await checkpoint_session(
+            ):
+                result = await checkpoint_session(
                     self.CHANNEL_ID, trigger="manual", mark_paused=False
                 )
 
-            today = local_now().strftime("%Y-%m-%d")
-            day_files = sorted((Path(tmp) / "sessions").glob("*.md"))
-            self.assertEqual(day_files, [Path(tmp) / "sessions" / f"{today}.md"])
-            content = day_files[0].read_text(encoding="utf-8")
-            self.assertIn("First conversation body.", content)
-            self.assertIn("Second conversation body.", content)
-            # Arrival-reader compatibility (destination criterion 8 / Flag A):
-            # markdown file with the session-day heading.
-            self.assertTrue(content.startswith(f"# Session — {today}"))
-            self.assertEqual(first.session_note, f"{today}.md")
-            self.assertEqual(second.session_note, f"{today}.md")
-            sessions_llm.assert_not_awaited()
+            self.assertIsNotNone(result.eddy_note)
+            self.assertIsNone(result.session_note)
+            sessions_dir = Path(tmp) / "sessions"
+            self.assertFalse(sessions_dir.exists() or list(sessions_dir.glob("*.md")))
 
     async def test_eddy_note_error_degrades_gracefully(self) -> None:
         """A failed reflection must never break the checkpoint — flow captures
@@ -359,18 +343,13 @@ class CheckpointConvergenceTests(_CheckpointHarness):
             self.assertNotIn("```md", joined)
             self.assertNotIn("Open note", joined)
 
-    async def test_chronicle_names_eddy_note_when_day_assembly_fails(self) -> None:
-        """The chronicle must never go blind on a written note: when the
-        day-file assembly fails after a successful eddy note, the chronicle
-        label still names the note (practice-relative) and is never empty."""
+    async def test_chronicle_names_eddy_note(self) -> None:
+        """The chronicle must name a written eddy note (practice-relative)."""
         with tempfile.TemporaryDirectory() as tmp:
             writer = AsyncMock(return_value=_fake_note(tmp))
             chronicle = MagicMock()
             with self._patched(tmp, HISTORY_4), patch(
                 "story_notes.write_eddy_note", writer
-            ), patch(
-                "sessions._append_session_day_entry",
-                side_effect=RuntimeError("disk full"),
             ), patch("river_handler._append_chronicle", chronicle):
                 result = await checkpoint_session(
                     self.CHANNEL_ID, trigger="manual", mark_paused=False

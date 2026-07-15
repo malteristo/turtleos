@@ -89,7 +89,7 @@ from cmd_dispatch import (
     send_with_actions,
     try_direct_command,
 )
-from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_ignore, cmd_keep, cmd_release
+from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_ignore, cmd_keep, cmd_release, cmd_day
 from share_eddy import cmd_share
 from cmd_practice_io import cmd_artifacts, cmd_export, cmd_ls, cmd_read, cmd_search
 from cmd_threads import (
@@ -331,6 +331,7 @@ def _help_embed_fields() -> list[tuple[str, str]]:
 
     eddy_core = [
         ("`!checkpoint`", "Save resonance — flow state + session note; keeps history"),
+        ("`!day`", "Refresh today's daily note (overwrites if it exists)"),
         ("`!release`", "Close session — checkpoint, then clear history"),
         ("`!focus <topic>`", "Narrow this eddy to one thing (`!focus` to view, `!focus clear` to widen)"),
         ("`!dissolve`", "Archive eddy + chronicle — distinct from `!release`"),
@@ -1292,6 +1293,7 @@ DIRECT_COMMANDS = {
     "ls": lambda msg, args: cmd_ls(msg, args),
     "search": lambda msg, args: cmd_search(msg, args),
     "checkpoint": lambda msg, args: cmd_checkpoint(msg),
+    "day": lambda msg, args: cmd_day(msg),
     "release": lambda msg, args: cmd_release(msg),
     "dissolve": lambda msg, args: cmd_dissolve(msg, args),
     "keep": lambda msg, args: cmd_keep(msg, args),

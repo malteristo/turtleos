@@ -59,6 +59,11 @@ async def dispatch_incoming_message(message: discord.Message) -> None:
     if not is_practice_channel(message):
         return
 
+    if not message.author.bot or message.author.id == SPIRIT_BOT_ID:
+        from story_daily import maybe_run_daily_note_catchup
+
+        await maybe_run_daily_note_catchup()
+
     # Split-bot: River owns all turtle-talk `!` commands (acts, not Turtle prose)
     if message.content.strip().startswith("!") and river_bot_enabled():
         return

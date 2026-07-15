@@ -24,7 +24,8 @@ class TestArtifactAllowlist(unittest.TestCase):
         open(os.path.join(self.pd, "sessions", "2026-06-29.md"), "w").close()
         open(os.path.join(self.pd, "proposals", "secret.md"), "w").close()
         open(os.path.join(self.pd, "state", "notes", "navigator.md"), "w").close()
-        open(os.path.join(self.pd, "thread-state", "card.md"), "w").close()
+        os.makedirs(os.path.join(self.pd, "story", "daily"), exist_ok=True)
+        open(os.path.join(self.pd, "story", "daily", "2026-07-15.md"), "w").close()
         self.runtime = os.path.join(self.pd, "runtime")
         os.makedirs(os.path.join(self.runtime, "link-resonance"), exist_ok=True)
 
@@ -36,6 +37,12 @@ class TestArtifactAllowlist(unittest.TestCase):
             "artifact_viewer.get_runtime_dir", return_value=self.runtime
         ), patch("artifact_viewer.get_mage_type", return_value="practitioner"):
             self.assertTrue(av.is_artifact_readable("sessions/2026-06-29.md"))
+
+    def test_practitioner_can_read_story_daily(self) -> None:
+        with patch("artifact_viewer.get_pd", return_value=self.pd), patch(
+            "artifact_viewer.get_runtime_dir", return_value=self.runtime
+        ), patch("artifact_viewer.get_mage_type", return_value="practitioner"):
+            self.assertTrue(av.is_artifact_readable("story/daily/2026-07-15.md"))
 
     def test_practitioner_denied_proposals(self) -> None:
         with patch("artifact_viewer.get_pd", return_value=self.pd), patch(

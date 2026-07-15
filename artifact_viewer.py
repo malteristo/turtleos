@@ -101,6 +101,8 @@ def is_artifact_readable(rel_path: str, *, mage_type: str | None = None) -> bool
     # preview browser link (§8.4 visibility, issue 036) resolves through here.
     if rel.startswith("story/eddies/") and rel.endswith(".md"):
         return True
+    if rel.startswith("story/daily/") and rel.endswith(".md"):
+        return True
     if rel.startswith("state/notes/") and rel.endswith(".md"):
         return True
     if rel.startswith("thread-archive/") and rel.endswith(".md"):
@@ -127,6 +129,7 @@ def is_artifact_directory(rel_dir: str, *, mage_type: str | None = None) -> bool
         "sessions",
         "story",
         "story/eddies",
+        "story/daily",
         "state/notes",
         "thread-archive",
         "box/intake",

@@ -341,3 +341,37 @@ async def cmd_ignore(message, args):
         "Confirm with `!ignore confirm`.",
         mention_author=False,
     )
+
+
+async def cmd_day(message):
+    """Manual refresh of today's daily note (issue 040)."""
+    from helpers import local_now
+    from story_daily import DailyNoteError, build_daily_note_surface, write_daily_note
+
+    today = local_now().date()
+    try:
+        result = await write_daily_note(today, force=True)
+    except DailyNoteError:
+        await message.reply(
+            "Couldn't refresh today's daily note — synthesis didn't produce "
+            "usable text. Try again later.",
+            mention_author=False,
+        )
+        return
+
+    if result.note_path is None:
+        await message.reply(
+            "No eddy notes for today yet — nothing to synthesize.",
+            mention_author=False,
+        )
+        return
+
+    surface = build_daily_note_surface(today, result)
+    if surface is None:
+        await message.reply(
+            f"Daily note refreshed for {today.isoformat()} — previous version replaced.",
+            mention_author=False,
+        )
+        return
+
+    await reply_artifact_surface(message, surface)

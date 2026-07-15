@@ -155,6 +155,10 @@ async def on_message(message: discord.Message):
     if get_attunement_profile() != "native":
         return
 
+    from story_daily import maybe_run_daily_note_catchup
+
+    await maybe_run_daily_note_catchup()
+
     # Universal turtle-talk handler (river + eddies; Mage, Spirit, practitioners)
     if message.content.strip().startswith("!"):
         set_practice_context(message)

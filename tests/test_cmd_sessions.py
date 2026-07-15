@@ -421,5 +421,45 @@ class TestCmdDissolve(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(embed.title, "Eddy dissolved")
 
 
+class TestCmdDay(unittest.IsolatedAsyncioTestCase):
+    async def test_day_surfaces_preview_surface(self) -> None:
+        message = MagicMock()
+        message.reply = AsyncMock()
+        result = MagicMock()
+        result.note_path = Path("/tmp/practice/story/daily/2026-07-15.md")
+        result.preview_text = "You moved the turtle build forward today."
+        result.created = True
+
+        with patch("story_daily.write_daily_note", new_callable=AsyncMock, return_value=result), patch(
+            "helpers.local_now",
+            return_value=__import__("datetime").datetime(
+                2026, 7, 15, 15, 0, tzinfo=__import__("zoneinfo").ZoneInfo("Europe/Berlin")
+            ),
+        ), patch("mage.get_pd", return_value="/tmp/practice"), patch(
+            "cmd_sessions.reply_artifact_surface", new_callable=AsyncMock
+        ) as reply:
+            await cs.cmd_day(message)
+
+        reply.assert_awaited_once()
+        surface = reply.await_args.args[1]
+        self.assertEqual(surface.template_id, "post_daily_note")
+        self.assertIn("```md", surface.content or "")
+        self.assertIn(
+            ("Open note", "!read story/daily/2026-07-15.md"),
+            surface.open_actions,
+        )
+
+    async def test_day_no_entries_message(self) -> None:
+        message = MagicMock()
+        message.reply = AsyncMock()
+        result = MagicMock()
+        result.note_path = None
+
+        with patch("story_daily.write_daily_note", new_callable=AsyncMock, return_value=result):
+            await cs.cmd_day(message)
+
+        self.assertIn("No eddy notes", message.reply.await_args.args[0])
+
+
 if __name__ == "__main__":
     unittest.main()

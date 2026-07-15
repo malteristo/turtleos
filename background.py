@@ -133,6 +133,14 @@ RECENT SESSIONS:
         print(f"Health read failed: {type(e).__name__}: {e}")
 
 
+@tasks.loop(hours=1)
+async def daily_note_loop():
+    """Scheduled daily-note synthesis after DAILY_NOTE_HOUR (issue 040)."""
+    from story_daily import run_scheduled_daily_note
+
+    await run_scheduled_daily_note()
+
+
 @tasks.loop(hours=3)
 async def interoception_loop():
     """Retired — pulse/interoception removed with magic-attuned Appendix A."""
@@ -266,6 +274,7 @@ async def health_canary_loop():
         "session_monitor": session_monitor.is_running(),
         "interoception": interoception_loop.is_running(),
         "health_loop": practice_health_loop.is_running(),
+        "daily_note": daily_note_loop.is_running(),
         "daily_reminders": daily_reminders_loop.is_running(),
     }
     dead_loops = [name for name, alive in loop_status.items() if not alive]

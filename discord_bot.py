@@ -105,7 +105,7 @@ from helpers import (
 from sessions import session_monitor, checkpoint_session, close_session, maybe_reflect
 from eddy_spawn import handle_eddy_spawn_interaction
 from intake_server import start_intake_server
-from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop
+from background import practice_health_loop, interoception_loop, daily_reminders_loop, health_canary_loop, daily_note_loop
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
@@ -503,6 +503,9 @@ async def on_ready():
         if not daily_reminders_loop.is_running():
             daily_reminders_loop.start()
             print("daily_reminders_loop started")
+        if not daily_note_loop.is_running():
+            daily_note_loop.start()
+            print("daily_note_loop started")
         if not health_canary_loop.is_running():
             health_canary_loop.start()
             print("health_canary_loop started (INT-027)")

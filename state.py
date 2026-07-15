@@ -157,6 +157,10 @@ HEALTH_READ_DAY = 6  # Sunday
 HEALTH_READ_HOUR = 6  # 6 AM local
 last_health_read_week: int = 0
 
+DAILY_NOTE_HOUR = int(os.environ.get("DAILY_NOTE_HOUR", "22"))
+daily_note_catchup_done: str | None = None  # yesterday ISO when catch-up ran
+daily_note_scheduled_done: str | None = None  # today ISO when scheduled path completed
+
 # Daily reminders state
 last_reminder_date: str | None = None
 REMINDER_HOUR_START = 8

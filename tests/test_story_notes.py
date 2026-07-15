@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import ExitStack, contextmanager
+from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -458,6 +459,98 @@ class EddyNoteWriterTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(front["title"], 'Trip: "plans" #1')
             self.assertEqual(front["related-topics"], ["budget: 2026 #planning"])
             self.assertEqual(front["thread"], str(CHANNEL_ID))
+
+
+class EddyEntryCollectorTests(unittest.TestCase):
+    """Issue 038 — collect_eddy_entries_for_date."""
+
+    def _entry_block(
+        self,
+        *,
+        thread: str = "111",
+        title: str = "Morning walk",
+        trigger: str = "idle",
+        timestamp: str = "2026-07-15T09:00:00+02:00",
+        topics: list[str] | None = None,
+        body: str = "Held sentence one. Held sentence two.",
+    ) -> str:
+        fields = {
+            "thread": thread,
+            "title": title,
+            "trigger": trigger,
+            "timestamp": timestamp,
+            "related-topics": topics or [],
+        }
+        dumped = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True).strip()
+        return f"---\n{dumped}\n---\n\n{body}\n"
+
+    def test_multi_eddy_file_returns_only_target_date_sorted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            eddies = Path(tmp) / "story" / "eddies"
+            eddies.mkdir(parents=True)
+            (eddies / "111-morning.md").write_text(
+                self._entry_block(
+                    timestamp="2026-07-15T08:00:00+02:00",
+                    body="Early July 15 entry.",
+                )
+                + "\n"
+                + self._entry_block(
+                    timestamp="2026-07-14T22:00:00+02:00",
+                    body="Late July 14 entry.",
+                ),
+                encoding="utf-8",
+            )
+            (eddies / "222-afternoon.md").write_text(
+                self._entry_block(
+                    thread="222",
+                    title="Afternoon thread",
+                    timestamp="2026-07-15T15:30:00+02:00",
+                    topics=["health"],
+                    body="Afternoon held.\n\nThis connects to your health thread.",
+                ),
+                encoding="utf-8",
+            )
+
+            entries = story_notes.collect_eddy_entries_for_date(
+                date(2026, 7, 15), practice_dir=Path(tmp)
+            )
+
+            self.assertEqual(len(entries), 2)
+            self.assertEqual(entries[0].body, "Early July 15 entry.")
+            self.assertEqual(entries[1].body, "Afternoon held.\n\nThis connects to your health thread.")
+            self.assertEqual(entries[0].timestamp.isoformat(), "2026-07-15T08:00:00+02:00")
+            self.assertEqual(entries[1].related_topics, ["health"])
+            self.assertEqual(entries[1].source_path.name, "222-afternoon.md")
+
+    def test_malformed_front_matter_is_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            eddies = Path(tmp) / "story" / "eddies"
+            eddies.mkdir(parents=True)
+            (eddies / "333-bad.md").write_text(
+                "---\nnot: valid: yaml: [\n---\n\nSkipped.\n\n"
+                + self._entry_block(body="Good entry."),
+                encoding="utf-8",
+            )
+            (eddies / "444-missing-ts.md").write_text(
+                "---\nthread: '444'\ntitle: no-ts\n---\n\nNo timestamp.\n",
+                encoding="utf-8",
+            )
+
+            entries = story_notes.collect_eddy_entries_for_date(
+                date(2026, 7, 15), practice_dir=Path(tmp)
+            )
+
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0].body, "Good entry.")
+
+    def test_empty_eddies_dir_returns_empty_list(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                story_notes.collect_eddy_entries_for_date(
+                    date(2026, 7, 15), practice_dir=Path(tmp)
+                ),
+                [],
+            )
 
 
 if __name__ == "__main__":
