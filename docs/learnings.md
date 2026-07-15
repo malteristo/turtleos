@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-15 — Story Act Two: daily note (issues 038–041)
+
+**Shipped:** Eddy-entry collector (`story_notes.collect_eddy_entries_for_date`), daily note writer (`story_daily.write_daily_note`), triggers (scheduled hourly after `DAILY_NOTE_HOUR`, morning catch-up before noon, `!day` force-refresh), river preview surface (`post_daily_note_river_visibility`), `story/daily/*.md` Tier-1 allowlist, Forge sync (`desk/story/daily/`). Session-day mechanical assembly **retired** at checkpoint.
+
+**Deploy:** Mini `c9069a7`; restart both `com.turtle.discord` and `com.turtle.river`. Live `!day` dogfood synthesized `story/daily/2026-07-15.md` with river preview.
+
+**Gate:** `spirit_verify.sh` — 549 tests green.
+
+**Next:** Mage living evaluation of synthesis quality; Act Three (period notes) or hardening per destination doc.
+
 ### 2026-07-10 — Split-bot regression: runtime-dir fragmentation
 
 **Symptom:** After discord_bot deploy, River parent messages arrived (`River inbound` logged) but bar did not re-anchor; fresh eddies materialized without practitioner add/rename/turtle-add system lines.

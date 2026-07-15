@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-07-15 (Checkpoint-time proposal extraction retired §8.4 — one-reflection-call law; dedicated proposal mechanism backlogged)  
+**Version:** 2026-07-15b (Daily note Act Two shipped §6.5 — triggers + river visibility; session-day assembly retired §8.4)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -282,7 +282,7 @@ The platform's narrative artifact family — prose the practitioner **reads**, w
 | Surface | Written at | Reads from |
 |---------|-----------|------------|
 | **Eddy note** | Checkpoint (§8.4) | The eddy + its relation to the practitioner's alive threads and intentions (same practice root only; never other eddies' transcripts; no forced relations — when nothing alive connects, the note says what the eddy held and stops) |
-| **Daily note** | End of day | Eddy notes, in context of recent days |
+| **Daily note** | End of day (scheduled after `DAILY_NOTE_HOUR`, default 22:00 practice-local; morning catch-up before noon for yesterday if missed; manual `!day` force-refresh) | Eddy notes for the calendar day, optional recent daily notes for continuity, optional alive one-liner; one reflection-class LLM call. Written to `story/daily/YYYY-MM-DD.md`. **River visibility:** after a fresh synthesis (`created=True`), post inline preview + **Open note** on the river (same artifact-presenter family as checkpoint eddy notes). Idle-only days with zero eddy entries: no write, no post |
 | **Period notes** (week / month / year) | Period close | The scale below, in context of recent periods — never raw transcripts |
 | **Thread arcs** | Thread confirm/update (CE Slice 2) | Confirmed active threads, as readable narrative |
 
@@ -433,7 +433,7 @@ Practitioners leave sessions without announcing closure. The platform MUST captu
 |--------|-----------|-------|
 | Flow `writes` paths (e.g. `state/notes/navigator-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from thread registry `context_type`, thread config, thread name, or flow signals |
 | **Eddy note** (story surface, §6.5) | ≥4 exchanges | **The** reflection artifact at checkpoint — absorbs the former session-note reflection (one reflection-class LLM call per checkpoint). What the eddy held + relation to alive threads/intentions. Reflection cooldown applies to **idle** triggers only; a manual `!checkpoint` bypasses the cooldown, weights the note toward exchanges since the last checkpoint, and is marked `trigger: manual`. Written to story surfaces under the practice root via the transaction-safe write path |
-| Session-day file (`sessions/YYYY-MM-DD.md`) | — | **Transitional:** assembled mechanically from the day's eddy notes (no separate reflection call). Retires as a genre when the daily note (§6.5) ships; the daily note replaces it as the day-scale surface |
+| Session-day file (`sessions/YYYY-MM-DD.md`) | — | **Retired** (shipped 2026-07-15, Act Two): was transitional mechanical assembly from eddy-note entry bodies. Replaced by daily note (`story/daily/`, §6.5). Existing `sessions/` files remain historical Tier-1 corpus; new checkpoints do not append |
 | Practice extraction | Per attunement | Practitioner notes/profile extraction as implemented. **Checkpoint-time proposal extraction retired** (2026-07-15, dyad-sanctioned): it lived inside the removed legacy reflection prompt and keeping it would violate the one-reflection-call law. Autonomous proposal generation returns as a dedicated mechanism decoupled from checkpoint (backlogged) |
 
 **Capture duty:** idle checkpoints carry the duty — practitioners are never required to capture manually. A manual checkpoint is a significance signal the pipeline honors (cooldown bypass + recency weighting), never a duty. A deliberate `!checkpoint` MUST NOT be silently declined by cooldown.
@@ -657,7 +657,7 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 
 | Tier | Paths / sources | Viewer presentation |
 |------|-----------------|---------------------|
-| **1 — Practitioner corpus** | `state/current.yaml`; `state/notes/*`; `sessions/`; **story surfaces (§6.5): eddy/daily/period notes + thread arcs ("Story" shelf)**; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
+| **1 — Practitioner corpus** | `state/current.yaml`; `state/notes/*`; `sessions/` (historical); **story surfaces (§6.5): `story/eddies/*.md`, `story/daily/*.md`, period notes + thread arcs ("Story" shelf)**; `thread-archive/`; `chronicle/surface.md` (rendered summary + jump links, not raw `deep.jsonl`); `box/intake/` (practitioner's own pastes); saved links derived from `link-resonance/` | Default shelves |
 | **2 — Summary UI only** | Active eddy list from `thread-state/registry.yaml`; `!fetch` cache | "Active eddies", "Saved links" — no YAML or cache path browser |
 | **3 — Never** | `proposals/`; `thread-state/` innards; `dialogue/`; `signals/`; `share/*.json`; `native-runtime/`; logs; `~/turtleos/`; other practitioners' practice roots; operator craft/automation reports (unless operator role) | Hidden; `!read`/`!ls`/`!search` MUST reject |
 
@@ -1217,6 +1217,7 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 
 | Date | Change |
 |------|--------|
+| 2026-07-15 | §6.5 daily note triggers + river visibility; §8.4 session-day assembly retired; §11.5.1 explicit `story/daily/` Tier-1 (Act Two shipped) |
 | 2026-07-10 | Native-only practice surfaces — boom/compass/bright portable files retired; `practice.append_note`; INT-027 uses `state/current.yaml` only |
 | 2026-07-08 | §20 Self-Development Authority — inspect / propose / pre-defined self-healing operator ceiling (supersedes design-era §22.8 refs) |
 | 2026-07-08 | Appendix A retired — magic-attuned + workshop_root code paths removed; native-only shell |
