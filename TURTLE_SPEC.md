@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-07-14b (Story Layer Act One grill — eddy note absorbs session-note reflection §8.4; relations point at alive threads/intentions §6.5)  
+**Version:** 2026-07-15 (Checkpoint-time proposal extraction retired §8.4 — one-reflection-call law; dedicated proposal mechanism backlogged)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -434,7 +434,7 @@ Practitioners leave sessions without announcing closure. The platform MUST captu
 | Flow `writes` paths (e.g. `state/notes/navigator-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from thread registry `context_type`, thread config, thread name, or flow signals |
 | **Eddy note** (story surface, §6.5) | ≥4 exchanges | **The** reflection artifact at checkpoint — absorbs the former session-note reflection (one reflection-class LLM call per checkpoint). What the eddy held + relation to alive threads/intentions. Reflection cooldown applies to **idle** triggers only; a manual `!checkpoint` bypasses the cooldown, weights the note toward exchanges since the last checkpoint, and is marked `trigger: manual`. Written to story surfaces under the practice root via the transaction-safe write path |
 | Session-day file (`sessions/YYYY-MM-DD.md`) | — | **Transitional:** assembled mechanically from the day's eddy notes (no separate reflection call). Retires as a genre when the daily note (§6.5) ships; the daily note replaces it as the day-scale surface |
-| Proposals / practice extraction | Per attunement | Magic-attuned and practitioner profiles as implemented |
+| Practice extraction | Per attunement | Practitioner notes/profile extraction as implemented. **Checkpoint-time proposal extraction retired** (2026-07-15, dyad-sanctioned): it lived inside the removed legacy reflection prompt and keeping it would violate the one-reflection-call law. Autonomous proposal generation returns as a dedicated mechanism decoupled from checkpoint (backlogged) |
 
 **Capture duty:** idle checkpoints carry the duty — practitioners are never required to capture manually. A manual checkpoint is a significance signal the pipeline honors (cooldown bypass + recency weighting), never a duty. A deliberate `!checkpoint` MUST NOT be silently declined by cooldown.
 
