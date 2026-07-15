@@ -262,3 +262,20 @@ Append to this file after each research cycle — it persists across sessions.
 **Workflow shift:** `docs/development.md` now codifies agent-driven production mechanics (grill-first alignment, vertical-slice issues, HITL/AFK split, TDD default, fresh-context review, deep-module boundaries). Chapter pattern unchanged; this is its factory floor.
 
 **Fixed same-day (TDD):** unit gate red+noisy → 480 green; manual-eddy dissolve gated on explicit release (spec §8.4 — idle checkpoint was silently deleting threads); flow-ID confinement (strict slug + realpath, symlink-safe). Pattern note: the dissolve bug was invisible to short-history tests because `checkpoint_session` early-returns below `MIN_EXCHANGES_FOR_REFLECTION` — reaching deep branches needs realistic fixtures.
+
+### Story Layer Act One — eddy notes with relations (2026-07-15)
+
+**Shipped (issues 033–036, commits 8d1c0f9→790956f):** `atomic_io.py` (shared atomic-write primitive + flock sidecar locks), `story_notes.py` (eddy note writer — one reflection call producing what-the-eddy-held + relation to alive threads/intentions), checkpoint convergence in `sessions.py` (eddy note absorbs the legacy session-note reflection; cooldown idle-only; day file assembled mechanically), preview surface in `cmd_sessions.py` (inline expandable preview + Open-note button via artifact presenter; `story/eddies/` allowlisted Tier-1). Spec §8.4/§6.5 amended first (grill-first), version 2026-07-15.
+
+**Pipeline pattern that worked:** grill → destination doc → spec amendment → vertical slices dispatched AFK with the *as-built contract notes of the previous slice* in the brief → fresh-context adversarial review → fix loop → re-review → commit. Every slice drew request-changes on first review; every Major was real (honesty-gate bypass, quality floor, TOCTOU, sliding-window since_index, lifecycle-bar crash). Fresh-context review with explicit "trust nothing, reproduce it" instruction repeatedly caught what the implementer's own green suite could not.
+
+**Technical learnings:**
+- A raw list index cannot anchor "since the last checkpoint" against a sliding history window (`MAX_DIALOGUE_HISTORY` pops heads). Identity-anchored boundary (fingerprint suffix/prefix alignment) survives saturation and pops; byte-identical repeats (the "." protocol) can over-claim one-sidedly — benign, documented.
+- Snapshot (`list(history)`) at checkpoint start closes the mid-reflection append race; verify no in-place dict mutation before trusting a shallow copy (audited: all mutation sites copy first).
+- LLM-output quality floors must gate *before* any write, and honesty gates need whole-word matching with canonical names — substring matching validated fabricated topics.
+- `_LifecycleInteractionMessage.reply` returned None since 8b9e1ea, so the bar's Checkpoint button crashed at `ack.delete()` — every adapter that wraps reply-like APIs must return the sent message; audit any consumed reply return when touching adapters (AST scan beats binding-grep).
+- Regression guards should assert outcomes (payloads actually sent), not mock wiring — module-attribute patches are bypassed by `from X import Y` rewires.
+
+**Retired with sanction:** checkpoint-time proposal extraction (lived inside the removed reflection prompt; one-reflection-call law). Dedicated proposal mechanism backlogged practice-side.
+
+**Deploy note:** shared lifecycle modules changed (`sessions.py`, `cmd_sessions.py`, `eddy_lifecycle_bar.py`, `artifact_viewer.py`) — restart **both** `com.turtle.discord` and `com.turtle.river`; run `shake_lifecycle.py` live at deploy (offline gate green, `test-runs/shake-lifecycle-latest.json`).
