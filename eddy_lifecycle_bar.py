@@ -211,12 +211,12 @@ class _LifecycleInteractionMessage:
             send_kwargs["embed"] = embed
         send_kwargs.update(kwargs)
         if not send_kwargs:
-            return
-        if not self._sent:
-            await self._interaction.followup.send(**send_kwargs)
-            self._sent = True
-        else:
-            await self._interaction.followup.send(**send_kwargs)
+            return None
+        self._sent = True
+        # followup.send returns the WebhookMessage — hand it back so handlers
+        # that bind the ack (cmd_checkpoint edits/deletes it) work on the bar
+        # path exactly as on the typed-command path.
+        return await self._interaction.followup.send(**send_kwargs)
 
     async def add_reaction(self, emoji):
         pass

@@ -49,6 +49,23 @@ class TestArtifactAllowlist(unittest.TestCase):
         ), patch("artifact_viewer.get_mage_type", return_value="mage"):
             self.assertTrue(av.is_artifact_readable("proposals/secret.md"))
 
+    def test_practitioner_can_read_story_eddy_notes(self) -> None:
+        """Story surfaces are Tier-1 practitioner corpus (§11.5.1) — the
+        checkpoint preview browser link (issue 036) resolves through here."""
+        os.makedirs(os.path.join(self.pd, "story", "eddies"), exist_ok=True)
+        open(os.path.join(self.pd, "story", "eddies", "2-morning-walk.md"), "w").close()
+        with patch("artifact_viewer.get_pd", return_value=self.pd), patch(
+            "artifact_viewer.get_runtime_dir", return_value=self.runtime
+        ), patch("artifact_viewer.get_mage_type", return_value="practitioner"):
+            self.assertTrue(av.is_artifact_readable("story/eddies/2-morning-walk.md"))
+            self.assertEqual(
+                av.resolve_artifact_path("story/eddies/2-morning-walk.md"),
+                os.path.join(self.pd, "story/eddies/2-morning-walk.md"),
+            )
+
+    def test_story_shelf_title(self) -> None:
+        self.assertEqual(av.shelf_title_for_path("story/eddies/2-x.md"), "Story")
+
     def test_thread_state_denied(self) -> None:
         with patch("artifact_viewer.get_pd", return_value=self.pd), patch(
             "artifact_viewer.get_runtime_dir", return_value=self.runtime

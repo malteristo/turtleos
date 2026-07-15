@@ -97,6 +97,10 @@ def is_artifact_readable(rel_path: str, *, mage_type: str | None = None) -> bool
 
     if rel.startswith("sessions/") and rel.endswith(".md"):
         return True
+    # Story surfaces are Tier-1 practitioner corpus (§11.5.1); the checkpoint
+    # preview browser link (§8.4 visibility, issue 036) resolves through here.
+    if rel.startswith("story/eddies/") and rel.endswith(".md"):
+        return True
     if rel.startswith("state/notes/") and rel.endswith(".md"):
         return True
     if rel.startswith("thread-archive/") and rel.endswith(".md"):
@@ -121,6 +125,8 @@ def is_artifact_directory(rel_dir: str, *, mage_type: str | None = None) -> bool
 
     allowed_prefixes = (
         "sessions",
+        "story",
+        "story/eddies",
         "state/notes",
         "thread-archive",
         "box/intake",
@@ -271,6 +277,8 @@ class RecentArtifact:
 def shelf_title_for_path(path: str) -> str:
     if path.startswith("sessions/"):
         return "Sessions"
+    if path.startswith("story/"):
+        return "Story"
     if path.startswith("state/notes/"):
         return "Notes"
     if path == "state/current.yaml":

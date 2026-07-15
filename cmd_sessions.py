@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import discord
 
 from artifact_viewer import mark_artifacts_ui_unlocked, shelf_title_for_path
-from artifact_presenter import ArtifactSurface, checkpoint_open_path, reply_artifact_surface
+from artifact_presenter import (
+    ArtifactSurface,
+    checkpoint_open_path,
+    compose_artifact_preview_content,
+    reply_artifact_surface,
+)
 from helpers import clear_history, get_history, reload_history
 from mage import get_mage_name, get_pd, is_practice_channel
 from practice_io import count_items, read_safe
@@ -21,6 +27,25 @@ def _short_history_message(history: list[dict], *, action: str) -> str:
         f"Not enough conversation to {action} yet "
         f"({n}/{need} exchanges on the shared dialogue store)."
     )
+
+
+def _eddy_note_reply_parts(result) -> tuple[str | None, str | None]:
+    """(inline preview block, practice-relative note path) for the checkpoint
+    visibility surface (TURTLE_SPEC §8.4, issue 036).
+
+    Consumes ``CheckpointResult.eddy_note`` only — the reply never re-reads
+    the note file from disk. Returns (None, None) when no note was written
+    this checkpoint; preview-only (rel None) when the note path does not sit
+    under the practice root, so no dead link is offered."""
+    note = result.eddy_note
+    if note is None or not note.preview_text.strip():
+        return None, None
+    preview = compose_artifact_preview_content(note.preview_text.strip())
+    try:
+        rel = Path(note.note_path).relative_to(get_pd()).as_posix()
+    except ValueError:
+        rel = None
+    return preview, rel
 
 
 def _nothing_captured_message(history: list[dict]) -> str:
@@ -67,7 +92,11 @@ async def cmd_checkpoint(message):
 
     mark_artifacts_ui_unlocked("checkpoint")
 
+    note_preview, note_rel = _eddy_note_reply_parts(result)
+
     lines: list[str] = []
+    if note_rel:
+        lines.append(f"**Eddy note:** `{note_rel}`")
     if result.flow_writes:
         lines.append(f"**Flow:** `{result.flow_writes[0]}`")
     if result.session_note:
@@ -85,10 +114,24 @@ async def cmd_checkpoint(message):
         session_note=result.session_note,
         flow_write=result.flow_writes[0] if result.flow_writes else None,
     )
+    open_actions: list[tuple[str, str]] = []
+    if note_rel:
+        # Existing artifact open-action mechanism: renders as a link button
+        # when a viewer URL resolves (mobile path), else a !read button.
+        open_actions.append(("Open note", f"!read {note_rel}"))
+    if open_path:
+        open_actions.append(("Open", f"!read {open_path}"))
+    if note_preview:
+        template_id = "post_checkpoint_note"
+    elif open_path:
+        template_id = "post_checkpoint_open"
+    else:
+        template_id = "post_checkpoint_none"
     surface = ArtifactSurface(
-        template_id="post_checkpoint_open" if open_path else "post_checkpoint_none",
+        template_id=template_id,
         embed=embed,
-        open_actions=[("Open", f"!read {open_path}")] if open_path else [],
+        content=note_preview,
+        open_actions=open_actions,
     )
     try:
         await ack.delete()
@@ -115,6 +158,8 @@ async def cmd_release(message):
     if result.captured_anything:
         mark_artifacts_ui_unlocked("checkpoint")
 
+    note_preview, note_rel = _eddy_note_reply_parts(result)
+
     embed = discord.Embed(title="Session Released", color=0x2ECC71)
     lines: list[str] = ["Conversation history cleared."]
     if result.flow_writes:
@@ -123,6 +168,8 @@ async def cmd_release(message):
         lines.insert(0, f"**Session note:** `sessions/{result.session_note}`")
     if result.proposal:
         lines.insert(0, f"**Proposal:** `proposals/{result.proposal}`")
+    if note_rel:
+        lines.insert(0, f"**Eddy note:** `{note_rel}`")
     if not result.captured_anything:
         lines.insert(0, "No new resonance captured this release.")
     embed.description = "\n".join(lines) + f"\n\nRest well, {get_mage_name()}."
@@ -137,13 +184,24 @@ async def cmd_release(message):
             inline=False,
         )
 
-
+    open_actions: list[tuple[str, str]] = []
+    if note_rel:
+        open_actions.append(("Open note", f"!read {note_rel}"))
+    if open_path:
+        open_actions.append(("Open", f"!read {open_path}"))
+    if note_preview:
+        template_id = "post_release_note"
+    elif open_path:
+        template_id = "post_release_open"
+    else:
+        template_id = "post_release_none"
     await reply_artifact_surface(
         message,
         ArtifactSurface(
-            template_id="post_release_open" if open_path else "post_release_none",
+            template_id=template_id,
             embed=embed,
-            open_actions=[("Open", f"!read {open_path}")] if open_path else [],
+            content=note_preview,
+            open_actions=open_actions,
         ),
     )
 

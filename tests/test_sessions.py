@@ -318,6 +318,47 @@ class CheckpointConvergenceTests(_CheckpointHarness):
         self.assertIsNone(result.eddy_note)
         self.assertEqual(last_checkpoint_anchor[self.CHANNEL_ID], _fingerprints(short))
 
+    async def test_idle_checkpoint_posts_no_preview_surface(self) -> None:
+        """Issue 036 regression guard: idle checkpoints stay quiet in the
+        eddy (chronicle line only) — the preview surface belongs to the
+        deliberate act (!checkpoint / !release command replies) only.
+
+        Outcome-based (036 review F2): every payload actually sent toward
+        the channel during an idle checkpoint is captured and asserted free
+        of a ```md preview block and an Open-note affordance — not just a
+        mock-wiring check that a future direct import could bypass."""
+        with tempfile.TemporaryDirectory() as tmp:
+            writer = AsyncMock(return_value=_fake_note(tmp))
+            channel = MagicMock()
+            channel.send = AsyncMock()
+            client = MagicMock()
+            client.get_channel.return_value = channel
+            log_act = AsyncMock()
+            with self._patched(tmp, HISTORY_4), patch(
+                "story_notes.write_eddy_note", writer
+            ), patch("sessions.client", client), patch(
+                "sessions.log_activity", log_act
+            ), patch(
+                "artifact_presenter.reply_artifact_surface", new_callable=AsyncMock
+            ) as reply:
+                result = await checkpoint_session(
+                    self.CHANNEL_ID, trigger="idle", mark_paused=True
+                )
+
+            self.assertIsNotNone(result.eddy_note)
+            reply.assert_not_awaited()
+
+            payloads: list[str] = []
+            for call in channel.send.call_args_list + log_act.call_args_list:
+                payloads.extend(str(a) for a in call.args)
+                payloads.extend(str(v) for v in call.kwargs.values())
+            joined = "\n".join(payloads)
+            # The sink is wired: the quiet ops line still lands…
+            self.assertIn("Eddy note", joined)
+            # …but nothing sent carries the preview surface.
+            self.assertNotIn("```md", joined)
+            self.assertNotIn("Open note", joined)
+
     async def test_chronicle_names_eddy_note_when_day_assembly_fails(self) -> None:
         """The chronicle must never go blind on a written note: when the
         day-file assembly fails after a successful eddy note, the chronicle

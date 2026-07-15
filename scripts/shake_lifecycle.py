@@ -45,6 +45,8 @@ def check_offline() -> list[str]:
 
             sys.modules.setdefault("discord", MagicMock())
             sys.modules.setdefault("discord.ui", MagicMock())
+            sys.modules.setdefault("discord.ext", MagicMock())
+            sys.modules.setdefault("discord.ext.tasks", MagicMock())
 
     from dialogue_store import read_shared, shared_dialogue_enabled, write_shared
 
@@ -80,6 +82,62 @@ def check_offline() -> list[str]:
     except Exception as exc:
         errors.append(f"reload_history wiring: {type(exc).__name__}: {exc}")
 
+    errors.extend(_check_preview_surface_offline())
+
+    return errors
+
+
+def _check_preview_surface_offline() -> list[str]:
+    """Issue 036 / TURTLE_SPEC §8.4 checkpoint visibility: the manual
+    checkpoint reply surfaces the eddy-note preview + open action, consumed
+    from CheckpointResult.eddy_note (no re-read from disk)."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    errors: list[str] = []
+    try:
+        import cmd_sessions
+        import story_notes
+        from sessions import CheckpointResult
+
+        practice_root = "/tmp/shake-036-practice"
+        note = story_notes.EddyNoteResult(
+            note_path=Path(practice_root) / "story" / "eddies" / "2-shake-eddy.md",
+            entry_text="---\nthread: '2'\n---\n\nshake entry\n",
+            preview_text="Shake preview: the eddy held a checkpoint rehearsal.",
+        )
+        result = CheckpointResult(
+            trigger="manual", session_note="2026-07-15.md", eddy_note=note
+        )
+        message = MagicMock()
+        message.channel.id = 2
+        message.reply = AsyncMock()
+
+        async def run() -> object:
+            with patch(
+                "cmd_sessions.reload_history",
+                return_value=[{"role": "user", "content": "a"}] * 4,
+            ), patch(
+                "sessions.checkpoint_session",
+                new_callable=AsyncMock,
+                return_value=result,
+            ), patch("cmd_sessions.mark_artifacts_ui_unlocked"), patch(
+                "cmd_sessions.get_pd", return_value=practice_root
+            ), patch(
+                "cmd_sessions.reply_artifact_surface", new_callable=AsyncMock
+            ) as reply:
+                await cmd_sessions.cmd_checkpoint(message)
+            return reply.await_args.args[1]
+
+        surface = asyncio.run(run())
+        if not surface.content or note.preview_text not in surface.content:
+            errors.append("036 fail: manual checkpoint reply missing eddy-note preview")
+        if "```md" not in (surface.content or ""):
+            errors.append("036 fail: preview not rendered as expandable code block")
+        if ("Open note", "!read story/eddies/2-shake-eddy.md") not in surface.open_actions:
+            errors.append("036 fail: manual checkpoint reply missing note open action")
+    except Exception as exc:
+        errors.append(f"preview surface offline check: {type(exc).__name__}: {exc}")
     return errors
 
 

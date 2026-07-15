@@ -9,6 +9,8 @@ Three operations — do not conflate them:
 
 Idle marks the session **paused** (`active_sessions.closed`) so the monitor does not re-fire; the next message reopens it. Manual `!checkpoint` does **not** pause — practitioner continues.
 
+**Checkpoint visibility (§8.4, issue 036):** manual `!checkpoint` and `!release` replies surface the eddy note — inline preview (expandable ` ```md ` block from `preview_text`) + **Open note** button (browser link when the viewer URL resolves, `!read` fallback otherwise; `story/eddies/` is Tier-1 readable). Idle checkpoints stay quiet in the eddy (chronicle line only). No note written → no preview block; the honest no-capture copy stands.
+
 River records successful checkpoints in **chronicle** (`💾 checkpoint (idle|manual|release): …`) — structural memory, not eddy dialogue.
 
 Regular eddies: eddy notes today (a manual `!checkpoint` weights the note toward exchanges since the last checkpoint); **sediment** (cross-eddy resonance) deferred. Flow eddies: mechanical writes to flow `writes` paths.
