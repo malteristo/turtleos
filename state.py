@@ -130,9 +130,15 @@ EDDY_DEFAULT = "standard"
 threads_flagged_for_release: dict[int, dict] = {}
 pending_ignore_confirm: dict[tuple[int, int], bool] = {}
 
-# Session reflection cooldown
+# Session reflection cooldown (idle triggers only — TURTLE_SPEC §8.4)
 SESSION_REFLECTION_COOLDOWN = 2 * 3600
 last_reflection_time: dict[int, float] = {}
+# (role, content) fingerprints of the transcript at each channel's previous
+# checkpoint. A raw list index cannot survive the MAX_DIALOGUE_HISTORY
+# sliding window (pops past 20), so the since-checkpoint boundary for manual
+# eddy-note weighting is recovered by suffix/prefix alignment against this
+# anchor (sessions._since_index_for).
+last_checkpoint_anchor: dict[int, list[tuple[str, str]]] = {}
 
 # Super-ego reflection loop (think-aloud during conversation)
 REFLECTION_LOOP_INTERVAL = int(os.environ.get('REFLECTION_LOOP_INTERVAL', '8'))

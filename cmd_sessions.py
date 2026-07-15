@@ -30,9 +30,11 @@ def _nothing_captured_message(history: list[dict]) -> str:
             f"Checkpoint ran — {n} exchange(s) saved; session notes need at least "
             f"{MIN_EXCHANGES_FOR_REFLECTION}. Keep talking, then checkpoint again."
         )
+    # A deliberate !checkpoint bypasses the reflection cooldown (TURTLE_SPEC
+    # §8.4) — when nothing landed, the note simply didn't come out usable.
     return (
         "Checkpoint ran — nothing new met the save threshold "
-        "(reflection cooldown or model produced no note)."
+        "(the reflection didn't produce a usable note this time; try again)."
     )
 
 
@@ -49,7 +51,7 @@ async def cmd_checkpoint(message):
     ack = await message.reply(
         embed=discord.Embed(
             title="Checkpointing…",
-            description="Saving flow state and writing your session note — usually 1–2 minutes.",
+            description="Saving flow state and writing your note — usually 1–2 minutes.",
             color=0x5865F2,
         ),
         mention_author=False,

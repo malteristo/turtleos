@@ -93,9 +93,9 @@ Discord message
     │
     ├─ session_monitor (sessions.py)            ← @tasks.loop(60s)
     │   └─ close_session after 15min silence
-    │       ├─ session reflection via REFLECTION_MODEL
-    │       │   ├─ write sessions/*.md (session note)
-    │       │   └─ write proposals/*.md (if proposal emerged)
+    │       ├─ eddy note via story_notes.write_eddy_note (REFLECTION_MODEL)
+    │       │   ├─ write story/eddies/<thread-id>-<slug>.md (dated entry)
+    │       │   └─ assemble sessions/YYYY-MM-DD.md mechanically (no LLM)
     │       ├─ _extract_practice_state           ← practitioners only
     │       │   └─ append state/notes/ + practitioner-profile
     │       └─ assess_readiness (readiness.py)
@@ -166,7 +166,7 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 |--------|---------------|---------|
 | `discord_bot.py` | 937 | Main entry point and event handlers; message dispatch; dialogue path; thread updates; startup orchestration; singleton guard. |
 | `commands.py` | 2556 | Direct command dispatcher plus Discord views/modals. Current largest gravity well. |
-| `sessions.py` | 378 | Session monitor, reflection, session notes, proposals, practice-state extraction, manual-release dissolution. |
+| `sessions.py` | 378 | Session monitor, checkpoint orchestration (eddy note via `story_notes`, day-file assembly), practice-state extraction, manual-release dissolution. |
 | `background.py` | 466 | Scheduled loops: practice health, interoception, invitations, signal drip, health canary loop. |
 | `boom_thread.py` | 437 | Standing boom thread intake, distillation, and follow-up interactions. |
 | `eddy_spawn.py` | 720 | Thread/eddy creation, intake-thread launcher, vortex/prism routing, resonance detection. |
@@ -409,12 +409,12 @@ Message received → active_sessions[channel_id] updated
     │
     ├─ 15 minutes of silence
     │   └─ session_monitor fires close_session()
-    │       ├─ Skip if < MIN_EXCHANGES_FOR_REFLECTION
-    │       ├─ Skip if cooldown not elapsed
-    │       ├─ Build conversation transcript
-    │       ├─ Reflect via REFLECTION_MODEL
-    │       │   ├─ ---SESSION_NOTE--- → sessions/*.md
-    │       │   └─ ---PROPOSAL--- → proposals/*.md (optional)
+    │       ├─ Skip reflection if < MIN_EXCHANGES_FOR_REFLECTION
+    │       ├─ Skip reflection if idle cooldown not elapsed
+    │       │   (manual !checkpoint / release always reflect — §8.4)
+    │       ├─ story_notes.write_eddy_note via REFLECTION_MODEL
+    │       │   ├─ dated entry → story/eddies/<thread-id>-<slug>.md
+    │       │   └─ entry appended mechanically → sessions/YYYY-MM-DD.md
     │       ├─ If practitioner: _extract_practice_state()
     │       │   ├─ ---NOTE_ITEMS--- → append state/notes/
     │       │   └─ ---PROFILE_UPDATE--- → state/notes/practitioner-profile.md

@@ -12,26 +12,21 @@ from discord.ext import tasks
 
 import re
 
+import story_notes
+from atomic_io import atomic_write_text, file_lock
 from state import (
     active_sessions, SESSION_TIMEOUT_SECONDS, MIN_EXCHANGES_FOR_REFLECTION,
     MIN_EXCHANGES_FOR_CHECKPOINT, SESSION_REFLECTION_COOLDOWN, last_reflection_time,
+    last_checkpoint_anchor,
     REFLECTION_MODEL,
     thread_configs,
 )
 from mage import get_pd, get_mage_name, get_mage_type, set_practice_context_for_channel
 from practice_io import read_safe
 from llm import chat_ollama
-from prompts import get_system_prompt
 from readiness import assess_readiness, save_readiness_trail
-from helpers import get_history, log_activity, local_now, reload_history
+from helpers import log_activity, local_now, reload_history
 from state import client
-
-
-_TRIGGER_COPY = {
-    "idle": "just ended (15 minutes of silence)",
-    "manual": "the practitioner ran a manual checkpoint — capture resonance; the session continues",
-    "release": "the practitioner is explicitly releasing the session",
-}
 
 
 @dataclass
@@ -41,10 +36,14 @@ class CheckpointResult:
     session_note: str | None = None
     proposal: str | None = None
     paused: bool = False
+    # The eddy note written this checkpoint (TURTLE_SPEC §8.4) — None when
+    # the reflection was skipped (cooldown/threshold) or degraded on error.
+    # Command surfaces (issue 036) read .preview_text/.note_path from here.
+    eddy_note: story_notes.EddyNoteResult | None = None
 
     @property
     def captured_anything(self) -> bool:
-        return bool(self.flow_writes or self.session_note or self.proposal)
+        return bool(self.flow_writes or self.session_note or self.proposal or self.eddy_note)
 
 
 @dataclass
@@ -58,8 +57,66 @@ class DissolveResult:
     retain_memory: bool = False
 
 
-def _trigger_phrase(trigger: str) -> str:
-    return _TRIGGER_COPY.get(trigger, _TRIGGER_COPY["idle"])
+def _history_fingerprints(history: list[dict]) -> list[tuple[str, str]]:
+    return [(m.get("role"), m.get("content")) for m in history]
+
+
+def _since_index_for(channel_id: int, history: list[dict]) -> int | None:
+    """Boundary of exchanges since the previous checkpoint, robust against
+    the MAX_DIALOGUE_HISTORY sliding window.
+
+    The anchor holds fingerprints of the transcript at the last checkpoint.
+    Because the window only appends at the tail and pops at the head, the
+    current transcript is (some suffix of the anchor) + (new messages) — so
+    the boundary is the length of the longest anchor suffix that prefixes
+    the current transcript. Saturated window: anchor[len:] survivors align,
+    new tail lands past the boundary. Fully rotated window: no alignment,
+    boundary 0 — everything is new, which the writer treats as unweighted.
+
+    Known limits: message edits rebind history slots in place, breaking the
+    append/pop invariant — alignment then fails and we degrade to 0
+    (unweighted). Byte-identical repeated messages (e.g. the "." protocol)
+    can over-claim the boundary; the error is one-sided, demoting only
+    duplicate content to background emphasis.
+    """
+    anchor = last_checkpoint_anchor.get(channel_id)
+    if anchor is None:
+        return None
+    current = _history_fingerprints(history)
+    for start in range(len(anchor)):
+        suffix = anchor[start:]
+        if current[: len(suffix)] == suffix:
+            return len(suffix)
+    return 0
+
+
+def _practice_relative(path: Path) -> str:
+    try:
+        return str(Path(path).relative_to(get_pd()))
+    except ValueError:
+        return str(path)
+
+
+def _append_session_day_entry(entry_text: str) -> str:
+    """Mechanically assemble ``sessions/YYYY-MM-DD.md`` from the day's
+    eddy-note entries — no LLM call (TURTLE_SPEC §8.4, transitional genre).
+
+    Markdown with the session-day heading so the magic-side arrival reader
+    keeps working until the daily note (slice 2) retires the genre.
+    Multi-writer file (River + Turtle) — locked read-append-atomic-write.
+    """
+    today = local_now().strftime("%Y-%m-%d")
+    session_path = Path(get_pd()) / "sessions" / f"{today}.md"
+    with file_lock(session_path):
+        if session_path.exists():
+            existing = session_path.read_text(encoding="utf-8")
+            if not existing.endswith("\n"):
+                existing += "\n"
+            content = f"{existing}\n{entry_text}"
+        else:
+            content = f"# Session — {today}\n\n{entry_text}"
+        atomic_write_text(session_path, content)
+    return session_path.name
 
 
 def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> None:
@@ -69,12 +126,19 @@ def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> No
     try:
         from river_handler import _append_chronicle
 
+        eddy_note_rel = (
+            _practice_relative(result.eddy_note.note_path) if result.eddy_note else None
+        )
         parts: list[str] = []
         if result.flow_writes:
             parts.append(result.flow_writes[0])
+        if eddy_note_rel:
+            # Always name the note when one was written — even if the
+            # sessions/ day-file assembly failed afterwards.
+            parts.append(eddy_note_rel)
         if result.session_note:
             parts.append(f"sessions/{result.session_note}")
-        label = ", ".join(parts)
+        label = ", ".join(parts) or "resonance captured"
         _append_chronicle(
             get_pd(),
             f"💾 checkpoint ({result.trigger}): {label}",
@@ -82,6 +146,7 @@ def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> No
                 "channel_id": str(channel_id),
                 "trigger": result.trigger,
                 "flow_writes": result.flow_writes,
+                "eddy_note": eddy_note_rel,
                 "session_note": result.session_note,
             },
         )
@@ -174,12 +239,16 @@ async def checkpoint_session(
         active_sessions[channel_id]["closed"] = True
 
     set_practice_context_for_channel(channel_id)
-    history = reload_history(channel_id)
+    # Snapshot the live history list: exchanges arriving during the long
+    # reflection await must neither shift the transcript the note sees nor
+    # be claimed as covered by this checkpoint's anchor.
+    history = list(reload_history(channel_id))
     mage_name = get_mage_name()
 
     result.flow_writes = await _write_flow_checkpoint_if_needed(channel_id, history, mage_name)
 
     if len(history) < MIN_EXCHANGES_FOR_REFLECTION:
+        last_checkpoint_anchor[channel_id] = _history_fingerprints(history)
         _append_resonance_chronicle(channel_id, result)
         return result
 
@@ -187,100 +256,45 @@ async def checkpoint_session(
         f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content']}" for m in history
     )
 
+    # The eddy note is THE reflection artifact at checkpoint (§8.4, 2026-07-14b).
+    # Cooldown gates idle triggers only — a deliberate !checkpoint (or release)
+    # is never silently declined.
     now_ts = datetime.now(timezone.utc).timestamp()
     last_ref = last_reflection_time.get(channel_id, 0)
-    reflection = None
-    on_cooldown = now_ts - last_ref < SESSION_REFLECTION_COOLDOWN
+    on_cooldown = trigger == "idle" and now_ts - last_ref < SESSION_REFLECTION_COOLDOWN
     if on_cooldown:
         print(
-            f"Session reflection skipped for {channel_id} — cooldown "
+            f"Eddy note skipped for {channel_id} — idle cooldown "
             f"({int((now_ts - last_ref) / 60)}m since last)"
         )
     else:
+        # Cooldown starts at the attempt (legacy semantics), so a failing
+        # model does not re-fire on every idle scan.
         last_reflection_time[channel_id] = now_ts
-        cross_channel_context = ""
-        ch = client.get_channel(channel_id)
-        if ch and hasattr(ch, "parent_id") and ch.parent_id:
-            parent_history = get_history(ch.parent_id)
-            if parent_history:
-                recent_parent = parent_history[-10:]
-                cross_channel_context = "\n".join(
-                    f"{mage_name if m['role'] == 'user' else 'Spirit/Turtle'}: {m['content'][:200]}"
-                    for m in recent_parent
-                )
-                cross_channel_context = (
-                    "\n\nRECENT MAIN CHANNEL CONTEXT (for awareness — do NOT repeat or re-propose "
-                    "what was already addressed here):\n"
-                    f"{cross_channel_context}\n"
-                )
-
-        reflection_prompt = (
-            f"The following conversation with {mage_name} {_trigger_phrase(trigger)}. "
-            "Reflect autonomously.\n\n"
-            "Write a SESSION NOTE:\n---SESSION_NOTE---\n"
-            "What was discussed: (2-3 lines)\nWhat emerged: (insights, decisions)\n"
-            "Thread for next time: (if any)\n---END_SESSION_NOTE---\n\n"
-            "If you noticed something about the practice system that could be improved, write:\n"
-            "---PROPOSAL---\nTitle:\nProblem:\nProposed change:\nExpected benefit:\n---END_PROPOSAL---\n\n"
-            "Skip PROPOSAL if nothing stood out. Especially skip if the improvement was already addressed "
-            "in recent main channel messages.\n\n"
-            f"THE CONVERSATION:\n{conversation}"
-            f"{cross_channel_context}"
-        )
-
         try:
-            reflection = await chat_ollama(
-                get_system_prompt(),
-                [{"role": "user", "content": reflection_prompt}],
-                model=REFLECTION_MODEL,
+            result.eddy_note = await story_notes.write_eddy_note(
+                channel_id,
+                history,
+                trigger=trigger,
+                since_index=_since_index_for(channel_id, history),
             )
-            if reflection:
-                today = local_now().strftime("%Y-%m-%d")
-
-                if "---SESSION_NOTE---" in reflection and "---END_SESSION_NOTE---" in reflection:
-                    note = reflection.split("---SESSION_NOTE---")[1].split("---END_SESSION_NOTE---")[0].strip()
-                    session_dir = Path(get_pd()) / "sessions"
-                    session_dir.mkdir(parents=True, exist_ok=True)
-                    session_path = session_dir / f"{today}.md"
-                    suffix = 1
-                    while session_path.exists():
-                        suffix += 1
-                        session_path = session_dir / f"{today}-{suffix}.md"
-                    session_path.write_text(f"# Session — {today}\n\n{note}\n")
-                    result.session_note = session_path.name
-                    print(f"Session note: {session_path}")
-
-                    session_channel = client.get_channel(channel_id)
-                    await log_activity(
-                        f"Session note: `sessions/{session_path.name}`",
-                        "\U0001f4dd",
-                        channel=session_channel,
-                    )
-
-                if "---PROPOSAL---" in reflection and "---END_PROPOSAL---" in reflection:
-                    proposal = reflection.split("---PROPOSAL---")[1].split("---END_PROPOSAL---")[0].strip()
-                    proposal_dir = Path(get_pd()) / "proposals"
-                    proposal_dir.mkdir(parents=True, exist_ok=True)
-                    proposal_path = proposal_dir / f"{today}-reflection.md"
-                    suffix = 1
-                    while proposal_path.exists():
-                        suffix += 1
-                        proposal_path = proposal_dir / f"{today}-reflection-{suffix}.md"
-                    proposal_path.write_text(f"# Proposal — {today}\n\n{proposal}\n")
-                    result.proposal = proposal_path.name
-                    print(f"Proposal: {proposal_path}")
-
-                    title_line = ""
-                    for line in proposal.split("\n"):
-                        if line.strip().startswith("Title:"):
-                            title_line = line.strip().replace("Title:", "").strip()
-                            break
-                    session_channel = client.get_channel(channel_id)
-                    label = f"**{title_line}**" if title_line else f"`proposals/{proposal_path.name}`"
-                    await log_activity(f"Proposal captured: {label}", "💡", channel=session_channel)
-
+        except story_notes.EddyNoteError as e:
+            # Degenerate reflection — nothing was written; checkpoint continues.
+            print(f"Eddy note declined for {channel_id}: {e}")
         except Exception as e:
-            print(f"Session reflection failed for {channel_id}: {type(e).__name__}: {e}")
+            print(f"Eddy note failed for {channel_id}: {type(e).__name__}: {e}")
+
+        if result.eddy_note:
+            try:
+                result.session_note = _append_session_day_entry(result.eddy_note.entry_text)
+                print(f"Eddy note: {result.eddy_note.note_path} → sessions/{result.session_note}")
+                await log_activity(
+                    f"Eddy note: `sessions/{result.session_note}`",
+                    "\U0001f4dd",
+                    channel=client.get_channel(channel_id),
+                )
+            except Exception as e:
+                print(f"Session day assembly failed for {channel_id}: {type(e).__name__}: {e}")
 
     if get_mage_type() == "practitioner" and len(history) >= 4:
         await _extract_practice_state(conversation, mage_name)
@@ -300,6 +314,15 @@ async def checkpoint_session(
     cfg = thread_configs.get(channel_id)
     if trigger == "release" and cfg and cfg.get("eddy_type") == "manual":
         await _manual_release_dissolve(channel_id, history)
+
+    if trigger == "release":
+        # History clears after release — a stale anchor must not mis-weight
+        # the next manual checkpoint on this channel.
+        last_checkpoint_anchor.pop(channel_id, None)
+    else:
+        # Anchor from the pre-await snapshot: mid-reflection appends stay
+        # uncovered and get weighted as new at the next manual checkpoint.
+        last_checkpoint_anchor[channel_id] = _history_fingerprints(history)
 
     _append_resonance_chronicle(channel_id, result)
     return result
