@@ -11,11 +11,13 @@ Append to this file after each research cycle — it persists across sessions.
 
 ### 2026-07-16 — Fresh Eyes flow (Ch 3)
 
-**Shipped (unit-green, pending live smoke):** `template/flows/fresh_eyes.md` + `fresh_eyes.py` materializes `state/notes/fresh-eyes-surface.md` from alive threads, last-checkpoint one-liner, recent eddy notes, recent daily notes. Wired via `prepare_flow_reads` / bootstrap. Quest deferred. Tone law: illumination, not urgency; vocabulary firewall.
+**Shipped + live-smoked (`82fb5f7` + `e1e3aa5`):** `template/flows/fresh_eyes.md` + `fresh_eyes.py` → `state/notes/fresh-eyes-surface.md`. Quest deferred.
 
-**Anti-pattern avoided:** Declaring `reads: [story/eddies/*]` — flow runner only loads exact files. Surface assembly is the adapter.
+**Smoke (nesrine):** `Loaded Fresh Eyes`; surface under `nesrine/state/notes/`; bootstrap delivered `practitioner=Nesrine`; DE reply, no-pressure tone.
 
-**Smoke:** `!flow fresh_eyes` on `#nesrine-dialogue` eddy with alive themes from Ch 2; expect calm read naming what's in motion; surface file under `nesrine/state/notes/`.
+**Bug found in smoke:** `!flow` was silently dropped for `mage_type=practitioner` — allowlist had `flows` but not the `flow` alias. Fixed in `e1e3aa5`. Hosted rivers need both.
+
+**Anti-pattern avoided:** `reads: [story/eddies/*]` — runner only loads exact files; surface assembly is the adapter.
 
 ### 2026-07-16 — CE Slice 2 MVP (theme propose + confirm)
 
