@@ -20,6 +20,7 @@ COMMAND_ACT_FALLBACK = {
     "focus": "Focus updated — this eddy narrowed (or widened) to one thing.",
     "dissolve": "Eddy dissolved — thread archived, chronicle updated.",
     "flows": "Flow menu opened.",
+    "flow": "Flow loaded or flow menu opened.",
     "pin": "Message pinned in river channel.",
     "readiness": "Practice-readiness act posted.",
     "artifacts": "Practice artifact shelves displayed.",
@@ -36,6 +37,7 @@ _PRACTITIONER_COMMANDS = {
     "release",
     "dissolve",
     "flows",
+    "flow",  # alias of !flows — required for !flow <id> on hosted rivers
     "pin",
     "focus",
     "readiness",

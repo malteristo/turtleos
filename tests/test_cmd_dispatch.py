@@ -39,6 +39,11 @@ class TestSeneschalRegistries(unittest.TestCase):
         overlap = dispatch.LIFECYCLE_BAR_COMMANDS & dispatch.SENESCHAL_ACTION_COMMANDS
         self.assertEqual(overlap, set())
 
+    def test_flow_alias_allowed_for_practitioners(self) -> None:
+        """Hosted rivers use mage_type=practitioner — !flow must not be silent-dropped."""
+        self.assertIn("flows", dispatch._PRACTITIONER_COMMANDS)
+        self.assertIn("flow", dispatch._PRACTITIONER_COMMANDS)
+
 
 class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
     async def test_dispatch_calls_try_and_ensure(self) -> None:
