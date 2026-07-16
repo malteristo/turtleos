@@ -1,7 +1,7 @@
 # Design Chapter: Nesrine-Ready
 
 **Opened:** 2026-07-16  
-**Status:** Ch 1 green · Ch 2 CE Slice 2 implemented (unit-green; live deploy + her-river smoke open)  
+**Status:** Ch 1 green · Ch 2 CE Slice 2 live-smoked green on her river (2026-07-16)  
 **Spec trace:** TURTLE_SPEC §3.1, §6.5, §8.4, §10.2 (Fresh Eyes), §15; CE design v4 Slice 2  
 **Sources:** July 2026 user research (`magic/floor/research/turtleos_user_research_nesrine_2026-07.md`); Story Layer vision; Forge arrival 2026-07-16  
 **Grill:** Forge craft session 2026-07-16 (MVP cut · ChatGPT import post-MVP · Fresh Eyes over weekly)
@@ -103,8 +103,8 @@ Thinking-substrate for the ask, not a script:
 - [x] **Operator smoke on her channel** — re-smoke 2026-07-16 11:56: `malte-returns-to-new-eddy-chat.md` under `nesrine/story/eddies/`; nothing new under `kermit/` (fix `23caf5f` live)
 
 ### Ch 2–4
-- [x] Checkpoint proposes ≥1 theme in plain language; Keep these / Not now updates alive layer *(code + unit; live smoke open)*
-- [ ] New eddy after confirm shows continuity without re-explaining the theme *(needs live smoke)*
+- [x] Checkpoint proposes ≥1 theme in plain language; Keep these / Not now updates alive layer — live 2026-07-16: confirm UI in `#earlier walks for better sleep`; Keep via `apply_keep_themes` (same path as button) → `nesrine/state/alive.yaml`
+- [x] New eddy after confirm shows continuity without re-explaining the theme — Turtle named walking schedule / pre-trip sleep / calmer wind-down unprompted (`ce-slice2-continuity-*`)
 - [ ] Fresh Eyes available in flow library; produces illumination, not urgency
 - [ ] Operator smoke complete (includes Ch 2–3 beats)
 - [ ] Invite anchors prepared; ChatGPT import explicitly *later*
@@ -140,4 +140,4 @@ Run on `#nesrine-dialogue` (`1484973995823599757`) as operator standing in for h
 
 ---
 
-*Ch 1 green. Ch 2 Slice 2 code landed — deploy both bots, smoke Keep→continuity on her river, then Ch 3 Fresh Eyes.*
+*Ch 1–2 green on her river. Next: Ch 3 Fresh Eyes → Ch 4 invite. Residual: eddy-note reflection sometimes leaks model reasoning into the preview (not Slice 2 blocking).*

@@ -11,11 +11,13 @@ Append to this file after each research cycle — it persists across sessions.
 
 ### 2026-07-16 — CE Slice 2 MVP (theme propose + confirm)
 
-**Shipped (unit-green, pending live deploy):** Eddy-note reflection gains `---PROPOSED-THEMES---` (new themes allowed when alive is empty — related-topics honesty gate alone would block first-use). Manual checkpoint/release posts plain-language **Keep these** / **Not now** (`continuity_confirm.py`); Keep → `add_active_thread`. `set_last_checkpoint` wired from eddy-note preview. Stale demotion and per-theme edit deferred.
+**Shipped + live-smoked (`7207a43`):** Eddy-note `---PROPOSED-THEMES---` (works when alive empty). Manual checkpoint posts **Keep these** / **Not now**; Keep → `add_active_thread`. `set_last_checkpoint` from eddy-note preview.
 
-**Anti-pattern caught in design:** Reusing `related-topics` for Slice 2 proposals — `_validate_relation` strips all topics when alive is empty, so the confirm UI would never appear for Nesrine's first themes.
+**Her-river smoke (2026-07-16 ~12:15):** Eddy `1527256399741063238` → note under `nesrine/story/eddies/`; confirm UI listed three themes; Keep applied → `nesrine/state/alive.yaml`; second eddy Turtle named all three without re-explain. Stale demotion deferred.
 
-**Deploy:** restart both bots; smoke on `#nesrine-dialogue` — checkpoint → Keep → new eddy feels theme without re-explain.
+**Anti-pattern caught in design:** Reusing `related-topics` for Slice 2 — honesty gate strips topics when alive empty → confirm UI would never appear first-use.
+
+**Residual:** Reflection model sometimes dumps chain-of-thought into held/preview (and can break YAML front-matter parse). Proposed-themes + confirm still landed. Hosted root still has leftover `intentions/trainingsplan.md` (Mar) that the relation prompt tried to force — worth pruning or ignoring for her river.
 
 ### 2026-07-16 — Hosted eddy notes wrote to operator root
 
