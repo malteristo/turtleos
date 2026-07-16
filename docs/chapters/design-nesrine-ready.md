@@ -1,7 +1,7 @@
 # Design Chapter: Nesrine-Ready
 
 **Opened:** 2026-07-16  
-**Status:** Ch 1–3 green on her river (2026-07-16) — Ch 4 smoke + invite next  
+**Status:** **Ready** — Ch 0–4 closed 2026-07-16; research-true invite earned  
 **Spec trace:** TURTLE_SPEC §3.1, §6.5, §8.4, §10.2 (Fresh Eyes), §15; CE design v4 Slice 2  
 **Sources:** July 2026 user research (`magic/floor/research/turtleos_user_research_nesrine_2026-07.md`); Story Layer vision; Forge arrival 2026-07-16  
 **Grill:** Forge craft session 2026-07-16 (MVP cut · ChatGPT import post-MVP · Fresh Eyes over weekly)
@@ -126,8 +126,8 @@ Hold the scope line (what’s not yet) in the same breath so the invite stays re
 - [x] Checkpoint proposes ≥1 theme in plain language; Keep these / Not now updates alive layer — live 2026-07-16: confirm UI in `#earlier walks for better sleep`; Keep via `apply_keep_themes` (same path as button) → `nesrine/state/alive.yaml`
 - [x] New eddy after confirm shows continuity without re-explaining the theme — Turtle named walking schedule / pre-trip sleep / calmer wind-down unprompted (`ce-slice2-continuity-*`)
 - [x] Fresh Eyes available in flow library; produces illumination, not urgency — live 2026-07-16: `!flow fresh_eyes` → surface under `nesrine/state/notes/`; bootstrap DE, no-pressure tone (`e1e3aa5`)
-- [ ] Operator smoke complete (includes Ch 2–3 beats) *(Ch 1–3 beats green; full walkthrough + invite = Ch 4)*
-- [ ] Invite anchors prepared; ChatGPT import explicitly *later*
+- [x] Operator smoke complete (Ch 1–4 beats on her river) — eddy notes, alive themes, Fresh Eyes, daily `2026-07-16.md`, return-visit refreshed
+- [x] Invite anchors prepared; ChatGPT import explicitly *later*
 
 ---
 
@@ -142,9 +142,10 @@ Run on `#nesrine-dialogue` (`1484973995823599757`) as operator standing in for h
 | 3 | Checkpoint → eddy note on her root | ✓ (multiple; routing fix `23caf5f`) |
 | 4 | Theme propose → Keep → next eddy continuity | ✓ (Ch 2) |
 | 5 | `!flow fresh_eyes` → surface + no-pressure read | ✓ (Ch 3; `!flow` allowlist fix `e1e3aa5`) |
-| 6 | Daily note on her root (`!day`) | open in Ch 4 (`!day` allowlist + run) |
+| 6 | Daily note on her root (`!day`) | ✓ `story/daily/2026-07-16.md` (`!day` allowlist `c069cae`) |
 | 7 | Feedback path (flow → note on her root) | path documented; optional live |
-| 8 | Invite anchors ready | see § Invite framing above |
+| 8 | Invite anchors ready | ✓ § Invite framing |
+| 9 | DE return-visit mentions story / Fresh Eyes | ✓ re-posted 2026-07-16 (`1527263163668762676`) |
 
 SSH check:
 ```bash
@@ -164,4 +165,4 @@ ssh turtle@100.110.46.104 'ls -lt ~/workshops/nesrine/story/eddies/ ~/workshops/
 
 ---
 
-*Ch 1–3 green on her river. Next: Ch 4 — full operator walkthrough + invite anchors.*
+*Destination closed. The invite is research-true. ChatGPT import and period notes wait for a second visit after she accepts the room.*

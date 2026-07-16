@@ -9,6 +9,14 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — Nesrine-ready Ch 4 closed (invite earned)
+
+**Ready:** Full walkthrough green on `#nesrine-dialogue` — eddy notes, CE Slice 2 alive themes, Fresh Eyes, daily note `nesrine/story/daily/2026-07-16.md`, DE return-visit refreshed with story/Fresh Eyes beats. Invite anchors in `design-nesrine-ready.md` (thinking-substrate, not script).
+
+**Also fixed:** `!day` was missing from practitioner allowlist (same class as `!flow`). Hosted rivers need explicit aliases for every turtle-talk command practitioners use.
+
+**Post-MVP:** ChatGPT→CE import; period notes; Quest; Feedback intake auto-write.
+
 ### 2026-07-16 — Fresh Eyes flow (Ch 3)
 
 **Shipped + live-smoked (`82fb5f7` + `e1e3aa5`):** `template/flows/fresh_eyes.md` + `fresh_eyes.py` → `state/notes/fresh-eyes-surface.md`. Quest deferred.
