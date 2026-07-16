@@ -9,6 +9,14 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — Update announcements (return-visit generalized)
+
+**Shipped:** Versioned River announcements — `announcements.py` + `scripts/post_announcement.py` + `template/announcements/`. Audience is registry `river` + `hosted-river` (not practitioner-type gate — that excluded the operator river). Locale from `_practitioner_locale`; state per channel at `thread-state/river/announcements.json`. First id `2026-07-16-nesrine-ready` migrated from return-visit copy; `post_return_visit.py` is a thin forwarder.
+
+**Runbook:** After ship, fanout with `--id`; `--dry-run` / `--list` / `--force` / `--channel` supported. No pin (onboarding stays the pin). Design: `docs/chapters/design-update-announcements.md`.
+
+**Anti-pattern avoided:** Gating fanout on `get_mage_type() == "practitioner"` — operator `river` channels would never get the card.
+
 ### 2026-07-16 — Nesrine-ready Ch 4 closed (invite earned)
 
 **Ready:** Full walkthrough green on `#nesrine-dialogue` — eddy notes, CE Slice 2 alive themes, Fresh Eyes, daily note `nesrine/story/daily/2026-07-16.md`, DE return-visit refreshed with story/Fresh Eyes beats. Invite anchors in `design-nesrine-ready.md` (thinking-substrate, not script).

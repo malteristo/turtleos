@@ -160,6 +160,7 @@ ssh turtle@100.110.46.104 'ls -lt ~/workshops/nesrine/story/eddies/ ~/workshops/
 - Vision: [story-layer-vision.md](../design/story-layer-vision.md)
 - CE: [continuity-engine-and-substrate.md](../design/continuity-engine-and-substrate.md) §Slice 2
 - Hosted: [design-hosted-river.md](design-hosted-river.md), [hosted-tester-program.md](../ux/hosted-tester-program.md)
+- Updates: [design-update-announcements.md](design-update-announcements.md) — return-visit → announcement id `2026-07-16-nesrine-ready`
 - Intentions: `nesrine_practice`, `practice_accessibility`, `turtle`
 - Registry restore note: Mini `mage_registry.yaml` was absent 2026-07-16 (gitignored; no backup found). Reconstructed from eddy bars + Discord history; keep a Mini-local backup after smoke.
 
