@@ -105,6 +105,7 @@ async def on_ready():
                 print(f"River startup setup failed: {exc}")
 
         asyncio.create_task(_setup_native_river())
+        asyncio.create_task(_river_bar_safety_sweep_loop())
         try:
             from mage import sync_shared_river_channel_access
 
@@ -117,6 +118,20 @@ async def on_ready():
             await _rejoin_practice_threads(river_client)
         except Exception as exc:
             print(f"River thread rejoin failed: {exc}")
+
+
+async def _river_bar_safety_sweep_loop() -> None:
+    """Periodic floor reconcile — orphan killer when event-driven debounce misses."""
+    from river_handler import sweep_river_bar_floors
+
+    while True:
+        await asyncio.sleep(180)
+        if get_attunement_profile() != "native":
+            continue
+        try:
+            await sweep_river_bar_floors(river_client)
+        except Exception as exc:
+            print(f"River bar safety sweep failed: {exc}")
 
 
 async def _rejoin_practice_threads(client) -> None:

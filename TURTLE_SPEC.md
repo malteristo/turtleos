@@ -141,13 +141,13 @@ Metaphor: the sea in *Moana*, the casita in *Encanto* — intelligence expressed
 
 ### 5.3. Intake Logic (Vanilla v1)
 
-**Standing eddy bar:** The river channel maintains a **persistent bottom affordance** — always the last message in the timeline:
+**Standing eddy bar (launch pad):** The river channel maintains a **persistent bottom affordance** — a reconciled floor fixture, always the last message in the timeline:
 
 ```text
-[ 🌀 new eddy ]
+[ 🌀 new eddy ]  [ more ▾ ]
 ```
 
-This satisfies **always offer eddy** globally (§17). Practitioners materialize blank eddies by click — not from river prose. **Flow choice is in-eddy** (§5.6), not on the standing bar.
+**more** exposes secondary acts (`artifacts`, `help`) without competing with materialize. Help from **more** is ephemeral. This satisfies **always offer eddy** globally (§17). Practitioners materialize blank eddies by click — not from river prose. **Flow choice is in-eddy** (§5.6), not on the standing bar.
 
 **Per-message act bundle** (parent channel only — not inside eddies):
 
@@ -162,7 +162,7 @@ not emitted in parent channel:
   revise_offer                # bar path uses generic open + rename in eddy
 ```
 
-After each practitioner river message, the harness MUST ensure the eddy bar remains the **last message** in the channel.
+After river timeline activity, the harness MUST **reconcile** the floor: debounce quiet bursts, sweep orphan bar messages, and leave exactly one standing bar last — unless a multi-step act holds reconcile until the sequence ends.
 
 **v1 routing policy:** No semantic routing to existing eddies. Each materialize is a **new thread**. Semantic merge is deferred (§16).
 
@@ -1231,6 +1231,7 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 | 2026-06-20 | §5.8 — River bot owns all turtle-talk `!` execution (split-bot); Turtle reads `[Act: !cmd]` digests; bar posts use River client identity |
 | 2026-06-20 | §5.8 / §9.5 — harness split: Turtle silent link-read vs River post-Turtle Save to library (`!fetch`); distinct skip logging |
 | 2026-06-23 | In-eddy flow library — bar = `new eddy` only; Turtle bootstrap intake; Shelter archived; user-facing **flows** / **flow library** |
+| 2026-07-16 | River bar reconciled floor — launch pad (`new eddy` + more); debounce + orphan sweep; multi-step hold; ephemeral help from more |
 | 2026-06-25 | §15.6 Share eddy Slice 1 (practitioner target, `!share`); flow library on-demand (`!flows` / `!flow`); standing bottom flow bar retired — see `docs/chapters/2026-06-25-share-eddy-slice1-dogfood.md` |
 | 2026-06-20 | §9.5 — Discord permalink read-for-dialogue (`discord_ref_read.py`): visible trace, thread history, long-thread summary; distinct from external URL read and `!fetch` |
 | 2026-06-28 | §9.6 — Discord native UI reconciliation (policy C close, channel structural sync, shared lifecycle/structural adapters); practitioner doc `docs/ux/discord-native-ui.md` |

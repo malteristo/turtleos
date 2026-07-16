@@ -1,8 +1,10 @@
-"""Tests for unified bar bottom-anchor helper."""
+"""Tests for unified bar bottom-anchor helper + river floor debounce/hold."""
 
 from __future__ import annotations
 
+import asyncio
 import sys
+import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +15,9 @@ import bar_anchor
 
 
 class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self) -> None:
+        bar_anchor.clear_river_bar_scheduler_state()
+
     async def test_thread_with_active_lifecycle_bar(self) -> None:
         thread = MagicMock()
         thread.id = 42
@@ -43,7 +48,7 @@ class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
                 await bar_anchor.ensure_channel_bars(thread)
                 ensure_lifecycle.assert_not_called()
 
-    async def test_river_channel_calls_river_bar(self) -> None:
+    async def test_river_channel_schedules_reconcile(self) -> None:
         channel = MagicMock()
         channel.id = 99
         channel.parent_id = None
@@ -51,12 +56,9 @@ class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
 
         with patch("mage.is_river_channel", return_value=True):
             with patch("river_handler._river_client_for_channel", return_value=client):
-                with patch(
-                    "river_handler.ensure_bar_at_bottom",
-                    new_callable=AsyncMock,
-                ) as ensure_river:
+                with patch("bar_anchor.schedule_river_bar_reconcile") as schedule:
                     await bar_anchor.ensure_channel_bars(channel)
-                    ensure_river.assert_awaited_once_with(channel, client)
+                    schedule.assert_called_once_with(channel, client)
 
     async def test_non_river_parent_is_noop(self) -> None:
         channel = MagicMock()
@@ -64,12 +66,43 @@ class TestEnsureChannelBars(unittest.IsolatedAsyncioTestCase):
         channel.parent_id = None
 
         with patch("mage.is_river_channel", return_value=False):
-            with patch(
-                "river_handler.ensure_bar_at_bottom",
-                new_callable=AsyncMock,
-            ) as ensure_river:
+            with patch("bar_anchor.schedule_river_bar_reconcile") as schedule:
                 await bar_anchor.ensure_channel_bars(channel)
-                ensure_river.assert_not_called()
+                schedule.assert_not_called()
+
+
+class TestRiverBarHold(unittest.TestCase):
+    def tearDown(self) -> None:
+        bar_anchor.clear_river_bar_scheduler_state()
+
+    def test_hold_and_release(self) -> None:
+        bar_anchor.hold_river_bar(7)
+        self.assertTrue(bar_anchor.is_river_bar_held(7))
+        bar_anchor.release_river_bar(7)
+        self.assertFalse(bar_anchor.is_river_bar_held(7))
+
+    def test_hold_expires(self) -> None:
+        bar_anchor.hold_river_bar(8)
+        bar_anchor._bar_holds[8] = time.monotonic() - (bar_anchor._RIVER_BAR_HOLD_TTL_S + 1)
+        self.assertFalse(bar_anchor.is_river_bar_held(8))
+
+
+class TestScheduleReconcile(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self) -> None:
+        bar_anchor.clear_river_bar_scheduler_state()
+
+    async def test_debounce_coalesces_to_one_reconcile(self) -> None:
+        channel = MagicMock()
+        channel.id = 55
+        client = MagicMock()
+
+        with patch("bar_anchor._RIVER_BAR_DEBOUNCE_S", 0.05), patch(
+            "river_handler.reconcile_river_bar_floor", new_callable=AsyncMock
+        ) as reconcile:
+            bar_anchor.schedule_river_bar_reconcile(channel, client)
+            bar_anchor.schedule_river_bar_reconcile(channel, client)
+            await asyncio.sleep(0.12)
+            reconcile.assert_awaited_once()
 
 
 if __name__ == "__main__":

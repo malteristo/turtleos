@@ -224,7 +224,7 @@ async def complete_river_claim(
 ) -> None:
     from hosted_river_onboarding import post_hosted_river_onboarding
     from mage import get_registry, set_practice_context_for_channel, get_pd
-    from river_handler import _append_chronicle, ensure_bar_at_bottom
+    from river_handler import _append_chronicle, reconcile_river_bar_floor
 
     channel = message.channel
     if not isinstance(channel, discord.TextChannel):
@@ -282,7 +282,7 @@ async def complete_river_claim(
     )
 
     await post_hosted_river_onboarding(channel, client)
-    await ensure_bar_at_bottom(channel, client)
+    await reconcile_river_bar_floor(channel, client)
     print(f"River claimed: {display_name} → #{river_name}")
 
 

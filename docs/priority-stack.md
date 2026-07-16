@@ -80,7 +80,7 @@ Optimizing `!fetch` when the pain is "paste link and talk" is a **tier mismatch*
 | **Resume eddy** | Re-open thread after days/weeks; seamless continuation from Discord history | D1 |
 | **Article / link conversation** | Drop URL + comment → visible read trace → grounded reply; no fetch disclaimers | H1, H4 |
 | **Discord permalink cross-ref** | Paste thread/message link → Turtle self-feeds prior context (transparent inject) | D2 |
-| **River standing bar** | `new eddy` only (target); bar last message after post | R1, R2 |
+| **River standing bar** | Launch pad (`new eddy` + more); reconciled floor | R1, R2 |
 | **Contextual River offers** | River listens to Turtle↔Mage dialogue; posts **situationally useful** act row (hit rate improves over time) | D3 |
 | **In-eddy flow library** | **`!flows`** / **`!flow`** in eddy when chosen; Turtle bootstrap; conversational intake | **J2–J4** (Tier 2 when used) |
 

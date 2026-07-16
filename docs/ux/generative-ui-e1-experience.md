@@ -274,7 +274,7 @@ Principles that emerged from Mage dogfood on river bar → Recent → select →
 | Code block + title + attachment | Two previews of the same file |
 | Recent embed + select result layered | Confusing — two stages visible at once |
 
-**Reference implementation:** `artifact_presenter.py` — `present_artifact_preview_in_place()`, `RiverEddyBarView.with_active_command()`.
+**Reference implementation:** `artifact_presenter.py` — `present_artifact_preview_in_place()`; river bar floor hold via `bar_anchor` (active-face polish retired 2026-07-16).
 
 ---
 

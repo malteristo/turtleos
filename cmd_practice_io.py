@@ -217,8 +217,12 @@ async def cmd_search(message, args):
 
 async def cmd_artifacts(message, args):
     from artifact_presenter import ArtifactIntent, compose_artifact_surface, reply_artifact_surface
+    from bar_anchor import hold_river_bar
+    from mage import is_river_channel
 
     mark_artifacts_ui_unlocked("typed")
+    if is_river_channel(message.channel):
+        hold_river_bar(message.channel.id)
     mage_type = get_mage_type()
 
     if args and args[0].lower() == "--all":

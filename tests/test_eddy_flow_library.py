@@ -9,13 +9,16 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 class EddyFlowLibraryTests(unittest.TestCase):
-    def test_river_bar_has_new_eddy_artifacts_help(self) -> None:
+    def test_river_bar_is_launch_pad_with_more(self) -> None:
         src = (REPO / "river_handler.py").read_text(encoding="utf-8")
         bar_block = src.split("class RiverEddyBarView")[1].split("class RiverEddyView")[0]
         self.assertIn("new eddy", bar_block)
+        self.assertIn("_river_bar_custom_ids", bar_block)
+        self.assertIn("more…", bar_block)
         self.assertIn("artifacts", bar_block)
         self.assertIn("help", bar_block)
-        self.assertIn("with_active_command", bar_block)
+        self.assertIn("ephemeral=True", bar_block)
+        self.assertNotIn("with_active_command", bar_block)
 
     def test_eddy_flow_library_module(self) -> None:
         src = (REPO / "eddy_flow_library.py").read_text(encoding="utf-8")

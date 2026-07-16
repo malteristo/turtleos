@@ -202,91 +202,113 @@ async def _materialize_from_bar(
         )
     except Exception as exc:
         print(f"Eddy bar spawn failed: {type(exc).__name__}: {exc}")
-        await post_river_eddy_bar(channel, client)
+        await reconcile_river_bar_floor(channel, client)
         await interaction.followup.send(
             "Could not open eddy — try again or use `!thread`.",
             ephemeral=True,
         )
         return
     if not thread:
-        await post_river_eddy_bar(channel, client)
+        await reconcile_river_bar_floor(channel, client)
         await interaction.followup.send("Could not open eddy.", ephemeral=True)
         return
-    await post_river_eddy_bar(channel, client)
+    await reconcile_river_bar_floor(channel, client)
+
+
+def _river_bar_custom_ids(channel_id: int) -> tuple[str, str]:
+    return f"river:bar:new:{channel_id}", f"river:bar:more:{channel_id}"
+
+
+def message_looks_like_river_bar(message, channel_id: int) -> bool:
+    """True when a timeline message is (or was) a standing river bar."""
+    content = (getattr(message, "content", None) or "").strip("\u200b").strip()
+    if content:
+        return False
+    custom_ids: list[str] = []
+    for row in getattr(message, "components", None) or []:
+        children = getattr(row, "children", None) or getattr(row, "components", None) or []
+        for child in children:
+            cid = getattr(child, "custom_id", None)
+            if cid:
+                custom_ids.append(str(cid))
+    if not custom_ids:
+        return False
+    new_id, more_id = _river_bar_custom_ids(channel_id)
+    for cid in custom_ids:
+        if cid == new_id or cid == more_id or cid.startswith("river:bar:"):
+            return True
+        if cid.startswith(f"river:act:{channel_id}:"):
+            return True
+    return False
 
 
 class RiverEddyBarView(discord.ui.View):
-    """Standing bottom bar — new eddy · artifacts · help."""
+    """Standing bottom bar — launch pad: new eddy + more (artifacts · help)."""
 
-    def __init__(self, channel_id: int, *, active: str | None = None):
+    def __init__(self, channel_id: int):
         super().__init__(timeout=None)
         self._channel_id = channel_id
+        new_id, more_id = _river_bar_custom_ids(channel_id)
         new_btn = discord.ui.Button(
             label="new eddy",
-            custom_id=f"river:bar:new:{channel_id}",
+            custom_id=new_id,
             style=discord.ButtonStyle.secondary,
             emoji="🌀",
-            disabled=active is not None and active != "new eddy",
         )
-        if active == "new eddy":
-            new_btn.style = discord.ButtonStyle.primary
         new_btn.callback = self._on_new_eddy
         self.add_item(new_btn)
 
-        from eddy_lifecycle_bar import (
-            _encode_act_custom_id,
-            _parse_act_command,
-            _run_river_act_command,
+        more = discord.ui.Select(
+            placeholder="more…",
+            custom_id=more_id,
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(
+                    label="artifacts",
+                    value="artifacts",
+                    emoji="📂",
+                    description="Browse recent practice artifacts",
+                ),
+                discord.SelectOption(
+                    label="help",
+                    value="help",
+                    emoji="❓",
+                    description="Command summary (only you see this)",
+                ),
+            ],
         )
-
-        for label, command, emoji in (
-            ("artifacts", "!artifacts", "📂"),
-            ("help", "!help", "❓"),
-        ):
-            custom_id = _encode_act_custom_id(channel_id, command)
-            if not custom_id:
-                continue
-            btn = discord.ui.Button(
-                label=label,
-                custom_id=custom_id,
-                style=discord.ButtonStyle.primary if active == label else discord.ButtonStyle.secondary,
-                emoji=emoji,
-                disabled=active is not None and active != label,
-            )
-            btn.callback = self._make_act_callback(custom_id, _parse_act_command, _run_river_act_command)
-            self.add_item(btn)
-
-    @classmethod
-    def with_active_command(cls, channel_id: int, active: str) -> "RiverEddyBarView":
-        """Highlight one bar action and grey out the rest (browse-in-progress affordance)."""
-        return cls(channel_id, active=active)
-
-    def _make_act_callback(self, custom_id, parse_cmd, run_act):
-        from eddy_lifecycle_bar import _decode_act_custom_id
-
-        async def callback(interaction: discord.Interaction):
-            if interaction.channel.id != self._channel_id:
-                await interaction.response.send_message("Wrong channel.", ephemeral=True)
-                return
-            try:
-                _, decoded = _decode_act_custom_id(custom_id)
-            except ValueError:
-                await interaction.response.send_message("This action expired.", ephemeral=True)
-                return
-            cmd, args = parse_cmd(decoded)
-            if cmd == "artifacts":
-                selected = RiverEddyBarView.with_active_command(self._channel_id, "artifacts")
-                interaction.client.add_view(selected)
-                await interaction.response.edit_message(content="\u200b", view=selected)
-            else:
-                await interaction.response.defer()
-            await run_act(interaction, cmd, args)
-
-        return callback
+        more.callback = self._on_more
+        self.add_item(more)
 
     async def _on_new_eddy(self, interaction: discord.Interaction):
         await interaction.response.defer()
         await _materialize_from_bar(interaction)
+
+    async def _on_more(self, interaction: discord.Interaction):
+        if interaction.channel.id != self._channel_id:
+            await interaction.response.send_message("Wrong channel.", ephemeral=True)
+            return
+        values = (interaction.data or {}).get("values") or []
+        choice = values[0] if values else ""
+        if choice == "help":
+            from commands import _river_help_body
+
+            body = _river_help_body()
+            await interaction.response.send_message(
+                f"📋 **Commands**\n{body}",
+                ephemeral=True,
+            )
+            return
+        if choice == "artifacts":
+            from bar_anchor import hold_river_bar
+            from eddy_lifecycle_bar import _run_river_act_command
+
+            hold_river_bar(self._channel_id)
+            await interaction.response.defer()
+            await _run_river_act_command(interaction, "artifacts", [])
+            return
+        await interaction.response.send_message("Unknown option.", ephemeral=True)
 
 
 class RiverEddyView(discord.ui.View):
@@ -556,6 +578,9 @@ async def _remove_legacy_eddy_door(channel) -> None:
         pass
 
 
+_RIVER_BAR_HISTORY_SCAN = 40
+
+
 async def post_river_eddy_bar(channel, client) -> discord.Message | None:
     """Post the standing new-eddy bar as the channel's last message."""
     from bar_anchor import channel_for_client
@@ -572,54 +597,67 @@ async def post_river_eddy_bar(channel, client) -> discord.Message | None:
     return msg
 
 
+async def _delete_river_bar_orphans(channel, channel_id: int) -> int:
+    """Delete standing-bar messages in recent history. Returns count deleted."""
+    deleted = 0
+    try:
+        async for msg in channel.history(limit=_RIVER_BAR_HISTORY_SCAN):
+            if not message_looks_like_river_bar(msg, channel_id):
+                continue
+            try:
+                await msg.delete()
+                deleted += 1
+            except discord.HTTPException:
+                pass
+    except discord.HTTPException as exc:
+        print(f"River bar orphan scan failed for {channel_id}: {exc}")
+    return deleted
+
+
+async def reconcile_river_bar_floor(channel, client) -> None:
+    """Global floor invariant: at most one river bar, last in the channel."""
+    from bar_anchor import channel_for_client, is_river_bar_held
+
+    ch = await channel_for_client(channel, client)
+    if is_river_bar_held(ch.id):
+        return
+
+    await _delete_river_bar_orphans(ch, ch.id)
+    await post_river_eddy_bar(ch, client)
+
+
 async def ensure_bar_at_bottom(
     channel,
     client,
     *,
     after_message_id: int | None = None,
 ) -> None:
-    """Keep the eddy bar as the last message in the river channel."""
-    from bar_anchor import channel_for_client
+    """Backward-compatible entry — schedules debounced reconcile (or immediate).
 
-    ch = await channel_for_client(channel, client)
-    state = _load_eddy_bar_state()
-    bar_id = state.get(str(ch.id))
-    if after_message_id and after_message_id != bar_id:
-        if bar_id:
-            try:
-                stale = await ch.fetch_message(bar_id)
-                await stale.delete()
-            except discord.HTTPException:
-                pass
-        await post_river_eddy_bar(ch, client)
-        return
-    if bar_id:
-        try:
-            bar_msg = await ch.fetch_message(bar_id)
-            async for last in ch.history(limit=1):
-                if last.id == bar_id:
-                    view = RiverEddyBarView(ch.id)
-                    client.add_view(view)
-                    try:
-                        await bar_msg.edit(view=view)
-                    except discord.HTTPException:
-                        pass
-                    return
-            try:
-                await bar_msg.delete()
-            except discord.HTTPException:
-                pass
-        except discord.HTTPException:
-            pass
-    await post_river_eddy_bar(ch, client)
+    ``after_message_id`` is ignored; reconcile always sweeps orphans. Callers that
+    need an immediate settle should use ``reconcile_river_bar_floor``.
+    """
+    del after_message_id  # placement law is global reconcile, not message-relative
+    from bar_anchor import schedule_river_bar_reconcile
+
+    schedule_river_bar_reconcile(channel, client)
 
 
 async def ensure_river_eddy_bar(client) -> None:
     """Deploy the standing eddy bar at the bottom of each river channel."""
     for channel in await _iter_river_channels(client):
         await _remove_legacy_eddy_door(channel)
-        await ensure_bar_at_bottom(channel, client)
+        await reconcile_river_bar_floor(channel, client)
         print(f"Eddy bar ready in #{getattr(channel, 'name', channel.id)}")
+
+
+async def sweep_river_bar_floors(client) -> None:
+    """Periodic safety reconcile for all river channels."""
+    for channel in await _iter_river_channels(client):
+        try:
+            await reconcile_river_bar_floor(channel, client)
+        except Exception as exc:
+            print(f"River bar sweep failed for {getattr(channel, 'id', '?')}: {exc}")
 
 
 async def handle_eddy_first_message(message: discord.Message) -> bool:
@@ -704,12 +742,12 @@ async def handle_river_message(message: discord.Message) -> None:
 
     bar_client = _river_client_for_channel(message.channel)
 
-    # Continuation breath — re-anchor bar without River model round-trip.
+    # Continuation breath — settle floor without River model round-trip.
     if content in {".", "..", "...", "go", "continue", "next"}:
         if bar_client:
-            await ensure_bar_at_bottom(
-                message.channel, bar_client, after_message_id=message.id
-            )
+            from bar_anchor import schedule_river_bar_reconcile
+
+            schedule_river_bar_reconcile(message.channel, bar_client)
         return
 
     acts = await classify_river_acts(content)
@@ -717,4 +755,6 @@ async def handle_river_message(message: discord.Message) -> None:
     print(f"River [{message.author.display_name}]: {summary['acts']} views={summary['views']}")
 
     if bar_client:
-        await ensure_bar_at_bottom(message.channel, bar_client, after_message_id=message.id)
+        from bar_anchor import schedule_river_bar_reconcile
+
+        schedule_river_bar_reconcile(message.channel, bar_client)

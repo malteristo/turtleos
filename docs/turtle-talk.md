@@ -43,6 +43,7 @@ Hosted practitioners (`mage_type: practitioner`) receive a **minimal allowlist**
 | Affordance | Behavior | Spec |
 |------------|----------|------|
 | **new eddy** (standing bar) | Materialize blank thread; practitioner speaks first; Turtle joins on first message | §5.4, §17 |
+| **more** (standing bar select) | Secondary: artifacts (public Recent) · help (ephemeral) | §5.3 |
 | **flow library** (in-eddy) | **`!flows`** or **`!flow`** in eddy posts inline picker; load → Turtle bootstrap | §5.4, §5.6, §10.2 |
 | Contextual flow acts | `offer_flow_menu` / `offer_flow` on a river message when intent detected | §5.6 |
 

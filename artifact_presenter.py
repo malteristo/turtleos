@@ -296,9 +296,9 @@ async def present_artifact_preview_in_place(
         fallback = compose_artifact_preview_content(content)
         await interaction.response.edit_message(content=fallback, **edit_kwargs)
 
-    from bar_anchor import ensure_channel_bars
+    from bar_anchor import release_river_bar_and_settle
 
-    await ensure_channel_bars(interaction.channel, interaction.client)
+    await release_river_bar_and_settle(interaction.channel, interaction.client)
 
 
 def _artifact_read_url(path: str) -> str | None:

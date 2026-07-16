@@ -40,7 +40,7 @@ The artifact viewer is **shelves of your practice** — not a filesystem tree, n
 
 **Select menu (4+ recents):** Choosing an artifact **replaces** the browse message with the `.md` attachment preview (expandable in chat) and an optional **Open in browser** link when web read is configured. Download via `⋯` on the attachment bar — no separate Download button.
 
-**River bar → artifacts:** Highlights **artifacts** on the standing bar (others greyed) while browse is open; bar re-anchors at bottom after pick.
+**River bar → more → artifacts:** Opens Recent browse; floor reconcile is **held** until pick completes, then one settle. (Pinned-alive artifact presentation is a future rethink — not this surface.)
 
 **`!artifacts <shelf>`:** Browse one shelf — e.g. `!artifacts sessions`, `!artifacts notes`. Same Open buttons or select menu.
 

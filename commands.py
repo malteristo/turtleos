@@ -301,9 +301,9 @@ def _river_help_body() -> str:
     """Compact parent-river command summary — full inventory lives in eddies."""
     mage_type = get_mage_type()
     lines = [
-        "**River:** standing bar · `!pin` · `!dissolve`",
+        "**River:** `new eddy` + more (bar) · `!pin` · `!dissolve`",
         "**Eddies:** `!checkpoint` · `!release` · `!flows` · `!share` · `!help` (full list)",
-        "**Browse:** `!artifacts` · `!read` / `!ls` / `!search`",
+        "**Browse:** more → artifacts · `!artifacts` · `!read` / `!ls` / `!search`",
         f"Models: River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}`",
     ]
     if mage_type != "practitioner":
@@ -1144,10 +1144,10 @@ async def cmd_admin(message, args):
                     options,
                     member_keys=member_keys,
                 )
-                from river_handler import _river_client_for_channel, ensure_bar_at_bottom
+                from river_handler import _river_client_for_channel, reconcile_river_bar_floor
 
                 bar_client = _river_client_for_channel(channel) or client
-                await ensure_bar_at_bottom(channel, bar_client)
+                await reconcile_river_bar_floor(channel, bar_client)
             except ValueError as exc:
                 await message.reply(str(exc), mention_author=False)
                 return

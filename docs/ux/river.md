@@ -1,38 +1,48 @@
 # River UX patterns
 
-**Principles:** [principles.md](principles.md) · **Journeys:** [journeys.md](journeys.md) · **Flow library:** [flow-library-journeys.md](flow-library-journeys.md)
+**Principles:** [principles.md](principles.md) · **Journeys:** [journeys.md](journeys.md) · **Flow library:** [flow-library-journeys.md](flow-library-journeys.md)  
+**Destination:** [design-river-bar-floor.md](../chapters/design-river-bar-floor.md)
 
 ---
 
-## Standing eddy bar (bottom anchor)
+## Standing eddy bar (reconciled floor)
 
-**Principle:** One persistent affordance at the **bottom** of the river timeline. Eddies accumulate above it; the control always stays last.
+**Purpose:** Launch pad — “start a conversation,” not a river console.
 
-**Pattern:**
+**Principle:** One persistent affordance at the **bottom** of the river timeline. Eddies and acts accumulate above it; the control is a **floor fixture**, not a message that races every act.
+
+**Face:**
 
 ```
 … practitioner drops …
-… Discord thread cards for past eddies …
-[ 🌀 new eddy ]   ← always last message
+… Discord thread cards / river acts …
+[ 🌀 new eddy ]  [ more ▾ ]   ← always last message
 ```
 
-**On `new eddy` click:**
+**more** (select on the bar): `artifacts` · `help`.
 
-1. Bar message **deletes**
-2. River bot posts a silent anchor message and creates a thread named **`new eddy`**
-3. Discord renders the **native thread-list embed**
-4. River posts a **compact flow library** embed in the thread (optional programs — user-initiated)
-5. Fresh bar posts **below** the new thread card
+- **new eddy** — materialize blank eddy (unchanged).
+- **artifacts** — public Recent browse as today; reconcile is **held** until the browse sequence ends.
+- **help** — ephemeral Commands card (no timeline litter).
 
-**Flow choice is in-eddy, not on the bar.** Practitioners load a flow via the in-thread library embed or **`!flows`** inside an eddy. **`!flows`** in the parent river redirects to open an eddy first.
+**Flow choice is in-eddy, not on the bar.** Practitioners load a flow via the in-thread library or **`!flows`** inside an eddy. **`!flows`** in the parent river redirects to open an eddy first.
 
-**After any river timeline activity** (practitioner message, Turtle command output, ops embeds, Spirit ops): the harness re-checks that the bar is still the last message; if not, it removes the stale bar and posts a new one at the bottom.
+### Placement law (reconcile)
 
-**Implementation:** `river_handler.py` — `RiverEddyBarView`, `ensure_river_eddy_bar`, `ensure_bar_at_bottom`. In-eddy picker: `eddy_flow_library.py`. Unified hook: `bar_anchor.ensure_channel_bars`.
+The harness does **not** eagerly delete/repost the tracked bar after every timeline tick. It **reconciles the floor**:
+
+1. Debounce after activity (~1–2s quiet; coalesces during bursts).
+2. Scan recent history for orphan bar messages; delete them.
+3. Post exactly one fresh bar last (unless `bar_hold` is active).
+4. Safety net: on River ready + slow periodic sweep.
+
+**Multi-step hold:** Known sequences (e.g. artifacts browse) pause reconcile until complete, then one settle. The bar must not insert itself between related acts.
+
+**Implementation:** `river_handler.py` — `RiverEddyBarView`, `reconcile_river_bar_floor`, `post_river_eddy_bar`. Debounce/hold: `bar_anchor.py`. Unified hook: `bar_anchor.ensure_channel_bars` (schedules debounce on river channels).
 
 **State:** `thread-state/river/eddy_bar.json` maps channel id → bar message id.
 
-**Retired:** standing-bar **`flow menu`** and `RiverFlowPickerView` on the bar (2026-06-20 flow library chapter).
+**Retired:** standing-bar **`flow menu`** / `RiverFlowPickerView` (2026-06-20). Peer buttons for artifacts/help on the face (2026-07-16 — demoted under **more**).
 
 ---
 

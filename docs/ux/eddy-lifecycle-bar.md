@@ -79,7 +79,7 @@ After **any timeline activity** in the thread (practitioner, Spirit, Turtle comm
 1. If lifecycle bar message is already last → refresh view if needed (re-register persistent custom_ids).
 2. Else → delete stale bar message (if tracked) → post fresh bar at bottom.
 
-Same mental model as `ensure_bar_at_bottom` for the river bar ([river.md](river.md)). Unified entry point: `bar_anchor.ensure_channel_bars(channel)`.
+River parent channels use reconciled-floor debounce ([river.md](river.md)); eddy lifecycle bars still ensure-at-bottom when active. Unified entry point: `bar_anchor.ensure_channel_bars(channel)`.
 
 **State file:** `thread-state/eddy/lifecycle_bar.json` — maps `thread_id → bar_message_id`.
 

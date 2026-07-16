@@ -35,7 +35,7 @@ Lens — load flow mid-conversation (future)
   → bootstrap from thread history → no auto-rename → optional [Rename thread]
 ```
 
-River bar target: **`[ 🌀 new eddy ]` only** (no `flow menu`). Shelter retired; blank eddy is Layer 1.
+River bar: **`[ 🌀 new eddy ] [ more ▾ ]`** — launch pad; secondary acts under more (no `flow menu`). Shelter retired; blank eddy is Layer 1. See [river.md](river.md) · [design-river-bar-floor.md](../chapters/design-river-bar-floor.md).
 
 ---
 

@@ -9,6 +9,18 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — River bar reconciled floor (042–044)
+
+**Shipped:** Launch-pad chrome (`new eddy` + `more` select); `reconcile_river_bar_floor` (orphan sweep → one bar); debounced schedule via `bar_anchor` (~1.5s); multi-step `hold_river_bar` for artifacts; ephemeral help from more; River safety sweep every 3 min; TURTLE_SPEC §5.3 + UX docs.
+
+**Anti-pattern retired:** Eager `ensure_bar_at_bottom` on every tick with a single tracked id (local invariant). Floor law is global reconcile.
+
+**Gate:** `spirit_verify.sh` green (560+ tests).
+
+**Deploy note:** Restart both bots so River picks up chrome + sweep loop; first ready reconcile clears orphan bars.
+
+**Forward:** Pinned-alive artifacts (Mage signal) — not this chapter.
+
 ### 2026-07-15 — Story Act Two: daily note (issues 038–041)
 
 **Shipped:** Eddy-entry collector (`story_notes.collect_eddy_entries_for_date`), daily note writer (`story_daily.write_daily_note`), triggers (scheduled hourly after `DAILY_NOTE_HOUR`, morning catch-up before noon, `!day` force-refresh), river preview surface (`post_daily_note_river_visibility`), `story/daily/*.md` Tier-1 allowlist, Forge sync (`desk/story/daily/`). Session-day mechanical assembly **retired** at checkpoint.

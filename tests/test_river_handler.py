@@ -155,10 +155,10 @@ class HandleRiverMessageTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("river_handler.classify_river_acts", new_callable=AsyncMock) as classify, patch(
             "river_handler._river_client_for_channel", return_value=MagicMock()
-        ), patch("river_handler.ensure_bar_at_bottom", new_callable=AsyncMock) as ensure:
+        ), patch("bar_anchor.schedule_river_bar_reconcile") as schedule:
             await handle_river_message(message)
             classify.assert_not_awaited()
-            ensure.assert_awaited_once()
+            schedule.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -122,7 +122,7 @@ def _iter_hosted_river_channels(client) -> list:
 
 async def post_hosted_river_onboarding(channel, client) -> discord.Message | None:
     from mage import set_practice_context_for_channel, get_mage_type, get_pd
-    from river_handler import _append_chronicle, ensure_bar_at_bottom
+    from river_handler import _append_chronicle, reconcile_river_bar_floor
 
     channel_id = channel.id
     if is_onboarding_posted(channel_id):
@@ -154,7 +154,7 @@ async def post_hosted_river_onboarding(channel, client) -> discord.Message | Non
         f"hosted river onboarding posted (channel {channel_id})",
         {"event": "hosted_river_onboarding", "channel_id": channel_id, "message_id": msg.id},
     )
-    await ensure_bar_at_bottom(channel, client)
+    await reconcile_river_bar_floor(channel, client)
     print(f"Hosted river onboarding posted in #{getattr(channel, 'name', channel_id)}")
     return msg
 

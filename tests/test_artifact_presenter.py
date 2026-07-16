@@ -192,9 +192,9 @@ class TestPresentArtifactPreview(unittest.IsolatedAsyncioTestCase):
     @patch("artifact_presenter._apply_practice_context")
     @patch("artifact_presenter._load_artifact_content", return_value=("chronicle/surface.md", "# Surface\n"))
     @patch("artifact_presenter.build_artifact_open_view", return_value=MagicMock())
-    @patch("bar_anchor.ensure_channel_bars", new_callable=AsyncMock)
+    @patch("bar_anchor.release_river_bar_and_settle", new_callable=AsyncMock)
     async def test_present_artifact_preview_replaces_embed(
-        self, _ensure, _view, _load, _ctx
+        self, _settle, _view, _load, _ctx
     ) -> None:
         interaction = MagicMock()
         interaction.channel = MagicMock()
@@ -209,7 +209,7 @@ class TestPresentArtifactPreview(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(kwargs.get("embed"))
         self.assertEqual(kwargs["content"], "\u200b")
         self.assertIn("attachments", kwargs)
-        _ensure.assert_awaited_once()
+        _settle.assert_awaited_once()
 
 
 if __name__ == "__main__":
