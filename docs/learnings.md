@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — Flow context_type lost after restart (`dnd_dm` / Galactic Adventure)
+
+**Symptom:** After remount storms, Turtle answered Galactic Adventure as thinking-partner, not DM — refused roleplay, addressed Lukas by real name. Registry still had `context_type: null` while pending JSON held `dnd_dm`.
+
+**Root cause:** `!flow` / bootstrap wrote in-memory `thread_configs` and pending file, but never `update_thread_context_type`. Pending is only consumed on `on_thread_create`, so existing eddies never rehydrated.
+
+**Fix:** Persist context_type in `load_flow_in_eddy` + `deliver_flow_bootstrap`; hydrate on each native dialogue turn from registry then pending (`hydrate_native_eddy_context`). Tests: `tests/test_context_type_persistence.py`.
+
+**Practice note:** In `#lukas-sandbox` Galactic Adventure, Spirit is prompter to Turtle — Mage stays in character; Spirit handles remount/ops/corrections.
+
 ### 2026-07-16 — Shared-river eddy deafness after restart (Galactic Adventure)
 
 **Symptom:** Lukas posted Ossimandus in `#lukas-sandbox` / Galactic Adventure; zero `Turtle inbound`, zero River lifecycle touch. Manual Turtle `join` + Spirit poke restored replies.

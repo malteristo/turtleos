@@ -608,6 +608,66 @@ def write_pending_native_eddy(thread_id: int, parent_channel_id: int, payload: d
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def read_pending_native_eddy(thread_id: int, parent_channel_id: int) -> dict | None:
+    """Peek pending native eddy config without consuming it."""
+    path = _pending_native_eddy_path(thread_id, parent_channel_id)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def hydrate_native_eddy_context(thread_id: int, parent_id: int | None) -> str | None:
+    """Restore flow context_type into thread_configs after restart.
+
+    Order: existing in-memory → registry → pending file. When recovered from
+    pending/registry, also write registry so the next restart does not regress.
+    """
+    from state import thread_configs
+    from thread_registry import load_registry, update_thread_context_type
+
+    cfg = thread_configs.get(thread_id)
+    if cfg and cfg.get("context_type"):
+        return cfg["context_type"]
+
+    ctx = None
+    try:
+        entry = load_registry().get("threads", {}).get(str(thread_id), {}) or {}
+        raw = entry.get("context_type")
+        if raw:
+            ctx = str(raw)
+    except Exception:
+        ctx = None
+
+    if not ctx and parent_id:
+        pending = read_pending_native_eddy(thread_id, parent_id)
+        if pending and pending.get("context_type"):
+            ctx = str(pending["context_type"])
+
+    if not ctx:
+        return None
+
+    if cfg is None:
+        thread_configs[thread_id] = {
+            "context_type": ctx,
+            "native_vanilla": True,
+            "blank_eddy": False,
+            "attunement": "semi",
+            "use_api": False,
+        }
+    else:
+        cfg["context_type"] = ctx
+
+    try:
+        update_thread_context_type(thread_id, ctx)
+    except Exception as exc:
+        print(f"hydrate_native_eddy_context persist failed: {exc}")
+    return ctx
+
+
 def patch_pending_native_eddy(
     thread_id: int,
     parent_channel_id: int,

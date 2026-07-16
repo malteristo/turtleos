@@ -310,6 +310,8 @@ async def load_flow_in_eddy(
 
     lens = is_lens_load(thread, flow_id)
 
+    from thread_registry import update_thread_context_type
+
     cfg = thread_configs.get(thread.id)
     if cfg is not None:
         cfg["context_type"] = flow_id
@@ -322,6 +324,17 @@ async def load_flow_in_eddy(
             parent_id,
             {"context_type": flow_id, "blank_eddy": False},
         )
+        # Seed in-memory immediately — pending alone is only consumed on thread_create.
+        thread_configs[thread.id] = {
+            "context_type": flow_id,
+            "blank_eddy": False,
+            "native_vanilla": True,
+            "attunement": "semi",
+            "use_api": False,
+        }
+
+    # Durable across restarts (in-memory + pending alone were lost after restart).
+    update_thread_context_type(thread.id, flow_id)
 
     await prepare_flow_eddy_entry(thread, flow_id, bot_client, lens=lens)
     return True

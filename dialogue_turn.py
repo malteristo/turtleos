@@ -329,6 +329,15 @@ async def continue_dialogue_turn(
     craft_surface = uses_craft_surface(parent_ch_id)
     cfg = thread_configs.get(channel_id)
     if native_eddy:
+        from eddy_spawn import hydrate_native_eddy_context
+
+        parent_for_hydrate = (
+            message.channel.parent_id
+            if hasattr(message.channel, "parent_id")
+            else None
+        )
+        hydrate_native_eddy_context(channel_id, parent_for_hydrate)
+        cfg = thread_configs.get(channel_id)
         ctx = (cfg or {}).get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
             ctx = get_channel_default_context(message.channel.parent_id)

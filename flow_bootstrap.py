@@ -269,6 +269,12 @@ async def deliver_flow_bootstrap(
         }
     )
     thread_configs[thread_id] = cfg
+    try:
+        from thread_registry import update_thread_context_type
+
+        update_thread_context_type(thread_id, flow_id)
+    except Exception as exc:
+        print(f"Flow bootstrap context_type persist failed: {exc}")
 
     fake_message = SimpleNamespace(channel=channel)
     from discord_bot import _build_native_runtime_env
