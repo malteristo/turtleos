@@ -19,6 +19,8 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Deploy note:** Restart both bots so River picks up chrome + sweep loop; first ready reconcile clears orphan bars.
 
+**Living eval (2026-07-16):** Mage — looks and feels good to use. Recognition tests held. Issues 042–044 deleted (doc-rot).
+
 **Forward:** Pinned-alive artifacts (Mage signal) — not this chapter.
 
 ### 2026-07-15 — Story Act Two: daily note (issues 038–041)
