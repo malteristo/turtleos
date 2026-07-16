@@ -524,36 +524,18 @@ async def _resolve_client_channel(client, channel_id: int):
 
 
 async def _iter_river_channels(client) -> list:
-    from mage import get_attunement_profile, get_registry
-    from state import CHANNELS
+    """Resolve live Discord channels for every active practice parent.
+
+    Includes shared-river / hosted-river — not only the operator dialogue channel.
+    Skips archived and orphaned registry rows.
+    """
+    from mage import practice_parent_channel_ids
 
     channels = []
-    seen: set[int] = set()
-    reg = get_registry()
-    for ch_id_str, entry in reg.get("channels", {}).items():
-        ch_type = entry.get("type") if isinstance(entry, dict) else None
-        if isinstance(entry, dict) and entry.get("archived"):
-            continue
-        if ch_type in ("river", "hosted-river", "shared-river"):
-            try:
-                ch_id = int(ch_id_str)
-            except (ValueError, TypeError):
-                continue
-            ch = await _resolve_client_channel(client, ch_id)
-            if ch and ch_id not in seen:
-                channels.append(ch)
-                seen.add(ch_id)
-    dialogue_id = CHANNELS.get("dialogue")
-    if dialogue_id and get_attunement_profile() == "native":
-        try:
-            ch_id = int(dialogue_id)
-        except (ValueError, TypeError):
-            ch_id = None
-        if ch_id is not None and ch_id not in seen:
-            ch = await _resolve_client_channel(client, ch_id)
-            if ch:
-                channels.append(ch)
-                seen.add(ch_id)
+    for ch_id in practice_parent_channel_ids():
+        ch = await _resolve_client_channel(client, ch_id)
+        if ch is not None:
+            channels.append(ch)
     return channels
 
 

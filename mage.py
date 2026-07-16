@@ -689,6 +689,36 @@ def is_registered_parent_channel(channel_id):
     return dialogue and channel_id == dialogue.id
 
 
+def practice_parent_channel_ids(registry: dict | None = None) -> list[int]:
+    """Active practice parent ids: river, hosted-river, shared-river (not archived/orphaned).
+
+    Used by River/Turtle startup rejoin so shared-river eddies (e.g. lukas-sandbox)
+    stay subscribed after restart — not only the operator dialogue channel.
+    """
+    reg = registry if registry is not None else _MAGE_REGISTRY
+    ids: list[int] = []
+    seen: set[int] = set()
+    for ch_id_str, entry in (reg.get("channels") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("archived") or entry.get("orphaned"):
+            continue
+        if entry.get("type") not in ("river", "hosted-river", "shared-river"):
+            continue
+        try:
+            ch_id = int(ch_id_str)
+        except (TypeError, ValueError):
+            continue
+        if ch_id in seen:
+            continue
+        seen.add(ch_id)
+        ids.append(ch_id)
+    dialogue_id = _resolve_dialogue_channel_id()
+    if dialogue_id is not None and dialogue_id not in seen:
+        ids.append(dialogue_id)
+    return ids
+
+
 def get_thread_member_ids(channel_id):
     """Return list of discord_id strings for practitioners who should be auto-added to threads in this channel.
     For mage/practitioner channels: returns that user's discord_id.

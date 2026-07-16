@@ -392,38 +392,60 @@ async def on_ready():
         try:
             from discord_reconcile import ensure_dissolved_threads_archived
             from eddy_spawn import should_defer_turtle_join
+            from river_handler import _iter_river_channels
+            from thread_registry import is_dissolved
 
             await ensure_dissolved_threads_archived(client, dialogue.id)
 
-            active = dialogue.threads
-            for t in active:
-                from thread_registry import is_dissolved
-
-                if is_dissolved(t.id) and not t.archived:
+            # Active eddies on every practice parent (shared-river / hosted-river too).
+            # Native eddies: join only when already a Discord member so brand-new
+            # blank eddies still get River's first-message add_user ceremony.
+            for parent in await _iter_river_channels(client):
+                parent_name = getattr(parent, "name", parent.id)
+                for t in list(getattr(parent, "threads", []) or []):
+                    if is_dissolved(t.id) and not t.archived and parent.id == dialogue.id:
+                        try:
+                            await t.edit(archived=True)
+                            print(
+                                f"Re-archived dissolved thread still active: "
+                                f"{t.name} (id: {t.id})"
+                            )
+                        except Exception as e:
+                            print(f"Failed to re-archive dissolved thread {t.name}: {e}")
+                        continue
+                    if should_defer_turtle_join(t):
+                        try:
+                            await t.fetch_member(client.user.id)
+                        except discord.NotFound:
+                            print(
+                                f"Skipped rejoin (native eddy, not yet member): "
+                                f"{t.name} (id: {t.id})"
+                            )
+                            continue
+                        except Exception as e:
+                            print(
+                                f"Skipped rejoin (native eddy): {t.name} "
+                                f"(id: {t.id}) — {e}"
+                            )
+                            continue
                     try:
-                        await t.edit(archived=True)
-                        print(f"Re-archived dissolved thread still active: {t.name} (id: {t.id})")
+                        await t.join()
+                        print(
+                            f"Rejoined thread: {t.name} (id: {t.id}) "
+                            f"in #{parent_name}"
+                        )
+                        await asyncio.sleep(1)  # Throttle to avoid Discord rate limits
                     except Exception as e:
-                        print(f"Failed to re-archive dissolved thread {t.name}: {e}")
-                    continue
-                if should_defer_turtle_join(t):
-                    print(f"Skipped rejoin (native eddy): {t.name} (id: {t.id})")
-                    continue
-                try:
-                    await t.join()
-                    print(f"Rejoined thread: {t.name} (id: {t.id})")
-                    await asyncio.sleep(1)  # Throttle to avoid Discord rate limits
-                except Exception as e:
-                    print(f"Failed to join thread {t.name}: {e}")
-                    await asyncio.sleep(2)  # Back off more on failure
+                        print(f"Failed to join thread {t.name}: {e}")
+                        await asyncio.sleep(2)  # Back off more on failure
+
+            # Operator-river archived cleanup only (do not wake every parent).
             archived_threads = []
             async for t in dialogue.archived_threads(limit=20):
                 archived_threads.append(t)
             for t in archived_threads:
                 if should_defer_turtle_join(t):
                     continue
-                from thread_registry import is_dissolved
-
                 if is_dissolved(t.id):
                     print(f"Skipped dissolved archived thread: {t.name} (id: {t.id})")
                     continue

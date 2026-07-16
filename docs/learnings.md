@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — Shared-river eddy deafness after restart (Galactic Adventure)
+
+**Symptom:** Lukas posted Ossimandus in `#lukas-sandbox` / Galactic Adventure; zero `Turtle inbound`, zero River lifecycle touch. Manual Turtle `join` + Spirit poke restored replies.
+
+**Root cause:** River startup rejoin only walked the operator `#river` parent (`_resolve_dialogue_channel_id`). Turtle skipped native-eddy rejoin entirely (deferred-join design). After restart, shared-river / hosted-river eddies could stop receiving MESSAGE_CREATE even while Discord still listed bots as members historically — and `river_add_turtle_to_eddy` only ran on first-message / flow bootstrap, not on later turns.
+
+**Fix:** `practice_parent_channel_ids()` + `_iter_river_channels` covers river / hosted-river / shared-river (skips archived/orphaned). River rejoins active threads under every practice parent (throttled). River calls `river_add_turtle_to_eddy` on every practitioner eddy turn (no-op if present). Turtle rejoins active threads across those parents, but for deferred native eddies only when already a Discord member (preserves first-message add ceremony). Tests: `tests/test_practice_parent_rejoin.py`.
+
+**Deploy:** restart **both** `com.turtle.discord` and `com.turtle.river`. Verify: post in a quiet shared-river eddy after restart → inbound + reply without Spirit poke.
+
 ### 2026-07-16 — Update announcements (return-visit generalized)
 
 **Shipped:** Versioned River announcements — `announcements.py` + `scripts/post_announcement.py` + `template/announcements/`. Audience is registry `river` + `hosted-river` (not practitioner-type gate — that excluded the operator river). Locale from `_practitioner_locale`; state per channel at `thread-state/river/announcements.json`. First id `2026-07-16-nesrine-ready` migrated from return-visit copy; `post_return_visit.py` is a thin forwarder.

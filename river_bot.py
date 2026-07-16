@@ -134,25 +134,39 @@ async def _river_bar_safety_sweep_loop() -> None:
             print(f"River bar safety sweep failed: {exc}")
 
 
-async def _rejoin_practice_threads(client) -> None:
-    """Join active eddy threads so River receives practitioner messages after restart."""
-    from mage import _resolve_dialogue_channel_id
+async def _ensure_turtle_in_eddy(thread: discord.Thread) -> None:
+    """Re-add Turtle when membership dropped — cheap no-op if already present."""
+    try:
+        from eddy_spawn import river_add_turtle_to_eddy
 
-    dialogue_id = _resolve_dialogue_channel_id()
-    if not dialogue_id:
-        return
-    dialogue = client.get_channel(dialogue_id)
-    if dialogue is None:
-        try:
-            dialogue = await client.fetch_channel(dialogue_id)
-        except discord.HTTPException:
-            return
-    for thread in dialogue.threads:
-        try:
-            await thread.join()
-            print(f"River rejoined thread: {thread.name} ({thread.id})")
-        except discord.HTTPException as exc:
-            print(f"River rejoin skipped {thread.name}: {exc}")
+        await river_add_turtle_to_eddy(thread)
+    except Exception as exc:
+        print(f"River ensure Turtle in eddy failed: {type(exc).__name__}: {exc}")
+
+
+async def _rejoin_practice_threads(client) -> None:
+    """Join active eddy threads on every practice parent after restart.
+
+    Operator dialogue alone is not enough — shared-river / hosted-river eddies
+    (e.g. lukas-sandbox Galactic Adventure) go deaf if River never rejoins them.
+    """
+    from river_handler import _iter_river_channels
+
+    parents = await _iter_river_channels(client)
+    for parent in parents:
+        parent_name = getattr(parent, "name", parent.id)
+        threads = list(getattr(parent, "threads", []) or [])
+        for thread in threads:
+            try:
+                await thread.join()
+                print(
+                    f"River rejoined thread: {thread.name} ({thread.id}) "
+                    f"in #{parent_name}"
+                )
+                await asyncio.sleep(1)
+            except discord.HTTPException as exc:
+                print(f"River rejoin skipped {thread.name}: {exc}")
+                await asyncio.sleep(2)
 
 
 @river_client.event
@@ -203,12 +217,16 @@ async def on_message(message: discord.Message):
                 renamed = await handle_eddy_first_message(message)
             from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
 
+            await _ensure_turtle_in_eddy(message.channel)
             await touch_eddy_lifecycle_bar(message, from_practitioner=True)
             _maybe_schedule_contextual_offer(message)
             return
 
         from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
 
+        # Established eddy: re-ensure Turtle membership before acts so dialogue
+        # does not stay silent after restart/membership drop (Galactic Adventure).
+        await _ensure_turtle_in_eddy(message.channel)
         await touch_eddy_lifecycle_bar(message, from_practitioner=True)
         _maybe_schedule_contextual_offer(message)
         return
