@@ -44,6 +44,9 @@ class TestSeneschalRegistries(unittest.TestCase):
         self.assertIn("flows", dispatch._PRACTITIONER_COMMANDS)
         self.assertIn("flow", dispatch._PRACTITIONER_COMMANDS)
 
+    def test_day_allowed_for_practitioners(self) -> None:
+        self.assertIn("day", dispatch._PRACTITIONER_COMMANDS)
+
 
 class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):
     async def test_dispatch_calls_try_and_ensure(self) -> None:

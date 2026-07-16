@@ -64,15 +64,35 @@ Ready = she can feel **three research beats in one sitting**, plus a care packag
 
 ## Invite framing (anchors — Mage’s voice)
 
-Thinking-substrate for the ask, not a script:
+Thinking-substrate for the ask — **not a script**. Hold these; words emerge in your voice.
 
-- **Remember:** the talk about AI helping with competing demands, scattered chats, wanting something that structures life *for* her to read and react.
-- **What’s here:** private channel on his machine; open an eddy and talk; Turtle writes short notes about conversations and a daily “connect the dots”; it can notice themes across chats and ask before tracking them; Fresh Eyes offers a calm read of what’s moving — no pressure.
-- **What’s not yet:** bringing old ChatGPT history in; weekly life chapters; medical/Antrag helpers; reminders at specific times.
-- **The ask:** try it when she wants; optional Feedback inside an eddy; honest reaction shapes what comes next.
-- **Trust:** her channel stays hers; nothing reported elsewhere; she can stop anytime.
+### What to hold before you speak
+- **Remember the talk:** competing demands, scattered chats, wanting something that structures life *for her to read and react* — not another app with homework.
+- **You built from that talk** — this version is the research-shaped slice, not the whole vision.
+- **Her river is the proof surface** — she tries *her* channel, not yours.
+- **Trust is the product** — useful + private + stoppable beats impressive.
 
-**Target sentence (earned at Ch 4):** close to the original ask, with the scope line above held in the same breath.
+### What’s here (true now)
+- Private channel on your machine; only hers.
+- `new eddy` → talk → Turtle replies (DE when she writes DE).
+- Checkpoint → short conversation notes; themes proposed in plain language → she confirms before they’re tracked.
+- Fresh Eyes → calm read of what’s moving; no urgency.
+- Optional Feedback inside an eddy.
+- DE return-visit posts the “who is River / Turtle” orientation without Magic jargon.
+
+### What’s not yet (say in the same breath)
+- Bringing old ChatGPT history in *(second visit, if she wants)*.
+- Weekly/monthly life chapters.
+- Medical / Antrag helpers; timed reminders.
+
+### The ask
+- Try when she wants — no deadline.
+- Honest reaction shapes what comes next (including “not for me”).
+- She can stop anytime; nothing reported elsewhere.
+
+### Target sentence (earned)
+Close to: *Remember the talk we had about how AI could help you? I built turtleOS from those insights — please try this version on your channel and tell me what you think.*  
+Hold the scope line (what’s not yet) in the same breath so the invite stays research-true.
 
 ---
 
@@ -111,21 +131,25 @@ Thinking-substrate for the ask, not a script:
 
 ---
 
-## Operator smoke checklist (her channel)
+## Operator smoke checklist (her channel) — Ch 4 walkthrough
 
-Run on `#nesrine-dialogue` (`1484973995823599757`) as operator standing in for her — then verify files under `~/workshops/nesrine/`, **not** `kermit/`.
+Run on `#nesrine-dialogue` (`1484973995823599757`) as operator standing in for her — verify under `~/workshops/nesrine/`, **not** `kermit/`.
 
-1. Confirm registry live: open an eddy → Turtle uses practitioner soul (DE-capable, no Magic jargon).
-2. `new eddy` → message 1 (names) → message 2 → Turtle replies.
-3. Talk enough to checkpoint → eddy note preview appears → `story/eddies/` gains a file on **her** root.
-4. Trigger or wait for daily note (`!day` if available to practitioners / operator path) → `story/daily/` on **her** root.
-5. Optional: Feedback flow → `!checkpoint` → `state/notes/feedback-last.md` on **her** root.
-6. SSH check:
-   ```bash
-   ssh turtle@100.110.46.104 'ls -lt ~/workshops/nesrine/story/eddies/ ~/workshops/nesrine/story/daily/ ~/workshops/nesrine/state/notes/ 2>/dev/null | head -20'
-   ```
+| # | Beat | Status (2026-07-16) |
+|---|------|---------------------|
+| 1 | Registry → `nesrine` practitioner | ✓ |
+| 2 | `new eddy` → Turtle replies (DE-capable) | ✓ |
+| 3 | Checkpoint → eddy note on her root | ✓ (multiple; routing fix `23caf5f`) |
+| 4 | Theme propose → Keep → next eddy continuity | ✓ (Ch 2) |
+| 5 | `!flow fresh_eyes` → surface + no-pressure read | ✓ (Ch 3; `!flow` allowlist fix `e1e3aa5`) |
+| 6 | Daily note on her root (`!day`) | open in Ch 4 (`!day` allowlist + run) |
+| 7 | Feedback path (flow → note on her root) | path documented; optional live |
+| 8 | Invite anchors ready | see § Invite framing above |
 
-**Pass:** steps 1–4 green with paths under `nesrine/`. Then Ch 1 gate closes; cut Ch 2 (CE Slice 2).
+SSH check:
+```bash
+ssh turtle@100.110.46.104 'ls -lt ~/workshops/nesrine/story/eddies/ ~/workshops/nesrine/story/daily/ ~/workshops/nesrine/state/notes/ ~/workshops/nesrine/state/alive.yaml 2>/dev/null | head -25'
+```
 
 ---
 

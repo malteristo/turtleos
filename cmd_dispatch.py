@@ -21,6 +21,7 @@ COMMAND_ACT_FALLBACK = {
     "dissolve": "Eddy dissolved — thread archived, chronicle updated.",
     "flows": "Flow menu opened.",
     "flow": "Flow loaded or flow menu opened.",
+    "day": "Daily note refreshed from today's eddy notes.",
     "pin": "Message pinned in river channel.",
     "readiness": "Practice-readiness act posted.",
     "artifacts": "Practice artifact shelves displayed.",
@@ -38,6 +39,7 @@ _PRACTITIONER_COMMANDS = {
     "dissolve",
     "flows",
     "flow",  # alias of !flows — required for !flow <id> on hosted rivers
+    "day",  # Act Two daily note refresh — needed on hosted rivers too
     "pin",
     "focus",
     "readiness",
