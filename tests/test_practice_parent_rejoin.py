@@ -58,27 +58,41 @@ class PracticeParentChannelIdsTests(unittest.TestCase):
 
 
 class RiverRejoinPracticeThreadsTests(unittest.IsolatedAsyncioTestCase):
-    async def test_rejoins_threads_under_shared_river_parent(self) -> None:
+    async def test_rejoins_threads_via_guild_active_threads(self) -> None:
         from river_bot import _rejoin_practice_threads
 
         thread = MagicMock()
         thread.name = "Galactic Adventure"
         thread.id = 1522648705360990469
+        thread.parent_id = 1522210357622341766
         thread.join = AsyncMock()
+
+        other = MagicMock()
+        other.name = "unrelated"
+        other.id = 1
+        other.parent_id = 999
+        other.join = AsyncMock()
 
         parent = MagicMock()
         parent.name = "lukas-sandbox"
         parent.id = 1522210357622341766
-        parent.threads = [thread]
+        parent.guild = MagicMock()
+        parent.guild.active_threads = AsyncMock(return_value=[thread, other])
 
         client = MagicMock()
+        client.get_channel.return_value = parent
+
         with patch(
-            "river_handler._iter_river_channels",
-            new=AsyncMock(return_value=[parent]),
+            "mage.practice_parent_channel_ids",
+            return_value=[1522210357622341766],
+        ), patch(
+            "river_handler._resolve_client_channel",
+            new=AsyncMock(return_value=parent),
         ), patch("river_bot.asyncio.sleep", new=AsyncMock()):
             await _rejoin_practice_threads(client)
 
         thread.join.assert_awaited_once()
+        other.join.assert_not_awaited()
 
 
 class RiverEnsureTurtleOnTurnTests(unittest.IsolatedAsyncioTestCase):

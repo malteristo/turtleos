@@ -149,24 +149,49 @@ async def _rejoin_practice_threads(client) -> None:
 
     Operator dialogue alone is not enough — shared-river / hosted-river eddies
     (e.g. lukas-sandbox Galactic Adventure) go deaf if River never rejoins them.
-    """
-    from river_handler import _iter_river_channels
 
-    parents = await _iter_river_channels(client)
-    for parent in parents:
-        parent_name = getattr(parent, "name", parent.id)
-        threads = list(getattr(parent, "threads", []) or [])
-        for thread in threads:
-            try:
-                await thread.join()
-                print(
-                    f"River rejoined thread: {thread.name} ({thread.id}) "
-                    f"in #{parent_name}"
-                )
-                await asyncio.sleep(1)
-            except discord.HTTPException as exc:
-                print(f"River rejoin skipped {thread.name}: {exc}")
-                await asyncio.sleep(2)
+    Uses guild.active_threads() rather than channel.threads: the cache only
+    lists threads the bot already knows, so quiet shared-river eddies would
+    otherwise be skipped forever after a cold restart.
+    """
+    from mage import practice_parent_channel_ids
+    from river_handler import _resolve_client_channel
+
+    parent_ids = set(practice_parent_channel_ids())
+    if not parent_ids:
+        return
+
+    guild = None
+    for ch_id in parent_ids:
+        ch = await _resolve_client_channel(client, ch_id)
+        if ch is not None and getattr(ch, "guild", None) is not None:
+            guild = ch.guild
+            break
+    if guild is None:
+        return
+
+    try:
+        active = await guild.active_threads()
+    except discord.HTTPException as exc:
+        print(f"River active_threads fetch failed: {exc}")
+        return
+
+    for thread in active:
+        parent_id = getattr(thread, "parent_id", None)
+        if parent_id not in parent_ids:
+            continue
+        parent = client.get_channel(parent_id) if parent_id else None
+        parent_name = getattr(parent, "name", parent_id)
+        try:
+            await thread.join()
+            print(
+                f"River rejoined thread: {thread.name} ({thread.id}) "
+                f"in #{parent_name}"
+            )
+            await asyncio.sleep(1)
+        except discord.HTTPException as exc:
+            print(f"River rejoin skipped {thread.name}: {exc}")
+            await asyncio.sleep(2)
 
 
 @river_client.event

@@ -15,9 +15,9 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Root cause:** River startup rejoin only walked the operator `#river` parent (`_resolve_dialogue_channel_id`). Turtle skipped native-eddy rejoin entirely (deferred-join design). After restart, shared-river / hosted-river eddies could stop receiving MESSAGE_CREATE even while Discord still listed bots as members historically — and `river_add_turtle_to_eddy` only ran on first-message / flow bootstrap, not on later turns.
 
-**Fix:** `practice_parent_channel_ids()` + `_iter_river_channels` covers river / hosted-river / shared-river (skips archived/orphaned). River rejoins active threads under every practice parent (throttled). River calls `river_add_turtle_to_eddy` on every practitioner eddy turn (no-op if present). Turtle rejoins active threads across those parents, but for deferred native eddies only when already a Discord member (preserves first-message add ceremony). Tests: `tests/test_practice_parent_rejoin.py`.
+**Fix:** `practice_parent_channel_ids()` covers river / hosted-river / shared-river (skips archived/orphaned). Startup rejoin uses `guild.active_threads()` filtered by those parents — **not** `channel.threads` (cache misses eddies the bot is not already subscribed to; first deploy attempt only rejoined `#river` cache). River also calls `river_add_turtle_to_eddy` on every practitioner eddy turn (no-op if present). Turtle rejoins the same set, but for deferred native eddies only when already a Discord member (preserves first-message add ceremony). Tests: `tests/test_practice_parent_rejoin.py`.
 
-**Deploy:** restart **both** `com.turtle.discord` and `com.turtle.river`. Verify: post in a quiet shared-river eddy after restart → inbound + reply without Spirit poke.
+**Deploy:** restart **both** `com.turtle.discord` and `com.turtle.river`. Verify: log line `River rejoined thread: … in #lukas-sandbox` (or other shared-river), then post in a quiet shared-river eddy → inbound + reply without Spirit poke.
 
 ### 2026-07-16 — Update announcements (return-visit generalized)
 

@@ -392,52 +392,65 @@ async def on_ready():
         try:
             from discord_reconcile import ensure_dissolved_threads_archived
             from eddy_spawn import should_defer_turtle_join
-            from river_handler import _iter_river_channels
             from thread_registry import is_dissolved
 
             await ensure_dissolved_threads_archived(client, dialogue.id)
 
             # Active eddies on every practice parent (shared-river / hosted-river too).
+            # Use guild.active_threads() — channel.threads cache misses eddies the
+            # bot is not already subscribed to (the Galactic Adventure failure mode).
             # Native eddies: join only when already a Discord member so brand-new
             # blank eddies still get River's first-message add_user ceremony.
-            for parent in await _iter_river_channels(client):
-                parent_name = getattr(parent, "name", parent.id)
-                for t in list(getattr(parent, "threads", []) or []):
-                    if is_dissolved(t.id) and not t.archived and parent.id == dialogue.id:
-                        try:
-                            await t.edit(archived=True)
-                            print(
-                                f"Re-archived dissolved thread still active: "
-                                f"{t.name} (id: {t.id})"
-                            )
-                        except Exception as e:
-                            print(f"Failed to re-archive dissolved thread {t.name}: {e}")
-                        continue
-                    if should_defer_turtle_join(t):
-                        try:
-                            await t.fetch_member(client.user.id)
-                        except discord.NotFound:
-                            print(
-                                f"Skipped rejoin (native eddy, not yet member): "
-                                f"{t.name} (id: {t.id})"
-                            )
-                            continue
-                        except Exception as e:
-                            print(
-                                f"Skipped rejoin (native eddy): {t.name} "
-                                f"(id: {t.id}) — {e}"
-                            )
-                            continue
+            from mage import practice_parent_channel_ids
+
+            parent_ids = set(practice_parent_channel_ids())
+            try:
+                active = await dialogue.guild.active_threads()
+            except Exception as e:
+                print(f"active_threads fetch failed: {e}")
+                active = list(dialogue.threads)
+
+            for t in active:
+                parent_id = getattr(t, "parent_id", None)
+                if parent_id not in parent_ids:
+                    continue
+                parent = client.get_channel(parent_id) if parent_id else None
+                parent_name = getattr(parent, "name", parent_id)
+                if is_dissolved(t.id) and not t.archived and parent_id == dialogue.id:
                     try:
-                        await t.join()
+                        await t.edit(archived=True)
                         print(
-                            f"Rejoined thread: {t.name} (id: {t.id}) "
-                            f"in #{parent_name}"
+                            f"Re-archived dissolved thread still active: "
+                            f"{t.name} (id: {t.id})"
                         )
-                        await asyncio.sleep(1)  # Throttle to avoid Discord rate limits
                     except Exception as e:
-                        print(f"Failed to join thread {t.name}: {e}")
-                        await asyncio.sleep(2)  # Back off more on failure
+                        print(f"Failed to re-archive dissolved thread {t.name}: {e}")
+                    continue
+                if should_defer_turtle_join(t):
+                    try:
+                        await t.fetch_member(client.user.id)
+                    except discord.NotFound:
+                        print(
+                            f"Skipped rejoin (native eddy, not yet member): "
+                            f"{t.name} (id: {t.id})"
+                        )
+                        continue
+                    except Exception as e:
+                        print(
+                            f"Skipped rejoin (native eddy): {t.name} "
+                            f"(id: {t.id}) — {e}"
+                        )
+                        continue
+                try:
+                    await t.join()
+                    print(
+                        f"Rejoined thread: {t.name} (id: {t.id}) "
+                        f"in #{parent_name}"
+                    )
+                    await asyncio.sleep(1)  # Throttle to avoid Discord rate limits
+                except Exception as e:
+                    print(f"Failed to join thread {t.name}: {e}")
+                    await asyncio.sleep(2)  # Back off more on failure
 
             # Operator-river archived cleanup only (do not wake every parent).
             archived_threads = []
