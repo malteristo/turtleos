@@ -9,13 +9,21 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — CE Slice 2 MVP (theme propose + confirm)
+
+**Shipped (unit-green, pending live deploy):** Eddy-note reflection gains `---PROPOSED-THEMES---` (new themes allowed when alive is empty — related-topics honesty gate alone would block first-use). Manual checkpoint/release posts plain-language **Keep these** / **Not now** (`continuity_confirm.py`); Keep → `add_active_thread`. `set_last_checkpoint` wired from eddy-note preview. Stale demotion and per-theme edit deferred.
+
+**Anti-pattern caught in design:** Reusing `related-topics` for Slice 2 proposals — `_validate_relation` strips all topics when alive is empty, so the confirm UI would never appear for Nesrine's first themes.
+
+**Deploy:** restart both bots; smoke on `#nesrine-dialogue` — checkpoint → Keep → new eddy feels theme without re-explain.
+
 ### 2026-07-16 — Hosted eddy notes wrote to operator root
 
 **Symptom:** Checkpoint in `#nesrine-dialogue` eddy wrote `story/eddies/…-malte-in-nesrine-s-river.md` under `~/workshops/kermit/`, not `nesrine/`.
 
 **Root cause:** After eddy title assignment, `awaiting-title/{thread}.json` (with numeric `parent_channel_id`) is gone. `_parent_id_from_thread_state` returned `None`; resolve fell through to primary workshop. Durable `thread-state/registry.yaml` had `parent_channel: nesrine-dialogue` (name, not id) and was not consulted.
 
-**Fix (pending deploy):** (1) resolve parent from `registry.yaml` + channel `name:` fields; (2) pass Discord `thread.parent_id` through `cmd_checkpoint` / `write_eddy_note`. Misplaced note moved to `nesrine/story/eddies/`.
+**Fix (live `23caf5f`):** (1) resolve parent from `registry.yaml` + channel `name:` fields; (2) pass Discord `thread.parent_id` through `cmd_checkpoint` / `write_eddy_note`. Misplaced note moved to `nesrine/story/eddies/`.
 
 ### 2026-07-16 — Nesrine-ready Ch 1: registry restore + care package
 

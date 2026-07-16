@@ -33,8 +33,11 @@ Design stances honored here:
     the others, so scope is keyed by channel id in ``scopes.yaml`` rather than
     living in the single per-root ``current.yaml`` field.
 
-Not in Slice 1 (Slice 2+): checkpoint auto-proposals for active threads,
-conversational-offer narrowing, sediment (durable recall), and externals.
+Slice 2 (checkpoint theme proposals): see ``continuity_confirm.py`` +
+``story_notes`` ``PROPOSED-THEMES`` — plain-language Keep these / Not now
+before ``add_active_thread``; ``set_last_checkpoint`` wired from eddy-note
+preview. Not yet: stale demotion, conversational-offer narrowing, sediment,
+externals.
 """
 
 from __future__ import annotations

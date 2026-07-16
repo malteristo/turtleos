@@ -63,6 +63,20 @@ def _nothing_captured_message(history: list[dict]) -> str:
     )
 
 
+async def _offer_theme_confirm_if_any(message, result) -> None:
+    """CE Slice 2 — plain-language Keep these / Not now after an eddy note."""
+    note = getattr(result, "eddy_note", None)
+    proposed = list(getattr(note, "proposed_themes", None) or [])
+    if not proposed:
+        return
+    try:
+        from continuity_confirm import offer_theme_confirm
+
+        await offer_theme_confirm(message, proposed)
+    except Exception as exc:
+        print(f"Theme confirm offer failed: {type(exc).__name__}: {exc}")
+
+
 async def cmd_checkpoint(message):
     channel_id = message.channel.id
     parent_channel_id = getattr(message.channel, "parent_id", None)
@@ -144,6 +158,7 @@ async def cmd_checkpoint(message):
     except discord.HTTPException:
         pass
     await reply_artifact_surface(message, surface)
+    await _offer_theme_confirm_if_any(message, result)
 
 
 async def cmd_release(message):
@@ -216,6 +231,7 @@ async def cmd_release(message):
             open_actions=open_actions,
         ),
     )
+    await _offer_theme_confirm_if_any(message, result)
 
 
 async def cmd_dissolve(message, args):

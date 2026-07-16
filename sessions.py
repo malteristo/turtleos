@@ -262,6 +262,19 @@ async def checkpoint_session(
             eddy_rel = _practice_relative(result.eddy_note.note_path)
             print(f"Eddy note: {result.eddy_note.note_path}")
             try:
+                from continuity_engine import set_last_checkpoint
+
+                one_liner = (result.eddy_note.preview_text or "").strip()
+                if len(one_liner) > 240:
+                    one_liner = one_liner[:237].rstrip() + "..."
+                if one_liner:
+                    set_last_checkpoint(get_pd(), one_liner)
+            except Exception as e:
+                print(
+                    f"Last-checkpoint one-liner failed for {channel_id}: "
+                    f"{type(e).__name__}: {e}"
+                )
+            try:
                 await log_activity(
                     f"Eddy note: `{eddy_rel}`",
                     "\U0001f4dd",

@@ -31,12 +31,19 @@ HISTORY = [
 ]
 
 
-def _response(held: str, relation: str, topics: list[str] | None) -> str:
+def _response(
+    held: str,
+    relation: str,
+    topics: list[str] | None,
+    proposed: list[str] | None = None,
+) -> str:
     topics_body = "\n".join(f"- {t}" for t in topics) if topics else "none"
+    proposed_body = "\n".join(f"- {t}" for t in proposed) if proposed else "none"
     return (
         f"---HELD---\n{held}\n"
         f"---RELATION---\n{relation}\n"
         f"---RELATED-TOPICS---\n{topics_body}\n"
+        f"---PROPOSED-THEMES---\n{proposed_body}\n"
         "---END---"
     )
 
@@ -352,9 +359,73 @@ class EddyNoteWriterTests(unittest.IsolatedAsyncioTestCase):
 
             (front, body), = _parse_entries(result.note_path.read_text(encoding="utf-8"))
             self.assertEqual(front["related-topics"], [])
+            self.assertEqual(front.get("proposed-themes"), [])
+            self.assertEqual(result.proposed_themes, [])
             self.assertNotIn("your thread about", body)
             self.assertNotIn("your thread about", result.preview_text)
             self.assertIn("rough night of sleep", body)
+
+    async def test_empty_alive_still_keeps_proposed_themes(self) -> None:
+        """CE Slice 2 first-use: proposed themes must survive when nothing is
+        in motion yet — related-topics stay empty; confirm UI needs proposals."""
+        llm = AsyncMock(
+            return_value=_response(
+                HELD_SLEEP,
+                "This conversation touches your thread about health.",
+                ["health"],
+                proposed=["earlier evening walks", "weekend trip packing"],
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._patched(tmp, llm):
+                result = await story_notes.write_eddy_note(
+                    CHANNEL_ID, HISTORY, trigger="idle"
+                )
+
+            self.assertEqual(
+                result.proposed_themes,
+                ["earlier evening walks", "weekend trip packing"],
+            )
+            (front, body), = _parse_entries(result.note_path.read_text(encoding="utf-8"))
+            self.assertEqual(front["related-topics"], [])
+            self.assertEqual(
+                front["proposed-themes"],
+                ["earlier evening walks", "weekend trip packing"],
+            )
+            self.assertNotIn("your thread about", body)
+
+    async def test_proposed_themes_drop_already_in_motion(self) -> None:
+        llm = AsyncMock(
+            return_value=_response(
+                HELD_SLEEP,
+                "none",
+                None,
+                proposed=["health", "weekend trip packing"],
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_alive(tmp, threads=("health",), intentions=())
+            with self._patched(tmp, llm):
+                result = await story_notes.write_eddy_note(
+                    CHANNEL_ID, HISTORY, trigger="idle"
+                )
+
+            self.assertEqual(result.proposed_themes, ["weekend trip packing"])
+
+    async def test_legacy_response_without_proposed_section_parses(self) -> None:
+        legacy = (
+            f"---HELD---\n{HELD_TRIP}\n"
+            "---RELATION---\nnone\n"
+            "---RELATED-TOPICS---\nnone\n"
+            "---END---"
+        )
+        llm = AsyncMock(return_value=legacy)
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._patched(tmp, llm):
+                result = await story_notes.write_eddy_note(
+                    CHANNEL_ID, HISTORY, trigger="idle"
+                )
+            self.assertEqual(result.proposed_themes, [])
 
     # ── one file per eddy, appended per checkpoint ───────────────────
 

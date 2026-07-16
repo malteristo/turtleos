@@ -1,7 +1,7 @@
 # Design Chapter: Nesrine-Ready
 
 **Opened:** 2026-07-16  
-**Status:** Ch 1 care package landed — registry restored; her-river routing green; operator smoke + discord_id still open  
+**Status:** Ch 1 green · Ch 2 CE Slice 2 implemented (unit-green; live deploy + her-river smoke open)  
 **Spec trace:** TURTLE_SPEC §3.1, §6.5, §8.4, §10.2 (Fresh Eyes), §15; CE design v4 Slice 2  
 **Sources:** July 2026 user research (`magic/floor/research/turtleos_user_research_nesrine_2026-07.md`); Story Layer vision; Forge arrival 2026-07-16  
 **Grill:** Forge craft session 2026-07-16 (MVP cut · ChatGPT import post-MVP · Fresh Eyes over weekly)
@@ -100,11 +100,11 @@ Thinking-substrate for the ask, not a script:
 - [x] DE return-visit already posted (`thread-state/river/return_visit_v1.json`) — re-post with `--force` after Ch 3 if copy should mention story surfaces
 - [x] Feedback path documented: flow library → structured thread; durable `state/notes/feedback-last.md` on `!checkpoint` (intake file auto-write still open slice — not blocking Ch 1)
 - [x] **Nesrine `discord_id` filled** — `1485296679900156025` (moichmena); Kermit corrected to `701492724674723901` (firlefance). Backup: `mage_registry.yaml.bak-2026-07-16`
-- [ ] **Operator smoke on her channel** — first attempt wrote to `kermit/` (parent-resolve bug); note moved; fix pending deploy — re-smoke after both bots restart
+- [x] **Operator smoke on her channel** — re-smoke 2026-07-16 11:56: `malte-returns-to-new-eddy-chat.md` under `nesrine/story/eddies/`; nothing new under `kermit/` (fix `23caf5f` live)
 
 ### Ch 2–4
-- [ ] Checkpoint proposes ≥1 theme in plain language; confirm/edit updates alive layer
-- [ ] New eddy after confirm shows continuity without re-explaining the theme
+- [x] Checkpoint proposes ≥1 theme in plain language; Keep these / Not now updates alive layer *(code + unit; live smoke open)*
+- [ ] New eddy after confirm shows continuity without re-explaining the theme *(needs live smoke)*
 - [ ] Fresh Eyes available in flow library; produces illumination, not urgency
 - [ ] Operator smoke complete (includes Ch 2–3 beats)
 - [ ] Invite anchors prepared; ChatGPT import explicitly *later*
@@ -140,4 +140,4 @@ Run on `#nesrine-dialogue` (`1484973995823599757`) as operator standing in for h
 
 ---
 
-*Ch 1 care package landed. Close Ch 1 with operator smoke + discord_id. Next build: Ch 2 — CE Slice 2.*
+*Ch 1 green. Ch 2 Slice 2 code landed — deploy both bots, smoke Keep→continuity on her river, then Ch 3 Fresh Eyes.*

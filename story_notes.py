@@ -27,7 +27,7 @@ the model names is kept only when it points at something actually alive.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -46,7 +46,10 @@ EDDIES_SUBDIR = Path("story") / "eddies"
 _HELD = "---HELD---"
 _RELATION = "---RELATION---"
 _TOPICS = "---RELATED-TOPICS---"
+_PROPOSED = "---PROPOSED-THEMES---"
 _END = "---END---"
+_MAX_PROPOSED_THEMES = 3
+_MAX_THEME_LABEL_CHARS = 60
 
 _SYSTEM_PROMPT = (
     "You write short notes that tell a practitioner's story back to them. "
@@ -66,6 +69,11 @@ _SYSTEM_PROMPT = (
     f"{_TOPICS}\n"
     "The items from the in-motion list that the relation points at, one per "
     "line prefixed with \"- \". If you wrote none above, write exactly: none\n"
+    f"{_PROPOSED}\n"
+    "Up to 3 short labels (2-6 words) for themes that emerged in THIS "
+    "conversation and would be useful to remember across future chats — "
+    "durable threads, not a summary of the whole chat. Prefer reusing an "
+    "in-motion label when it fits. If nothing durable emerged: none\n"
     f"{_END}"
 )
 
@@ -88,6 +96,7 @@ class EddyNoteResult:
     note_path: Path
     entry_text: str
     preview_text: str
+    proposed_themes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -144,13 +153,16 @@ async def write_eddy_note(
     if reply == _NO_RESPONSE_SENTINEL or len(reply) <= _MIN_REPLY_CHARS:
         raise EddyNoteError(f"reflection reply failed the quality floor: {reply[:80]!r}")
 
-    held, relation, topics = _parse_response(reply)
+    held, relation, topics, proposed = _parse_response(reply)
     if not held.strip():
         raise EddyNoteError("reflection reply had an empty what-the-eddy-held section")
     relation, topics = _validate_relation(relation, topics, alive_items)
+    proposed = _normalize_proposed_themes(proposed, alive_items)
 
     title = _resolve_thread_title(channel_id)
-    entry_text = _compose_entry(channel_id, title, trigger, held, relation, topics)
+    entry_text = _compose_entry(
+        channel_id, title, trigger, held, relation, topics, proposed
+    )
 
     # Per-eddy lock (keyed on channel id) held across discovery + append so
     # two concurrent first checkpoints cannot fork the eddy's note file.
@@ -163,6 +175,7 @@ async def write_eddy_note(
         note_path=note_path,
         entry_text=entry_text,
         preview_text=_compose_preview(held, relation),
+        proposed_themes=proposed,
     )
 
 
@@ -262,23 +275,64 @@ def _section(raw: str, start: str, end: str) -> str | None:
     return body.strip()
 
 
-def _parse_response(raw: str) -> tuple[str, str | None, list[str]]:
+def _parse_bullet_labels(body: str) -> list[str]:
+    labels: list[str] = []
+    for line in body.splitlines():
+        line = line.strip().lstrip("-").strip()
+        if line and line.lower() not in ("none", "none."):
+            labels.append(line)
+    return labels
+
+
+def _parse_response(raw: str) -> tuple[str, str | None, list[str], list[str]]:
     held = _section(raw, _HELD, _RELATION)
     if held is None:
         # Sentinels missing — degrade to treating the whole reply as the note.
-        return raw.strip(), None, []
+        return raw.strip(), None, [], []
 
     relation = _section(raw, _RELATION, _TOPICS) or ""
     if relation.strip().lower() in ("", "none", "none."):
         relation = None
 
-    topics: list[str] = []
-    topics_body = _section(raw, _TOPICS, _END) or ""
-    for line in topics_body.splitlines():
-        line = line.strip().lstrip("-").strip()
-        if line and line.lower() not in ("none", "none."):
-            topics.append(line)
-    return held, relation, topics
+    if _PROPOSED in raw:
+        topics_body = _section(raw, _TOPICS, _PROPOSED) or ""
+        proposed_body = _section(raw, _PROPOSED, _END) or ""
+    else:
+        # Pre-Slice-2 replies omit proposed themes.
+        topics_body = _section(raw, _TOPICS, _END) or ""
+        proposed_body = ""
+
+    return held, relation, _parse_bullet_labels(topics_body), _parse_bullet_labels(
+        proposed_body
+    )
+
+
+def _normalize_proposed_themes(
+    proposed: list[str], alive_items: list[str]
+) -> list[str]:
+    """Cap, trim, and drop themes already listed as in motion.
+
+    Unlike related-topics, proposed themes are allowed when the alive layer is
+    empty — that is the first-use path for Continuity Engine Slice 2.
+    """
+    kept: list[str] = []
+    seen: set[str] = set()
+    for raw in proposed:
+        label = " ".join((raw or "").split())
+        if not label or len(label) < 2:
+            continue
+        if len(label) > _MAX_THEME_LABEL_CHARS:
+            label = label[:_MAX_THEME_LABEL_CHARS].rstrip()
+        key = label.lower()
+        if key in seen:
+            continue
+        if any(_topic_matches_alive(label, alive) for alive in alive_items):
+            continue
+        seen.add(key)
+        kept.append(label)
+        if len(kept) >= _MAX_PROPOSED_THEMES:
+            break
+    return kept
 
 
 def _normalize_words(text: str) -> set[str]:
@@ -381,6 +435,7 @@ def _compose_entry(
     held: str,
     relation: str | None,
     topics: list[str],
+    proposed: list[str] | None = None,
 ) -> str:
     fields = {
         "thread": str(channel_id),
@@ -388,6 +443,7 @@ def _compose_entry(
         "trigger": trigger,
         "timestamp": local_now().isoformat(timespec="seconds"),
         "related-topics": topics,
+        "proposed-themes": list(proposed or []),
     }
     dumped = yaml.safe_dump(
         fields, sort_keys=False, allow_unicode=True, default_flow_style=None
