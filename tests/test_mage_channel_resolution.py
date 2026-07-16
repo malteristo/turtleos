@@ -79,6 +79,41 @@ class MageChannelResolutionTests(unittest.TestCase):
         )
         self.assertEqual(mage.resolve_registry_channel_id(thread_id), parent_id)
 
+    def test_resolve_registry_channel_id_from_thread_registry_name(self) -> None:
+        """After title assignment, awaiting-title JSON is gone — registry.yaml remains."""
+        parent_id = 1484973995823599757
+        thread_id = 1527242561930924113
+        self._write_registry(
+            {
+                str(parent_id): {
+                    "type": "hosted-river",
+                    "mage": "nesrine",
+                    "name": "nesrine-dialogue",
+                }
+            },
+            mages={
+                "nesrine": {
+                    "practice_dir": os.path.join(self._tmpdir.name, "nesrine"),
+                    "runtime_dir": self._runtime_root,
+                },
+            },
+        )
+        reg_dir = Path(self._runtime_root) / "thread-state"
+        reg_dir.mkdir(parents=True, exist_ok=True)
+        reg_dir.joinpath("registry.yaml").write_text(
+            "\n".join(
+                [
+                    "threads:",
+                    f"  '{thread_id}':",
+                    "    name: Malte in Nesrine's river",
+                    "    parent_channel: nesrine-dialogue",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(mage.resolve_registry_channel_id(thread_id), parent_id)
+
     def test_set_practice_context_for_thread_uses_parent_workshop(self) -> None:
         lukas_pd = os.path.join(self._tmpdir.name, "lukas")
         os.makedirs(lukas_pd, exist_ok=True)

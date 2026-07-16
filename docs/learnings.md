@@ -9,6 +9,26 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — Hosted eddy notes wrote to operator root
+
+**Symptom:** Checkpoint in `#nesrine-dialogue` eddy wrote `story/eddies/…-malte-in-nesrine-s-river.md` under `~/workshops/kermit/`, not `nesrine/`.
+
+**Root cause:** After eddy title assignment, `awaiting-title/{thread}.json` (with numeric `parent_channel_id`) is gone. `_parent_id_from_thread_state` returned `None`; resolve fell through to primary workshop. Durable `thread-state/registry.yaml` had `parent_channel: nesrine-dialogue` (name, not id) and was not consulted.
+
+**Fix (pending deploy):** (1) resolve parent from `registry.yaml` + channel `name:` fields; (2) pass Discord `thread.parent_id` through `cmd_checkpoint` / `write_eddy_note`. Misplaced note moved to `nesrine/story/eddies/`.
+
+### 2026-07-16 — Nesrine-ready Ch 1: registry restore + care package
+
+**Finding:** `~/turtleos/mage_registry.yaml` was **absent again** on Mini (gitignored; no backup). Hosted routing degraded to primary-workshop inference — same class as 2026-07-10 split-bot / runtime-dir fragmentation. Nesrine-ready Ch 1 blocked until restore.
+
+**Shipped (care package):** Reconstructed registry from eddy bars + Discord history; `~/workshops/nesrine/resonance.md`; story/daily + story/eddies + state/notes dirs; conduct honesty update (no false “no cross-eddy memory”); destination acceptance + operator smoke checklist in `docs/chapters/design-nesrine-ready.md`.
+
+**Still open for Ch 1 close:** Nesrine `discord_id` (not in recoverable message history — channel dominated by operator test posts); operator smoke proving story writes land under `nesrine/` not `kermit/`.
+
+**Anti-pattern:** Treating gitignored `mage_registry.yaml` as durable without a Mini-local backup or canary check. **Follow-up:** after smoke, copy registry to a Mini backup path; consider ops-gate “registry present” check.
+
+**Next:** Operator smoke → Ch 2 CE Slice 2.
+
 ### 2026-07-16 — River bar reconciled floor (042–044)
 
 **Shipped:** Launch-pad chrome (`new eddy` + `more` select); `reconcile_river_bar_floor` (orphan sweep → one bar); debounced schedule via `bar_anchor` (~1.5s); multi-step `hold_river_bar` for artifacts; ephemeral help from more; River safety sweep every 3 min; TURTLE_SPEC §5.3 + UX docs.

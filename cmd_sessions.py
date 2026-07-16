@@ -65,6 +65,7 @@ def _nothing_captured_message(history: list[dict]) -> str:
 
 async def cmd_checkpoint(message):
     channel_id = message.channel.id
+    parent_channel_id = getattr(message.channel, "parent_id", None)
     history = reload_history(channel_id)
     if len(history) < MIN_EXCHANGES_FOR_CHECKPOINT:
         await message.reply(
@@ -84,7 +85,12 @@ async def cmd_checkpoint(message):
 
     from sessions import checkpoint_session
 
-    result = await checkpoint_session(channel_id, trigger="manual", mark_paused=False)
+    result = await checkpoint_session(
+        channel_id,
+        trigger="manual",
+        mark_paused=False,
+        parent_channel_id=parent_channel_id,
+    )
 
     if not result.captured_anything:
         await ack.edit(content=_nothing_captured_message(history))
@@ -142,6 +148,7 @@ async def cmd_checkpoint(message):
 
 async def cmd_release(message):
     channel_id = message.channel.id
+    parent_channel_id = getattr(message.channel, "parent_id", None)
     history = reload_history(channel_id)
     if len(history) < 2:
         await message.reply("Not enough conversation to release. Just go — rest well.", mention_author=False)
@@ -150,7 +157,12 @@ async def cmd_release(message):
     await message.reply("Closing session...", mention_author=False)
     from sessions import checkpoint_session
 
-    result = await checkpoint_session(channel_id, trigger="release", mark_paused=True)
+    result = await checkpoint_session(
+        channel_id,
+        trigger="release",
+        mark_paused=True,
+        parent_channel_id=parent_channel_id,
+    )
 
     clear_history(channel_id)
     active_sessions.pop(channel_id, None)

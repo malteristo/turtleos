@@ -203,6 +203,7 @@ async def checkpoint_session(
     *,
     trigger: str = "idle",
     mark_paused: bool = True,
+    parent_channel_id: int | None = None,
 ) -> CheckpointResult:
     """Capture resonance without clearing history. Idle timeout or ``!checkpoint``."""
     result = CheckpointResult(trigger=trigger, paused=mark_paused)
@@ -210,7 +211,7 @@ async def checkpoint_session(
     if channel_id in active_sessions and mark_paused:
         active_sessions[channel_id]["closed"] = True
 
-    set_practice_context_for_channel(channel_id)
+    set_practice_context_for_channel(parent_channel_id or channel_id)
     # Snapshot the live history list: exchanges arriving during the long
     # reflection await must neither shift the transcript the note sees nor
     # be claimed as covered by this checkpoint's anchor.
@@ -249,6 +250,7 @@ async def checkpoint_session(
                 history,
                 trigger=trigger,
                 since_index=_since_index_for(channel_id, history),
+                parent_channel_id=parent_channel_id,
             )
         except story_notes.EddyNoteError as e:
             # Degenerate reflection — nothing was written; checkpoint continues.

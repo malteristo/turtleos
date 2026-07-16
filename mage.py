@@ -484,10 +484,62 @@ def get_topology():
     }
 
 
+def _channel_id_for_parent_name(name: str) -> int | None:
+    """Map a Discord channel name/slug from thread registry → registered parent id."""
+    needle = (name or "").strip().lower()
+    if not needle:
+        return None
+    if needle.isdigit():
+        return int(needle)
+    for ch_id_str, entry in (_MAGE_REGISTRY.get("channels") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        for key in ("name", "slug", "discord_name"):
+            val = entry.get(key)
+            if val and str(val).strip().lower() == needle:
+                try:
+                    return int(ch_id_str)
+                except (TypeError, ValueError):
+                    continue
+    return None
+
+
+def _parent_id_from_thread_registry(thread_id: int) -> int | None:
+    """Resolve parent from durable thread-state/registry.yaml (survives title assignment)."""
+    import yaml
+
+    tid = str(thread_id)
+    for runtime_dir in list_registered_runtime_dirs():
+        reg_path = Path(runtime_dir) / "thread-state" / "registry.yaml"
+        if not reg_path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(reg_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        threads = data.get("threads") or {}
+        if not isinstance(threads, dict):
+            continue
+        entry = threads.get(tid)
+        if entry is None:
+            entry = threads.get(thread_id)
+        if not isinstance(entry, dict):
+            continue
+        for key in ("parent_channel_id", "parent_id"):
+            parent = entry.get(key)
+            if parent is not None and str(parent).isdigit():
+                return int(parent)
+        parent_name = entry.get("parent_channel")
+        if isinstance(parent_name, str) and parent_name.strip():
+            resolved = _channel_id_for_parent_name(parent_name)
+            if resolved is not None:
+                return resolved
+    return None
+
+
 def _parent_id_from_thread_state(thread_id: int) -> int | None:
     """Resolve parent river channel from eddy thread state on disk."""
     import json
-    from pathlib import Path
 
     tid = str(thread_id)
     for runtime_dir in list_registered_runtime_dirs():
@@ -527,7 +579,8 @@ def _parent_id_from_thread_state(thread_id: int) -> int | None:
                     pass
             return parent_id
 
-    return None
+    # After title assignment, awaiting-title JSON is gone — registry.yaml remains.
+    return _parent_id_from_thread_registry(thread_id)
 
 
 def resolve_registry_channel_id(channel_id) -> int:

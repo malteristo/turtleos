@@ -112,13 +112,17 @@ async def write_eddy_note(
     *,
     trigger: str,
     since_index: int | None = None,
+    parent_channel_id: int | None = None,
 ) -> EddyNoteResult:
     """Write (or append to) the eddy's story note and return it with a preview.
 
     ``trigger == "manual"`` weights the reflection toward
     ``history[since_index:]`` — the exchanges since the last checkpoint.
+
+    Prefer ``parent_channel_id`` (Discord thread parent) so hosted-river eddies
+    write under the practitioner root even when thread-state parent lookup is stale.
     """
-    set_practice_context_for_channel(channel_id)
+    set_practice_context_for_channel(parent_channel_id or channel_id)
     practice_dir = Path(get_pd())
     mage_name = get_mage_name()
 
