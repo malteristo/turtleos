@@ -240,6 +240,12 @@ async def deliver_flow_bootstrap(
         return False
 
     ensure_campaign_bootstrap(spec, get_pd())
+    try:
+        from flow_runner import prepare_flow_reads
+
+        prepare_flow_reads(spec, get_pd())
+    except Exception as exc:
+        print(f"Flow read prepare failed ({flow_id}): {type(exc).__name__}: {exc}")
 
     try:
         channel = client.get_channel(thread_id) or await client.fetch_channel(thread_id)

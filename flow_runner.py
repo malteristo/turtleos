@@ -376,12 +376,26 @@ def format_intake_summary(spec: FlowSpec, values: dict[str, str]) -> str:
     return "\n\n".join(parts) + "\n\nTurtle will pick up from here — not from zero."
 
 
+def prepare_flow_reads(spec: FlowSpec, practice_dir: str | None = None) -> None:
+    """Materialize derived read surfaces before the flow prompt is built."""
+    if spec.flow_id == "fresh_eyes" or any(
+        rel.endswith("fresh-eyes-surface.md") for rel in spec.reads
+    ):
+        try:
+            from fresh_eyes import materialize_fresh_eyes_surface
+
+            materialize_fresh_eyes_surface(practice_dir or get_pd())
+        except Exception as exc:
+            print(f"Fresh Eyes surface materialize failed: {type(exc).__name__}: {exc}")
+
+
 def build_flow_prompt_sections(
     flow_id: str | None, practice_dir: str | None = None
 ) -> tuple[list[str], FlowSpec | None]:
     spec = load_flow_spec(flow_id, practice_dir)
     if not spec:
         return [], None
+    prepare_flow_reads(spec, practice_dir)
     sections = [f"## Active Flow: {spec.title}\n\n{spec.body}"]
     reads = read_state_bundle(spec, practice_dir)
     if spec.reads:

@@ -284,7 +284,7 @@ class FlowRunnerTests(unittest.TestCase):
 
     def test_list_resolvable_flow_ids_includes_shipped_flows(self) -> None:
         flows = list_resolvable_flow_ids()
-        for flow_id in ("navigator", "thread", "companion"):
+        for flow_id in ("navigator", "thread", "companion", "fresh_eyes"):
             self.assertIn(flow_id, flows)
         self.assertNotIn("shelter", flows)
         self.assertEqual(len(flows), len(set(flows)))

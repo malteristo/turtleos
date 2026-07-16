@@ -9,6 +9,14 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-16 — Fresh Eyes flow (Ch 3)
+
+**Shipped (unit-green, pending live smoke):** `template/flows/fresh_eyes.md` + `fresh_eyes.py` materializes `state/notes/fresh-eyes-surface.md` from alive threads, last-checkpoint one-liner, recent eddy notes, recent daily notes. Wired via `prepare_flow_reads` / bootstrap. Quest deferred. Tone law: illumination, not urgency; vocabulary firewall.
+
+**Anti-pattern avoided:** Declaring `reads: [story/eddies/*]` — flow runner only loads exact files. Surface assembly is the adapter.
+
+**Smoke:** `!flow fresh_eyes` on `#nesrine-dialogue` eddy with alive themes from Ch 2; expect calm read naming what's in motion; surface file under `nesrine/state/notes/`.
+
 ### 2026-07-16 — CE Slice 2 MVP (theme propose + confirm)
 
 **Shipped + live-smoked (`7207a43`):** Eddy-note `---PROPOSED-THEMES---` (works when alive empty). Manual checkpoint posts **Keep these** / **Not now**; Keep → `add_active_thread`. `set_last_checkpoint` from eddy-note preview.
