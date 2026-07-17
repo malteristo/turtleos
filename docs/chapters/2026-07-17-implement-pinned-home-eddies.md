@@ -203,4 +203,4 @@ If `PIN_MESSAGES`, thread unarchive, or jump URL fails on Mini: document in this
 
 ## Status
 
-**Implementing 2026-07-17** — claimed-by forge-craft; slices 0–7 code/docs/tests landed. Residual: Slice 6 Turtle dialogue tool wiring (helper + units shipped). **Gate:** dyad approval → restart both bots → operator recognition tests.
+**Shipped 2026-07-17** — dogfood green (pin card, Continue, Open, Stop delete). Split-bot client mends: `c7b0932` / `58d6c3d` / `b869a6c`. Residual Slice 6 quiet write → crystallization chapter.

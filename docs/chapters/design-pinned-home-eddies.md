@@ -1,7 +1,7 @@
 # Design Chapter: Pinned Home Eddies
 
 **Opened:** 2026-07-17  
-**Status:** Implementing / code landed — dogfood after both-bot restart → [2026-07-17-implement-pinned-home-eddies.md](2026-07-17-implement-pinned-home-eddies.md)  
+**Status:** Shipped — operator dogfood green 2026-07-17 → [2026-07-17-implement-pinned-home-eddies.md](2026-07-17-implement-pinned-home-eddies.md). Next product gap: [design-turtle-artifact-crystallization.md](design-turtle-artifact-crystallization.md)  
 **Spec trace:** TURTLE_SPEC §5.3 (river surface), §8 (eddy lifecycle / cool), §11.5 (practice artifacts); story-layer vision §5  
 **Sources:** Forge design slice 2026-07-17 (workout lifecycle; Discord-honest periphery; `!pin` as first real product use)  
 **Dogfood first:** Operator river; UI copy hosted-safe
