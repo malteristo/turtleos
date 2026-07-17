@@ -519,7 +519,7 @@ async def cmd_pin(message, args):
 
 async def _cmd_pin_home_eddy(message, args):
     """Bind or refresh a home-plan pin from inside an eddy."""
-    from home_plan_ui import bind_and_post_pin
+    from home_plan_ui import bind_and_post_pin, resolve_pin_client
     from home_plans import HomePlanError, get_by_eddy
     from mage import get_pd
 
@@ -533,6 +533,7 @@ async def _cmd_pin_home_eddy(message, args):
 
     pd = get_pd()
     existing = get_by_eddy(pd, thread.id)
+    pin_client = resolve_pin_client(message=message)
 
     title = " ".join(args).strip() if args else ""
     body = None
@@ -546,6 +547,23 @@ async def _cmd_pin_home_eddy(message, args):
         except (discord.NotFound, discord.Forbidden):
             pass
 
+    # No reply: prefer latest substantial non-command message in the eddy (Turtle plan).
+    if not body and hasattr(thread, "history"):
+        try:
+            async for m in thread.history(limit=20):
+                text = (m.content or "").strip()
+                if not text or text.startswith("!"):
+                    continue
+                if len(text) < 80:
+                    continue
+                body = text
+                if not title:
+                    first = body.splitlines()[0].lstrip("#").strip()
+                    title = first[:80] if first else ""
+                break
+        except (discord.Forbidden, discord.HTTPException, TypeError, AttributeError):
+            pass
+
     if existing:
         try:
             plan = await bind_and_post_pin(
@@ -554,6 +572,9 @@ async def _cmd_pin_home_eddy(message, args):
                 home_eddy_id=thread.id,
                 river_channel_id=parent_id,
                 refresh_plan=existing,
+                discord_client=pin_client,
+                message=message,
+                body=body,
             )
         except HomePlanError as exc:
             await message.reply(str(exc), mention_author=False)
@@ -579,6 +600,8 @@ async def _cmd_pin_home_eddy(message, args):
             home_eddy_id=thread.id,
             river_channel_id=parent_id,
             body=body,
+            discord_client=pin_client,
+            message=message,
         )
     except HomePlanError as exc:
         await message.reply(str(exc), mention_author=False)

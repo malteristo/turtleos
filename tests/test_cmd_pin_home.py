@@ -117,6 +117,25 @@ class TestCmdPinHome(unittest.IsolatedAsyncioTestCase):
         message.add_reaction.assert_awaited_once_with("📌")
 
 
+class TestResolvePinClient(unittest.TestCase):
+    def test_prefers_ready_river_client(self) -> None:
+        from home_plan_ui import resolve_pin_client
+
+        river = MagicMock()
+        river.is_ready = MagicMock(return_value=True)
+        river.user = MagicMock()
+        with patch("mage.river_bot_enabled", return_value=True), patch(
+            "river_state.river_client", river
+        ):
+            self.assertIs(resolve_pin_client(message=MagicMock()), river)
+
+    def test_explicit_client_wins(self) -> None:
+        from home_plan_ui import resolve_pin_client
+
+        explicit = MagicMock(name="explicit")
+        self.assertIs(resolve_pin_client(discord_client=explicit), explicit)
+
+
 class TestStickyCool(unittest.IsolatedAsyncioTestCase):
     async def test_sticky_skips_mark_cooled(self) -> None:
         import sessions as sess

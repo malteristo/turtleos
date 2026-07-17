@@ -297,6 +297,38 @@ class HomePlanOfferView(discord.ui.View):
         await interaction.response.edit_message(content="Okay — not pinned.", view=None)
 
 
+def resolve_pin_client(message=None, discord_client=None):
+    """Client that must post/pin the river card — River when split, else message client.
+
+    Never use the Turtle ``state.client`` from the River process: it is not
+    logged-in there and Discord awaits land on ``_MissingSentinel`` (no ``is_set``).
+    """
+    if discord_client is not None:
+        return discord_client
+    try:
+        from mage import river_bot_enabled
+        from river_state import river_client
+
+        if river_bot_enabled() and river_client is not None:
+            ready = getattr(river_client, "is_ready", None)
+            if callable(ready) and ready():
+                return river_client
+            # River process: prefer river_client even before is_ready races settle
+            if getattr(river_client, "user", None) is not None:
+                return river_client
+    except Exception:
+        pass
+    if message is not None:
+        getter = getattr(getattr(message, "_state", None), "_get_client", None)
+        if callable(getter):
+            live = getter()
+            if live is not None:
+                return live
+    from state import client as global_client
+
+    return global_client
+
+
 async def bind_and_post_pin(
     *,
     practice_dir: str,
@@ -306,18 +338,43 @@ async def bind_and_post_pin(
     body: str | None = None,
     artifact_path: str | None = None,
     discord_client=None,
+    message=None,
     refresh_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Bind (unless refresh) + post/pin river card. Returns plan dict."""
     import discord as discord_mod
     from practice_io import artifact_read_url
-    from state import client as global_client
 
-    dc = discord_client or global_client
+    dc = resolve_pin_client(message=message, discord_client=discord_client)
+    if dc is None:
+        raise HomePlanError("No Discord client available to post the river pin.")
     if refresh_plan:
         plan = dict(refresh_plan)
         touch_plan(practice_dir, str(plan["id"]))
         plan = get_by_id(practice_dir, str(plan["id"])) or plan
+        # First-attempt bind may have left a skeleton before pin post failed —
+        # fill from eddy body when the file is still a placeholder.
+        if body and body.strip() and plan.get("artifact_path"):
+            from pathlib import Path
+
+            abs_path = Path(practice_dir) / str(plan["artifact_path"])
+            try:
+                current = abs_path.read_text(encoding="utf-8") if abs_path.is_file() else ""
+            except OSError:
+                current = ""
+            if (
+                not current.strip()
+                or "Working plan — edit with Turtle" in current
+                or len(current) < 80
+            ):
+                clean = body.strip()
+                if not clean.lstrip().startswith("#"):
+                    clean = f"# {plan.get('title') or title}\n\n{clean}"
+                if not clean.endswith("\n"):
+                    clean += "\n"
+                from atomic_io import atomic_write_text
+
+                atomic_write_text(abs_path, clean)
     else:
         plan = bind_home(
             practice_dir,
@@ -377,12 +434,9 @@ async def bind_and_post_pin(
     plan = get_by_id(practice_dir, str(plan["id"])) or plan
 
     try:
-        from state import client as bot_client
-
-        if bot_client:
-            bot_client.add_view(HomePlanPinView(str(plan["id"]), timeout=None))
-    except Exception:
-        pass
+        dc.add_view(HomePlanPinView(str(plan["id"]), timeout=None))
+    except Exception as exc:
+        print(f"home_plan add_view: {exc}")
 
     return plan
 
