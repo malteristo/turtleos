@@ -54,6 +54,7 @@
 | §9.5 | Act digest as context bridge | `commands.py` inject | same | **Partial** | `test_command_dispatch` | handoff doc | **Strangle** — replace with cleaner harness contract |
 | §10.3 | Flow front matter `reads:`/`writes:` | `flow_runner.py` | same | **Aligned** | `test_flow_runner`, `shake_flow.py` | `template/flows/` | **Keep** |
 | §11.1 | Vanilla practice root `state/` | `flow_runner`, `practice_io`, `practice_freshness` | same | **Aligned** | `test_flow_runner`, `test_practice_freshness` | `PRACTICE.md` | **Keep** |
+| §5 / §8 / §11.5 | Pinned home eddies (working plan ↔ home eddy ↔ river pin card) | `home_plans.py`, `home_plan_ui.py`, `cmd_pin`, sticky cool, dialogue attunement | same | **Aligned** (2026-07-17 AFK) | `test_home_plans`, `test_cmd_pin_home`, `shake_home_plans.py` | `design-pinned-home-eddies.md`, implement chapter | **Keep** — live dogfood + both-bot restart; Slice 6 Turtle write-tool residual OK |
 | §12 | River act catalog + JSON enforcement | `river_handler.py` | same | **Aligned** | `test_river_handler` | §12 | **Keep** |
 | §4 | Attunement `native` / `craft` / `magic` | `mage.py`, `attunement.py` | same | **Partial** | `test_craft_attunement`, `test_flow_runner` | `mage_registry.example.yaml` | **Integrate** — operator instance attunement truth |
 | §4 / App A | Magic-attuned overlay | — (retired 2026-07-08/10) | removed | **Retired** | — | Appendix A | **Done** |

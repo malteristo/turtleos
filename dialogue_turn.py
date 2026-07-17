@@ -407,6 +407,16 @@ async def continue_dialogue_turn(
     except Exception as exc:
         print(f"CE substrate packet failed: {type(exc).__name__}: {exc}")
 
+    # Pinned home eddy — inject working-plan attunement (river pin + file, not sidebar).
+    try:
+        from home_plans import render_home_attunement_packet
+
+        home_block = render_home_attunement_packet(get_pd(), channel_id)
+        if home_block:
+            system_prompt = home_block + system_prompt
+    except Exception as exc:
+        print(f"Home-plan attunement failed: {type(exc).__name__}: {exc}")
+
     source_flags = []
     if url_content:
         source_flags.append(f"bot-fetched URL content ({url_source_count or len(urls)} URL(s))")

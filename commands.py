@@ -324,7 +324,7 @@ def _help_embed_fields() -> list[tuple[str, str]]:
     river_cmds = [
         ("**new eddy**", "Standing bar — open a blank eddy (TURTLE_SPEC §5.4)"),
         ("`!flows`", "In-eddy flow library — load a guided flow (`!flow` alias)"),
-        ("`!pin`", "Pin a message — reply with `!pin` or `!pin <message_id>`"),
+        ("`!pin`", "Working plan — in eddy: home + river pin card; on river: pin a message"),
         ("`!dissolve`", "Archive eddy + chronicle (river or in-thread)"),
     ]
     fields.append(("River (parent channel)", _help_lines(river_cmds)))
@@ -469,15 +469,19 @@ async def cmd_flows(message, args):
 
 
 async def cmd_pin(message, args):
-    """River moderation — pin a message (reply or message id)."""
+    """Working-plan product act (eddy) or legacy river message pin.
+
+    In an eddy: bind home eddy ↔ Tier-1 artifact and post a river pin card.
+    On the river: pin a replied-to message (moderation path).
+    """
     if isinstance(message.channel, discord.Thread):
-        await message.reply(
-            "Use `!pin` in the river channel — reply to a message to pin it.",
-            mention_author=False,
-        )
+        await _cmd_pin_home_eddy(message, args)
         return
     if not is_practice_channel(message):
-        await message.reply("Use `!pin` in your practice river channel.", mention_author=False)
+        await message.reply(
+            "Use `!pin` in a practice eddy (working plan) or your river (message pin).",
+            mention_author=False,
+        )
         return
 
     target = None
@@ -494,7 +498,9 @@ async def cmd_pin(message, args):
 
     if not target:
         await message.reply(
-            "Reply to a message with `!pin`, or `!pin <message_id>`.",
+            "On the river: reply to a message with `!pin`, or `!pin <message_id>`.\n"
+            "In an eddy: `!pin` keeps the conversation as a working plan "
+            "(river pin card + home eddy).",
             mention_author=False,
         )
         return
@@ -509,6 +515,83 @@ async def cmd_pin(message, args):
         )
     except discord.HTTPException as exc:
         await message.reply(f"Pin failed: {exc}", mention_author=False)
+
+
+async def _cmd_pin_home_eddy(message, args):
+    """Bind or refresh a home-plan pin from inside an eddy."""
+    from home_plan_ui import bind_and_post_pin
+    from home_plans import HomePlanError, get_by_eddy
+    from mage import get_pd
+
+    thread = message.channel
+    parent_id = getattr(thread, "parent_id", None)
+    if not parent_id:
+        await message.reply(
+            "Cannot find the practice river for this eddy.", mention_author=False
+        )
+        return
+
+    pd = get_pd()
+    existing = get_by_eddy(pd, thread.id)
+
+    title = " ".join(args).strip() if args else ""
+    body = None
+    if message.reference and message.reference.message_id:
+        try:
+            src = await thread.fetch_message(message.reference.message_id)
+            body = (src.content or "").strip() or None
+            if not title and body:
+                first = body.splitlines()[0].lstrip("#").strip()
+                title = first[:80] if first else ""
+        except (discord.NotFound, discord.Forbidden):
+            pass
+
+    if existing:
+        try:
+            plan = await bind_and_post_pin(
+                practice_dir=pd,
+                title=existing.get("title") or title or thread.name or "Working plan",
+                home_eddy_id=thread.id,
+                river_channel_id=parent_id,
+                refresh_plan=existing,
+            )
+        except HomePlanError as exc:
+            await message.reply(str(exc), mention_author=False)
+            return
+        except Exception as exc:
+            await message.reply(f"Could not refresh pin: {exc}", mention_author=False)
+            return
+        await message.reply(
+            f"Refreshed river pin for **{plan.get('title')}** — Continue anytime.",
+            mention_author=False,
+        )
+        return
+
+    if not title:
+        title = (thread.name or "").strip() or "Working plan"
+        if title.lower().startswith("new eddy"):
+            title = "Working plan"
+
+    try:
+        plan = await bind_and_post_pin(
+            practice_dir=pd,
+            title=title,
+            home_eddy_id=thread.id,
+            river_channel_id=parent_id,
+            body=body,
+        )
+    except HomePlanError as exc:
+        await message.reply(str(exc), mention_author=False)
+        return
+    except Exception as exc:
+        await message.reply(f"Could not pin working plan: {exc}", mention_author=False)
+        return
+
+    await message.reply(
+        f"Pinned **{plan.get('title')}** on your river — "
+        "Continue anytime from the pin tray. Open shows the file.",
+        mention_author=False,
+    )
 
 
 async def cmd_absorb(message, args):

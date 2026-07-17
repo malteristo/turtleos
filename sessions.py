@@ -600,7 +600,10 @@ async def cool_eddy_from_auto_archive(
     thread_name: str | None = None,
     parent_channel_id: int | None = None,
 ) -> None:
-    """Auto-archive path — release in-memory harness, retain history, mark cooled."""
+    """Auto-archive path — release in-memory harness, retain history, mark cooled.
+
+    Sticky home-plan eddies skip cool (prefer keep room restorable via river pin).
+    """
     import discord
     from thread_registry import mark_cooled
     from state import active_sessions, thread_configs, threads_flagged_for_release
@@ -615,6 +618,25 @@ async def cool_eddy_from_auto_archive(
 
     resolved_name = thread_name or (getattr(thread, "name", None) if thread else None) or "eddy"
     parent_id = parent_channel_id or (getattr(thread, "parent_id", None) if thread else None)
+
+    # Sticky home plans: skip cool; try to unarchive so Continue stays live.
+    try:
+        from home_plans import is_sticky_eddy
+        from mage import get_pd
+
+        if is_sticky_eddy(get_pd(), channel_id):
+            if thread and isinstance(thread, discord.Thread) and thread.archived:
+                try:
+                    await thread.edit(
+                        archived=False,
+                        reason="sticky_home_plan_skip_cool",
+                    )
+                except (discord.Forbidden, discord.HTTPException) as exc:
+                    print(f"sticky_home_plan_skip_cool unarchive failed: {exc}")
+            print(f"sticky_home_plan_skip_cool: {resolved_name} ({channel_id})")
+            return
+    except Exception as exc:
+        print(f"sticky home-plan check failed: {type(exc).__name__}: {exc}")
 
     thread_configs.pop(channel_id, None)
     threads_flagged_for_release.pop(channel_id, None)
@@ -774,6 +796,42 @@ async def dissolve_eddy(
             await thread.edit(archived=True)
         except Exception:
             pass
+
+    # Home-plan dissolve: clear binding + unpin river card; keep artifact file.
+    try:
+        from home_plans import clear_plan, get_by_eddy
+
+        home = get_by_eddy(get_pd(), channel_id)
+        if home:
+            pin_msg = home.get("river_pin_message_id")
+            river_id = home.get("river_channel_id")
+            clear_plan(get_pd(), str(home["id"]))
+            if pin_msg and river_id:
+                try:
+                    river_ch = dc.get_channel(int(river_id)) or await dc.fetch_channel(
+                        int(river_id)
+                    )
+                    card = await river_ch.fetch_message(int(pin_msg))
+                    try:
+                        await card.unpin(reason="Home eddy dissolved")
+                    except Exception:
+                        pass
+                    try:
+                        await card.edit(
+                            content=(
+                                f"Home eddy dissolved — **{home.get('title')}** "
+                                "(file kept)."
+                            ),
+                            embed=None,
+                            view=None,
+                        )
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    print(f"Home-plan dissolve unpin failed: {exc}")
+            print(f"home_plan_cleared_on_dissolve: {home.get('title')} ({channel_id})")
+    except Exception as exc:
+        print(f"Home-plan dissolve cleanup failed: {type(exc).__name__}: {exc}")
 
     print(f"Dissolved eddy: {thread_name} ({entry_count} insights archived)")
     return DissolveResult(

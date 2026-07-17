@@ -40,7 +40,9 @@ The artifact viewer is **shelves of your practice** — not a filesystem tree, n
 
 **Select menu (4+ recents):** Choosing an artifact **replaces** the browse message with the `.md` attachment preview (expandable in chat) and an optional **Open in browser** link when web read is configured. Download via `⋯` on the attachment bar — no separate Download button.
 
-**River bar → more → artifacts:** Opens Recent browse; floor reconcile is **held** until pick completes, then one settle. (Pinned-alive artifact presentation is a future rethink — not this surface.)
+**River bar → more → artifacts:** Opens Recent browse; floor reconcile is **held** until pick completes, then one settle.
+
+**Pinned home eddies (working plans):** Separate discovery path from Recent. In an eddy, `!pin` (or “Keep as working plan”) binds that eddy 1:1 to a Notes artifact and posts a **river pin card** (Continue → home eddy, Open → file, Stop pinning). Not a side-panel. Design: [design-pinned-home-eddies.md](../chapters/design-pinned-home-eddies.md).
 
 **`!artifacts <shelf>`:** Browse one shelf — e.g. `!artifacts sessions`, `!artifacts notes`. Same Open buttons or select menu.
 

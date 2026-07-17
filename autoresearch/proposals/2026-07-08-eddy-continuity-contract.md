@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-08
 **Spec reference:** TURTLE_SPEC (eddy lifecycle / native UI reconciliation / practitioner sovereignty)
-**Status:** Draft
+**Status:** Implemented (`6e342b6`, 2026-07-08) — auto-archive cools; `!keep` / `!ignore` live; capture-fail aborts. Residual: cooled-act lead copy still says "Closed eddy".
 **Companion:** `2026-07-06-value-surface-routing-guards.md` — same memory-consent architecture, different layer (that proposal: what values-surface may *generate* where; this proposal: what may *persist*; a queued third design: what may surface *publicly* — outfacing clearance)
 
 ## Finding (incident 2026-07-06/07)

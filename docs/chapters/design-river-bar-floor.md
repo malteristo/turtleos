@@ -58,7 +58,7 @@ The river standing bar is meant to be a **floor fixture** — always reachable, 
 
 ### Out of scope
 
-- Pinned / alive artifact presentation (forward signal — Mage rarely list-browses; future chapter).
+- Pinned / alive artifact presentation — design locked: [design-pinned-home-eddies.md](design-pinned-home-eddies.md) (not list-browse; river pin + home eddy).
 - Shared-river artifact privacy model.
 - Eddy lifecycle / in-eddy flow-library bars.
 - Active-face “artifacts highlighted” polish.
@@ -113,7 +113,7 @@ A week in, this succeeded if:
 
 ## Forward signal
 
-Artifact browsing may move from “sift a Recent list” to **pinning alive artifacts**. Do not invest in list-browse UX beyond keeping the public Recent path working under hold/reconcile.
+Artifact browsing may move from “sift a Recent list” to **pinned home eddies** ([design-pinned-home-eddies.md](design-pinned-home-eddies.md)). Do not invest in list-browse UX beyond keeping the public Recent path working under hold/reconcile.
 
 ---
 

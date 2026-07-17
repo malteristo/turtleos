@@ -3,7 +3,7 @@
 > **Canonical version:** This file in the `malteristo/turtleos` repository is the sole canonical TURTLE_SPEC.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-07-15b (Daily note Act Two shipped §6.5 — triggers + river visibility; session-day assembly retired §8.4)  
+**Version:** 2026-07-17 (Pinned home eddies — working-plan river pins §5.3 / sticky cool §8 / home binding §11.5)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -165,6 +165,8 @@ not emitted in parent channel:
 After river timeline activity, the harness MUST **reconcile** the floor: debounce quiet bursts, sweep orphan bar messages, and leave exactly one standing bar last — unless a multi-step act holds reconcile until the sequence ends.
 
 **v1 routing policy:** No semantic routing to existing eddies. Each materialize is a **new thread**. Semantic merge is deferred (§16).
+
+**Working-plan river pins (pinned home eddies):** Practitioners MAY bind a **home eddy** 1:1 to a Tier-1 Notes artifact and discover it via a **Discord-pinned river card** (Continue / Open / Stop pinning). Product act: `!pin` inside the eddy (or confirm offer). The pin tray is the discovery surface — **not** a side-panel, shelf beside chat, or live sidebar sync. Design: [docs/chapters/design-pinned-home-eddies.md](docs/chapters/design-pinned-home-eddies.md). Registry: practice-root `state/home_plans.yaml`.
 
 **UX resonance surface:** [docs/ux/README.md](docs/ux/README.md) — living collection for practitioner-facing patterns; amend together with this spec when UX law changes.
 
@@ -472,6 +474,8 @@ An eddy is a Discord thread — a **bounded conversation** with its own history.
 | **Release** | User `!release` — checkpoint + clear history |
 | **Dissolve** | User-initiated archive; chronicle records event |
 
+**Sticky home eddies:** Eddies bound as working-plan homes (§5.3) SHOULD **skip idle auto-cool** so the river pin remains a live Continue door. On deliberate dissolve, clear the home binding and unpin the river card; keep the artifact file by default.
+
 **No standing eddies at install:** No vortex thread, no boom thread, no pre-created system eddies.
 
 ### 9.3. Eddy Types (Deferred)
@@ -652,6 +656,7 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 - **Layer-aware discoverability.** Layer 1 (casual eddy) users MAY never open the viewer. Layer 2 (flow) users benefit from checkpoints and session artifacts. The viewer MUST NOT spam proactive offers; contextual hints after checkpoint/release are permitted (v1.1).
 - **Same allowlist everywhere.** `!read`, `!ls`, `!search`, optional read-only web (§11.4), and `!artifacts` MUST enforce the same path policy. **Shipped 2026-06-29:** browse commands narrowed to this allowlist; `!artifacts` is the product entry point.
 - **Chat holds conversation; browser holds corpus.** The eddy timeline is for dialogue and pointers. Persisted Tier-1 artifacts open in the Discord in-app browser (or read-only web) — not as full-body markdown dumps in chat. See §11.5.5.
+- **Home binding for working plans.** A Notes-shelf artifact MAY have one **home eddy** discovered via a river pin card (§5.3). `!artifacts` remains corpus browse; the pin is the door, not a second filesystem. Attunement on home-eddy turns injects the plan file (truncated) — not full Discord history.
 
 #### 11.5.1. Access tiers
 

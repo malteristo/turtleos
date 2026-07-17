@@ -77,7 +77,7 @@ Practitioners accumulate structured fragments that deserve better than scroll-ba
 
 - **Contextual offers, not commands.** Mid-eddy, when a date is mentioned: a River act offers "add to your dates?" One tap. (Law of Acts Not Words already governs the surface; this extends the act catalog.)
 - **Image intake counts.** A screenshot of a poster is a first-class source — vision preprocessing already exists; the offer pipeline is the missing piece.
-- **Pinned alive artifacts.** The workout plan lives in a pin thread *and* as a Tier-1 artifact the story layer can reference ("three weeks since the plan was touched" is a thread waiting to be noticed).
+- **Pinned alive artifacts.** The workout plan lives in a **home eddy** *and* as a Tier-1 artifact the story layer can reference ("three weeks since the plan was touched" is a thread waiting to be noticed). Day-one productization: [design-pinned-home-eddies.md](../chapters/design-pinned-home-eddies.md) (river pin card + Continue; story “untouched” nudges remain forward).
 - **Life-domain corpora** (medical, administrative) are Tier-1 artifacts with obvious privacy weight — sovereign-tier only until the hosted-privacy story is proven. The prefilled-form use case (the practitioner edits rather than authors) is the north-star demo of personalized wisdom applied.
 
 ---

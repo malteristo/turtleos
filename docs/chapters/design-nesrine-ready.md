@@ -56,7 +56,7 @@ Ready = she can feel **three research beats in one sitting**, plus a care packag
 **Out of MVP (explicit):**
 - ChatGPT → continuity import *(post-MVP second visit)*
 - Weekly/monthly period notes
-- Pinned-alive productization, `offer_capture`, timing-aware nudges
+- Pinned-alive productization ([design-pinned-home-eddies.md](design-pinned-home-eddies.md) — design locked; implement post-MVP), `offer_capture`, timing-aware nudges
 - Life-domain medical corpora / prefilled Antrag
 - Proposal mechanism *(orthogonal dyad hygiene — not on this critical path)*
 

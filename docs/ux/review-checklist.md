@@ -5,7 +5,7 @@ Before merging a change that touches practitioner-facing behavior:
 1. **Voice:** Does this add prose to the river? (If yes — stop or reframe as an act.)
 2. **Identity:** Which bot posts it? Should it be River or Turtle?
 3. **Consent:** Does this open an eddy without a click? Does it fetch a URL without opt-in when the link is incidental?
-4. **Surface:** Is the affordance visible in the main timeline without pins or hidden panels?
+4. **Surface:** Is the affordance visible in the main timeline without pins or hidden panels? *(Exception: working-plan **river pin cards** — deliberate discovery surface; see [design-pinned-home-eddies.md](../chapters/design-pinned-home-eddies.md).)*
 5. **Discord-native:** Are we rebuilding something Discord already renders?
 6. **Entry chrome:** Does this add UI before the practitioner speaks in a new eddy?
 7. **Bottom bar:** After river activity settles, is there exactly one standing bar last (no orphans, not mid multi-step sequence)?

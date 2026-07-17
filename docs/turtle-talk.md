@@ -56,7 +56,7 @@ Implementation: `river_handler.py` (`StandingEddyBarView`).
 | `!dissolve` | `cmd_dissolve` | §9.2 / §9.6 — archive eddy + `🍃 dissolved` chronicle (distinct from `!release`); native **Close Thread** uses same pipeline (policy C) |
 | `!flows` | `cmd_flows` | §5.6 — in-eddy flow picker (`!flow` alias); in parent river, redirects to open an eddy |
 | `!flow` | `cmd_flows` | Alias for `!flows` |
-| `!pin` | `cmd_pin` | §6 — pin message (reply or message id) |
+| `!pin` | `cmd_pin` | §5.3 — **eddy:** bind working plan (home eddy + river pin card); **river:** legacy message pin (reply / id) |
 
 ### River prohibitions
 

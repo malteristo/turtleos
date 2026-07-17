@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-17 — Pinned home eddies shipped (AFK)
+
+**Shipped:** Working plans = 1:1 home eddy ↔ Tier-1 Notes file ↔ river pin card. Modules: `home_plans.py` (YAML registry), `home_plan_ui.py` (Continue / Open / Stop pinning), `cmd_pin` product path in eddies (river legacy pin kept), sticky skip in `cool_eddy_from_auto_archive`, attunement inject in `dialogue_turn`, dissolve clears binding + unpin (file kept). Quiet `patch_artifact` helper; Turtle tool wiring residual.
+
+**Honesty:** Product copy = river pin + home eddy + file — never side-panel fiction (design truth-check chapter).
+
+**Deploy:** restart **both** `com.turtle.discord` and `com.turtle.river`. Then operator recognition tests: pin → Continue → same eddy; mid-session note → file; sticky cool; no sidebar language.
+
+**Shake:** `scripts/shake_home_plans.py` offline. Tests: `test_home_plans`, `test_cmd_pin_home`.
+
 ### 2026-07-16 — Flow context_type lost after restart (`dnd_dm` / Galactic Adventure)
 
 **Symptom:** After remount storms, Turtle answered Galactic Adventure as thinking-partner, not DM — refused roleplay, addressed Lukas by real name. Registry still had `context_type: null` while pending JSON held `dnd_dm`.
@@ -97,7 +107,13 @@ Append to this file after each research cycle — it persists across sessions.
 
 **Living eval (2026-07-16):** Mage — looks and feels good to use. Recognition tests held. Issues 042–044 deleted (doc-rot).
 
-**Forward:** Pinned-alive artifacts (Mage signal) — not this chapter.
+**Forward:** Pinned-alive → design locked 2026-07-17 as **pinned home eddies** ([design-pinned-home-eddies.md](chapters/design-pinned-home-eddies.md)): river pin card + 1:1 home eddy + Tier-1 file; `!pin` is the product act. **AFK armed:** [2026-07-17-implement-pinned-home-eddies.md](chapters/2026-07-17-implement-pinned-home-eddies.md) (slices 0–7; claim before coding). **Honesty:** do not describe side-panel shelves — Discord pin tray + home eddy + file only.
+
+### 2026-07-17 — Pinned home eddies (design + AFK prep)
+
+**Shipped (docs only):** Design chapter + cross-links; implement chapter with slice map, data model, sticky-cool rule, shake/gate plan; matrix Gap row; magic backlog + release handoff. No runtime code.
+
+**Next:** AFK execute implement chapter on Forge/Mini; operator dogfood after both-bot restart.
 
 ### 2026-07-15 — Story Act Two: daily note (issues 038–041)
 
