@@ -163,10 +163,13 @@ class HomePlanPinView(discord.ui.View):
 
 
 async def unpin_home_plan_card(discord_client, plan: dict[str, Any]) -> None:
-    """Unpin + neutralize river card. ``discord_client`` must be the River bot."""
+    """Unpin and delete the river card — leave no timeline debris.
+
+    Confirmation stays ephemeral on the interaction. Discord's own
+    "pinned a message" system lines cannot be removed by the bot.
+    """
     msg_id = plan.get("river_pin_message_id")
     ch_id = plan.get("river_channel_id")
-    title = plan.get("title") or "Working plan"
     if not msg_id or not ch_id or discord_client is None:
         return
     try:
@@ -179,13 +182,14 @@ async def unpin_home_plan_card(discord_client, plan: dict[str, Any]) -> None:
         except Exception as exc:
             print(f"home_plan stop unpin API: {exc}")
         try:
-            await msg.edit(
-                content=f"Unpinned: **{title}** (file kept).",
-                embed=None,
-                view=None,
-            )
+            await msg.delete()
         except Exception as exc:
-            print(f"home_plan stop edit: {exc}")
+            # Fallback: strip embed/buttons if delete denied
+            print(f"home_plan stop delete: {exc}")
+            try:
+                await msg.edit(content="\u200b", embed=None, view=None)
+            except Exception as exc2:
+                print(f"home_plan stop edit fallback: {exc2}")
     except Exception as exc:
         print(f"home_plan stop unpin failed: {exc}")
 

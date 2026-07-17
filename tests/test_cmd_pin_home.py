@@ -118,7 +118,7 @@ class TestCmdPinHome(unittest.IsolatedAsyncioTestCase):
 
 
 class TestUnpinHomePlanCard(unittest.IsolatedAsyncioTestCase):
-    async def test_unpins_and_edits_via_provided_client(self) -> None:
+    async def test_unpins_and_deletes_card(self) -> None:
         from home_plan_ui import unpin_home_plan_card
 
         plan = {
@@ -129,6 +129,7 @@ class TestUnpinHomePlanCard(unittest.IsolatedAsyncioTestCase):
         }
         msg = MagicMock()
         msg.unpin = AsyncMock()
+        msg.delete = AsyncMock()
         msg.edit = AsyncMock()
         ch = MagicMock()
         ch.fetch_message = AsyncMock(return_value=msg)
@@ -139,7 +140,8 @@ class TestUnpinHomePlanCard(unittest.IsolatedAsyncioTestCase):
 
         dc.get_channel.assert_called_once_with(55)
         msg.unpin.assert_awaited_once()
-        msg.edit.assert_awaited_once()
+        msg.delete.assert_awaited_once()
+        msg.edit.assert_not_awaited()
 
 
 class TestResolvePinClient(unittest.TestCase):

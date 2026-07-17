@@ -517,6 +517,24 @@ async def cmd_pin(message, args):
         await message.reply(f"Pin failed: {exc}", mention_author=False)
 
 
+def _home_plan_title_from_body(body: str) -> str:
+    """Prefer a real heading over the first bullet of a workout list."""
+    for raw in (body or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(("#",)):
+            return line.lstrip("#").strip()[:80]
+        if line.startswith(("-", "*", "•")):
+            continue
+        if line.startswith("**") and line.endswith("**") and len(line) < 80:
+            return line.strip("*").strip()[:80]
+        if len(line) <= 80 and not line.endswith(":"):
+            return line[:80]
+        break
+    return ""
+
+
 async def _cmd_pin_home_eddy(message, args):
     """Bind or refresh a home-plan pin from inside an eddy."""
     from home_plan_ui import bind_and_post_pin, resolve_pin_client
@@ -542,8 +560,7 @@ async def _cmd_pin_home_eddy(message, args):
             src = await thread.fetch_message(message.reference.message_id)
             body = (src.content or "").strip() or None
             if not title and body:
-                first = body.splitlines()[0].lstrip("#").strip()
-                title = first[:80] if first else ""
+                title = _home_plan_title_from_body(body)
         except (discord.NotFound, discord.Forbidden):
             pass
 
@@ -558,8 +575,7 @@ async def _cmd_pin_home_eddy(message, args):
                     continue
                 body = text
                 if not title:
-                    first = body.splitlines()[0].lstrip("#").strip()
-                    title = first[:80] if first else ""
+                    title = _home_plan_title_from_body(body)
                 break
         except (discord.Forbidden, discord.HTTPException, TypeError, AttributeError):
             pass
