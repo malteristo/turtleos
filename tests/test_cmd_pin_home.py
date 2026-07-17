@@ -117,6 +117,44 @@ class TestCmdPinHome(unittest.IsolatedAsyncioTestCase):
         message.add_reaction.assert_awaited_once_with("📌")
 
 
+class TestStopPinUsesInteractionClient(unittest.IsolatedAsyncioTestCase):
+    async def test_confirm_unpins_via_interaction_client(self) -> None:
+        from home_plan_ui import HomePlanStopConfirmView
+
+        plan = {
+            "id": "plan1",
+            "title": "Workout",
+            "river_pin_message_id": "99",
+            "river_channel_id": "55",
+        }
+        msg = MagicMock()
+        msg.unpin = AsyncMock()
+        msg.edit = AsyncMock()
+        ch = MagicMock()
+        ch.fetch_message = AsyncMock(return_value=msg)
+        dc = MagicMock()
+        dc.get_channel = MagicMock(return_value=ch)
+
+        response = MagicMock()
+        response.edit_message = AsyncMock()
+        interaction = MagicMock()
+        interaction.client = dc
+        interaction.channel = MagicMock(id=55)
+        interaction.response = response
+
+        view = HomePlanStopConfirmView("plan1")
+        with patch("mage.get_pd", return_value="/tmp"), patch(
+            "home_plan_ui.clear_plan", return_value=plan
+        ):
+            await view._confirm(interaction)
+
+        msg.unpin.assert_awaited_once()
+        msg.edit.assert_awaited_once()
+        # Must not touch Turtle state.client
+        response.edit_message.assert_awaited()
+        self.assertIs(interaction.client, dc)
+
+
 class TestResolvePinClient(unittest.TestCase):
     def test_prefers_ready_river_client(self) -> None:
         from home_plan_ui import resolve_pin_client
