@@ -117,9 +117,9 @@ class TestCmdPinHome(unittest.IsolatedAsyncioTestCase):
         message.add_reaction.assert_awaited_once_with("📌")
 
 
-class TestStopPinUsesInteractionClient(unittest.IsolatedAsyncioTestCase):
-    async def test_confirm_unpins_via_interaction_client(self) -> None:
-        from home_plan_ui import HomePlanStopConfirmView
+class TestUnpinHomePlanCard(unittest.IsolatedAsyncioTestCase):
+    async def test_unpins_and_edits_via_provided_client(self) -> None:
+        from home_plan_ui import unpin_home_plan_card
 
         plan = {
             "id": "plan1",
@@ -135,24 +135,11 @@ class TestStopPinUsesInteractionClient(unittest.IsolatedAsyncioTestCase):
         dc = MagicMock()
         dc.get_channel = MagicMock(return_value=ch)
 
-        response = MagicMock()
-        response.edit_message = AsyncMock()
-        interaction = MagicMock()
-        interaction.client = dc
-        interaction.channel = MagicMock(id=55)
-        interaction.response = response
+        await unpin_home_plan_card(dc, plan)
 
-        view = HomePlanStopConfirmView("plan1")
-        with patch("mage.get_pd", return_value="/tmp"), patch(
-            "home_plan_ui.clear_plan", return_value=plan
-        ):
-            await view._confirm(interaction)
-
+        dc.get_channel.assert_called_once_with(55)
         msg.unpin.assert_awaited_once()
         msg.edit.assert_awaited_once()
-        # Must not touch Turtle state.client
-        response.edit_message.assert_awaited()
-        self.assertIs(interaction.client, dc)
 
 
 class TestResolvePinClient(unittest.TestCase):

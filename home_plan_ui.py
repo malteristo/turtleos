@@ -162,6 +162,34 @@ class HomePlanPinView(discord.ui.View):
         )
 
 
+async def unpin_home_plan_card(discord_client, plan: dict[str, Any]) -> None:
+    """Unpin + neutralize river card. ``discord_client`` must be the River bot."""
+    msg_id = plan.get("river_pin_message_id")
+    ch_id = plan.get("river_channel_id")
+    title = plan.get("title") or "Working plan"
+    if not msg_id or not ch_id or discord_client is None:
+        return
+    try:
+        ch = discord_client.get_channel(int(ch_id))
+        if ch is None:
+            ch = await discord_client.fetch_channel(int(ch_id))
+        msg = await ch.fetch_message(int(msg_id))
+        try:
+            await msg.unpin(reason="Stop pinning working plan")
+        except Exception as exc:
+            print(f"home_plan stop unpin API: {exc}")
+        try:
+            await msg.edit(
+                content=f"Unpinned: **{title}** (file kept).",
+                embed=None,
+                view=None,
+            )
+        except Exception as exc:
+            print(f"home_plan stop edit: {exc}")
+    except Exception as exc:
+        print(f"home_plan stop unpin failed: {exc}")
+
+
 class HomePlanStopConfirmView(discord.ui.View):
     def __init__(self, plan_id: str):
         super().__init__(timeout=STOP_CONFIRM_TIMEOUT)
@@ -192,32 +220,8 @@ class HomePlanStopConfirmView(discord.ui.View):
             )
             return
         title = plan.get("title") or "Working plan"
-        msg_id = plan.get("river_pin_message_id")
-        ch_id = plan.get("river_channel_id") or getattr(
-            interaction.channel, "id", None
-        )
         # Must use the interacting bot (River) — not Turtle state.client.
-        dc = interaction.client
-        if msg_id and ch_id and dc is not None:
-            try:
-                ch = dc.get_channel(int(ch_id))
-                if ch is None:
-                    ch = await dc.fetch_channel(int(ch_id))
-                msg = await ch.fetch_message(int(msg_id))
-                try:
-                    await msg.unpin(reason="Stop pinning working plan")
-                except Exception as exc:
-                    print(f"home_plan stop unpin API: {exc}")
-                try:
-                    await msg.edit(
-                        content=f"Unpinned: **{title}** (file kept).",
-                        embed=None,
-                        view=None,
-                    )
-                except Exception as exc:
-                    print(f"home_plan stop edit: {exc}")
-            except Exception as exc:
-                print(f"home_plan stop unpin failed: {exc}")
+        await unpin_home_plan_card(interaction.client, plan)
         await interaction.response.edit_message(
             content=f"Stopped pinning **{title}**. File kept.",
             view=None,
