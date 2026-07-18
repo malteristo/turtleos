@@ -9,11 +9,17 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-18 — Alive thread vs artifact (recipe-book dogfood)
+
+**Finding:** Framing a “recipe book” in chat is not a crystallization miss. Offer heuristic correctly stayed quiet (no plan-shaped body). Broadening to `looks_like_artifact` would encode the tool habit. Living collections want **CE alive threads** (themes across cooking eddies); artifacts are secondary export/perform surfaces.
+
+**Boundary:** Crystallization chapter stays working-doc only. Design note: `docs/chapters/design-alive-thread-vs-artifact.md`.
+
 ### 2026-07-18 — Artifact crystallization offer hook
 
 **Shipped:** After Turtle posts a plan-shaped reply in a native eddy, River offers **Keep as working plan** (no typed `!pin` required). Heuristic `home_plans.looks_like_working_plan` (length + headings/bullets). Hook in `river_eddy_seneschal` after Turtle-turn poll; home offer wins over save/checkpoint act rows for that turn. Native `conduct.md` Working Documents section + prompts `!pin` / honesty lines. Title helper prefers headings over intro prose.
 
-**Locks:** L1–L5 sanctioned (note-only deferred; no `!artifact` create; River attaches offer).
+**Locks:** L1–L5 sanctioned (note-only deferred; no `!artifact` create; River attaches offer). **Do not broaden** heuristic to generic artifacts (see alive-thread note).
 
 **Residual:** Slice 6 `patch_artifact` dialogue tool wiring still open.
 

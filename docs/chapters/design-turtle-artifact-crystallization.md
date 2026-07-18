@@ -1,7 +1,7 @@
 # Design Chapter: Turtle Artifact Crystallization
 
 **Opened:** 2026-07-17  
-**Status:** Implemented 2026-07-18 — awaiting both-bot deploy + dogfood  
+**Status:** Shipped 2026-07-18 — working-doc offer live; **boundary:** not for living collections (see [design-alive-thread-vs-artifact.md](design-alive-thread-vs-artifact.md))  
 **Depends on:** [design-pinned-home-eddies.md](design-pinned-home-eddies.md) (discovery door shipped)  
 **Spec touch (later):** TURTLE_SPEC §11.5 write path; native `conduct.md` / prompts tool guidance  
 **Dogfood first:** Operator river
@@ -119,4 +119,4 @@ Product speech: file + home eddy + river pin. Never side-panel / shelf beside ch
 
 ## Status
 
-**Implemented 2026-07-18** (L1–L5). Code: `looks_like_working_plan` + River seneschal offer + `conduct.md` / prompts. Awaiting both-bot restart + recognition tests. Note-only deferred. Slice 6 quiet write-tool residual remains.
+**Shipped 2026-07-18** (L1–L5). Offer hook live on Mini (`52b0ebb`). **Do not broaden** to `looks_like_artifact` — living collections (e.g. recipe book) belong to [alive-thread vs artifact](design-alive-thread-vs-artifact.md), not this chapter. Note-only deferred. Slice 6 quiet write-tool residual remains.
