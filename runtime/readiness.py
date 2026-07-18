@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import urllib.request
 from dataclasses import dataclass
@@ -15,9 +16,42 @@ from .tasks import Task, TaskStore
 
 SERVICE_LABELS = [
     "com.turtle.discord",
+    "com.turtle.river",
     "com.turtle.canary",
     "com.turtle.caddy",
 ]
+
+
+def _ensure_repo_env() -> None:
+    """Load repo `.env` so readiness sees RIVER_BOT_TOKEN outside launchd."""
+    repo_root = Path(__file__).resolve().parent.parent
+    env_path = Path(os.environ.get("DOTENV_PATH", repo_root / ".env"))
+    if not env_path.is_absolute():
+        env_path = repo_root / env_path
+    if not env_path.is_file():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+    except OSError:
+        return
+
+
+def river_bot_token_configured() -> bool:
+    _ensure_repo_env()
+    return bool(os.environ.get("RIVER_BOT_TOKEN", "").strip())
+
+
+def required_service_labels() -> list[str]:
+    """Discord always; River when split-bot token is configured."""
+    labels = ["com.turtle.discord"]
+    if river_bot_token_configured():
+        labels.append("com.turtle.river")
+    return labels
 
 
 @dataclass(frozen=True)
@@ -75,11 +109,19 @@ class RuntimeReadiness:
                 "last_exit_code": _int_or_none(exit_raw),
             }
 
-        required = ["com.turtle.discord"]
+        required = required_service_labels()
         missing_required = [label for label in required if labels[label]["status"] == "missing"]
+        # Also treat loaded-but-not-running required labels as impaired
+        down_required = [
+            label
+            for label in required
+            if labels[label]["status"] in ("missing", "loaded")
+        ]
         return {
-            "status": "impaired" if missing_required else "ready",
+            "status": "impaired" if down_required else "ready",
             "missing_required": missing_required,
+            "down_required": down_required,
+            "required": required,
             "labels": labels,
         }
 

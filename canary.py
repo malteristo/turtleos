@@ -26,6 +26,7 @@ LIVESYNC_ERR_PATHS = [Path(path.strip()) for path in os.environ.get("CANARY_LIVE
 LIVESYNC_ERR_RECENT_SECONDS = 10 * 60
 SOURCE_MODULES = [
     "discord_bot.py",
+    "river_bot.py",
     "commands.py",
     "canary.py",
     "sessions.py",
@@ -37,6 +38,39 @@ SOURCE_MODULES = [
     "tool_result.py",
     "runtime/update.py",
 ]
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _ensure_repo_env() -> None:
+    """Load ~/turtleos/.env once so canary sees RIVER_BOT_TOKEN when launchd omits it."""
+    env_path = Path(os.environ.get("DOTENV_PATH", REPO_ROOT / ".env"))
+    if not env_path.is_absolute():
+        env_path = REPO_ROOT / env_path
+    if not env_path.is_file():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+    except OSError:
+        return
+
+
+def river_bot_token_configured() -> bool:
+    _ensure_repo_env()
+    return bool(os.environ.get("RIVER_BOT_TOKEN", "").strip())
+
+
+def check_river_bot_alive():
+    """Split-bot: River must be alive. Single-bot fallback: skip when token unset."""
+    if not river_bot_token_configured():
+        return "green", "single-bot fallback (RIVER_BOT_TOKEN unset — river not required)"
+    return check_launchd_label("com.turtle.river")
+
 
 
 
@@ -272,6 +306,7 @@ def check_triage_fallback_count():
 CHECKS = [
     ("infra", "turtleos_repo", check_turtleos_repo, "high"),
     ("infra", "discord_bot_alive", lambda: check_launchd_label("com.turtle.discord"), "high"),
+    ("infra", "river_bot_alive", check_river_bot_alive, "high"),
     ("models", "ollama_reachable", check_ollama, "high"),
     ("models", "triage_fallback_count", check_triage_fallback_count, "medium"),
     ("source", "source_deployable", check_source_deployable, "high"),

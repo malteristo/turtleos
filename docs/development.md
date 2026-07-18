@@ -157,7 +157,7 @@ Consequence tiers:
 
 - Documentation-only updates can be operator-reviewed and usually require no restart.
 - Runtime Python changes require Spirit/operator review and may require a bot restart after verification.
-- **Split-bot:** restart **both** `com.turtle.discord` (Turtle) and `com.turtle.river` (River) when `cmd_dispatch`, `river_*`, or lifecycle commands change — kickstarting Turtle alone leaves stale River code loaded.
+- **Split-bot:** restart **both** `com.turtle.discord` (Turtle) and `com.turtle.river` (River) when shared modules change — kickstarting Turtle alone leaves stale River code loaded. Prefer `./restart.sh` (bounces both when River is loaded). Module tags: [`deploy-touchpoints.md`](deploy-touchpoints.md). Canary/readiness require River alive when `RIVER_BOT_TOKEN` is set.
 - Dependency changes require explicit operator approval and an install plan.
 - Protected or governance files (`TURTLE_SPEC.md`, private config, launchd plists, identity files) require explicit Mage/operator approval before applying.
 

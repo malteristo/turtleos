@@ -1,19 +1,42 @@
 #!/bin/bash
-# Self-restart script for Turtle's self-development protocol
-# Turtle can call this after making code changes to deploy them
+# Self-restart for Turtle's self-development protocol / operator deploy ritual.
+# Split-bot: always bounce Turtle + River together so shared modules stay in sync.
+# Single-bot fallback: River label absent → Turtle only.
 
-echo "[Tue Mar 31 18:58:57 CEST 2026] Self-restart initiated by Turtle" >> ~/turtleos/logs/self-dev.log
+set -euo pipefail
 
-# Validate syntax of changed Python files before restarting
-for f in ~/turtleos/*.py; do
-    python3 -c "import py_compile; py_compile.compile('$f', doraise=True)" 2>/dev/null
-    if [ $? -ne 0 ]; then
-        echo "[Tue Mar 31 18:58:57 CEST 2026] ABORT: Syntax error in $f" >> ~/turtleos/logs/self-dev.log
+REPO="${HOME}/turtleos"
+LOG="${REPO}/logs/self-dev.log"
+UID_GUI="$(id -u)"
+TS="$(date '+%a %b %d %H:%M:%S %Z %Y')"
+
+mkdir -p "${REPO}/logs"
+echo "[${TS}] Self-restart initiated" >> "${LOG}"
+
+# Validate syntax of top-level Python files before restarting
+for f in "${REPO}"/*.py; do
+    if ! python3 -c "import py_compile; py_compile.compile('$f', doraise=True)" 2>/dev/null; then
+        echo "[${TS}] ABORT: Syntax error in $f" >> "${LOG}"
         echo "Syntax error in $f — aborting restart"
         exit 1
     fi
 done
 
-echo "[Tue Mar 31 18:58:57 CEST 2026] Syntax check passed, restarting..." >> ~/turtleos/logs/self-dev.log
-launchctl kickstart -k gui/$(id -u)/com.turtle.discord
-echo "[Tue Mar 31 18:58:57 CEST 2026] Restart command issued" >> ~/turtleos/logs/self-dev.log
+kickstart_label() {
+    local label="$1"
+    launchctl kickstart -k "gui/${UID_GUI}/${label}"
+}
+
+echo "[${TS}] Syntax check passed, restarting…" >> "${LOG}"
+
+kickstart_label com.turtle.discord
+echo "[${TS}] Restarted com.turtle.discord" >> "${LOG}"
+
+if launchctl list "com.turtle.river" >/dev/null 2>&1; then
+    kickstart_label com.turtle.river
+    echo "[${TS}] Restarted com.turtle.river" >> "${LOG}"
+    echo "Restarted Turtle + River (split-bot deploy unit)"
+else
+    echo "[${TS}] com.turtle.river not loaded — Turtle only (single-bot fallback)" >> "${LOG}"
+    echo "Restarted Turtle (River label not loaded — single-bot fallback)"
+fi

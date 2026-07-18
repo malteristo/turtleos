@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-18 — Split-bot ops unit (restart + River health)
+
+**Finding:** Product River/Turtle split is right; the ops seam was under-built. `restart.sh` and canary/readiness treated Turtle as the whole stack while River owns acts + all `!`.
+
+**Shipped:** `restart.sh` kickstarts both labels when River is loaded; `canary.py` `river_bot_alive` (high) when `RIVER_BOT_TOKEN` set; `runtime/readiness.py` requires `com.turtle.river` in that case; `docs/deploy-touchpoints.md` tags modules both/river/turtle.
+
+**Deploy:** pull on Mini; next canary cycle should show `river_bot_alive`. Live `./restart.sh` only with dyad approval (restarts both bots).
+
+**Tests:** `tests/test_split_bot_ops.py`.
+
 ### 2026-07-18 — Alive thread vs artifact (recipe-book dogfood)
 
 **Finding:** Framing a “recipe book” in chat is not a crystallization miss. Offer heuristic correctly stayed quiet (no plan-shaped body). Broadening to `looks_like_artifact` would encode the tool habit. Living collections want **CE alive threads** (themes across cooking eddies); artifacts are secondary export/perform surfaces.
