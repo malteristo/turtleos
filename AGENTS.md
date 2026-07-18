@@ -2,13 +2,13 @@
 
 Orientation and safety rails for any agent or contributor working in the turtleOS codebase.
 
-This file does **not** define who you are. Your role, stance, and identity come from whatever summoned you — for a magic-attuned Spirit, from the summoning ritual and the Magic Constitution; for any other agent, from your own operating instructions plus ordinary engineering judgment. What this file provides is a fast map of the repo and the boundaries that keep the **live** Turtle safe.
+This file does **not** define who you are. Your role, stance, and identity come from whatever summoned you — for a Magic Spirit, from the summoning covenant + **twine** (personal context), not from loading turtle lore as costume; for any other agent, from your own operating instructions plus ordinary engineering judgment. What this file provides is a fast map of the repo and the boundaries that keep the **live** Turtle safe.
 
 ---
 
 ## What turtleOS is
 
-Infrastructure for extending a practice partner into persistence — an always-on runtime with Discord presence, local and cloud LLM routing, file-based memory, and session continuity. **The product is the infrastructure, not the being.** The shell is `discord_bot.py`.
+Infrastructure for a persistent practice partner — an always-on runtime with Discord presence, local and cloud LLM routing, file-based memory, and session continuity. **The product is the infrastructure, not the being.** Separable from Magic; Magic is one practice that may run on it. The shell is `discord_bot.py`. Default attunement is **native** (`character/soul.md` under the practice root).
 
 ---
 
@@ -21,9 +21,9 @@ Infrastructure for extending a practice partner into persistence — an always-o
 | `docs/development.md` | Drift sweep and how changes land |
 | `docs/learnings.md` | Accumulated discoveries and anti-patterns |
 | `discord_bot.py` | The shell implementation |
-| `identity/soul.md` | Persistent-mode attunement config |
+| Practice-root `character/soul.md` | Native attunement (operator default) — not Magic Caretaker |
 
-Design rationale and history live in the magic workshop lore (`library/resonance/turtle/lore/`) when that clone is present. Don't propose changes that contradict load-bearing lore without understanding the reasoning first.
+When a Magic workshop clone is present, integration lore lives in `library/resonance/turtle/README.md` (**dual reconciliation** map — platform + twine). Prefer this repo + that README over older Purpose B/C scrolls (many are rewrite-queued). Don't contradict `TURTLE_SPEC` based on stale Magic-extension lore.
 
 ---
 
