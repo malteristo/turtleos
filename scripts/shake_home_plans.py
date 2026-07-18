@@ -91,6 +91,35 @@ def check_honesty_copy() -> list[str]:
     return errors
 
 
+def check_plan_offer_heuristic() -> list[str]:
+    """Crystallization L3 — River offers Keep after plan-shaped Turtle replies."""
+    errors: list[str] = []
+    import home_plans as hp
+    import river_eddy_seneschal as res
+
+    plan = (
+        "Here is a break-time plan you can rotate through between development sessions.\n\n"
+        "### 1. Strength\n"
+        "* pull-ups or chin-ups on the bar you already have at home\n"
+        "* push-ups — standard or diamond when you want more challenge\n"
+        "* squats or split squats to wake the legs after sitting\n"
+        "* hangs from the bar for grip and shoulder decompression\n"
+        "### 2. Mobility\n"
+        "* thoracic opener hang for thirty seconds with soft knees\n"
+        "* world's greatest stretch — lunge plus torso twist\n"
+        "### Rotation\n"
+        "* quick refresh between turtleOS commits with pull-ups and push-ups\n"
+        "* deep reset after long sits at the desk when shoulders lock up\n"
+    )
+    if not hp.looks_like_working_plan(plan):
+        errors.append("workout-shaped body should match looks_like_working_plan")
+    if hp.looks_like_working_plan("Sure — try a few pull-ups."):
+        errors.append("short scratch must not match looks_like_working_plan")
+    if not hasattr(res, "maybe_offer_home_plan_after_turtle_reply"):
+        errors.append("seneschal missing maybe_offer_home_plan_after_turtle_reply")
+    return errors
+
+
 def main() -> int:
     live = "--live" in sys.argv
     report = {
@@ -103,6 +132,7 @@ def main() -> int:
         ("registry", check_registry),
         ("registration", check_registration),
         ("honesty", check_honesty_copy),
+        ("plan_offer", check_plan_offer_heuristic),
     ):
         e = fn()
         report["offline"][name] = {"ok": not e, "errors": e}

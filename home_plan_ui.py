@@ -17,6 +17,7 @@ from home_plans import (
     get_by_eddy,
     get_by_id,
     set_pin_message,
+    title_from_plan_body,
     touch_plan,
 )
 
@@ -454,38 +455,66 @@ async def bind_and_post_pin(
 
 
 async def offer_home_plan(
-    message,
+    message=None,
     *,
-    title: str,
+    title: str | None = None,
     body: str | None = None,
     practice_dir: str | None = None,
+    channel=None,
+    discord_client=None,
 ) -> bool:
-    """Post Keep as working plan offer in an eddy. Returns True if offered."""
+    """Post Keep as working plan offer in an eddy. Returns True if offered.
+
+    Prefer calling from the **River** process with ``discord_client=river_client``
+    so button clicks resolve on a logged-in River client (split-bot law).
+    """
     import discord as discord_mod
     from mage import get_pd
 
-    if not isinstance(message.channel, discord_mod.Thread):
+    thread = channel or (getattr(message, "channel", None) if message else None)
+    if thread is None or not isinstance(thread, discord_mod.Thread):
         return False
     pd = practice_dir or get_pd()
-    if get_by_eddy(pd, message.channel.id):
+    if get_by_eddy(pd, thread.id):
         return False
-    parent_id = message.channel.parent_id
+    parent_id = thread.parent_id
     if not parent_id:
         return False
+    plan_body = body
+    plan_title = (title or "").strip() or title_from_plan_body(plan_body or "")
     view = HomePlanOfferView(
-        channel_id=message.channel.id,
+        channel_id=thread.id,
         river_channel_id=parent_id,
-        title=title,
-        body=body,
+        title=plan_title,
+        body=plan_body,
         practice_dir=pd,
     )
-    await message.reply(
-        f"Keep **{title}** as a working plan? "
-        "Pins a card on your river — Continue opens this home eddy.",
-        view=view,
-        mention_author=False,
+    content = (
+        f"Keep **{plan_title}** as a working plan? "
+        "Pins a card on your river — Continue opens this home eddy."
     )
-    return True
+    dc = resolve_pin_client(message=message, discord_client=discord_client)
+    ref = message if message is not None else None
+    try:
+        if dc is not None and hasattr(dc, "get_channel"):
+            river_thread = dc.get_channel(thread.id)
+            if river_thread is None and hasattr(dc, "fetch_channel"):
+                river_thread = await dc.fetch_channel(thread.id)
+            if river_thread is not None:
+                kwargs: dict[str, Any] = {"view": view}
+                if ref is not None:
+                    kwargs["reference"] = ref
+                    kwargs["mention_author"] = False
+                await river_thread.send(content, **kwargs)
+                return True
+        if message is not None:
+            await message.reply(content, view=view, mention_author=False)
+            return True
+        await thread.send(content, view=view)
+        return True
+    except Exception as exc:
+        print(f"home_plan offer failed: {type(exc).__name__}: {exc}")
+        return False
 
 
 def format_updated_subtitle(iso: str | None) -> str:

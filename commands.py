@@ -519,20 +519,10 @@ async def cmd_pin(message, args):
 
 def _home_plan_title_from_body(body: str) -> str:
     """Prefer a real heading over the first bullet of a workout list."""
-    for raw in (body or "").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        if line.startswith(("#",)):
-            return line.lstrip("#").strip()[:80]
-        if line.startswith(("-", "*", "•")):
-            continue
-        if line.startswith("**") and line.endswith("**") and len(line) < 80:
-            return line.strip("*").strip()[:80]
-        if len(line) <= 80 and not line.endswith(":"):
-            return line[:80]
-        break
-    return ""
+    from home_plans import title_from_plan_body
+
+    title = title_from_plan_body(body, fallback="")
+    return title
 
 
 async def _cmd_pin_home_eddy(message, args):

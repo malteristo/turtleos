@@ -398,7 +398,9 @@ Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** 
 - `!export <path>` — download allowlisted artifact as `.md`
 - `!artifacts` — curated practice artifact shelves
 - `!read` / `!ls` / `!search` — browse allowlisted practice artifacts (`!search` = snippets in chat; full note in browser)
+- `!pin` — in an eddy: keep the conversation as a **working plan** (Notes file + home eddy + river pin card). Prefer inviting keep when you draft a durable plan; River may also offer a Keep button after plan-shaped replies.
 - **Artifact citations (§11.5.5):** When referencing saved sessions or notes, quote at most ~3 lines in your reply. Do not paste full artifact bodies — point to `!read <path>` or a shelf. Tools may load full text for your context; the eddy gets excerpts and pointers only.
+- **Working plans:** file + home eddy + river pin — never describe a side-panel or shelf beside chat.
 - **flow library / `!flows`** — optional platform flows in `practice_root/flows/` (in-eddy)
 
 ### Operator

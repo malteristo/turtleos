@@ -30,6 +30,73 @@ class HomePlanError(ValueError):
     """Bind/clear refused — message is practitioner-safe."""
 
 
+_MIN_PLAN_CHARS = 350
+_MIN_PLAN_LINES = 6
+
+
+def looks_like_working_plan(text: str) -> bool:
+    """Heuristic: substantial structured plan worth a Keep-as-working-plan offer.
+
+    Length + headings/bullets — not an LLM classifier (design L3).
+    """
+    t = (text or "").strip()
+    if len(t) < _MIN_PLAN_CHARS:
+        return False
+    lines = [ln for ln in t.splitlines() if ln.strip()]
+    if len(lines) < _MIN_PLAN_LINES:
+        return False
+
+    md_heads = 0
+    bold_heads = 0
+    bullets = 0
+    numbered = 0
+    questions = 0
+    for raw in lines:
+        ln = raw.strip()
+        if ln.endswith("?"):
+            questions += 1
+        if re.match(r"^#{1,3}\s+\S", ln):
+            md_heads += 1
+        elif ln.startswith("**") and ln.endswith("**") and len(ln) < 100:
+            bold_heads += 1
+        if ln.startswith(("-", "*", "•")) or re.match(r"^[-*•]\s+", ln):
+            bullets += 1
+        elif re.match(r"^\d+[.)]\s+\S", ln):
+            numbered += 1
+
+    structure_hits = bullets + numbered
+    heads = md_heads + bold_heads
+    structured = (
+        (md_heads >= 2 and structure_hits >= 3)
+        or (heads >= 1 and structure_hits >= 4 and len(t) >= 400)
+        or (structure_hits >= 5 and len(t) >= 500)
+    )
+    if not structured:
+        return False
+    if questions > max(2, len(lines) * 0.4):
+        return False
+    return True
+
+
+def title_from_plan_body(body: str, *, fallback: str = "Working plan") -> str:
+    """Prefer a markdown/bold heading over intro prose or the first bullet."""
+    prose_candidate = ""
+    for raw in (body or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            return line.lstrip("#").strip()[:_MAX_TITLE] or fallback
+        if line.startswith(("-", "*", "•")):
+            continue
+        if line.startswith("**") and line.endswith("**") and len(line) < 80:
+            return line.strip("*").strip()[:_MAX_TITLE] or fallback
+        if not prose_candidate and len(line) <= 80 and not line.endswith(":"):
+            prose_candidate = line[:_MAX_TITLE]
+            # Keep scanning — a later heading wins over intro prose.
+    return prose_candidate or fallback
+
+
 def registry_path(practice_dir: str | Path) -> Path:
     return Path(practice_dir) / REGISTRY_REL
 

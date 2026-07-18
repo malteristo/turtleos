@@ -119,5 +119,49 @@ class TestPinCardPayload(unittest.TestCase):
         )
 
 
+class TestLooksLikeWorkingPlan(unittest.TestCase):
+    def test_workout_shaped_plan(self) -> None:
+        text = """
+Here is a balanced approach you could rotate through during your breaks.
+
+### 1. The Strength Core (Tension)
+*   **Upper Pull:** Pull-ups or Chin-ups.
+*   **Upper Push:** Push-ups.
+*   **Lower Body:** Bulgarian Split Squats or Air Squats.
+*   **Core:** Hanging Leg Raises or Knee Tucks on the bar.
+
+### 2. The Mobility Reset (Release)
+*   **The Thoracic Opener:** Hang from the pull-up bar for 30 seconds.
+*   **World's Greatest Stretch:** A deep lunge with a torso twist.
+
+### A Possible Break Rotation
+*   **The Quick Refresh (5 mins):** 1 set of Pull-ups + 1 set of Push-ups + Dead hang.
+*   **The Deep Reset (10 mins):** World's Greatest Stretch + Wall Slides + Squats.
+"""
+        self.assertTrue(hp.looks_like_working_plan(text))
+        self.assertIn("Strength", hp.title_from_plan_body(text))
+
+    def test_short_scratch_rejected(self) -> None:
+        self.assertFalse(hp.looks_like_working_plan("Sure — try a few pull-ups between commits."))
+
+    def test_question_heavy_rejected(self) -> None:
+        text = "\n".join(
+            [
+                "### Thoughts",
+                "- What do you want?",
+                "- When should we start?",
+                "- Who else is involved?",
+                "- Why now?",
+                "- How does this feel?",
+                "- Where do we put it?",
+                "Does any of this resonate?",
+                "Or should we rethink the whole frame?",
+            ]
+        )
+        # pad to length without adding structure that passes
+        text = text + "\n" + ("x" * 400)
+        self.assertFalse(hp.looks_like_working_plan(text))
+
+
 if __name__ == "__main__":
     unittest.main()

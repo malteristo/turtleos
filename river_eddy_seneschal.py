@@ -23,6 +23,7 @@ from content_fetch import _URL_PATTERN
 from link_read import external_urls
 
 _save_offer_seen: dict[int, set[str]] = defaultdict(set)
+_home_plan_offer_seen: set[int] = set()
 _contextual_poll_tasks: dict[int, asyncio.Task] = {}
 
 _CHECKPOINT_INTENT_RE = re.compile(
@@ -215,15 +216,156 @@ def clear_save_offer_state(channel_id: int | None = None) -> None:
     """Test helper — reset in-memory offer dedupe and poll tasks."""
     if channel_id is None:
         _save_offer_seen.clear()
+        _home_plan_offer_seen.clear()
         for task in _contextual_poll_tasks.values():
             if not task.done():
                 task.cancel()
         _contextual_poll_tasks.clear()
     else:
         _save_offer_seen.pop(channel_id, None)
+        _home_plan_offer_seen.discard(channel_id)
         task = _contextual_poll_tasks.pop(channel_id, None)
         if task and not task.done():
             task.cancel()
+
+
+def _latest_assistant_after_turn(
+    history: list[dict],
+    practitioner_text: str,
+) -> str:
+    """Full assistant reply text after the matching practitioner turn."""
+    needle = (practitioner_text or "").strip()
+    if not needle:
+        return ""
+    last_user_idx: int | None = None
+    for i, entry in enumerate(history):
+        if entry.get("role") != "user":
+            continue
+        content = (entry.get("content") or "").strip()
+        if needle[:240] in content or content[:240] in needle:
+            last_user_idx = i
+    if last_user_idx is None:
+        return ""
+    chunks: list[str] = []
+    for entry in history[last_user_idx + 1 :]:
+        if entry.get("role") != "assistant":
+            if chunks:
+                break
+            continue
+        text = (entry.get("content") or "").strip()
+        if text:
+            chunks.append(text)
+    return "\n\n".join(chunks)
+
+
+def home_plan_offer_skip_reason(
+    assistant_text: str,
+    channel_id: int,
+    *,
+    practice_dir: str | None = None,
+) -> str | None:
+    """Skip reason when no Keep-as-working-plan offer should post."""
+    from home_plans import get_by_eddy, looks_like_working_plan
+    from mage import get_pd
+
+    if channel_id in _home_plan_offer_seen:
+        return "already_offered_this_session"
+    if not looks_like_working_plan(assistant_text):
+        return "not_plan_shaped"
+    pd = practice_dir or get_pd()
+    if get_by_eddy(pd, channel_id):
+        return "already_home"
+    return None
+
+
+async def maybe_offer_home_plan_after_turtle_reply(
+    channel,
+    *,
+    practitioner_text: str,
+    practitioner_message=None,
+) -> bool:
+    """River: after Turtle replies, offer Keep-as-working-plan when plan-shaped.
+
+    Returns True when an offer was posted (skips other contextual act rows).
+    """
+    from home_plan_ui import offer_home_plan
+    from home_plans import title_from_plan_body
+    from mage import get_pd, river_bot_enabled
+    from prompts import uses_native_turtle_prompt
+    from river_state import river_client
+
+    if not river_bot_enabled():
+        return False
+    parent_id = getattr(channel, "parent_id", None)
+    if not parent_id or not uses_native_turtle_prompt(parent_id):
+        return False
+
+    history = _dialogue_history_snapshot(channel.id)
+    assistant_text = _latest_assistant_after_turn(history, practitioner_text)
+    skip = home_plan_offer_skip_reason(assistant_text, channel.id, practice_dir=get_pd())
+    if skip:
+        _log_contextual_skip(channel, "home_plan", skip)
+        return False
+
+    title = title_from_plan_body(assistant_text)
+    ref_message = await _turtle_plan_reference_message(
+        channel, practitioner_message, assistant_text
+    )
+
+    offered = await offer_home_plan(
+        ref_message,
+        title=title,
+        body=assistant_text,
+        practice_dir=get_pd(),
+        channel=channel,
+        discord_client=river_client,
+    )
+    if offered:
+        _home_plan_offer_seen.add(channel.id)
+        _log_contextual_posted(channel, "home_plan")
+    return offered
+
+
+def _chunk_in_assistant(chunk: str, full: str) -> bool:
+    """True when Discord chunk is part of the assistant reply body."""
+    c = (chunk or "").strip()
+    f = (full or "").strip()
+    if not c or not f:
+        return False
+    if c[:120] in f:
+        return True
+    return len(c) >= 200 and c[:80] in f
+
+
+async def _turtle_plan_reference_message(
+    channel,
+    practitioner_message,
+    assistant_text: str,
+):
+    """Longest Turtle Discord chunk that belongs to this assistant reply."""
+    if practitioner_message is None:
+        return None
+    try:
+        from eddy_spawn import resolve_turtle_bot_user_id
+
+        turtle_id = resolve_turtle_bot_user_id(getattr(channel, "guild", None))
+        if not turtle_id:
+            return None
+        candidates = []
+        async for msg in channel.history(limit=25, after=practitioner_message):
+            if getattr(msg.author, "id", None) != turtle_id:
+                continue
+            content = (msg.content or "").strip()
+            if not content:
+                continue
+            if _chunk_in_assistant(content, assistant_text):
+                candidates.append(msg)
+        if not candidates:
+            return None
+        return max(candidates, key=lambda m: len((m.content or "")))
+    except Exception as exc:
+        print(f"home_plan offer ref lookup: {type(exc).__name__}: {exc}")
+        return None
 
 
 def _cancel_contextual_poll(channel_id: int) -> None:
@@ -448,7 +590,15 @@ async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> N
     if not await _wait_for_turtle_reply_after(channel, practitioner_message):
         return
 
-    if pre_offer:
+    # Brief settle so multi-chunk Turtle replies land in shared history / Discord.
+    await asyncio.sleep(1.5)
+
+    home_offered = await maybe_offer_home_plan_after_turtle_reply(
+        channel,
+        practitioner_text=practitioner_text,
+        practitioner_message=practitioner_message,
+    )
+    if pre_offer and not home_offered:
         await maybe_offer_contextual_act_after_turn(
             channel, practitioner_text=practitioner_text
         )

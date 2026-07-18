@@ -1,7 +1,7 @@
 # Design Chapter: Turtle Artifact Crystallization
 
 **Opened:** 2026-07-17  
-**Status:** Design in progress — dogfood seed from pinned home eddies  
+**Status:** Implemented 2026-07-18 — awaiting both-bot deploy + dogfood  
 **Depends on:** [design-pinned-home-eddies.md](design-pinned-home-eddies.md) (discovery door shipped)  
 **Spec touch (later):** TURTLE_SPEC §11.5 write path; native `conduct.md` / prompts tool guidance  
 **Dogfood first:** Operator river
@@ -43,7 +43,7 @@ Pinned home eddies shipped the **discovery door** (`!pin` / Keep as working plan
 
 ---
 
-## Proposed locks (for Mage sanction)
+## Locks (sanctioned 2026-07-18)
 
 ### L1 — Offer, don’t silent-home
 
@@ -119,4 +119,4 @@ Product speech: file + home eddy + river pin. Never side-panel / shelf beside ch
 
 ## Status
 
-**Design open 2026-07-17.** Awaiting Mage locks on L1–L5 (especially L2 note-only and L3 who attaches the offer).
+**Implemented 2026-07-18** (L1–L5). Code: `looks_like_working_plan` + River seneschal offer + `conduct.md` / prompts. Awaiting both-bot restart + recognition tests. Note-only deferred. Slice 6 quiet write-tool residual remains.

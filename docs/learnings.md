@@ -9,6 +9,18 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-18 — Artifact crystallization offer hook
+
+**Shipped:** After Turtle posts a plan-shaped reply in a native eddy, River offers **Keep as working plan** (no typed `!pin` required). Heuristic `home_plans.looks_like_working_plan` (length + headings/bullets). Hook in `river_eddy_seneschal` after Turtle-turn poll; home offer wins over save/checkpoint act rows for that turn. Native `conduct.md` Working Documents section + prompts `!pin` / honesty lines. Title helper prefers headings over intro prose.
+
+**Locks:** L1–L5 sanctioned (note-only deferred; no `!artifact` create; River attaches offer).
+
+**Residual:** Slice 6 `patch_artifact` dialogue tool wiring still open.
+
+**Deploy:** restart **both** bots. Dogfood: ask for workout plan → Keep button → confirm → pin tray → Continue. Scratch question → no offer.
+
+**Shake:** `scripts/shake_home_plans.py` (+ `plan_offer` check). Tests: `TestLooksLikeWorkingPlan`, `TestMaybeOfferHomePlan`.
+
 ### 2026-07-17 — Pinned home eddies shipped (AFK)
 
 **Shipped:** Working plans = 1:1 home eddy ↔ Tier-1 Notes file ↔ river pin card. Modules: `home_plans.py` (YAML registry), `home_plan_ui.py` (Continue / Open / Stop pinning), `cmd_pin` product path in eddies (river legacy pin kept), sticky skip in `cool_eddy_from_auto_archive`, attunement inject in `dialogue_turn`, dissolve clears binding + unpin (file kept). Quiet `patch_artifact` helper; Turtle tool wiring residual.

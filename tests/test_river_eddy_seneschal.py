@@ -98,7 +98,7 @@ class TestMaybeOfferEddySaveAfterTurn(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         res.clear_save_offer_state()
 
-    async     def test_posts_save_row(self) -> None:
+    async def test_posts_save_row(self) -> None:
         channel = MagicMock()
         channel.id = 99
         channel.name = "test-eddy"
@@ -224,6 +224,91 @@ class TestScheduleContextualOffer(unittest.IsolatedAsyncioTestCase):
             res.schedule_save_offer_after_practitioner_url(message)
             await asyncio.sleep(0.05)
         run_mock.assert_awaited_once_with(message)
+
+
+class TestHomePlanOfferHelpers(unittest.TestCase):
+    def setUp(self) -> None:
+        res.clear_save_offer_state()
+
+    def test_latest_assistant_after_turn(self) -> None:
+        history = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hey"},
+            {"role": "user", "content": "give me a workout plan"},
+            {"role": "assistant", "content": "### Plan\n- a\n- b"},
+        ]
+        text = res._latest_assistant_after_turn(history, "give me a workout plan")
+        self.assertIn("### Plan", text)
+
+    def test_home_plan_skip_not_shaped(self) -> None:
+        reason = res.home_plan_offer_skip_reason("short reply", channel_id=1)
+        self.assertEqual(reason, "not_plan_shaped")
+
+    def test_home_plan_skip_already_offered(self) -> None:
+        plan = """
+### 1. Strength
+* pull-ups
+* push-ups
+* squats
+### 2. Mobility
+* hang
+* stretch
+* wall slides
+### 3. Rotation
+* quick refresh circuit with several named moves and enough prose to clear the length bar for a durable working document someone would pin.
+"""
+        res._home_plan_offer_seen.add(9)
+        with patch("mage.get_pd", return_value="/tmp"), patch(
+            "home_plans.get_by_eddy", return_value=None
+        ):
+            reason = res.home_plan_offer_skip_reason(plan, channel_id=9)
+        self.assertEqual(reason, "already_offered_this_session")
+
+
+class TestMaybeOfferHomePlan(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        res.clear_save_offer_state()
+
+    async def test_offers_when_plan_shaped(self) -> None:
+        channel = MagicMock()
+        channel.id = 55
+        channel.name = "workouts"
+        channel.parent_id = 99
+        plan = """
+Here is a break-time plan you can rotate through between development sessions.
+
+### 1. The Strength Core
+*   **Upper Pull:** Pull-ups or chin-ups on the bar you already have.
+*   **Upper Push:** Push-ups — standard or diamond when you want more challenge.
+*   **Lower Body:** Bulgarian split squats or air squats to wake the legs.
+### 2. The Mobility Reset
+*   Hang from the bar for thirty seconds and let the shoulders drop.
+*   World's Greatest Stretch — lunge plus torso twist for hips and mid-back.
+### Break Rotation
+*   Quick refresh with pull-ups and push-ups between development commits on turtleOS.
+*   Deep reset: hang, stretch, then a short squat set before returning to code.
+"""
+        history = [
+            {"role": "user", "content": "suggest a break workout"},
+            {"role": "assistant", "content": plan},
+        ]
+        with patch("mage.river_bot_enabled", return_value=True), patch(
+            "prompts.uses_native_turtle_prompt", return_value=True
+        ), patch("mage.get_pd", return_value="/tmp"), patch(
+            "home_plans.get_by_eddy", return_value=None
+        ), patch.object(
+            res, "_dialogue_history_snapshot", return_value=history
+        ), patch.object(
+            res, "_turtle_plan_reference_message", new_callable=AsyncMock, return_value=None
+        ), patch(
+            "home_plan_ui.offer_home_plan", new_callable=AsyncMock, return_value=True
+        ) as offer_mock:
+            offered = await res.maybe_offer_home_plan_after_turtle_reply(
+                channel, practitioner_text="suggest a break workout"
+            )
+        self.assertTrue(offered)
+        offer_mock.assert_awaited_once()
+        self.assertIn(55, res._home_plan_offer_seen)
 
 
 if __name__ == "__main__":
