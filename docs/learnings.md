@@ -9,6 +9,16 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-18 — Turtle → River structured act offers (Slice 1)
+
+**Finding:** Turtle should suggest platform acts; River should buttonize/execute. Prose→button parsing stays rejected. Local models skip tools — need a stripped trailer as well as `offer_river_act`.
+
+**Shipped:** `act_offer_signal.py`; tool `offer_river_act`; trailer `[[act-offer:checkpoint|save url]]` stripped in `dialogue_turn`; River consume in `river_eddy_seneschal` (priority: home_plan → turtle intent → River heuristics). Allowlist: checkpoint, save. Chapter: `docs/chapters/2026-07-18-turtle-river-act-offers.md`.
+
+**Deploy:** restart **both** bots. Dogfood: wrap-up → Checkpoint button; URL worth keeping → Save (via tool or trailer).
+
+**Tests:** `tests/test_act_offer_signal.py`.
+
 ### 2026-07-18 — Split-bot ops unit (restart + River health)
 
 **Finding:** Product River/Turtle split is right; the ops seam was under-built. `restart.sh` and canary/readiness treated Turtle as the whole stack while River owns acts + all `!`.

@@ -24,7 +24,7 @@ Turtle-talk describes **platform commands only**: river acts, eddy lifecycle, pr
 | **Eddy core** | Discord threads (eddies) | **River bot** — all platform `!` (acts, not prose) | §5.8, §8.4, §9 |
 | **Operator tools** | Any practice channel | **River bot** — operator profile | §15, canary |
 
-**Split-bot law:** typed `!` commands (Mage, Spirit, practitioner) are **River acts** everywhere — river and eddies. Turtle reads outcomes via `[Act: !cmd]` digests in dialogue context; Turtle may suggest commands but does not execute them when `RIVER_BOT_TOKEN` is set.
+**Split-bot law:** typed `!` commands (Mage, Spirit, practitioner) are **River acts** everywhere — river and eddies. Turtle reads outcomes via `[Act: !cmd]` digests in dialogue context; Turtle may suggest commands but does not execute them when `RIVER_BOT_TOKEN` is set. Structured contextual offers: Turtle proposes via `offer_river_act` / `[[act-offer:…]]` → River posts the button (`act_offer_signal.py`); never via prose backtick parsing.
 
 **Deferred (not default install):** legacy thread/orchestration patterns — see [Appendix A — deferred patterns](#appendix-a--deferred-patterns-not-v1) and `TURTLE_SPEC.md` Appendix A.
 

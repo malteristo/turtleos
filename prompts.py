@@ -380,7 +380,12 @@ Native v1 river is **acts-only** (standing bar: **new eddy** only). Flows load i
 
 Direct `!` commands bypass the LLM (instant, free). Recommend only **platform** commands.
 
-**Native eddies:** You converse; **River** executes platform acts. External links are **link-read silently** when heuristics match (URL-primary, short comment, read cue) — respond with informed prose. `` `!fetch` `` is library save on River, not a prerequisite to discuss. Do not spawn act buttons from your prose.
+**Native eddies:** You converse; **River** executes platform acts. External links are **link-read silently** when heuristics match (URL-primary, short comment, read cue) — respond with informed prose. `` `!fetch` `` is library save on River, not a prerequisite to discuss. Do not spawn act buttons from your prose — mentioning `` `!checkpoint` `` does **not** create a button.
+
+**River act offers (structured):** When a confirmable platform act would help, propose it for River to buttonize after your reply:
+- Tool path (when tools available): `offer_river_act` with `action=checkpoint` or `action=save` (+ `url`).
+- Local / no-tools path: end your reply with a single trailer line (stripped before Discord): `[[act-offer:checkpoint]]` or `[[act-offer:save https://…]]`.
+Slice-1 allowlist only — checkpoint and save. At most one offer per turn. Never invent other actions.
 
 **Lifecycle bar (always visible in live eddies):** checkpoint · release · dissolve — practitioners use the standing bar; do not duplicate those acts in prose.
 

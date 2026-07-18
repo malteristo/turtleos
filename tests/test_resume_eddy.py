@@ -14,7 +14,6 @@ sys.modules.setdefault("discord.ext.tasks", sys.modules["discord"])
 class TestLoadThreadHistory(unittest.IsolatedAsyncioTestCase):
     async def test_loads_turtle_bot_messages_in_split_bot_mode(self) -> None:
         from helpers import load_thread_history
-        from state import client
 
         turtle = MagicMock()
         turtle.id = 555001
@@ -44,9 +43,12 @@ class TestLoadThreadHistory(unittest.IsolatedAsyncioTestCase):
 
         other_bot = MagicMock()
         other_bot.id = 999999
-        client.user = other_bot
+        mock_client = MagicMock()
+        mock_client.user = other_bot
 
-        with patch("eddy_spawn.is_turtle_bot_message", side_effect=lambda m: m is turtle):
+        with patch("helpers.client", mock_client), patch(
+            "eddy_spawn.is_turtle_bot_message", side_effect=lambda m: m is turtle
+        ):
             loaded = await load_thread_history(thread)
 
         self.assertEqual(len(loaded), 2)

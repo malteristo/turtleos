@@ -18,7 +18,7 @@ When shared modules change, restarting Turtle alone leaves stale River code (and
 Shared libraries and state seams — treat as **both** unless proven entrypoint-local:
 
 - `cmd_dispatch.py`, `commands.py`, `sessions.py`, `eddy_*`, `share_*`
-- `dialogue_store.py`, `river_turn_signal.py`, `mage.py`, `bar_anchor.py`
+- `dialogue_store.py`, `river_turn_signal.py`, `act_offer_signal.py`, `mage.py`, `bar_anchor.py`
 - `artifact_presenter.py`, `link_read.py`, `home_plans.py` / `home_plan_ui.py`
 - Continuity / practice-root writers read by either process
 
@@ -31,6 +31,7 @@ Shared libraries and state seams — treat as **both** unless proven entrypoint-
 
 - `discord_bot.py`, `practice_dispatch.py`, dialogue turn stack modules Turtle-only
 - Background loops that only run in the Turtle process
+- `offer_river_act` tool + `[[act-offer:…]]` trailer emit (signal consumed by River)
 
 **When unsure → both.** The cost of an extra kickstart is lower than a silent wrong-bot deploy.
 

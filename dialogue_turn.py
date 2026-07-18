@@ -453,74 +453,78 @@ async def continue_dialogue_turn(
         messages_for_llm = [{"role": "user", "content": absorbed_block},
                             {"role": "assistant", "content": "I have this thread context. Let's continue."}] + messages_for_llm
 
+    from act_offer_signal import act_offer_turn_context, extract_and_propose_from_reply
+
     async with message.channel.typing():
-        if native_eddy:
+        with act_offer_turn_context(channel_id, message.id):
+            if native_eddy:
+                try:
+                    await ensure_native_presence(message.channel)
+                except Exception as exc:
+                    print(f"Native presence failed: {exc}")
+                cfg = thread_configs.get(channel_id) or cfg
+                try:
+                    await post_flow_presence_if_needed(message.channel, cfg)
+                except Exception as exc:
+                    print(f"Flow presence failed: {exc}")
+            tool_report = ""
+            is_gemini = thread_model.startswith("gemini-")
+            if native_eddy:
+                thread_label = message.channel.name if isinstance(message.channel, discord.Thread) else "eddy"
+                print(f"Native Turtle [{thread_label}]: {thread_model} prompt={len(system_prompt)} chars")
             try:
-                await ensure_native_presence(message.channel)
-            except Exception as exc:
-                print(f"Native presence failed: {exc}")
-            cfg = thread_configs.get(channel_id) or cfg
-            try:
-                await post_flow_presence_if_needed(message.channel, cfg)
-            except Exception as exc:
-                print(f"Flow presence failed: {exc}")
-        tool_report = ""
-        is_gemini = thread_model.startswith("gemini-")
-        if native_eddy:
-            thread_label = message.channel.name if isinstance(message.channel, discord.Thread) else "eddy"
-            print(f"Native Turtle [{thread_label}]: {thread_model} prompt={len(system_prompt)} chars")
-        try:
-            if is_gemini and HAS_GEMINI and GOOGLE_API_KEY:
-                reply, tools_executed = await chat_gemini(system_prompt, messages_for_llm, model=thread_model, attachments=attachments)
-                tool_report = build_tool_report(tools_executed)
-            elif attachments and not is_gemini:
-                extraction = await preprocess_attachments(attachments) if attachments else ""
-                if extraction:
-                    messages_for_llm[-1] = dict(messages_for_llm[-1])
-                    block = extraction
-                    if extraction.startswith("[Attachment processing failed") and raw_attachments:
-                        url_lines = []
-                        for att in raw_attachments[:3]:
-                            url = getattr(att, "url", None)
-                            if url:
-                                url_lines.append(f"- {att.filename}: {url}")
-                        if url_lines:
-                            block += "\n[Attachment URLs for practitioner]:\n" + "\n".join(url_lines)
-                    messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + block
-                    if not extraction.startswith("[Attachment processing failed"):
-                        attachment_extracted = True
-                if thread_use_api:
+                if is_gemini and HAS_GEMINI and GOOGLE_API_KEY:
+                    reply, tools_executed = await chat_gemini(system_prompt, messages_for_llm, model=thread_model, attachments=attachments)
+                    tool_report = build_tool_report(tools_executed)
+                elif attachments and not is_gemini:
+                    extraction = await preprocess_attachments(attachments) if attachments else ""
+                    if extraction:
+                        messages_for_llm[-1] = dict(messages_for_llm[-1])
+                        block = extraction
+                        if extraction.startswith("[Attachment processing failed") and raw_attachments:
+                            url_lines = []
+                            for att in raw_attachments[:3]:
+                                url = getattr(att, "url", None)
+                                if url:
+                                    url_lines.append(f"- {att.filename}: {url}")
+                            if url_lines:
+                                block += "\n[Attachment URLs for practitioner]:\n" + "\n".join(url_lines)
+                        messages_for_llm[-1]["content"] += "\n\n[Attachment content]:\n" + block
+                        if not extraction.startswith("[Attachment processing failed"):
+                            attachment_extracted = True
+                    if thread_use_api:
+                        reply, tools_executed = await chat_anthropic_with_model(
+                            system_prompt, messages_for_llm, thread_model, use_tools=True,
+                            tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
+                        tool_report = build_tool_report(tools_executed)
+                    else:
+                        reply, tools_executed = await chat_ollama_with_tools(
+                            system_prompt, messages_for_llm, model_override=thread_model,
+                            tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
+                        tool_report = build_tool_report(tools_executed)
+                elif thread_use_api:
                     reply, tools_executed = await chat_anthropic_with_model(
                         system_prompt, messages_for_llm, thread_model, use_tools=True,
                         tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
                     tool_report = build_tool_report(tools_executed)
                 else:
-                    reply, tools_executed = await chat_ollama_with_tools(
-                        system_prompt, messages_for_llm, model_override=thread_model,
-                        tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
-                    tool_report = build_tool_report(tools_executed)
-            elif thread_use_api:
-                reply, tools_executed = await chat_anthropic_with_model(
-                    system_prompt, messages_for_llm, thread_model, use_tools=True,
-                    tos_tools=TOS_TOOLS, execute_tool=execute_tos_tool)
-                tool_report = build_tool_report(tools_executed)
-            else:
-                # Direct commands are handled before dialogue. For ordinary
-                # local replies, avoid the conversational tool loop so Qwen
-                # does not spend turns searching or routing while Discord waits.
-                reply = await chat_ollama(
-                    system_prompt, messages_for_llm, model=thread_model,
-                    num_ctx=32768, think=False)
-                tools_executed = []
+                    # Direct commands are handled before dialogue. For ordinary
+                    # local replies, avoid the conversational tool loop so Qwen
+                    # does not spend turns searching or routing while Discord waits.
+                    # Act offers: use [[act-offer:…]] trailer (stripped before send).
+                    reply = await chat_ollama(
+                        system_prompt, messages_for_llm, model=thread_model,
+                        num_ctx=32768, think=False)
+                    tools_executed = []
 
-            if not reply:
-                reply = "(no response generated)"
-        except Exception as e:
-            print(f"Dialogue error ({thread_model}): {type(e).__name__}: {e}")
-            try:
-                reply = await chat_ollama(system_prompt, list(history), model=REFLECTION_MODEL)
-            except Exception as e2:
-                reply = f"[dialogue error: {type(e2).__name__}: {e2}]"
+                if not reply:
+                    reply = "(no response generated)"
+            except Exception as e:
+                print(f"Dialogue error ({thread_model}): {type(e).__name__}: {e}")
+                try:
+                    reply = await chat_ollama(system_prompt, list(history), model=REFLECTION_MODEL)
+                except Exception as e2:
+                    reply = f"[dialogue error: {type(e2).__name__}: {e2}]"
 
     # Detect and remove repeated paragraphs before sending
     paragraphs = reply.split("\n\n")
@@ -547,6 +551,14 @@ async def continue_dialogue_turn(
         reply, guard_notes = apply_flow_reply_guard(reply, flow_id, history)
         if guard_notes:
             print(f"Flow reply guard: {guard_notes}")
+    # Structured River act offer (tool and/or [[act-offer:…]] trailer) — never visible in Discord.
+    reply, act_intent = extract_and_propose_from_reply(reply, channel_id, message.id)
+    if act_intent:
+        print(
+            f"Act offer queued ({act_intent.action}"
+            f"{' ' + act_intent.url if act_intent.url else ''}) "
+            f"for eddy {channel_id}"
+        )
     if tool_report:
         reply = f"{reply}\n\n-# ⚙️ {tool_report}"
     if attachment_extracted:

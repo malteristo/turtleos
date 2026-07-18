@@ -209,6 +209,37 @@ TOS_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "offer_river_act",
+            "description": (
+                "Ask River to post one contextual act button after this reply (split-bot). "
+                "Use when a platform act would help and the practitioner should confirm — "
+                "checkpoint to save progress, or save to library for a URL worth keeping. "
+                "Does not execute the act. Do not invent commands outside checkpoint/save. "
+                "Mentioning `!checkpoint` in prose does NOT spawn buttons — use this tool."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Allowlisted act: 'checkpoint' or 'save' (library distill).",
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "Required for action=save — the http(s) URL to distill.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Short why (logged; optional).",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_turtle_capabilities",
             "description": (
                 "List Turtle's local skills and procedures. Use this when deciding how to approach "
@@ -310,6 +341,15 @@ def _execute_tos_tool_raw(name, arguments):
         reason = arguments.get("reason", "")
         result = run_shell_command(command, cwd=cwd or None, reason=reason, requester="turtle-llm")
         return format_shell_result(result)
+
+    if name == "offer_river_act":
+        from act_offer_signal import propose_act_offer_from_tool
+
+        return propose_act_offer_from_tool(
+            str(arguments.get("action") or ""),
+            url=arguments.get("url"),
+            reason=str(arguments.get("reason") or ""),
+        )
 
     if name == "list_turtle_capabilities":
         kind = (arguments.get("kind") or "").strip() or None

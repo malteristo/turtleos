@@ -374,6 +374,76 @@ def _cancel_contextual_poll(channel_id: int) -> None:
         task.cancel()
 
 
+def _offer_from_turtle_intent(intent) -> ContextualOffer | None:
+    """Map validated Turtle intent → button row (River owns labels / ! strings)."""
+    if intent.action == "checkpoint":
+        return ContextualOffer(
+            kind="turtle_checkpoint",
+            description="Optional — **checkpoint** this thread when you are ready.",
+            actions=[("Checkpoint", "!checkpoint")],
+        )
+    if intent.action == "save" and intent.url:
+        return ContextualOffer(
+            kind="turtle_save",
+            description="Optional — **save this link** to your practice library.",
+            actions=[("Save to library", f"!fetch {intent.url}")],
+        )
+    return None
+
+
+async def _post_contextual_offer(channel, offer: ContextualOffer) -> bool:
+    from eddy_lifecycle_bar import post_act_suggestion_row
+    from river_state import river_client
+
+    try:
+        msg = await post_act_suggestion_row(
+            channel,
+            offer.actions,
+            river_client,
+            description=offer.description,
+        )
+    except Exception as exc:
+        print(f"Contextual offer failed for {channel.id}: {type(exc).__name__}: {exc}")
+        return False
+    if not msg:
+        print(f"Contextual offer skipped for #{getattr(channel, 'name', channel.id)} — no act buttons")
+        return False
+    _log_contextual_posted(channel, offer.kind)
+    return True
+
+
+async def maybe_offer_turtle_intent_after_turn(
+    channel,
+    *,
+    practitioner_message_id: int,
+) -> bool:
+    """River: consume Turtle structured act-offer signal; post one row if valid."""
+    from act_offer_signal import consume_act_offer
+    from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
+    from mage import river_bot_enabled
+    from prompts import uses_native_turtle_prompt
+
+    if not river_bot_enabled():
+        return False
+    parent_id = getattr(channel, "parent_id", None)
+    if not parent_id or not uses_native_turtle_prompt(parent_id):
+        return False
+    if is_awaiting_flow_intake(channel.id, parent_id) or is_awaiting_title(channel.id, parent_id):
+        return False
+
+    intent = consume_act_offer(channel.id, practitioner_message_id)
+    if not intent:
+        return False
+    offer = _offer_from_turtle_intent(intent)
+    if not offer:
+        _log_contextual_skip(channel, "turtle_intent", "unmapped_or_invalid")
+        return False
+    posted = await _post_contextual_offer(channel, offer)
+    if posted and offer.kind == "turtle_save" and intent.url:
+        mark_save_offer_posted(channel.id, intent.url)
+    return posted
+
+
 async def maybe_offer_contextual_act_after_turn(
     channel,
     *,
@@ -381,11 +451,9 @@ async def maybe_offer_contextual_act_after_turn(
 ) -> None:
     """River harness: post one contextual act row once Turtle has replied."""
     from cmd_link_resonance import get_cached_resonance
-    from eddy_lifecycle_bar import post_act_suggestion_row
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
     from mage import river_bot_enabled
     from prompts import uses_native_turtle_prompt
-    from river_state import river_client
     from state import MIN_EXCHANGES_FOR_CHECKPOINT
 
     if not river_bot_enabled():
@@ -419,18 +487,8 @@ async def maybe_offer_contextual_act_after_turn(
         )
         return
 
-    try:
-        msg = await post_act_suggestion_row(
-            channel,
-            offer.actions,
-            river_client,
-            description=offer.description,
-        )
-    except Exception as exc:
-        print(f"Contextual offer failed for {channel.id}: {type(exc).__name__}: {exc}")
-        return
-    if not msg:
-        print(f"Contextual offer skipped for #{getattr(channel, 'name', channel.id)} — no act buttons")
+    posted = await _post_contextual_offer(channel, offer)
+    if not posted:
         return
 
     if offer.kind == "save":
@@ -439,8 +497,6 @@ async def maybe_offer_contextual_act_after_turn(
         )
         if url:
             mark_save_offer_posted(channel.id, url)
-
-    _log_contextual_posted(channel, offer.kind)
 
 
 async def maybe_offer_eddy_save_after_turn(
@@ -598,7 +654,13 @@ async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> N
         practitioner_text=practitioner_text,
         practitioner_message=practitioner_message,
     )
-    if pre_offer and not home_offered:
+    turtle_offered = False
+    if not home_offered:
+        turtle_offered = await maybe_offer_turtle_intent_after_turn(
+            channel,
+            practitioner_message_id=practitioner_message.id,
+        )
+    if pre_offer and not home_offered and not turtle_offered:
         await maybe_offer_contextual_act_after_turn(
             channel, practitioner_text=practitioner_text
         )
