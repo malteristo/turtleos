@@ -6,7 +6,7 @@
 **Date:** 2026-07-19
 **Spec trace:** TURTLE_SPEC §15.4–15.6 (multi-practitioner topologies, data flow, multi-server), §6 (eddy model), §8.4 (checkpoint), §16 (practice state)
 **Origin:** Operator strategy dialogue on Forge (2026-07-19); recipe-book eddy as first live communal artifact
-**Rev:** 2026-07-20 (Anvil) — crossing law (§3.2) reframed around the **two-needs split** (contribution vs ambient context) after operator crossing-law dialogue; open questions (§5) updated accordingly.
+**Rev:** 2026-07-20 (Anvil) — crossing law (§3.2) reframed around the **two-needs split** (contribution vs ambient context) after operator crossing-law dialogue; added **§3.4 operator vs member** (custody is not authorship); open questions (§5) updated accordingly.
 
 ---
 
@@ -80,6 +80,24 @@ A channel twine is written from whose viewpoint? A community's shared story is n
 
 A shared artifact (e.g. a family's living recipe book) is not stored *in* communal memory; it is a strand *of* it.
 
+### 3.4 Operator vs member — custody is not authorship
+
+A shared space has an **operator** (who runs the node, holds the registry, provisions the space) and **members** (who co-author the between). Often one person is both — on the family node, the operator is also one of the two spouses. The hazard is **role bleed**: infrastructural capability ("I *can* edit any file") silently read as authorial license ("therefore I *may* revise what we remember").
+
+The resolving distinction:
+
+> **Operator authority is custodial — power over the container. Member sanction is authorial — authority over the contents' meaning. The operator keeps the lights on; the operator does not decide, alone, what the room remembers.**
+
+Because one person may wear both hats, the boundary cannot rest on capability limits (the operator has root). It rests on **Turtle's behaviour + transparency**:
+
+- **On anything that *is* the between** — channel-twine entries, witness records, shared artifacts, corrections — the operator holds exactly **one member vote**. Operator-hood does not upgrade it. Revising or dissolving shared memory needs member sanction; "operator says forget that" must not act like "the members agree to forget that." This is §3.1's no-silent-rewrites generalised: **no silent operator anything on the between.**
+- **Legitimate operator territory is the container:** existence and availability of the space, backups, membership admission/removal, default configuration (e.g. channel attunement), and a *protective floor* (halting abuse, honouring legal compulsion). These are exercised — ideally visibly — without member sanction, because they make no claim about meaning.
+- **When an action is both** (deleting a space that holds shared memory; a compelled removal): the operator executes the container-part, but the meaning-part is surfaced and, where possible, member-sanctioned. A forced removal leaves a **witnessed trace that it occurred** (§3.1's productive irresolution) rather than a silent gap.
+
+**The self-check** for any operator action: *am I keeping the container running, or deciding what the room means?* Container → operator authority. Meaning → one member vote, no more.
+
+**The asymmetry trap (load-bearing for the family case).** The operator's infrastructural asymmetry is real — it is his node — and the danger is that it *leaks into the relational one*: because he hosts, his account of the shared history quietly becomes the canonical one. This is the prior session's neurotype-bias insight one layer down — *the medium's ownership structure favours the host.* The counter is active, not passive: in the between, Turtle attributes perspectives to their holders, records both members' versions when they diverge (§3.1), and never lets host-status render one member's account the default. **The operator hosts the room; he does not narrate the marriage.**
+
 ---
 
 ## 4. Non-goals
@@ -98,7 +116,7 @@ A shared artifact (e.g. a family's living recipe book) is not stored *in* commun
 3. **Channel CE cost** — *partly answered:* the relevance detection for ambient offers runs on the **member's own CE** (already running over their twine + channels), not a new shared-space inference layer. Residual: which of the **channel's own** current/alive layers (for the channel twine itself) earn their place at channel scale for v1?
 4. **Community twine** — is node-scale twine a real layer for v1, or an aggregate view over channel twines until proven needed?
 5. **Member departure** — when a member leaves a space, what happens to twine entries that carry their clearance? (Working instinct: grants are revocable; witness record of shared events persists; personal-context strands are withdrawn.)
-6. **Operator role** — the operator administers the space but must not thereby own the between. Where does operator authority end and member sanction begin?
+6. **Operator role** — *resolved in §3.4.* Custody is not authorship: operator authority governs the container, member sanction governs the meaning, and on the between the operator holds one member vote with every touch of shared memory surfaced, never silent. Residual is implementation-UX, not governance: the exact **visibility surface** — how an operator action on a space is shown to members in-channel (an audit strand? a system act?).
 
 ---
 
