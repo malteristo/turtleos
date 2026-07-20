@@ -6,6 +6,7 @@
 **Date:** 2026-07-19
 **Spec trace:** TURTLE_SPEC §15.4–15.6 (multi-practitioner topologies, data flow, multi-server), §6 (eddy model), §8.4 (checkpoint), §16 (practice state)
 **Origin:** Operator strategy dialogue on Forge (2026-07-19); recipe-book eddy as first live communal artifact
+**Rev:** 2026-07-20 (Anvil) — crossing law (§3.2) reframed around the **two-needs split** (contribution vs ambient context) after operator crossing-law dialogue; open questions (§5) updated accordingly.
 
 ---
 
@@ -50,17 +51,24 @@ The twine must also be able to **hold disagreement without flattening it**: "mem
 
 What of a river twine may inform a shared space, and what of a channel twine flows back into member rivers?
 
-TURTLE_SPEC §15.5 currently isolates: nothing crosses. That is the correct *default*, but shared meaning-making often depends on personal context — a shared space serves better when it knows what a member has chosen to let it know. The crossing must be **granted at the source, per item, by its sovereign** — never inferred, never filtered after the fact.
+TURTLE_SPEC §15.5 currently isolates: nothing crosses. That is the correct *default*. But "crossing" turns out to be **two different needs wearing one word**, and they want different mechanisms. Untangling them is what makes the law designable.
 
-This is the third independent occurrence of the same control primitive in turtleOS design (after outfacing clearance and routing guards):
+**Need A — Contribution.** *"This should become part of the shared memory."* Discrete, deliberate, durable: the crossed item becomes a channel-twine strand. Served today by `!share` and link-ingestion — a per-item, source-initiated **snapshot-copy** into a new strand in the target river. Consent-clean by construction: the act of sharing *is* the grant. The only gap is ergonomic — you cannot yet **pull your own** eddy in while already inside another conversation, which is exactly where the wish usually arises. Target-initiated pull of one's *own* item is the same consent model (only the sovereign can pull their own), so it needs **no new law — only implementation**.
+
+**Need B — Ambient context.** *"The shared Turtle should understand relevant private context without me hand-carrying each piece."* Continuous, relevance-driven, and — critically — **context, not strand**: it informs an exchange without necessarily becoming durable shared memory. This is unserved today, and the tempting shape — mark a private conversation "public"; grant the shared space's Turtle file-access to it — is the **wrong** one. It inverts sovereignty (the shared space reads your private files), and it breaks the source rule under amortization: after a one-time grant, every subsequent inclusion is *Turtle's* act, not the member's — the precise thing the source rule forbids.
+
+The answer keeps the source rule intact by keeping the read on the sovereign's side: **relevance-surfaced pull.** The member's *own* CE — which already sees both their private twine and the shared channels they're in — notices when a shared exchange touches private context and **offers** the crossing: *"you have private context relevant here — bring it in?"* One act pulls it, per item. The shared space's Turtle never reads private files; Turtle *surfaces*, the member *acts*. The one kernel worth keeping from the file-access instinct: some crossings should **inform without stranding** (ephemeral) — but that is a *property of the pull* ("bring in for this exchange" vs "add to our record"), not a reason for standing access.
+
+Both needs are the **same control primitive at different triggers** — contribution is clearance granted by an explicit act; ambient is the *same* per-item clearance, triggered by relevance instead of memory:
 
 > **Clearance as routing:** *"where may this resonance surface?"* — decided at the source, enforced at the boundary.
 
-When the same control appears three times independently, it is a **platform primitive**, not a feature. The crossing law should be specified once and instantiated per boundary:
+This is the third independent occurrence of that primitive in turtleOS design (after outfacing clearance and routing guards). When the same control appears three times independently, it is a **platform primitive**, not a feature — specified once, instantiated per boundary:
 
-- **river → channel:** member-granted clearance (explicit, revocable, per item or per scope)
-- **channel → river:** default-open for members (shared content is already known to them), relevance-routed by the member's own CE
-- **channel → outside node:** governed by outfacing clearance (same primitive, next boundary out)
+- **river → channel (contribution):** member-granted clearance by explicit act — push (`!share`) or pull-your-own; **becomes a strand**.
+- **river → channel (ambient):** member-granted clearance by **relevance-surfaced offer**; informs as **context**, strands only if the member says so.
+- **channel → river:** default-open for members (shared content is already known to them), relevance-routed by the member's own CE. *Ambient river→channel is the symmetric twin of this: the same relevance-routing runs both directions — inward as an auto-cue (shared content is already known), outward as an offer (private content is not).*
+- **channel → outside node:** governed by outfacing clearance (same primitive, next boundary out).
 
 ### 3.3 Perspective
 
@@ -85,11 +93,12 @@ A shared artifact (e.g. a family's living recipe book) is not stored *in* commun
 
 ## 5. Open questions
 
-1. **Granularity of clearance** — per item, per scope/theme, or per standing grant? (Standing grants risk consent fatigue in reverse: over-broad early grants forgotten later. Revocability and visibility are load-bearing.)
-2. **Channel CE cost** — per-channel current/alive layers multiply background inference; which layers earn their place at channel scale for v1?
-3. **Community twine** — is node-scale twine a real layer for v1, or an aggregate view over channel twines until proven needed?
-4. **Member departure** — when a member leaves a space, what happens to twine entries that carry their clearance? (Working instinct: grants are revocable; witness record of shared events persists; personal-context strands are withdrawn.)
-5. **Operator role** — the operator administers the space but must not thereby own the between. Where does operator authority end and member sanction begin?
+1. **Granularity of clearance** — *largely dissolved by the two-needs split (§3.2).* Per-item is the atom for **both** contribution and ambient; relevance-surfacing solves the friction that made standing/scope grants tempting, without broadening the grant. **Residual edge:** is there an ambient-*continuous* class — e.g. a "household logistics" thread the family Turtle should simply always know — for which per-item-even-if-prompted is still too much friction? If so, is that a narrowly-scoped standing grant with high visibility + one-tap revocation, or does a low relevance bar cover it without any standing grant? This is the one live tension left in clearance.
+2. **The relevance bar and offer UX** *(Need B's load-bearing unknown)* — what threshold and cadence make relevance-surfaced pull feel like a **gift** rather than **nagging**? Too eager and Turtle interrupts; too shy and ambient context never arrives. This — not the consent model — is what decides whether Need B earns its build. Needs live tuning against real shared exchanges (the recipe-book eddy is the first test surface).
+3. **Channel CE cost** — *partly answered:* the relevance detection for ambient offers runs on the **member's own CE** (already running over their twine + channels), not a new shared-space inference layer. Residual: which of the **channel's own** current/alive layers (for the channel twine itself) earn their place at channel scale for v1?
+4. **Community twine** — is node-scale twine a real layer for v1, or an aggregate view over channel twines until proven needed?
+5. **Member departure** — when a member leaves a space, what happens to twine entries that carry their clearance? (Working instinct: grants are revocable; witness record of shared events persists; personal-context strands are withdrawn.)
+6. **Operator role** — the operator administers the space but must not thereby own the between. Where does operator authority end and member sanction begin?
 
 ---
 
