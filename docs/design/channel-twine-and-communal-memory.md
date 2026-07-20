@@ -6,7 +6,7 @@
 **Date:** 2026-07-19
 **Spec trace:** TURTLE_SPEC §15.4–15.6 (multi-practitioner topologies, data flow, multi-server), §6 (eddy model), §8.4 (checkpoint), §16 (practice state)
 **Origin:** Operator strategy dialogue on Forge (2026-07-19); recipe-book eddy as first live communal artifact
-**Rev:** 2026-07-20 (Anvil) — crossing law (§3.2) reframed around the **two-needs split** (contribution vs ambient context) after operator crossing-law dialogue; added **§3.4 operator vs member** (custody is not authorship); open questions (§5) updated accordingly.
+**Rev:** 2026-07-20 (Anvil) — crossing law (§3.2) reframed around the **two-needs split** (contribution vs ambient context) after operator crossing-law dialogue; added **§3.4 operator vs member** (custody is not authorship); expanded **§3.3** with the concrete **witness spec** for 2+-member spaces (after a live misattribution — see turtle_issues INT-040); open questions (§5) updated accordingly.
 
 ---
 
@@ -74,7 +74,20 @@ This is the third independent occurrence of that primitive in turtleOS design (a
 
 A channel twine is written from whose viewpoint? A community's shared story is not the sum of individual stories.
 
-**Working stance:** Turtle writes as **witness, not arbiter** — a neutral narrating voice that attributes perspectives to their holders and records convergence when it genuinely happens. And the reframe that anchors this charter:
+**Working stance:** Turtle writes as **witness, not arbiter** — a neutral narrating voice that attributes perspectives to their holders and records convergence when it genuinely happens.
+
+**Witness behaviour — concrete** (specified 2026-07-20 after a live misattribution). The stance above was *stated but not implemented*: story synthesis (`story_notes.py` / `story_daily.py`) is single-practitioner by construction — one practitioner name, second-person "you," no authorship model. In a 2+-member space it collapses every member's contribution into one undifferentiated "you"; when that note crosses to another member's river, authorship silently transfers to the reader. (Observed live: a solo eddy authored by one member of a shared space surfaced to another member, re-narrated in the reader's own voice — §3.4's asymmetry trap one layer down, the witness speaking one member's account in another's voice.)
+
+The witness for a space with **two or more members** must therefore:
+
+1. **Attribute authorship.** Never render a shared-space contribution as undifferentiated "you." Every utterance / eddy is tagged to its author.
+2. **Narrate in third person.** *Dialogue-voice* (intimate "you," correct *inside* a member's own eddy) and *witness-voice* (the daily / cross-member surfacing) must diverge above one member: the witness speaks third-person attributed ("member A opened an eddy about…", "they surfaced a tension where…"), because second-person has no stable referent across members.
+3. **Hold a member's account of another as attributed perception** (§3.1), never as fact — "member A experienced member B as dismissive of the plan," not "member B was dismissive." Especially load-bearing when the content is a grievance about the very member it surfaces to.
+4. **Crossing-safety default.** A solo-authored eddy inside a shared space surfaces to *other* members as **attributed witness** ("member A opened an eddy about a hard week"), never as their own addressed daily — correct regardless of whether cross-surfacing was intended. Shared placement is not consent to a re-narrated digest.
+
+The branch is on **member cardinality**, not space type: a solo river keeps second-person "you" — there, dialogue-voice and witness-voice coincide and there is one sovereign to address. Everything above one member takes the witness-voice.
+
+And the reframe that anchors this charter:
 
 > The channel twine is not infrastructure *that enables* shared meaning-making. **The channel twine *is* the shared meaning, co-authored.**
 
