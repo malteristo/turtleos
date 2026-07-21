@@ -37,6 +37,7 @@ def check_templates() -> list[str]:
         "onboarding_de.md",
         "claim_room_en.md",
         "claim_room_de.md",
+        "resonance.md.example",
     ):
         path = REPO / "template" / "practitioner" / name
         if not path.is_file():
@@ -45,6 +46,20 @@ def check_templates() -> list[str]:
         path = REPO / "template" / "practitioner" / "character" / name
         if not path.is_file():
             errors.append(f"missing character template: {name}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        low = text.lower()
+        # Hosted seed must stay generic (not one person's invite-era overlay).
+        if "nesrine" in low:
+            errors.append(f"{name}: still Nesrine-specific — keep template generic")
+        # Care-only overlays recreate sycophancy (docs/ux/principles.md).
+        if "nie drängen" in low or "never push" in low:
+            errors.append(
+                f"{name}: care-only push language — use offer-agenda / care≠agreement split"
+            )
+        if name == "soul.md":
+            if "care is not agreement" not in low and "challenge" not in low:
+                errors.append("soul.md: missing care≠agreement / challenge language")
     return errors
 
 

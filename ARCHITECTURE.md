@@ -530,7 +530,7 @@ The `!admin onboard <username>` command creates a complete practitioner environm
 
 **What's NOT automated:**
 - Setting `type: practitioner` (must be added manually to mage_registry.yaml)
-- Seeding `resonance.md` (relationship history — written manually if it exists)
+- Seeding `resonance.md` (relationship history — start from `template/practitioner/resonance.md.example`; keep challenge language coherent with `character/soul.md`)
 - CouchDB database creation (if sync is needed)
 - Adding to family space membership
 

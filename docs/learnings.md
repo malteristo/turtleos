@@ -9,6 +9,28 @@ Append to this file after each research cycle — it persists across sessions.
 
 <!-- Append entries below this line -->
 
+### 2026-07-21 — Hosted attunement: care ≠ agreement
+
+**Finding:** A hosted practitioner (Nesrine) reported Turtle too accommodating / insufficient challenge. Concrete occasion: family *chore wars* eddy — one-sided advocacy until she corrected. Product signal, not a private quirk.
+
+**Diagnosis:**
+1. **Template already had light push** (`character/soul.md`: light push, honesty over reassurance; `system.md`: honesty over comfort + agreeableness self-check). Global “make Turtle harsher” was the wrong first lever.
+2. **Personal overlay overcorrected.** Invite-era hosted soul optimized for safety (“Nie drängen,” partnership: hold gently, don’t deliver “Wahrheiten”) and had **no challenge language**. `resonance.md` repeated the same suppressions — so three prompt layers agreed on accommodation.
+3. **Model pull under relational load** still softens even when prose allows push — especially in shared/family conflict where Turtle became partisan.
+
+**Shipped (instance, not template):** Rewrote `~/workshops/nesrine/character/{soul,conduct}.md` + `resonance.md` — care includes friction; agenda≠thinking split; hold-first when heavy, name missing side when reasoning; one-line **Stand: Herausforderung: mehr|ausgewogen|halten**. Backups `.bak-2026-07-21`. No bot restart (per-turn load).
+
+**Product principles crystallized:** `docs/ux/principles.md` — *Care is not agreement*.
+
+**Follow-ups:**
+- ~~Sync `template/practitioner/character/`~~ **done same day** — generic EN seed with care≠agreement + Stand dial; `resonance.md.example`; shake guards against care-only regression.
+- Prompt-layer coherence check at hosted provision (auto-copy/substitute resonance still open).
+- Family/shared-river character: witness not advocate (ties to communal-memory crossing law).
+- Optional on-demand perspective / steelman flow — additive, not a substitute for default voice.
+- Hosted research loop: practitioner-named friction is first-class UX evidence (thesis “family-sample bias” check).
+
+**Do not:** harden vanilla template push as the primary response to one hosted complaint; conflate “don’t impose agenda” with “don’t challenge thinking.”
+
 ### 2026-07-18 — Turtle → River structured act offers (Slice 1)
 
 **Finding:** Turtle should suggest platform acts; River should buttonize/execute. Prose→button parsing stays rejected. Local models skip tools — need a stripped trailer as well as `offer_river_act`.

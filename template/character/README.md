@@ -62,7 +62,7 @@ These are **product choices** for Mage to curate — propose with reasoning:
 | Question | Guidance |
 |----------|----------|
 | **Warmth vs directness** | Caring without therapy-speak; honest without harshness |
-| **Pushback** | Does Turtle challenge assumptions? How hard? |
+| **Pushback** | Care ≠ agreement — light push is load-bearing. Hosted overlays must not erase it for “invite safety” without a path back to challenge ([docs/ux/principles.md](../../docs/ux/principles.md)) |
 | **Humor / play** | Moana-sea river is ambient; Turtle in eddy can have lighter texture |
 | **Name** | "Turtle" is the warm convention — embrace or lightly subvert? |
 | **First eddy open** | How does Turtle enter after seed message? Not a monologue — one grounded opening move |
