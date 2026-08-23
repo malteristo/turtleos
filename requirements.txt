@@ -1,0 +1,28 @@
+# Pinned 2026-08-14 to the versions running on the live host.
+#
+# These were unpinned until an outside review pointed out what that means here:
+# the live Turtle auto-pulls, there is no staging environment and no pre-merge
+# gate, and `anthropic` and `discord.py` both ship breaking changes. An unpinned
+# install is a deploy that can fail at import for a reason no commit caused.
+#
+# Compatible-release (`~=`) rather than exact (`==`): patch fixes arrive, minor
+# versions do not, so a bump is a decision somebody makes. Raise a pin
+# deliberately, verify with `./scripts/spirit_verify.sh`, and restart both
+# services (`./restart.sh`).
+#
+# Versions here are what the live host reports, so this file describes a
+# configuration known to run rather than one that ought to.
+
+anthropic~=0.84.0
+pyyaml~=6.0.3
+discord.py~=2.7.1
+httpx~=0.28.1
+requests~=2.32.5
+aiohttp~=3.13.3
+tweepy~=4.16.0
+trafilatura~=2.0.0
+
+# Web search in craft attunement. Optional at runtime — `tos_tools._exa_search`
+# reports itself unavailable when the package or `EXA_API_KEY` is missing, rather
+# than failing the turn.
+exa-py~=2.18.0

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Refuse to push a red suite.
+#
+# Installed by `scripts/install_hooks.sh`. Tracked here rather than only living in
+# `.git/hooks`, because a guard that exists on one machine protects one machine —
+# and this repo already learned that lesson the expensive way when a check that
+# verified the wrong thing passed for eight days.
+#
+# Why a hook and not only CI: pushes to *origin* go to a remote the live host
+# pulls from, so the interval between "pushed" and "running on the Mini" is
+# short. A gate that fires after that push is a notification, not a gate.
+# The public subset remote is a different lineage — it is not the Mini's pull.
+#
+# Why CI as well: this runs on a machine where the dependencies are already
+# installed and the venv already works. On 2026-08-14 that venv had 21 console
+# scripts that could not exec, and four content fetchers had been dead for months
+# while every local check passed. A clean-environment run is a different
+# measurement, and only CI can make it.
+
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# A push that only deletes remote refs ships no code, so it needs no gate.
+#
+# This block fails CLOSED, and the first version did not. It treated "no ref lines
+# on stdin" as "nothing is being pushed" and exited 0 — so running the hook with
+# empty stdin printed `nothing to verify (deletion only)` and allowed the push.
+# Caught immediately by a positive control, which is the only reason it is not
+# still here: a gate whose skip path is reachable by accident is decoration with a
+# reassuring log line. Skip only when refs were actually read and every one of
+# them was a deletion.
+ZERO="0000000000000000000000000000000000000000"
+saw_ref=0
+deletions_only=1
+
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  [ -n "${local_sha:-}" ] || continue
+  saw_ref=1
+  if [ "$local_sha" != "$ZERO" ]; then
+    deletions_only=0
+  fi
+done
+
+if [ "$saw_ref" -eq 1 ] && [ "$deletions_only" -eq 1 ]; then
+  echo "pre-push: deletions only, no code leaving — skipping the gate"
+  exit 0
+fi
+
+REMOTE_NAME="${1:-}"
+# The live host pulls origin. A public-subset push is a different lineage;
+# treating it as a Mini deploy is why the first snapshot died on Forge
+# (system Python, no venv). Other remotes are not the Mini's pull.
+if [ "$REMOTE_NAME" != "origin" ]; then
+  echo "pre-push: $REMOTE_NAME is not origin — skipping the live-host gate"
+  exit 0
+fi
+
+echo "pre-push: running the unit gate before this leaves the machine"
+
+if ! ./scripts/spirit_verify.sh; then
+  cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────
+PUSH REFUSED — the unit suite is red.
+
+The live host pulls from this remote, so a red push is a red deployment
+waiting for the next pull.
+
+Fix the failure, or if you genuinely need to push a known-red branch:
+
+    git push --no-verify
+
+Reach for that only when you have said out loud why. A bypass nobody
+remembers using is how a gate becomes decoration.
+────────────────────────────────────────────────────────────────────────
+
+MSG
+  exit 1
+fi
+
+echo "pre-push: green — pushing"
+exit 0

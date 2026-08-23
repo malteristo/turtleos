@@ -1,0 +1,81 @@
+# Example registry for turtleOS multi-practitioner routing.
+# Copy to mage_registry.yaml and replace placeholders with your Discord IDs,
+# channel IDs, and local practice paths. Keep the real file untracked.
+#
+# Native topology (2026-06-29): practice_dir and runtime_dir colocate at
+# ~/workshops/<name>/. No workshop_root — Magic framework stays on Forge only.
+
+# Attunement profile (TURTLE_SPEC §4):
+#   native  — vanilla platform law (only supported profile)
+# attunement: native
+#
+# Member relations (docs/design/relations-and-membership.md) — circles, not a
+# trust ladder. `relation:` governs who a member may reach; missing or unknown
+# values are treated as `guest`, so nobody joins the family by omission.
+#   household — whose ordinary week the shared river is about
+#   kin       — extended family, either side; reaches household + kin
+#   guest     — friends, hosted practitioners; reaches an administrator only
+# `admin: true` is the orthogonal capability (host tools, invites, spaces). It
+# is held alongside a relation — the operator is a member with special rights.
+# `primary: true` / `default_mage` still grant admin for existing registries,
+# but they mean "whose practice root is the default"; a second administrator
+# needs `admin`, not a second primary.
+#
+# Channel types:
+#   river         — operator/practitioner main practice surface (acts in parent, dialogue in eddies)
+#   hosted-river  — sovereign practitioner's river on operator's server (same harness as river)
+#   unclaimed-river — private claim room; becomes hosted-river on river key drop
+#   shared        — legacy multi-practitioner dialogue (migrate to shared-river)
+#   shared-river  — multi-member space river (acts in parent, shared eddies) — see docs/chapters/design-family-shared-river.md
+#   craft         — builder vocation surface (design chapter: docs/chapters/design-craft-channel.md)
+#
+# Two-bot native mode (TURTLE_SPEC §5.8): set RIVER_BOT_TOKEN in .env and run river_bot.py
+# (com.turtle.river). River bot posts acts in the main channel; Turtle bot speaks in eddies.
+
+mages:
+  default:
+    discord_id: "YOUR_DISCORD_USER_ID"
+    address: "Your Name"
+    practice_dir: ~/workshops/default
+    runtime_dir: ~/workshops/default
+    type: mage
+    primary: true
+    admin: true
+    relation: household
+
+spaces:
+  shared:
+    practice_dir: ~/workshops/shared
+    runtime_dir: ~/workshops/shared
+    members:
+      - default
+    # share_policy: who may share TO this space from the Share eddy picker (TURTLE_SPEC §15.6)
+    #   all_practitioners — every hosted practitioner on the node (may share without Discord channel membership)
+    #   members_only — only space.members
+    share_policy: all_practitioners
+  family:
+    practice_dir: ~/workshops/family
+    runtime_dir: ~/workshops/family
+    members:
+      - partner
+    share_policy: members_only
+
+# Provision shared-river spaces via !admin space create (see docs/chapters/design-admin-space-provisioning.md)
+# Example after: !admin space create guest_play --members @you @guest --policy all_practitioners
+#   spaces.guest_play + channels.<id> type shared-river + ~/workshops/guest_play/
+
+channels:
+  "YOUR_DIALOGUE_CHANNEL_ID":
+    mage: default
+    type: river
+    default_context: null
+    description: Private practice surface
+
+  "YOUR_CRAFT_CHANNEL_ID":
+    mage: default
+    type: craft
+    attunement: craft
+    default_context: craft
+    description: Craft Turtle builder surface — learning intake for harness/product friction
+
+default_mage: default

@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+"""River bot — acts-only identity for native river channels (TURTLE_SPEC §5).
+
+Separate Discord application from Turtle. Handles structured acts in the main
+river channel and turtle-talk `!` commands everywhere in practice channels;
+Turtle speaks only inside eddies (prose, not acts).
+
+Requires RIVER_BOT_TOKEN and attunement: native in mage_registry.yaml.
+When RIVER_BOT_TOKEN is unset, discord_bot.py handles the River harness alone.
+"""
+
+from __future__ import annotations
+
+import fcntl
+import logging
+import os
+import sys
+import asyncio
+
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+
+def load_env(env_path=None):
+    path = env_path or os.environ.get("DOTENV_PATH", ".env")
+    if not os.path.isabs(path):
+        path = os.path.join(REPO_ROOT, path)
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+
+
+load_env()
+
+import discord
+
+from mage import (
+    get_attunement_profile,
+    is_practice_channel,
+    is_river_message,
+    maybe_reload_mage_registry,
+    reload_mage_registry,
+    set_practice_context,
+    set_practice_context_for_channel,
+)
+from mage import _get_channel_type
+from river_handler import ensure_river_eddy_bar, handle_eddy_first_message, handle_river_message
+from hosted_river_onboarding import ensure_hosted_river_onboarding
+from river_keys import try_river_key_claim
+from river_state import river_bot_token, river_client
+from state import SPIRIT_BOT_ID, get_channel_lock
+
+
+def _ensure_single_instance() -> None:
+    lock_path = os.path.join(REPO_ROOT, ".river_bot.lock")
+    lock_file = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_file.write(str(os.getpid()))
+        lock_file.flush()
+    except OSError:
+        print("Another river_bot.py is already running. Exiting.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _maybe_schedule_contextual_offer(message: discord.Message) -> None:
+    from river_eddy_seneschal import schedule_contextual_offer_after_practitioner_turn
+
+    schedule_contextual_offer_after_practitioner_turn(message)
+
+
+def _accept_message_author(message: discord.Message) -> bool:
+    if message.author == river_client.user:
+        return False
+    if message.author.bot and message.author.id != SPIRIT_BOT_ID:
+        return False
+    return True
+
+
+@river_client.event
+async def on_ready():
+    reload_mage_registry()
+    user = river_client.user
+    name = user.name if user else "?"
+    print(f"River online: {name}#{getattr(user, 'discriminator', '0')}")
+    print(f"Attunement profile: {get_attunement_profile()}")
+    if get_attunement_profile() == "native":
+        async def _setup_native_river() -> None:
+            try:
+                await ensure_river_eddy_bar(river_client)
+                await ensure_hosted_river_onboarding(river_client)
+                from share_eddy import register_persistent_share_views
+
+                register_persistent_share_views(river_client)
+                from eddy_flow_library import retire_standing_flow_library_bars
+
+                await retire_standing_flow_library_bars(river_client)
+                from eddy_lifecycle_bar import rehydrate_lifecycle_bar_views
+
+                restored = rehydrate_lifecycle_bar_views(river_client)
+                print(f"Lifecycle bars restored: {restored}")
+            except Exception as exc:
+                print(f"River startup setup failed: {exc}")
+
+        asyncio.create_task(_setup_native_river())
+        asyncio.create_task(_river_bar_safety_sweep_loop())
+        try:
+            from mage import sync_shared_river_channel_access
+
+            await sync_shared_river_channel_access(river_client)
+        except Exception as exc:
+            print(f"Shared-river channel sync failed: {exc}")
+    print("River bot ready — acts + turtle-talk in practice channels")
+    if get_attunement_profile() == "native":
+        try:
+            await _rejoin_practice_threads(river_client)
+        except Exception as exc:
+            print(f"River thread rejoin failed: {exc}")
+
+
+async def _river_bar_safety_sweep_loop() -> None:
+    """Periodic floor reconcile — orphan killer when event-driven debounce misses."""
+    from river_handler import sweep_river_bar_floors
+
+    while True:
+        await asyncio.sleep(180)
+        if get_attunement_profile() != "native":
+            continue
+        try:
+            await sweep_river_bar_floors(river_client)
+        except Exception as exc:
+            print(f"River bar safety sweep failed: {exc}")
+
+
+async def _ensure_turtle_in_eddy(thread: discord.Thread) -> None:
+    """Re-add Turtle when membership dropped — cheap no-op if already present."""
+    try:
+        from eddy_spawn import river_add_turtle_to_eddy
+
+        await river_add_turtle_to_eddy(thread)
+    except Exception as exc:
+        print(f"River ensure Turtle in eddy failed: {type(exc).__name__}: {exc}")
+
+
+async def _rejoin_practice_threads(client) -> None:
+    """Join active eddy threads on every practice parent after restart.
+
+    Operator dialogue alone is not enough — shared-river / hosted-river eddies
+    (e.g. a shared sandbox eddy) go deaf if River never rejoins them.
+
+    Uses guild.active_threads() rather than channel.threads: the cache only
+    lists threads the bot already knows, so quiet shared-river eddies would
+    otherwise be skipped forever after a cold restart.
+    """
+    from mage import practice_parent_channel_ids
+    from river_handler import _resolve_client_channel
+
+    parent_ids = set(practice_parent_channel_ids())
+    if not parent_ids:
+        return
+
+    guild = None
+    for ch_id in parent_ids:
+        ch = await _resolve_client_channel(client, ch_id)
+        if ch is not None and getattr(ch, "guild", None) is not None:
+            guild = ch.guild
+            break
+    if guild is None:
+        return
+
+    try:
+        active = await guild.active_threads()
+    except discord.HTTPException as exc:
+        print(f"River active_threads fetch failed: {exc}")
+        return
+
+    for thread in active:
+        parent_id = getattr(thread, "parent_id", None)
+        if parent_id not in parent_ids:
+            continue
+        parent = client.get_channel(parent_id) if parent_id else None
+        parent_name = getattr(parent, "name", parent_id)
+        try:
+            await thread.join()
+            print(
+                f"River rejoined thread: {thread.name} ({thread.id}) "
+                f"in #{parent_name}"
+            )
+            await asyncio.sleep(1)
+        except discord.HTTPException as exc:
+            print(f"River rejoin skipped {thread.name}: {exc}")
+            await asyncio.sleep(2)
+
+
+@river_client.event
+async def on_message(message: discord.Message):
+    if message.author == river_client.user:
+        return
+
+    if not _accept_message_author(message):
+        return
+    if message.type not in (discord.MessageType.default, discord.MessageType.reply):
+        return
+    maybe_reload_mage_registry()
+    if not is_practice_channel(message):
+        return
+    if get_attunement_profile() != "native":
+        return
+
+    # INT-046: context before catchup — ambient get_pd() falls to the primary.
+    set_practice_context(message)
+    if isinstance(message.channel, discord.Thread) and message.channel.parent_id:
+        set_practice_context_for_channel(message.channel.parent_id)
+    else:
+        set_practice_context_for_channel(message.channel.id)
+
+    from story_daily import maybe_run_daily_note_catchup
+
+    await maybe_run_daily_note_catchup()
+
+    # Universal turtle-talk handler (river + eddies; Mage, Spirit, practitioners)
+    if message.content.strip().startswith("!"):
+        from commands import dispatch_direct_command
+
+        if await dispatch_direct_command(message, bar_client=river_client):
+            print(f"River act [!{message.content.split()[0][1:]}] in #{getattr(message.channel, 'name', message.channel.id)}")
+        return
+
+    if isinstance(message.channel, discord.Thread):
+        parent_id = message.channel.parent_id
+        if not parent_id:
+            return
+        from eddy_spawn import is_awaiting_title, is_awaiting_flow_intake
+
+        if is_awaiting_flow_intake(message.channel.id, parent_id):
+            from flow_intake_handler import practitioner_message_ends_intake_wait
+
+            if not practitioner_message_ends_intake_wait(message.channel.id, parent_id):
+                return
+        if is_awaiting_title(message.channel.id, parent_id):
+            lock = get_channel_lock(message.channel.id)
+            async with lock:
+                renamed = await handle_eddy_first_message(message)
+            from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+            await _ensure_turtle_in_eddy(message.channel)
+            await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+            _maybe_schedule_contextual_offer(message)
+            return
+
+        from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+        # Established eddy: re-ensure Turtle membership before acts so dialogue
+        # does not stay silent after restart/membership drop (Galactic Adventure).
+        await _ensure_turtle_in_eddy(message.channel)
+        await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+        _maybe_schedule_contextual_offer(message)
+        return
+
+    if _get_channel_type(message.channel.id) == "unclaimed-river":
+        lock = get_channel_lock(message.channel.id)
+        async with lock:
+            if await try_river_key_claim(message, river_client):
+                return
+        return
+
+    if not is_river_message(message):
+        return
+
+    print(f"River inbound [{message.author.display_name}]: {message.content[:80]!r}")
+
+    set_practice_context(message)
+    set_practice_context_for_channel(message.channel.id)
+
+    lock = get_channel_lock(message.channel.id)
+    async with lock:
+        await handle_river_message(message)
+
+
+def main() -> None:
+    token = river_bot_token()
+    if not token:
+        print("Error: RIVER_BOT_TOKEN not set", file=sys.stderr)
+        sys.exit(1)
+
+    if "--test" in sys.argv:
+        reload_mage_registry()
+        print(f"River token: ...{token[-8:]}")
+        print(f"Attunement: {get_attunement_profile()}")
+        print("Configuration OK.")
+        return
+
+    _ensure_single_instance()
+    logging.basicConfig(level=logging.WARNING, stream=sys.stdout, force=True)
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+    river_client.run(token)
+
+
+if __name__ == "__main__":
+    main()

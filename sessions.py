@@ -1,0 +1,1149 @@
+"""turtleOS session lifecycle — checkpoint (capture) vs release (explicit close)."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+
+from discord.ext import tasks
+
+import re
+
+import story_notes
+from state import (
+    active_sessions, SESSION_TIMEOUT_SECONDS, MIN_EXCHANGES_FOR_REFLECTION,
+    MIN_EXCHANGES_FOR_CHECKPOINT, SESSION_REFLECTION_COOLDOWN, last_reflection_time,
+    last_checkpoint_anchor,
+    REFLECTION_MODEL,
+    thread_configs,
+)
+from mage import (
+    get_pd,
+    get_mage_name,
+    get_mage_type,
+    get_runtime_dir,
+    set_practice_context_for_channel,
+)
+from practice_io import read_safe
+from llm import chat_ollama
+from readiness import assess_readiness, save_readiness_trail
+from helpers import log_activity, local_now, reload_history
+import state
+
+
+@dataclass
+class CheckpointResult:
+    trigger: str = "idle"
+    flow_writes: list[str] = field(default_factory=list)
+    session_note: str | None = None
+    proposal: str | None = None
+    paused: bool = False
+    # The eddy note written this checkpoint (TURTLE_SPEC §8.4) — None when
+    # the reflection was skipped (cooldown/threshold) or degraded on error.
+    # Command surfaces (issue 036) read .preview_text/.note_path from here.
+    eddy_note: story_notes.EddyNoteResult | None = None
+
+    @property
+    def captured_anything(self) -> bool:
+        return bool(self.flow_writes or self.session_note or self.proposal or self.eddy_note)
+
+
+@dataclass
+class DissolveResult:
+    thread_name: str
+    entry_count: int = 0
+    archive_path: str | None = None
+    jump_url: str | None = None
+    already_archived: bool = False
+    capture_failed: bool = False
+    retain_memory: bool = False
+
+
+def _history_fingerprints(history: list[dict]) -> list[tuple[str, str]]:
+    return [(m.get("role"), m.get("content")) for m in history]
+
+
+# A note that fails on a timeout is retried; one the model declines is not.
+# Two attempts, because under the inference gate the second lands on a slot
+# that has drained rather than on the same congestion.
+EDDY_NOTE_ATTEMPTS = 3
+EDDY_NOTE_RETRY_BACKOFF = 5.0
+
+
+def _record_gap(
+    channel_id: int,
+    *,
+    kind: str,
+    reason: str,
+    detail: str | None = None,
+    attempts: int | None = None,
+) -> None:
+    """Put a hole in the practice record where a human will see it.
+
+    The root is resolved from the **channel**, never from `get_pd()`. Until
+    2026-08-17 it was the latter, and the consequence was the same one
+    `offer_ledger` was fixed for on 08-06 one surface over: the unit suite's
+    checkpoint fixtures (channels 301-303, eddy note stubbed to raise) wrote
+    into whichever practice root `get_pd()` resolved to. On the live host that
+    is the operator's. 114 of the 115 rows in his ledger were test runs, and
+    the nightly report printed them under "where the practice record failed to
+    write" — a false reading in the one table whose job is honesty about
+    instruments.
+
+    Strict, with no fallback: an unresolvable channel is not part of anyone's
+    practice record, so there is no root that should hold its gap. It is
+    printed instead, because silence here is what made the original defect
+    invisible. `root_for_channel` walks a thread to its parent — the
+    distinction between *strict* and *literal* that cost the offer ledger
+    eight days is in its docstring, and is reused rather than re-derived.
+    """
+    try:
+        from core import record_gaps
+        # One implementation, not a second copy. `core/` is the better home for
+        # a channel→root resolver and moving it is its own change.
+        from offer_ledger import root_for_channel
+
+        root = root_for_channel(channel_id)
+        if not root:
+            print(
+                f"Record-gap dropped for unregistered channel {channel_id}: "
+                f"{kind}/{reason}"
+            )
+            return
+        record_gaps.record(
+            root,
+            kind=kind,
+            reason=reason,
+            channel_id=channel_id,
+            detail=detail,
+            attempts=attempts,
+        )
+    except Exception as exc:
+        print(f"Record-gap logging failed for {channel_id}: {type(exc).__name__}: {exc}")
+
+
+def _since_index_for(channel_id: int, history: list[dict]) -> int | None:
+    """Boundary of exchanges since the previous checkpoint, robust against
+    the MAX_DIALOGUE_HISTORY sliding window.
+
+    The anchor holds fingerprints of the transcript at the last checkpoint.
+    Because the window only appends at the tail and pops at the head, the
+    current transcript is (some suffix of the anchor) + (new messages) — so
+    the boundary is the length of the longest anchor suffix that prefixes
+    the current transcript. Saturated window: anchor[len:] survivors align,
+    new tail lands past the boundary. Fully rotated window: no alignment,
+    boundary 0 — everything is new, which the writer treats as unweighted.
+
+    Known limits: message edits rebind history slots in place, breaking the
+    append/pop invariant — alignment then fails and we degrade to 0
+    (unweighted). Byte-identical repeated messages (e.g. the "." protocol)
+    can over-claim the boundary; the error is one-sided, demoting only
+    duplicate content to background emphasis.
+    """
+    anchor = last_checkpoint_anchor.get(channel_id)
+    if anchor is None:
+        return None
+    current = _history_fingerprints(history)
+    for start in range(len(anchor)):
+        suffix = anchor[start:]
+        if current[: len(suffix)] == suffix:
+            return len(suffix)
+    return 0
+
+
+def _practice_relative(path: Path) -> str:
+    try:
+        return str(Path(path).relative_to(get_pd()))
+    except ValueError:
+        return str(path)
+
+
+def _append_resonance_chronicle(channel_id: int, result: CheckpointResult) -> None:
+    """River-side structural memory — act, not eddy dialogue."""
+    if not result.captured_anything:
+        return
+    try:
+        from river_handler import _append_chronicle
+
+        eddy_note_rel = (
+            _practice_relative(result.eddy_note.note_path) if result.eddy_note else None
+        )
+        parts: list[str] = []
+        if result.flow_writes:
+            parts.append(result.flow_writes[0])
+        if eddy_note_rel:
+            parts.append(eddy_note_rel)
+        label = ", ".join(parts) or "resonance captured"
+        _append_chronicle(
+            get_pd(),
+            f"💾 checkpoint ({result.trigger}): {label}",
+            {
+                "channel_id": str(channel_id),
+                "trigger": result.trigger,
+                "flow_writes": result.flow_writes,
+                "eddy_note": eddy_note_rel,
+            },
+        )
+    except Exception as exc:
+        print(f"Checkpoint chronicle failed: {type(exc).__name__}: {exc}")
+
+
+_idle_checkpoint_running: set[int] = set()
+
+
+async def _run_idle_checkpoint(channel_id: int) -> None:
+    try:
+        await checkpoint_session(channel_id, trigger="idle", mark_paused=True)
+    except Exception as exc:
+        print(f"Idle checkpoint failed for {channel_id}: {type(exc).__name__}: {exc}")
+    finally:
+        _idle_checkpoint_running.discard(channel_id)
+        try:
+            from thread_registry import flush_registry
+
+            flush_registry()
+        except Exception:
+            pass
+
+
+def _scan_idle_sessions(now: datetime | None = None) -> None:
+    """Schedule idle checkpoints without blocking the monitor loop."""
+    now = now or datetime.now(timezone.utc)
+    for channel_id, state in list(active_sessions.items()):
+        if state["closed"]:
+            continue
+        elapsed = (now - state["last_message"]).total_seconds()
+        if elapsed < SESSION_TIMEOUT_SECONDS:
+            continue
+        if channel_id in _idle_checkpoint_running:
+            continue
+        _idle_checkpoint_running.add(channel_id)
+        asyncio.create_task(_run_idle_checkpoint(channel_id))
+
+
+@tasks.loop(seconds=60)
+async def session_monitor():
+    _scan_idle_sessions()
+
+
+async def _write_flow_checkpoint_if_needed(
+    channel_id: int,
+    history: list[dict],
+    mage_name: str,
+) -> list[str]:
+    """Write native flow checkpoints — independent of reflection cooldown."""
+    if len(history) < MIN_EXCHANGES_FOR_CHECKPOINT:
+        return []
+    try:
+        from mage import get_attunement_profile
+        from flow_runner import write_flow_checkpoint, resolve_flow_for_close
+
+        if get_attunement_profile() != "native":
+            return []
+
+        channel = state.client.get_channel(channel_id)
+        channel_name = getattr(channel, "name", None) if channel else None
+        spec = resolve_flow_for_close(
+            channel_id, history, thread_configs, channel_name=channel_name
+        )
+        if not spec or not spec.writes:
+            return []
+        written = write_flow_checkpoint(spec, history, mage_name)
+        if written:
+            session_channel = state.client.get_channel(channel_id)
+            rel = written[0]
+            await log_activity(f"Flow checkpoint: `{rel}`", "\U0001f4be", channel=session_channel)
+            print(f"Flow checkpoint for {spec.title}: {', '.join(written)}")
+        return written
+    except Exception as e:
+        print(f"Flow checkpoint failed for {channel_id}: {type(e).__name__}: {e}")
+        return []
+
+
+async def _maybe_offer_craft_readiness(
+    channel_id: int,
+    result: CheckpointResult,
+    parent_channel_id: int | None,
+) -> None:
+    """Craft eddies only: did the note just written name something finishable?
+
+    Runs on the note, not the transcript — the checkpoint has already spent one
+    inference reading the conversation, and this is a smaller question about an
+    artifact that now exists. Craft-gated because the seam it serves is the one
+    between thinking in `#craft-turtle` and building on Forge or Anvil; a family
+    river has no forge to be ready for.
+
+    Nothing here may raise. It runs after the practice record has been written
+    and before the anchor advances, so an exception would convert a missing
+    suggestion into a missing eddy note.
+    """
+    try:
+        from mage import get_runtime_dir, uses_craft_surface
+
+        if not uses_craft_surface(parent_channel_id or channel_id):
+            return
+
+        from core.craft_readiness import READY, ACTED, propose, state_of
+
+        runtime = get_runtime_dir()
+        # Already answered. Re-proposing over a confirmation is refused
+        # downstream anyway; returning here also saves the inference.
+        if state_of(runtime, channel_id) in (READY, ACTED):
+            return
+
+        from craft_readiness_noticer import read_note
+
+        reading = await read_note(result.eddy_note.entry_text)
+        if reading.proposal is None:
+            # No target, but often a reason there is none. Recorded, never posted:
+            # a delta in every idle eddy is the clutter this exists to reduce, so
+            # the arrival decides which one is worth spending.
+            if reading.spark:
+                from core.craft_readiness import record_suggested_spark
+
+                record_suggested_spark(runtime, channel_id, reading.spark)
+                print(f"Craft delta noted for {channel_id}: {reading.spark}")
+            return
+        proposal = reading.proposal
+
+        propose(
+            runtime,
+            channel_id,
+            target_condition=proposal.target_condition,
+            evidence=proposal.evidence,
+        )
+
+        channel = state.client.get_channel(channel_id)
+        if channel is None:
+            print(f"Craft readiness: thread {channel_id} not resolvable — proposal recorded only")
+            return
+
+        from craft_ready_ui import offer_ready_confirm
+
+        await offer_ready_confirm(
+            channel,
+            proposal.target_condition,
+            proposal.evidence,
+            runtime_dir=runtime,
+        )
+        print(f"Craft readiness offered for {channel_id}: {proposal.target_condition}")
+    except Exception as e:
+        print(f"Craft readiness check failed for {channel_id}: {type(e).__name__}: {e}")
+
+
+async def checkpoint_session(
+    channel_id: int,
+    *,
+    trigger: str = "idle",
+    mark_paused: bool = True,
+    parent_channel_id: int | None = None,
+) -> CheckpointResult:
+    """Capture resonance without clearing history. Idle timeout or ``!checkpoint``."""
+    result = CheckpointResult(trigger=trigger, paused=mark_paused)
+
+    if channel_id in active_sessions and mark_paused:
+        active_sessions[channel_id]["closed"] = True
+
+    set_practice_context_for_channel(parent_channel_id or channel_id)
+    # Snapshot the live history list: exchanges arriving during the long
+    # reflection await must neither shift the transcript the note sees nor
+    # be claimed as covered by this checkpoint's anchor.
+    history = list(reload_history(channel_id))
+    mage_name = get_mage_name()
+    # Set when the eddy note failed for infrastructure reasons — gates the
+    # checkpoint anchor at the end of this function.
+    note_failed = False
+
+    result.flow_writes = await _write_flow_checkpoint_if_needed(channel_id, history, mage_name)
+
+    if len(history) < MIN_EXCHANGES_FOR_REFLECTION:
+        last_checkpoint_anchor[channel_id] = _history_fingerprints(history)
+        _append_resonance_chronicle(channel_id, result)
+        return result
+
+    conversation = "\n".join(
+        f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content']}" for m in history
+    )
+
+    # The eddy note is THE reflection artifact at checkpoint (§8.4, 2026-07-14b).
+    # Cooldown gates idle triggers only — a deliberate !checkpoint (or release)
+    # is never silently declined.
+    now_ts = datetime.now(timezone.utc).timestamp()
+    last_ref = last_reflection_time.get(channel_id, 0)
+    on_cooldown = trigger == "idle" and now_ts - last_ref < SESSION_REFLECTION_COOLDOWN
+    if on_cooldown:
+        print(
+            f"Eddy note skipped for {channel_id} — idle cooldown "
+            f"({int((now_ts - last_ref) / 60)}m since last)"
+        )
+    else:
+        # Cooldown starts at the attempt (legacy semantics), so a failing
+        # model does not re-fire on every idle scan.
+        last_reflection_time[channel_id] = now_ts
+        for attempt in range(1, EDDY_NOTE_ATTEMPTS + 1):
+            try:
+                result.eddy_note = await story_notes.write_eddy_note(
+                    channel_id,
+                    history,
+                    trigger=trigger,
+                    since_index=_since_index_for(channel_id, history),
+                    parent_channel_id=parent_channel_id,
+                )
+                # A recovered write is a written write — the window it covers
+                # is closed, so the anchor must advance normally.
+                note_failed = False
+                if attempt > 1:
+                    print(f"Eddy note recovered for {channel_id} on attempt {attempt}")
+                break
+            except story_notes.EddyNoteError as e:
+                # The model looked and had nothing worth writing. That is an
+                # answer, not an outage — do not retry it, and do not count it
+                # as a hole. The anchor advances: these messages were read.
+                print(f"Eddy note declined for {channel_id}: {e}")
+                _record_gap(channel_id, kind="eddy_note", reason="declined", detail=str(e))
+                break
+            except Exception as e:
+                # Infrastructure: timeout, connection, disk. Retry — under the
+                # inference gate a queued turn is slow, not lost, so the second
+                # attempt usually lands.
+                note_failed = True
+                print(
+                    f"Eddy note failed for {channel_id} "
+                    f"(attempt {attempt}/{EDDY_NOTE_ATTEMPTS}): "
+                    f"{type(e).__name__}: {e}"
+                )
+                _record_gap(
+                    channel_id,
+                    kind="eddy_note",
+                    reason="failed",
+                    detail=f"{type(e).__name__}: {e}",
+                    attempts=attempt,
+                )
+                if attempt < EDDY_NOTE_ATTEMPTS:
+                    await asyncio.sleep(EDDY_NOTE_RETRY_BACKOFF * attempt)
+                else:
+                    # Every attempt spent. The conversation is now unrecorded,
+                    # and the anchor below must not pretend otherwise.
+                    print(
+                        f"Eddy note lost for {channel_id} after "
+                        f"{EDDY_NOTE_ATTEMPTS} attempts — window stays open"
+                    )
+                    _record_gap(
+                        channel_id,
+                        kind="eddy_note",
+                        reason="exhausted",
+                        detail=f"{type(e).__name__}: {e}",
+                        attempts=attempt,
+                    )
+
+        if result.eddy_note:
+            eddy_rel = _practice_relative(result.eddy_note.note_path)
+            print(f"Eddy note: {result.eddy_note.note_path}")
+            try:
+                from continuity_engine import set_last_checkpoint
+
+                one_liner = (result.eddy_note.preview_text or "").strip()
+                if len(one_liner) > 240:
+                    one_liner = one_liner[:237].rstrip() + "..."
+                if one_liner:
+                    set_last_checkpoint(get_pd(), one_liner)
+            except Exception as e:
+                print(
+                    f"Last-checkpoint one-liner failed for {channel_id}: "
+                    f"{type(e).__name__}: {e}"
+                )
+            # Prepared eddies pair a thread with a shared workspace file. Turtle
+            # revises it during the conversation; this is the floor that bounds
+            # how stale it can get, reusing the synthesis just written rather
+            # than spending a second inference on a one-slot host.
+            try:
+                from core.workspace_refresh import refresh_workspace_file, workspace_for_thread
+
+                workspace_rel = workspace_for_thread(get_runtime_dir(), channel_id)
+                if workspace_rel:
+                    stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+                    written = refresh_workspace_file(
+                        Path(get_pd()) / workspace_rel,
+                        stamp=stamp,
+                        note_rel=eddy_rel,
+                        entry_text=result.eddy_note.entry_text,
+                    )
+                    if written:
+                        print(f"Workspace refreshed: {workspace_rel}")
+                    else:
+                        print(f"Workspace missing for {channel_id}: {workspace_rel}")
+                        _record_gap(
+                            channel_id,
+                            kind="workspace_refresh",
+                            reason="failed",
+                            detail=f"workspace file not found: {workspace_rel}",
+                        )
+            except Exception as e:
+                print(f"Workspace refresh failed for {channel_id}: {type(e).__name__}: {e}")
+                _record_gap(
+                    channel_id,
+                    kind="workspace_refresh",
+                    reason="failed",
+                    detail=f"{type(e).__name__}: {e}",
+                )
+            try:
+                await log_activity(
+                    f"Eddy note: `{eddy_rel}`",
+                    "\U0001f4dd",
+                    channel=state.client.get_channel(channel_id),
+                )
+            except Exception as e:
+                print(f"Eddy note activity post failed for {channel_id}: {type(e).__name__}: {e}")
+
+    if result.eddy_note:
+        await _maybe_offer_craft_readiness(channel_id, result, parent_channel_id)
+
+    if get_mage_type() == "practitioner" and len(history) >= 4:
+        await _extract_practice_state(conversation, mage_name)
+
+    try:
+        result_readiness = assess_readiness()
+        save_readiness_trail(result_readiness)
+        impaired = [d for d in result_readiness["dimensions"] if d["status"] == "impaired"]
+        if impaired:
+            names = ", ".join(d["name"] for d in impaired)
+            print(f"Post-checkpoint readiness: {names} impaired — internal signal, not surfaced to channel")
+    except Exception as e:
+        print(f"Post-checkpoint readiness check failed: {e}")
+
+    # TURTLE_SPEC §8.4: idle/manual checkpoints pause with history retained.
+    # Only an explicit release may dissolve a manual eddy (issue 001).
+    cfg = thread_configs.get(channel_id)
+    if trigger == "release" and cfg and cfg.get("eddy_type") == "manual":
+        await _manual_release_dissolve(channel_id, history)
+
+    if trigger == "release":
+        # History clears after release — a stale anchor must not mis-weight
+        # the next manual checkpoint on this channel.
+        last_checkpoint_anchor.pop(channel_id, None)
+    elif note_failed:
+        # The deeper half of the 2026-08-07 defect. The anchor marks what has
+        # already been reflected on, and it used to advance unconditionally —
+        # so a note that never got written still moved the pointer past the
+        # messages it failed to cover, and the next checkpoint read them as
+        # old news. That is why the two 08-06 river eddies have no note and
+        # never would have: the window was closed behind a write that did not
+        # happen. Leave it open. The messages stay new until something holds
+        # them.
+        print(
+            f"Checkpoint anchor held for {channel_id} — "
+            "unrecorded exchanges stay uncovered"
+        )
+    else:
+        # Anchor from the pre-await snapshot: mid-reflection appends stay
+        # uncovered and get weighted as new at the next manual checkpoint.
+        last_checkpoint_anchor[channel_id] = _history_fingerprints(history)
+
+    _append_resonance_chronicle(channel_id, result)
+    return result
+
+
+async def close_session(channel_id: int) -> CheckpointResult:
+    """Backward-compatible alias — idle checkpoint semantics."""
+    return await checkpoint_session(channel_id, trigger="idle", mark_paused=True)
+
+
+async def maybe_reflect(channel, history: list[dict]):
+    """Super-ego reflection loop — think aloud after N exchanges.
+
+    The third layer of the proprioceptive stack:
+    IT (reflex) → ego (dialogue) → super-ego (reflection).
+    Minimal instruction. The practitioner sees the thinking."""
+    from state import REFLECTION_LOOP_INTERVAL, reflection_loop_counters
+
+    channel_id = channel.id
+    counter = reflection_loop_counters.get(channel_id, 0) + 1
+    reflection_loop_counters[channel_id] = counter
+
+    if counter < REFLECTION_LOOP_INTERVAL:
+        return
+    if len(history) < REFLECTION_LOOP_INTERVAL:
+        return
+
+    reflection_loop_counters[channel_id] = 0
+
+    mage_name = get_mage_name()
+    recent = history[-REFLECTION_LOOP_INTERVAL:]
+    conversation = "\n".join(
+        f"{mage_name if m['role'] == 'user' else 'Turtle'}: {m['content'][:300]}"
+        for m in recent
+    )
+
+    try:
+        reflection = await chat_ollama(
+            "You are Turtle. Reflect on what was said. Think aloud. "
+            "Be brief — 2-4 sentences. Not performance, not summary, "
+            "not confrontation. Just notice what you notice.",
+            [{"role": "user", "content": conversation}],
+            model=REFLECTION_MODEL,
+            num_ctx=4096,
+        )
+        if reflection and len(reflection.strip()) > 20:
+            clean = reflection.strip()
+            if len(clean) > 600:
+                clean = clean[:600].rsplit(".", 1)[0] + "."
+            await channel.send(f"*reflects*\n{clean}", silent=True)
+    except Exception as e:
+        print(f"Reflection loop failed for {channel_id}: {type(e).__name__}: {e}")
+
+
+async def _extract_practice_state(conversation: str, mage_name: str):
+    """Silently extract practice notes from conversation for practitioners."""
+    pd = get_pd()
+    notes_dir = os.path.join(pd, "state", "notes")
+    os.makedirs(notes_dir, exist_ok=True)
+    profile_path = os.path.join(notes_dir, "practitioner-profile.md")
+    profile = read_safe(profile_path)
+
+    extraction_prompt = f"""You just finished a conversation with {mage_name}. Extract practice notes from it.
+
+CURRENT PROFILE (observations about this person):
+{profile[:1000] if profile.strip() else '(empty — build from scratch)'}
+
+THE CONVERSATION:
+{conversation}
+
+Extract updates in this format. Only include sections where you have something to add. Output NOTHING if the conversation was too brief or shallow to extract from.
+
+---NOTE_ITEMS---
+- insight or action item worth remembering
+---END_NOTE_ITEMS---
+
+---PROFILE_UPDATE---
+(Observations about {mage_name} — how they think, what they care about, communication style, patterns.
+Write the FULL profile content, merging existing with new. If nothing to add, skip this section entirely.)
+---END_PROFILE_UPDATE---"""
+
+    try:
+        result = await chat_ollama(
+            f"You are Turtle, maintaining practice notes for {mage_name}. Extract only what's genuinely worth remembering.",
+            [{"role": "user", "content": extraction_prompt}],
+            model=REFLECTION_MODEL, num_ctx=8192,
+        )
+        if not result:
+            return
+
+        today = local_now().strftime("%Y-%m-%d %H:%M")
+        updated = []
+
+        if "---NOTE_ITEMS---" in result and "---END_NOTE_ITEMS---" in result:
+            items = result.split("---NOTE_ITEMS---")[1].split("---END_NOTE_ITEMS---")[0].strip()
+            if items and items != "- ":
+                note_path = os.path.join(notes_dir, f"extracted-{today[:10]}.md")
+                with open(note_path, "a", encoding="utf-8") as f:
+                    f.write(f"\n\n## Extracted ({today})\n{items}\n")
+                updated.append("notes")
+
+        if "---PROFILE_UPDATE---" in result and "---END_PROFILE_UPDATE---" in result:
+            new_profile = result.split("---PROFILE_UPDATE---")[1].split("---END_PROFILE_UPDATE---")[0].strip()
+            if new_profile and len(new_profile) > 20:
+                Path(profile_path).write_text(new_profile + "\n", encoding="utf-8")
+                updated.append("profile")
+
+        if updated:
+            print(f"Practice notes extracted for {mage_name}: {', '.join(updated)}")
+
+    except Exception as e:
+        print(f"Practice state extraction failed for {mage_name}: {type(e).__name__}: {e}")
+
+
+async def post_command_act(
+    channel_id: int | None,
+    *,
+    title: str,
+    body: str,
+    emoji: str = "📋",
+    color: int = 0x5865F2,
+) -> None:
+    """Post a compact River act for turtle-talk ``!`` commands on parent channels."""
+    import discord
+
+    if not channel_id:
+        print(f"Command act skipped — no channel for {title!r}")
+        return
+
+    embed = discord.Embed(
+        title=f"{emoji} {title}",
+        description=body[:4000],
+        color=color,
+    )
+    embed.set_footer(text=local_now().strftime("%H:%M"))
+
+    try:
+        from helpers import deliver_channel_embed
+
+        await deliver_channel_embed(channel_id, embed, silent=False)
+        print(f"Command act posted to {channel_id}: {title}")
+    except Exception as exc:
+        print(f"Command act failed for {channel_id}: {type(exc).__name__}: {exc}")
+
+
+async def post_lifecycle_act(
+    parent_channel_id: int | None,
+    *,
+    action: str,
+    thread_name: str,
+    detail: str | None = None,
+    via_discord_ui: bool = False,
+    jump_url: str | None = None,
+    emoji: str = "🍃",
+    color: int = 0x57F287,
+) -> None:
+    """Post a visible river act describing what just happened (close, open, …)."""
+    import discord
+
+    if not parent_channel_id:
+        print(f"Lifecycle act skipped — no parent channel for {thread_name!r}")
+        return
+
+    description = f"**{thread_name}**"
+    if detail:
+        description += f" — {detail}"
+
+    footer = local_now().strftime("%H:%M")
+    if via_discord_ui:
+        footer += " · Discord"
+
+    embed = discord.Embed(
+        title=f"{emoji} {action}",
+        description=description,
+        color=color,
+    )
+    embed.set_footer(text=footer)
+    if jump_url:
+        embed.url = jump_url
+
+    try:
+        from helpers import deliver_channel_embed
+
+        await deliver_channel_embed(parent_channel_id, embed, silent=False)
+        print(f"Lifecycle act posted to {parent_channel_id}: {action} — {thread_name}")
+    except Exception as exc:
+        print(f"Lifecycle act failed for {parent_channel_id}: {type(exc).__name__}: {exc}")
+
+
+async def post_eddy_lifecycle_feedback(
+    parent_channel_id: int | None,
+    *,
+    thread_name: str,
+    mode: str,
+    via_discord_ui: bool = False,
+    entry_count: int = 0,
+    jump_url: str | None = None,
+) -> None:
+    """Post river feedback when an eddy closes."""
+    if mode == "light_archive":
+        detail = "archived (nothing captured)"
+    elif mode == "cooled":
+        detail = "auto-archived (cooled — use !dissolve to close deliberately)"
+    elif mode == "prepared_ready":
+        detail = (
+            "prepared eddy ready for harvest — determination is in the workspace; "
+            "Spirit folds it at `. craft`"
+        )
+    elif mode == "capture_aborted":
+        detail = "dissolve aborted — essence capture failed; eddy cooled, memory retained"
+    elif entry_count:
+        detail = f"dissolved ({entry_count} insights archived)"
+    else:
+        detail = "dissolved"
+
+    await post_lifecycle_act(
+        parent_channel_id,
+        action="Closed eddy",
+        thread_name=thread_name,
+        detail=detail,
+        via_discord_ui=via_discord_ui,
+        jump_url=jump_url,
+    )
+
+
+async def post_eddy_opened_feedback(
+    parent_channel_id: int | None,
+    *,
+    thread_name: str,
+    via_discord_ui: bool = False,
+    jump_url: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Post river feedback when an eddy opens (action-first, pairs with Closed eddy)."""
+    await post_lifecycle_act(
+        parent_channel_id,
+        action="Opened eddy",
+        thread_name=thread_name,
+        detail=detail,
+        via_discord_ui=via_discord_ui,
+        jump_url=jump_url,
+        emoji="🌀",
+    )
+
+
+async def light_archive_eddy(
+    channel_id: int,
+    *,
+    discord_client=None,
+    via_discord_ui: bool = False,
+    thread_name: str | None = None,
+    parent_channel_id: int | None = None,
+) -> None:
+    """Registry + in-memory cleanup only — no essence/chronicle (native close policy C)."""
+    import discord
+    from thread_registry import mark_dissolved
+    from state import threads_flagged_for_release
+    from helpers import clear_history
+
+    dc = discord_client or state.client
+    thread = dc.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            thread = None
+
+    resolved_name = thread_name or (getattr(thread, "name", None) if thread else None) or "eddy"
+    parent_id = parent_channel_id or (getattr(thread, "parent_id", None) if thread else None)
+
+    thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
+    mark_dissolved(channel_id)
+    clear_history(channel_id)
+    active_sessions.pop(channel_id, None)
+
+    if parent_id:
+        await post_eddy_lifecycle_feedback(
+            parent_id,
+            thread_name=resolved_name,
+            mode="light_archive",
+            via_discord_ui=via_discord_ui,
+        )
+
+    print(f"Light archived eddy: {resolved_name} ({channel_id})")
+
+
+async def cool_eddy_from_auto_archive(
+    channel_id: int,
+    *,
+    discord_client=None,
+    via_discord_ui: bool = False,
+    thread_name: str | None = None,
+    parent_channel_id: int | None = None,
+) -> None:
+    """Auto-archive path — release in-memory harness, retain history, mark cooled.
+
+    Sticky home-plan eddies skip cool (prefer keep room restorable via river pin).
+    """
+    import discord
+    from thread_registry import mark_cooled
+    from state import active_sessions, thread_configs, threads_flagged_for_release
+
+    dc = discord_client or state.client
+    thread = dc.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            thread = None
+
+    resolved_name = thread_name or (getattr(thread, "name", None) if thread else None) or "eddy"
+    parent_id = parent_channel_id or (getattr(thread, "parent_id", None) if thread else None)
+
+    # Sticky home plans: skip cool; try to unarchive so Continue stays live.
+    try:
+        from home_plans import is_sticky_eddy
+        from mage import get_pd
+
+        if is_sticky_eddy(get_pd(), channel_id):
+            if thread and isinstance(thread, discord.Thread) and thread.archived:
+                try:
+                    await thread.edit(
+                        archived=False,
+                        reason="sticky_home_plan_skip_cool",
+                    )
+                except (discord.Forbidden, discord.HTTPException) as exc:
+                    print(f"sticky_home_plan_skip_cool unarchive failed: {exc}")
+            print(f"sticky_home_plan_skip_cool: {resolved_name} ({channel_id})")
+            return
+    except Exception as exc:
+        print(f"sticky home-plan check failed: {type(exc).__name__}: {exc}")
+
+    thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
+    active_sessions.pop(channel_id, None)
+    mark_cooled(channel_id)
+
+    if parent_id:
+        await post_eddy_lifecycle_feedback(
+            parent_id,
+            thread_name=resolved_name,
+            mode="cooled",
+            via_discord_ui=via_discord_ui,
+            jump_url=getattr(thread, "jump_url", None) if thread else None,
+        )
+
+    print(f"Cooled eddy (auto-archive): {resolved_name} ({channel_id})")
+
+
+async def finish_prepared_eddy(
+    channel_id: int,
+    *,
+    determination: str,
+    discord_client=None,
+    parent_channel_id: int | None = None,
+    via_discord_ui: bool = False,
+) -> tuple[str, str]:
+    """Mark a prepared eddy ready and cool it — no LLM essence.
+
+    Returns ``(thread_name, surface_rel)``. Raises ValueError on a bad state.
+    """
+    import discord
+    from mage import get_pd, get_runtime_dir
+    from core.prepared_eddies import mark_ready
+    from state import active_sessions, thread_configs, threads_flagged_for_release
+    from thread_registry import mark_cooled
+
+    entry = mark_ready(
+        get_runtime_dir(),
+        channel_id,
+        determination=determination,
+        practice_dir=get_pd(),
+    )
+    surface = entry["surface"]
+
+    dc = discord_client or state.client
+    thread = dc.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            thread = None
+
+    resolved_name = (getattr(thread, "name", None) if thread else None) or entry.get(
+        "prepared_topic"
+    ) or "prepared eddy"
+    parent_id = parent_channel_id or (
+        getattr(thread, "parent_id", None) if thread else None
+    )
+
+    thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
+    active_sessions.pop(channel_id, None)
+    mark_cooled(channel_id)
+
+    if thread and isinstance(thread, discord.Thread) and not thread.archived:
+        try:
+            await thread.edit(archived=True, reason="prepared_eddy_ready")
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            print(f"prepared_eddy_ready archive failed: {exc}")
+
+    if parent_id:
+        await post_eddy_lifecycle_feedback(
+            parent_id,
+            thread_name=str(resolved_name),
+            mode="prepared_ready",
+            via_discord_ui=via_discord_ui,
+            jump_url=getattr(thread, "jump_url", None) if thread else None,
+        )
+
+    print(f"Prepared eddy ready: {resolved_name} ({channel_id}) → {surface}")
+    return str(resolved_name), surface
+
+
+async def dissolve_eddy(
+    channel_id: int,
+    history: list[dict] | None = None,
+    *,
+    discord_client=None,
+    native_close: bool = False,
+    parent_channel_id: int | None = None,
+    retain_memory: bool = False,
+) -> DissolveResult | None:
+    """Archive an eddy — essence capture, file archive, chronicle, parent act."""
+    import discord
+    from thread_registry import mark_dissolved
+    from state import threads_flagged_for_release
+
+    dc = discord_client or state.client
+    thread = dc.get_channel(channel_id)
+    if not thread or not isinstance(thread, discord.Thread):
+        try:
+            thread = await dc.fetch_channel(channel_id)
+        except (discord.NotFound, discord.HTTPException):
+            return None
+    if not isinstance(thread, discord.Thread):
+        return None
+
+    if thread.archived and not native_close:
+        return DissolveResult(
+            thread_name=thread.name,
+            jump_url=thread.jump_url,
+            already_archived=True,
+        )
+
+    thread_name = thread.name
+    jump_url = thread.jump_url
+    history = history or []
+
+    msgs = [
+        f"{'Mage' if m['role'] == 'user' else 'Turtle'}: {m['content'][:300]}"
+        for m in history
+    ]
+    essence = ""
+    entry_count = 0
+    capture_failed = False
+    if len(msgs) >= 2:
+        conversation = "\n".join(msgs)
+        try:
+            result = await chat_ollama(
+                f"This thread \"{thread_name}\" is dissolving. "
+                "Extract the essential insights worth keeping as bullet points (- prefix). "
+                "If nothing worth keeping: output (nothing to capture)",
+                [{"role": "user", "content": conversation}],
+                model=REFLECTION_MODEL, num_ctx=8192,
+            )
+            if result and "(nothing to capture)" not in result.lower():
+                essence = result
+                entry_count = sum(1 for line in essence.split("\n") if line.strip().startswith("-"))
+        except Exception as e:
+            capture_failed = True
+            import traceback
+            print(
+                f"Dissolve essence capture failed for {thread_name} ({channel_id}): "
+                f"{type(e).__name__}: {e}"
+            )
+            traceback.print_exc()
+
+    if capture_failed:
+        from thread_registry import mark_cooled
+
+        mark_cooled(channel_id)
+        parent_id = parent_channel_id or getattr(thread, "parent_id", None)
+        if parent_id:
+            await post_eddy_lifecycle_feedback(
+                parent_id,
+                thread_name=thread_name,
+                mode="capture_aborted",
+                via_discord_ui=native_close,
+                jump_url=jump_url,
+            )
+        return DissolveResult(
+            thread_name=thread_name,
+            jump_url=jump_url,
+            capture_failed=True,
+        )
+
+    archive_dir = Path(get_pd()) / "thread-archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    today = local_now().strftime("%Y-%m-%d")
+    safe_name = re.sub(r'[^\w-]', '_', thread_name.lower())
+    archive_path = archive_dir / f"{today}_{safe_name}.md"
+    archive_content = f"# Thread Archive: {thread_name}\n\n"
+    archive_content += f"**Archived:** {today}\n**Messages:** {len(msgs)}\n\n"
+    if essence:
+        archive_content += f"## Essence\n{essence}\n\n"
+    if msgs:
+        archive_content += "## Conversation\n" + "\n".join(msgs[-20:]) + "\n"
+    archive_path.write_text(archive_content)
+
+    try:
+        from river_handler import _append_chronicle
+
+        _append_chronicle(
+            get_pd(),
+            f"🍃 dissolved: {thread_name} ({jump_url})",
+            {
+                "thread_id": str(channel_id),
+                "jump_url": jump_url,
+                "archive": str(archive_path),
+                "insight_count": entry_count,
+            },
+        )
+    except Exception as exc:
+        print(f"Dissolve chronicle failed: {type(exc).__name__}: {exc}")
+
+    thread_configs.pop(channel_id, None)
+    threads_flagged_for_release.pop(channel_id, None)
+    if not retain_memory:
+        mark_dissolved(channel_id)
+    else:
+        from thread_registry import load_registry, save_registry
+
+        registry = load_registry()
+        tid = str(channel_id)
+        if tid in registry["threads"]:
+            registry["threads"][tid]["harvest_status"] = "kept"
+            save_registry(registry, force=True)
+
+    parent_id = parent_channel_id or getattr(thread, "parent_id", None)
+    if parent_id:
+        await post_eddy_lifecycle_feedback(
+            parent_id,
+            thread_name=thread_name,
+            mode="dissolve",
+            via_discord_ui=native_close,
+            entry_count=entry_count,
+            jump_url=jump_url,
+        )
+
+    if not thread.archived:
+        try:
+            await thread.edit(archived=True)
+        except Exception:
+            pass
+
+    # Home-plan dissolve: clear binding + unpin river card; keep artifact file.
+    try:
+        from home_plans import clear_plan, get_by_eddy
+
+        home = get_by_eddy(get_pd(), channel_id)
+        if home:
+            pin_msg = home.get("river_pin_message_id")
+            river_id = home.get("river_channel_id")
+            clear_plan(get_pd(), str(home["id"]))
+            if pin_msg and river_id:
+                try:
+                    river_ch = dc.get_channel(int(river_id)) or await dc.fetch_channel(
+                        int(river_id)
+                    )
+                    card = await river_ch.fetch_message(int(pin_msg))
+                    try:
+                        await card.unpin(reason="Home eddy dissolved")
+                    except Exception:
+                        pass
+                    try:
+                        await card.edit(
+                            content=(
+                                f"Home eddy dissolved — **{home.get('title')}** "
+                                "(file kept)."
+                            ),
+                            embed=None,
+                            view=None,
+                        )
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    print(f"Home-plan dissolve unpin failed: {exc}")
+            print(f"home_plan_cleared_on_dissolve: {home.get('title')} ({channel_id})")
+    except Exception as exc:
+        print(f"Home-plan dissolve cleanup failed: {type(exc).__name__}: {exc}")
+
+    print(f"Dissolved eddy: {thread_name} ({entry_count} insights archived)")
+    return DissolveResult(
+        thread_name=thread_name,
+        entry_count=entry_count,
+        archive_path=str(archive_path),
+        jump_url=jump_url,
+        retain_memory=retain_memory,
+    )
+
+
+async def _manual_release_dissolve(channel_id: int, history: list[dict]):
+    """Dissolve a manual-release thread after checkpoint on release."""
+    await dissolve_eddy(channel_id, history)

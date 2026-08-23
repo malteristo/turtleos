@@ -1,0 +1,50 @@
+# Environment & secrets
+.env
+mage_registry.yaml
+consul/.env
+scout/.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Runtime artifacts
+bot.log
+bot.err
+logs/
+canary_state.json
+canary_triage_fallback_state.json
+river_state.md
+consul/bot.err
+consul/bot.log
+scout/bot.err
+scout/bot.log
+*.lock
+
+# Backups
+*.bak
+*.bak-*
+*.backup
+*.bak.*
+*.pre-*
+
+# Practitioner data (per-practitioner, stays local)
+workshops/
+
+# Local issue backlog (contains unfixed security detail; public repo)
+issues/
+
+# Private lineage and generated attunement state
+identity/deprecated/
+identity/attunement_digest.md
+archive/
+briefs/
+
+# Publish worktree — derived each run, never chronicled
+.publish-worktree/
+
+# Local artifacts — never chronicle these
+.DS_Store
+**/.DS_Store
+test-runs/

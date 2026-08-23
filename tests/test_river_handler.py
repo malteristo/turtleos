@@ -1,0 +1,184 @@
+import sys
+import unittest
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+# Pure-function tests should not require discord.py installed.
+sys.modules.setdefault("discord", MagicMock())
+sys.modules.setdefault("discord.ui", MagicMock())
+
+from river_handler import (
+    finalize_parent_river_acts,
+    handle_river_message,
+    parse_river_output,
+    list_installed_flows,
+)
+
+
+class RiverHandlerTests(unittest.TestCase):
+    def test_parse_valid_json(self) -> None:
+        raw = '{"acts": [{"type": "acknowledge", "emoji": "👋"}, {"type": "offer_eddy", "title": "hi", "button_label": "Materialize eddy"}]}'
+        acts, reason = parse_river_output(raw)
+        self.assertIsNone(reason)
+        self.assertEqual(len(acts), 2)
+        self.assertEqual(acts[0]["type"], "acknowledge")
+
+    def test_parse_rejects_prose(self) -> None:
+        acts, reason = parse_river_output("Hello! I can help you with that.")
+        self.assertEqual(acts, [])
+        self.assertIn("prose", reason or "")
+
+    def test_parse_strips_markdown_fence(self) -> None:
+        raw = '```json\n{"acts": [{"type": "offer_eddy", "title": "x", "button_label": "Go"}]}\n```'
+        acts, reason = parse_river_output(raw)
+        self.assertIsNone(reason)
+        self.assertEqual(acts[0]["title"], "x")
+
+    def test_finalize_parent_river_acts_strips_offer_eddy(self) -> None:
+        acts = [
+            {"type": "acknowledge", "emoji": "👋"},
+            {"type": "offer_eddy", "title": "x", "button_label": "Go"},
+            {"type": "offer_flow_menu", "flows": ["Shelter"]},
+        ]
+        out = finalize_parent_river_acts(acts)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["type"], "offer_flow_menu")
+
+    def test_finalize_parent_river_acts_strips_acknowledge(self) -> None:
+        acts = [{"type": "acknowledge", "emoji": "👋"}]
+        out = finalize_parent_river_acts(acts)
+        self.assertEqual(out, [])
+
+    def test_finalize_parent_river_acts_default_empty(self) -> None:
+        out = finalize_parent_river_acts([])
+        self.assertEqual(out, [])
+
+    def test_classify_pipeline_no_offer_eddy(self) -> None:
+        acts = [{"type": "acknowledge", "emoji": "👋"}]
+        out = finalize_parent_river_acts(acts)
+        self.assertEqual(out, [])
+        self.assertFalse(any(a.get("type") == "offer_eddy" for a in out))
+
+    def test_list_installed_flows_defaults(self) -> None:
+        flows = list_installed_flows("/nonexistent/practice")
+        self.assertIn("Navigator", flows)
+
+
+class AwaitingTitleTests(unittest.TestCase):
+    def test_write_pop_awaiting_title(self) -> None:
+        from eddy_spawn import is_awaiting_title, pop_awaiting_title, write_awaiting_title
+        from unittest.mock import patch
+
+        with patch("eddy_spawn._awaiting_title_path") as mock_path:
+            tmp = Path("/tmp/test_awaiting_title.json")
+            tmp.unlink(missing_ok=True)
+            mock_path.return_value = tmp
+            write_awaiting_title(99, 456, {"flow_id": "shelter"})
+            self.assertTrue(is_awaiting_title(99, 456))
+            out = pop_awaiting_title(99, 456)
+            self.assertEqual(out["flow_id"], "shelter")
+            self.assertFalse(is_awaiting_title(99, 456))
+
+    def test_awaiting_flow_intake(self) -> None:
+        from eddy_spawn import (
+            is_awaiting_flow_intake,
+            patch_awaiting_title,
+            write_awaiting_title,
+        )
+        from unittest.mock import patch
+
+        with patch("eddy_spawn._awaiting_title_path") as mock_path:
+            tmp = Path("/tmp/test_awaiting_intake.json")
+            tmp.unlink(missing_ok=True)
+            mock_path.return_value = tmp
+            write_awaiting_title(77, 456, {"flow_id": "navigator", "awaiting_intake": True})
+            self.assertTrue(is_awaiting_flow_intake(77, 456))
+            patch_awaiting_title(77, 456, awaiting_intake=False)
+            self.assertFalse(is_awaiting_flow_intake(77, 456))
+
+
+class PendingEddyTests(unittest.TestCase):
+    def test_write_and_pop_pending(self) -> None:
+        from eddy_spawn import pop_pending_native_eddy, write_pending_native_eddy
+        from unittest.mock import patch
+
+        with patch("eddy_spawn._pending_native_eddy_path") as mock_path:
+            tmp = Path("/tmp/test_pending_eddy.json")
+            tmp.unlink(missing_ok=True)
+            mock_path.return_value = tmp
+            payload = {"topic": "shake", "eddy_type": "standard", "model": "local"}
+            write_pending_native_eddy(123, 456, payload)
+            self.assertTrue(tmp.exists())
+            out = pop_pending_native_eddy(123, 456)
+            self.assertEqual(out["topic"], "shake")
+            self.assertFalse(tmp.exists())
+            self.assertIsNone(pop_pending_native_eddy(123, 456))
+
+
+class NativeRiverEddyRoutingTests(unittest.TestCase):
+    def test_new_eddy_name_not_intake_when_awaiting_title(self) -> None:
+        from eddy_spawn import is_intake_thread, is_native_river_eddy, write_awaiting_title
+        from unittest.mock import MagicMock, patch
+
+        thread = MagicMock()
+        thread.name = "new eddy"
+        thread.id = 555
+        thread.parent_id = 999
+
+        with patch("eddy_spawn._awaiting_title_path") as mock_path:
+            tmp = Path("/tmp/test_native_eddy_routing.json")
+            tmp.unlink(missing_ok=True)
+            mock_path.return_value = tmp
+            write_awaiting_title(555, 999)
+            self.assertTrue(is_native_river_eddy(thread))
+            self.assertFalse(is_intake_thread(thread))
+            tmp.unlink(missing_ok=True)
+
+    def test_blank_eddy_name_is_never_intake_even_without_native_marker(self) -> None:
+        """INT-044: the marker is unreliable, so the name must not decide.
+
+        River names every blank eddy "new eddy". When is_native_river_eddy
+        loses (title flow popped awaiting-title, or thread_configs is the other
+        process's memory), a bare-name match routed the practitioner's first
+        message into an eddy spawn instead of a reply.
+        """
+        from eddy_spawn import is_intake_thread
+        from unittest.mock import MagicMock
+
+        for name in ("new eddy", "new", "New Eddy"):
+            thread = MagicMock()
+            thread.name = name
+            thread.id = 556
+            thread.parent_id = 999
+            self.assertFalse(is_intake_thread(thread), name)
+
+    def test_emoji_prefixed_vortex_still_routes_to_intake(self) -> None:
+        from eddy_spawn import is_intake_thread
+        from unittest.mock import MagicMock
+
+        for name in ("🌀 vortex", "🌀 new eddy", "vortex", "intake", "new thread"):
+            thread = MagicMock()
+            thread.name = name
+            thread.id = 557
+            thread.parent_id = 999
+            self.assertTrue(is_intake_thread(thread), name)
+
+
+class HandleRiverMessageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dot_reanchors_without_classify(self) -> None:
+        message = MagicMock()
+        message.content = "."
+        message.attachments = []
+        message.author.display_name = "Kermit"
+        message.channel = MagicMock()
+
+        with patch("river_handler.classify_river_acts", new_callable=AsyncMock) as classify, patch(
+            "river_handler._river_client_for_channel", return_value=MagicMock()
+        ), patch("bar_anchor.schedule_river_bar_reconcile") as schedule:
+            await handle_river_message(message)
+            classify.assert_not_awaited()
+            schedule.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
