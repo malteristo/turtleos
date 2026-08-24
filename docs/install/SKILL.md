@@ -36,9 +36,9 @@ Confirm with the practitioner:
 ## Step 1 — Clone
 
 ```bash
-git clone https://github.com/malteristo/turtle-os.git
-cd turtle-os
-echo "cloned turtle-os"
+git clone https://github.com/malteristo/turtleos.git
+cd turtleos
+echo "cloned turtleos"
 ```
 
 ---
@@ -59,7 +59,7 @@ Native install seeds `state/current.yaml` only — legacy portable files (`compa
 ## Step 3 — Python environment
 
 ```bash
-cd turtle-os
+cd turtleos
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -110,7 +110,7 @@ Collect:
 ## Step 6 — Configure shell
 
 ```bash
-cd turtle-os
+cd turtleos
 cp .env.template .env
 cp mage_registry.example.yaml mage_registry.yaml
 ```
@@ -133,7 +133,7 @@ Edit `mage_registry.yaml`:
 ## Step 7 — Start shell
 
 ```bash
-cd turtle-os
+cd turtleos
 source venv/bin/activate
 python discord_bot.py
 ```

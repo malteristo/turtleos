@@ -29,6 +29,13 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+# Derived trees a first-timer (or a publish) can leave on disk. Counting them
+# as production doubled the baseline when `.publish-worktree/` existed.
+_NOISE_PARTS = frozenset({".publish-worktree", "venv", "node_modules", ".git"})
+
+
+def is_tree_noise(path: Path) -> bool:
+    return any(part in _NOISE_PARTS for part in path.parts)
 
 
 def _py_files(directory: Path, pattern: str = "*.py") -> list[Path]:
@@ -93,7 +100,7 @@ def _runtime_adoption() -> tuple[int, int]:
     consumers = [
         p
         for p in REPO.rglob("*.py")
-        if "venv" not in p.parts
+        if not is_tree_noise(p)
         and "tests" not in p.parts
         and "runtime" not in p.parts
         and "scripts" not in p.parts
@@ -186,10 +193,14 @@ def measure() -> dict:
     packages = sorted(
         p.parent.name
         for p in REPO.rglob("__init__.py")
-        if "venv" not in p.parts and "node_modules" not in p.parts
+        if not is_tree_noise(p)
     )
     prod_loc = _loc(root_modules) + _loc(
-        [p for p in REPO.rglob("*.py") if "venv" not in p.parts and p.parent != REPO and "tests" not in p.parts]
+        [
+            p
+            for p in REPO.rglob("*.py")
+            if not is_tree_noise(p) and p.parent != REPO and "tests" not in p.parts
+        ]
     )
     test_loc = _loc(test_files)
     over_1000 = sorted(

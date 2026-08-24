@@ -10,10 +10,10 @@ Create this in **Cursor → Automations → New automation**. The Automations ed
 |-------|--------|
 | **Name** | turtleOS post-push shake |
 | **Description** | After turtleOS main updates, run offline + live flow shakedown on the Mac Mini and report pass/fail. |
-| **Trigger** | New push to branch `main` in repo `malteristo/turtleos` |
+| **Trigger** | Chronicle push to Mini `~/repos/turtleos.git` (not GitHub). GitHub `malteristo/turtleos` is the public subset. |
 | **Tools** | Terminal / shell (Cloud Agent) |
 | **Instructions** | See prompt below |
-| **Git checkout** | `malteristo/turtleos`, branch `main` |
+| **Git checkout** | Forge `~/Documents/turtleos` or Mini `~/turtleos`, branch `main` |
 | **To finish in editor** | Confirm Cloud Agent has SSH access to `turtle@<turtle-host>` (Tailscale). If not, run offline-only checks in the checkout and note that live shake requires Forge session. |
 
 ### Agent prompt (paste into Instructions)

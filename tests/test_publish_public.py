@@ -64,31 +64,34 @@ class PublishPublicTests(unittest.TestCase):
         self.assertIn("skipping the live-host gate", hook)
 
     def test_publish_without_remote_refuses(self) -> None:
-        proc = _run([str(PUBLISH), "--publish"])
+        """Must not use the live `public` remote. A missing name is the control."""
+        proc = _run(
+            [str(PUBLISH), "--publish"],
+            env={"TURTLEOS_PUBLIC_REMOTE": "no-such-public-remote"},
+        )
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("not configured", proc.stderr)
         self.assertNotIn("Published", proc.stderr)
 
     def test_readme_points_at_the_public_clone_url(self) -> None:
-        """Testers follow the README. The private origin must not be the clone URL."""
+        """Testers follow the README. The clone folder is turtleos."""
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         skill = (ROOT / "docs" / "install" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertNotIn(
-            "github.com/malteristo/turtleos",
-            readme,
-            "README still clones the private origin",
-        )
-        self.assertNotIn(
-            "github.com/malteristo/turtleos",
-            skill,
-            "install skill still clones the private origin",
-        )
-        self.assertIn("github.com/malteristo/turtle-os", readme)
+        self.assertIn("github.com/malteristo/turtleos", readme)
+        self.assertIn("github.com/malteristo/turtleos", skill)
+        self.assertNotIn("turtle-os.git", readme)
+        self.assertNotIn("turtle-os.git", skill)
         self.assertIn("docs/ux/faq.md", readme)
-        self.assertIn("cd turtle-os", readme)
-        self.assertNotIn("\ncd turtleos\n", "\n" + readme)
-        self.assertIn("cd turtle-os", skill)
-        self.assertNotIn("\ncd turtleos\n", "\n" + skill)
+        self.assertIn("cd turtleos", readme)
+        self.assertNotIn("\ncd turtle-os\n", "\n" + readme)
+        self.assertIn("cd turtleos", skill)
+        self.assertNotIn("\ncd turtle-os\n", "\n" + skill)
+
+    def test_publish_script_refuses_the_chronicle_not_the_public_slug(self) -> None:
+        """malteristo/turtleos is the public subset. The Mini bare path is the chronicle."""
+        script = PUBLISH.read_text(encoding="utf-8")
+        self.assertIn("*repos/turtleos.git*", script)
+        self.assertNotIn("*malteristo/turtleos*", script)
 
     def test_publish_refuses_origin(self) -> None:
         """Positive control: origin is the Mini's pull. An empty refuse is decoration."""

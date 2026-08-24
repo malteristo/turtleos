@@ -61,7 +61,7 @@ def _production_files() -> list[Path]:
     return [
         p
         for p in REPO.rglob("*.py")
-        if "venv" not in p.parts
+        if not quality_baseline.is_tree_noise(p)
         and "tests" not in p.parts
         and "runtime" not in p.parts
         and "scripts" not in p.parts
@@ -69,6 +69,12 @@ def _production_files() -> list[Path]:
 
 
 class RecordedAdoptionTests(unittest.TestCase):
+    def test_a_publish_worktree_is_not_production(self) -> None:
+        """Positive control: the path that doubled the baseline must be noise."""
+        fake = REPO / ".publish-worktree" / "link_read.py"
+        self.assertTrue(quality_baseline.is_tree_noise(fake))
+        self.assertNotIn(fake, _production_files())
+
     def test_the_unwired_count_matches_the_record(self) -> None:
         modules, lines = quality_baseline._runtime_adoption()
         self.assertEqual(

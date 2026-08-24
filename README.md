@@ -99,8 +99,8 @@ If you use Claude Code, Codex, or similar, hand your agent the install skill:
 ### Manual install
 
 ```bash
-git clone https://github.com/malteristo/turtle-os.git
-cd turtle-os
+git clone https://github.com/malteristo/turtleos.git
+cd turtleos
 
 # 1. Practice root — one per member
 mkdir -p ~/workshops/$(whoami)

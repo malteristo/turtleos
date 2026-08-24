@@ -168,7 +168,7 @@ The allowlist lives in `scripts/public_surface.conf`. Ask it, do not remember it
 ./scripts/publish_public_turtleos.sh                       # dry-run (default)
 ```
 
-`docs/live-runtime.md` and `docs/learnings.md` are denied by name in that file and by an absolute never-list in the script. A test fails if either would classify as public. `publish_public_turtleos.sh` prints the same path list; `--publish` is the visibility act and refuses `origin` (the Mini's private pull). It does not create remotes.
+`docs/live-runtime.md` and `docs/learnings.md` are denied by name in that file and by an absolute never-list in the script. A test fails if either would classify as public. `publish_public_turtleos.sh` prints the same path list; `--publish` is the visibility act and refuses `origin` (the Mini chronicle). It does not create remotes. GitHub `malteristo/turtleos` is the public subset only.
 
 ## Update Ritual
 

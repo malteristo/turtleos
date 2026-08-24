@@ -110,10 +110,14 @@ class FailClosedTests(unittest.TestCase):
         ]
         self.assertEqual(
             len(early_exits),
-            1,
-            "exactly one early exit is expected — the deletions-only skip. Another "
-            f"one is another way to push without verifying: {early_exits}",
+            2,
+            "two early exits are expected — deletions-only, and remotes that are "
+            "not origin (the Mini chronicle). A third is another way to push "
+            f"without verifying: {early_exits}",
         )
+        hook = HOOK.read_text(encoding="utf-8")
+        self.assertIn("deletions only", hook)
+        self.assertIn('"$REMOTE_NAME" != "origin"', hook)
 
     def test_the_bypass_is_named_but_not_encouraged(self) -> None:
         text = HOOK.read_text(encoding="utf-8")

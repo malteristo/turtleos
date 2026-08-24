@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # publish_public_turtleos.sh — derive a public subset from public_surface.conf.
 #
-# The private origin (github.com/malteristo/turtleos) stays the Mini's pull.
-# This script is the only supported path to a *different* public remote, with
-# its own lineage. It does not flip the private repo public, and it never
-# pushes to origin.
+# The private chronicle lives on the Mini (~/repos/turtleos.git). Forge
+# origin and Mini origin both point there. This script is the only supported
+# path to the public GitHub subset (malteristo/turtleos), with its own
+# lineage. It never pushes the subset to origin.
 #
 #   ./scripts/publish_public_turtleos.sh            # dry-run (default)
 #   ./scripts/publish_public_turtleos.sh --dry-run  # same
@@ -121,9 +121,9 @@ if [ -n "$ORIGIN_URL" ] && [ "$PUB_URL" = "$ORIGIN_URL" ]; then
   exit 1
 fi
 case "$PUB_URL" in
-  *malteristo/turtleos*)
-    echo -e "${RED}Refusing: $REMOTE points at the private repository.${NC}" >&2
-    echo "Do not flip it. Publish a subset to a different remote." >&2
+  *repos/turtleos.git*)
+    echo -e "${RED}Refusing: $REMOTE points at the Mini chronicle.${NC}" >&2
+    echo "The public remote is GitHub. origin is the bare repo on the Mini." >&2
     exit 1
     ;;
 esac

@@ -52,7 +52,7 @@ DISCORD_EPOCH_MS = 1420070400000
 
 # Discord's edge rejects urllib's default agent with a bare 403 that looks
 # exactly like a bad token. The API requires a declared bot agent.
-USER_AGENT = "DiscordBot (https://github.com/malteristo/turtle-os, 1.0)"
+USER_AGENT = "DiscordBot (https://github.com/malteristo/turtleos, 1.0)"
 
 # The story layer's first note. Threads whose last message predates this never
 # had a chance to be written down.
