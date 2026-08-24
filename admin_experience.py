@@ -219,9 +219,17 @@ def collect_doctor_findings(
             "`!admin rivers sync-names` then `--confirm`."
         )
 
-    from mage import registry_relation_issues
+    from mage import REGISTRY_PATH, admin_discord_ids, registry_relation_issues
 
-    relation_issues = registry_relation_issues()
+    if not admin_discord_ids(registry):
+        findings.append(
+            f"⚠️ No administrator Discord id in `{REGISTRY_PATH}` — "
+            "`!admin invite` will say it requires the primary operator. "
+            "Set `discord_id` on the primary mage to your numeric user id "
+            "(the file next to the running bot, not a second copy under `~/turtleos/`)."
+        )
+
+    relation_issues = registry_relation_issues(registry)
     if relation_issues:
         findings.append(
             f"⚠️ {len(relation_issues)} member(s) without a usable `relation` "

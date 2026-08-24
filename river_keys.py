@@ -15,7 +15,6 @@ from pathlib import Path
 import discord
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
-REGISTRY_PATH = Path(os.path.expanduser("~/turtleos/mage_registry.yaml"))
 
 
 def _looks_like_single_key(text: str) -> bool:
@@ -78,14 +77,22 @@ def hosted_river_channel_name(mage_key: str) -> str:
     return f"river-{mage_key.replace('_', '-')}"[:100]
 
 
+def registry_file() -> Path:
+    """Same path mage.py reads. A second constant here was the split a first-timer hit."""
+    from mage import REGISTRY_PATH
+
+    return Path(REGISTRY_PATH)
+
+
 def save_registry(registry: dict) -> None:
     import yaml
 
-    REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = REGISTRY_PATH.with_suffix(".yaml.tmp")
+    path = registry_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".yaml.tmp")
     with open(tmp, "w", encoding="utf-8") as fh:
         yaml.dump(registry, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
-    tmp.replace(REGISTRY_PATH)
+    tmp.replace(path)
     from mage import reload_mage_registry
 
     reload_mage_registry()

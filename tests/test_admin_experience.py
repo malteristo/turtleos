@@ -88,6 +88,24 @@ class AdminExperienceTests(unittest.TestCase):
         preview = format_sync_preview(actions)
         self.assertIn("dry-run", preview)
 
+    def test_doctor_reports_invite_will_fail_without_admin_id(self) -> None:
+        """Invite and doctor must agree. Empty admin set used to look healthy."""
+        registry = {
+            "mages": {
+                "default": {
+                    "discord_id": "YOUR_DISCORD_USER_ID",
+                    "primary": True,
+                    "admin": True,
+                }
+            },
+            "channels": {},
+        }
+        findings = collect_doctor_findings(registry, None)
+        joined = "\n".join(findings)
+        self.assertIn("invite", joined)
+        self.assertIn("primary operator", joined)
+        self.assertNotIn("No admin issues", joined)
+
     def test_doctor_reports_name_drift(self) -> None:
         registry = {
             "mages": {"x": {"discord_id": "1"}},

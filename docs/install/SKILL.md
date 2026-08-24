@@ -37,8 +37,8 @@ Confirm with the practitioner:
 
 ```bash
 git clone https://github.com/malteristo/turtle-os.git
-cd turtleos
-echo "cloned turtleos"
+cd turtle-os
+echo "cloned turtle-os"
 ```
 
 ---
@@ -59,7 +59,7 @@ Native install seeds `state/current.yaml` only — legacy portable files (`compa
 ## Step 3 — Python environment
 
 ```bash
-cd turtleos
+cd turtle-os
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -95,7 +95,7 @@ Guide the practitioner through (cannot fully automate):
 1. [Discord Developer Portal](https://discord.com/developers/applications) → New Application
 2. Bot → Add Bot → copy **token**
 3. Enable intents: **Message Content Intent**, **Server Members Intent**
-4. OAuth2 → URL Generator → scopes: `bot` → permissions: Send Messages, Read Message History, Create Public Threads, Send Messages in Threads, Embed Links, Add Reactions (or Administrator for private server)
+4. OAuth2 → URL Generator → scopes: `bot` → permissions: **Administrator** on a private household server. Narrower channel permissions are not enough for `!admin invite`.
 5. Invite bot to the practitioner's **private server**
 6. Create a text channel named e.g. `river` — this is the practice surface
 
@@ -110,10 +110,12 @@ Collect:
 ## Step 6 — Configure shell
 
 ```bash
-cd turtleos
+cd turtle-os
 cp .env.template .env
 cp mage_registry.example.yaml mage_registry.yaml
 ```
+
+The bot reads `mage_registry.yaml` **in this clone**, not `~/turtleos/`. Edit the file you just copied.
 
 Edit `.env` — at minimum set Discord bot token and model names per current shell expectations.
 
@@ -131,7 +133,7 @@ Edit `mage_registry.yaml`:
 ## Step 7 — Start shell
 
 ```bash
-cd turtleos
+cd turtle-os
 source venv/bin/activate
 python discord_bot.py
 ```

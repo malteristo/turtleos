@@ -26,7 +26,15 @@ _mage_key_ctx = contextvars.ContextVar("mage_key", default="default")
 
 # ─── Registry Loading ────────────────────────────────────────────
 
-REGISTRY_PATH = os.path.expanduser("~/turtleos/mage_registry.yaml")
+def default_registry_path() -> str:
+    """The file next to this code — the clone you run. Override with MAGE_REGISTRY."""
+    override = os.environ.get("MAGE_REGISTRY")
+    if override:
+        return os.path.expanduser(override)
+    return str(Path(__file__).resolve().parent / "mage_registry.yaml")
+
+
+REGISTRY_PATH = default_registry_path()
 _registry_mtime: float | None = None
 
 

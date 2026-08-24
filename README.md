@@ -100,7 +100,7 @@ If you use Claude Code, Codex, or similar, hand your agent the install skill:
 
 ```bash
 git clone https://github.com/malteristo/turtle-os.git
-cd turtleos
+cd turtle-os
 
 # 1. Practice root — one per member
 mkdir -p ~/workshops/$(whoami)

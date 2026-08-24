@@ -43,26 +43,11 @@ mages:
     admin: true
     relation: household
 
-spaces:
-  shared:
-    practice_dir: ~/workshops/shared
-    runtime_dir: ~/workshops/shared
-    members:
-      - default
-    # share_policy: who may share TO this space from the Share eddy picker (TURTLE_SPEC §15.6)
-    #   all_practitioners — every hosted practitioner on the node (may share without Discord channel membership)
-    #   members_only — only space.members
-    share_policy: all_practitioners
-  family:
-    practice_dir: ~/workshops/family
-    runtime_dir: ~/workshops/family
-    members:
-      - partner
-    share_policy: members_only
-
-# Provision shared-river spaces via !admin space create (see docs/chapters/design-admin-space-provisioning.md)
-# Example after: !admin space create guest_play --members @you @guest --policy all_practitioners
-#   spaces.guest_play + channels.<id> type shared-river + ~/workshops/guest_play/
+# Do not pre-create spaces here. A spaces.family stub with no Discord channel
+# makes `!admin space create family` say the space already exists and create
+# nothing. Provision with:
+#   !admin space create family --members @you @them --context family --policy members_only
+# See docs/chapters/design-admin-space-provisioning.md.
 
 channels:
   "YOUR_DIALOGUE_CHANNEL_ID":

@@ -85,6 +85,10 @@ class PublishPublicTests(unittest.TestCase):
         )
         self.assertIn("github.com/malteristo/turtle-os", readme)
         self.assertIn("docs/ux/faq.md", readme)
+        self.assertIn("cd turtle-os", readme)
+        self.assertNotIn("\ncd turtleos\n", "\n" + readme)
+        self.assertIn("cd turtle-os", skill)
+        self.assertNotIn("\ncd turtleos\n", "\n" + skill)
 
     def test_publish_refuses_origin(self) -> None:
         """Positive control: origin is the Mini's pull. An empty refuse is decoration."""

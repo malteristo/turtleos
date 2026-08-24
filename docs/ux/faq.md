@@ -34,7 +34,7 @@ They need their own Discord account, and they join **your** server. In your rive
 !admin invite morgan 🌿 en --member @Morgan
 ```
 
-They open the link, claim their river, and talk to Turtle in a place you cannot see by default. `!admin rivers` lists who has a river. `!admin doctor` checks the house.
+They open the link, claim their river, and talk to Turtle there. You remain the host on that channel (you can see it exists; stay out of their threads). `!admin rivers` lists who has a river. `!admin doctor` checks the house. The bot needs **Administrator** on the server or the invite fails.
 
 ## How do we get a room we share?
 

@@ -11,7 +11,6 @@ from typing import Any
 import discord
 
 from river_keys import (
-    REGISTRY_PATH,
     _bot_channel_perms,
     _primary_operator_ids,
     _river_bot_member,
@@ -236,8 +235,11 @@ def resolve_member_keys(
 
 
 def validate_space_available(registry: dict[str, Any], space_key: str) -> None:
-    if space_key in registry.get("spaces", {}):
-        raise ValueError(f"Space `{space_key}` already exists in registry.")
+    """Refuse only when a live channel is already bound.
+
+    A spaces.* stub with no channel (the example file used to ship one named
+    family) is not a space yet — create binds the channel.
+    """
     for entry in registry.get("channels", {}).values():
         if isinstance(entry, dict) and entry.get("mage") == space_key and entry.get("type") == "shared-river":
             if not entry.get("archived"):

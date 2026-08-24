@@ -74,8 +74,18 @@ class AdminSpaceRegistryTests(unittest.TestCase):
     }
 
     def test_validate_space_available_rejects_duplicate(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as ctx:
             validate_space_available(self.REGISTRY, "family")
+        self.assertIn("already bound", str(ctx.exception))
+
+    def test_validate_space_available_allows_stub_without_channel(self) -> None:
+        """Example used to ship spaces.family with no channel — create must bind it."""
+        stub = {
+            "spaces": {"family": {"members": ["partner"], "share_policy": "members_only"}},
+            "channels": {},
+            "mages": {"partner": {"discord_id": "2"}},
+        }
+        validate_space_available(stub, "family")
 
     def test_list_active_spaces_skips_archived(self) -> None:
         rows = list_active_spaces(self.REGISTRY)
