@@ -1,7 +1,7 @@
 # Family Care — Operating Model
 
 **Date:** 2026-08-04  
-**Status:** Active stance — governs family-facing turtleOS craft  
+**Status:** Active stance — governs *this household's* shared practice. The product is practice channels ([practice-channels.md](practice-channels.md)); family is one shared practice, not the product name.  
 **Spec reference:** TURTLE_SPEC §1.4 (platform vs attunement), §15 (shared spaces), §6–8 (river / eddy)  
 **Companion chapters:** [design-family-dates.md](../chapters/design-family-dates.md), [design-topic-channels.md](../chapters/design-topic-channels.md), [relations-and-membership.md](relations-and-membership.md), [eddy-age-and-river-quiet.md](eddy-age-and-river-quiet.md), [design-update-announcements.md](../chapters/design-update-announcements.md)
 

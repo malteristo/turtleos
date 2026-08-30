@@ -118,11 +118,29 @@ class AdminExperienceTests(unittest.TestCase):
                 },
             },
         }
+        human = MagicMock(bot=False)
+        human.id = 1
         guild = MagicMock()
-        guild.members = [MagicMock(bot=False), MagicMock(bot=True)]
+        guild.members = [human, MagicMock(bot=True)]
         findings = collect_doctor_findings(registry, guild)
         joined = "\n".join(findings)
         self.assertIn("name drift", joined)
+
+    def test_doctor_reports_roster_drift(self) -> None:
+        """Bijection failure must not look healthy."""
+        registry = {
+            "mages": {"ghost": {"discord_id": "7"}},
+            "channels": {},
+        }
+        human = MagicMock(bot=False)
+        human.id = 9
+        guild = MagicMock()
+        guild.members = [human, MagicMock(bot=True)]
+        findings = collect_doctor_findings(registry, guild)
+        joined = "\n".join(findings)
+        self.assertIn("on Discord not in turtleOS", joined)
+        self.assertIn("in turtleOS not on Discord", joined)
+        self.assertNotIn("No admin issues", joined)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 > **Canonical version:** This file, in the tree you cloned, is law for that tree.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-07-17 (Pinned home eddies — working-plan river pins §5.3 / sticky cool §8 / home binding §11.5)  
+**Version:** 2026-08-30 (Practice channels — destination §3.1; install topology still §13.3)  
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -63,15 +63,19 @@ This rewrite supersedes the prior **"Law of the Persistent Spirit"** framing as 
 
 ### 3.1. The Product Promise
 
-**turtleOS** turns capable local hardware into a personal AI practice space:
+**turtleOS** is a place for **practices** — solo or shared — each a channel with its own Turtle and River, on hardware you own:
 
 - **Local, open-weight inference** — the default path uses models you run yourself (Ollama or equivalent).
 - **Discord-native UX** — a **river** for intake and action; **eddies** for conversation.
-- **Prompt programs as the practice layer** — Turtle Practice flows run on the platform; practitioners may author and share their own.
+- **Two primitives** — **solo** and **shared**. The install pair is one **private** channel per member (solo) and one **community** channel for all members (shared). Every other channel is a **practice** sitting on one primitive.
+- **Roster** — a human on the Discord server is a turtleOS member, and the reverse. One without the other is an error. Bots that run the house are not members.
+- **Prompt programs as an optional practice layer** — flows run on the platform; practitioners may author and share their own.
 
-The narrative for early adopters: *local AI made accessible* — not cloud chat with extra steps, not a Magic installation requirement.
+The narrative for early adopters: *practices you can keep, locally* — not cloud chat with extra steps, not a Magic installation requirement.
 
-turtleOS is a **relational** practice space: it develops shared context with the practitioner over time — writing the context that tells their story while they live it (§6.5), and applying what it knows to help in the moment. The practitioner's story stays on their hardware. *Local AI made accessible* is the door; the story layer is why practitioners stay. (Direction: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md).)
+**Current topology (§13.3) still ships one river at install; shared rooms are optional (§15).** Join on the practice server now admits (private river + seat in an existing shared room); leave departs. Community is still not created at install. Do not write a new clone as if it already has the two-room house. Destination: [docs/design/practice-channels.md](docs/design/practice-channels.md).
+
+turtleOS develops shared context with the practitioner over time — writing the context that tells their story while they live it (§6.5), and applying what it knows to help in the moment. The practitioner's story stays on their hardware. (Direction: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md).)
 
 ### 3.2. Three Layers
 
@@ -852,7 +856,7 @@ A zero-install sibling entry via `PRACTICE.md` (markdown practice with any AI) i
 | River channel | One per practitioner — the main practice surface |
 | Eddies | Threads spawned on demand |
 | Standing system threads | None at install |
-| Shared/family channels | Optional — multi-practitioner (§15) |
+| Shared/family channels | Optional — multi-practitioner (§15). **Target:** community at install; see [practice-channels.md](docs/design/practice-channels.md) |
 
 ### 13.4. Agent-Assisted Install
 
@@ -1253,6 +1257,7 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 | 2026-06-25 | §15.6 Share eddy Slice 1 (practitioner target, `!share`); flow library on-demand (`!flows` / `!flow`); standing bottom flow bar retired — see `docs/chapters/2026-06-25-share-eddy-slice1-dogfood.md` |
 | 2026-06-20 | §9.5 — Discord permalink read-for-dialogue (`discord_ref_read.py`): visible trace, thread history, long-thread summary; distinct from external URL read and `!fetch` |
 | 2026-06-28 | §9.6 — Discord native UI reconciliation (policy C close, channel structural sync, shared lifecycle/structural adapters); practitioner doc `docs/ux/discord-native-ui.md` |
+| 2026-08-30 | §3.1 — practice channels: solo/shared primitives, install pair (private + community), roster sync as destination; §13.3 still one river. Destination: `docs/design/practice-channels.md` |
 | 2026-07-28 | §15.4 — host admin UX: `!admin invite`, `#river-<name>` for life, rivers/doctor; `onboard` + `*-dialogue` rename retired from product path |
 
 *End of TURTLE_SPEC*

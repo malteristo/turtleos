@@ -1,29 +1,27 @@
 # First install and onboarding
 
-**Status:** Target copy and structure (2026-06-20)  
+**Status:** Target copy — house framing 2026-08-30. Live first success is still one river.  
 **Audience:** Anyone installing turtleOS — not Magic practitioners, not flow authors  
-**Related:** [journeys.md](journeys.md) · [flow-library-journeys.md](flow-library-journeys.md) · [eddy-entry.md](eddy-entry.md)
+**Related:** [practice-channels.md](../design/practice-channels.md) · [journeys.md](journeys.md) · [eddy-entry.md](eddy-entry.md)
 
 ---
 
-## Product layers (hold both)
+## The house, then flows
 
-turtleOS is **two things at once**, without forcing either:
+| | What it is | Who it's for |
+|--|------------|--------------|
+| **The rooms (install)** | A private river, and (destination) a community river. Turtle talks in **eddies**. | Everyone after install |
+| **Guided flows (optional)** | Structured conversations you load inside an eddy when you want them | People who want more structure |
 
-| Layer | What it is | Who it's for |
-|-------|------------|--------------|
-| **Personal AI (default)** | Sovereign, local-first **ChatGPT-style** use on Discord — open an eddy, talk, paste links, daily LLM work | Everyone after install |
-| **Guided flows (optional)** | Structured conversations — expert process encoded; **guided emergence** without prompt engineering | People who want more structure, or who are exploring what flows can do |
+**Install succeeds when they can talk in their river.** Flows are discoverable in the eddy; never required for daily use.
 
-**Install succeeds when Layer 1 feels good.** Layer 2 is discoverable in the eddy; never required for daily use.
-
-For operators who also live with **intentions** (clarity on what you want, plans, checkpoints): that depth is available on demand — Turtle attunes when you ask, not by nagging.
+Depth (intentions, plans, checkpoints) is available on demand — Turtle attunes when you ask, not by nagging.
 
 ---
 
 ## What you get after install
 
-1. A **Discord server** (yours) with a **river** channel  
+1. A **Discord server** (yours) with a **river** channel. Destination: private + community at install ([practice-channels.md](../design/practice-channels.md)); today this is still one river. People who join later get a private river without a further admit command.  
 2. **turtleOS** running on your machine — local models by default, API opt-in if you choose  
 3. **Turtle** as dialogue partner in **eddies** (threads)  
 4. **River** in the main channel — structural acts only, not a chatbot  
@@ -55,13 +53,13 @@ Past German onboarding drift reflected one practitioner's conversational prefere
 
 ### Welcome to turtleOS
 
-You now have a **personal AI** on Discord — running on **your** machine, with **your** models.
+You have a **river** on a machine you own. This is your private room.
 
-**The river** is where you drop things. The river doesn't chat in paragraphs; it acknowledges and offers buttons. That's normal.
+**The river** is where you drop things. It does not chat in paragraphs; it acknowledges and offers buttons. That's normal.
 
-**Eddies** are where you actually talk. At the bottom of the river you'll see **`new eddy`** — click it to open a thread. Send a message. Turtle joins and replies. That's the whole daily loop.
+**Eddies** are where you actually talk. At the bottom of the river you'll see **`new eddy`** — click it to open a thread. Send a message. Turtle joins and replies. That is the daily return.
 
-It works like the familiar pattern: open a chat, start typing, follow up, paste a link when you need to discuss something on the web. Threads stay in your sidebar — come back anytime.
+Follow up in the same eddy, or start a new one when the topic shifts. Paste a link when you want to talk about a page. Threads stay in your sidebar — come back anytime.
 
 **A few things that help:**
 
@@ -91,21 +89,22 @@ No homework. No framework vocabulary. Open an eddy and talk.
 
 ---
 
-## After first success — a household
+## After first success — the rest of the house
 
-First success is necessary and not sufficient for a family.
+The destination is a private river and a community river at install ([practice-channels.md](../design/practice-channels.md)). Today first success is the private river. A shared room is a second pass.
 
 | Step | Pass |
 |------|------|
-| 6 | A second adult has their own Discord account and has joined **this** server |
-| 7 | `!admin invite <name> <emoji> --member @them` → they claim `#river-<name>` |
-| 8 | They open an eddy; Turtle replies **to them**; the administrator does not see that thread by default |
-| 9 | `!admin space create family --members @admin @them --context family --policy members_only` |
-| 10 | A message in the family room is shared, not delivered into one private river |
+| 6 | A second adult has their own Discord account and has joined **this** server — they already have a private river |
+| 7 | They open an eddy in that river; Turtle replies **to them** |
+| 8 | A shared room exists: today `!admin space create family --members @you @them --context family --policy members_only` |
+| 9 | A message in that room is shared, not delivered into one private river |
+
+`!admin invite` is only if you want a claim room before they arrive.
 
 **Not a pass:** a guest or unclaimed Discord session standing in for a member. **Not a fail:** children under Discord’s age floor where you live (16 in Germany) staying off the server.
 
-Commands and the questions around them: [faq.md](faq.md).
+Commands: [faq.md](faq.md).
 
 ---
 
@@ -113,7 +112,7 @@ Commands and the questions around them: [faq.md](faq.md).
 
 | Surface | Tone |
 |---------|------|
-| **Self-install (Pop 2)** | Generic personal AI first; flows optional; sovereignty/local models mentioned briefly |
+| **Self-install (Pop 2)** | The rooms first; flows optional; machine and models mentioned briefly |
 | **Hosted river (claim room)** | Same core loop; privacy boundary (your channel is yours); **`locale=en`** onboarding for current cohort |
 | **Magic-attuned operator** | Same generic onboarding for product; Magic overlay is not the install story |
 
@@ -139,4 +138,4 @@ Commands and the questions around them: [faq.md](faq.md).
 
 ---
 
-*Generic onboarding is Layer 1. Flow journeys live in [flow-library-journeys.md](flow-library-journeys.md).*
+*Onboarding is the rooms. Flow journeys live in [flow-library-journeys.md](flow-library-journeys.md).*

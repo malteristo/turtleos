@@ -124,6 +124,78 @@ class CraftAttunementTests(unittest.TestCase):
         )
         self.assertIn("resident of turtleOS", CRAFT_VOCATION_HEADER)
 
+    # ── Vocation breadth ────────────────────────────────────────────
+    #
+    # Widened 2026-08-25. The vocation said "harness/product diagnostics and
+    # learning intake", which scoped craft to this codebase. The operator's
+    # craft had already outgrown that — he is commissioned to facilitate a
+    # workshop and intends to offer research services — and the observable
+    # symptom was that a craft eddy for that work needed an override paragraph
+    # written into its surface file to stop Turtle treating it as harness
+    # friction. A prompt you have to argue with is a prompt that is wrong.
+    #
+    # Two independent things are asserted because they can regress apart: the
+    # DOMAIN (craft is not this codebase) and the MODE SPLIT (work in hand is
+    # not a defect report). Narrowing either one silently is the failure.
+
+    VOCATION_SURFACES = ("prompts.CRAFT_VOCATION_HEADER", "state.THREAD_CONTEXTS[craft]")
+
+    @staticmethod
+    def _vocation_texts() -> dict[str, str]:
+        return {
+            "prompts.CRAFT_VOCATION_HEADER": CRAFT_VOCATION_HEADER,
+            "state.THREAD_CONTEXTS[craft]": THREAD_CONTEXTS["craft"]["rules"],
+        }
+
+    @staticmethod
+    def _names_craft_beyond_codebase(text: str) -> bool:
+        low = text.lower()
+        return "not a synonym for this codebase" in low and (
+            "workshop" in low or "research services" in low
+        )
+
+    @staticmethod
+    def _splits_friction_from_work(text: str) -> bool:
+        low = text.lower()
+        arrived = "friction arrived" in low or "when friction arrived" in low
+        in_hand = "in hand" in low
+        return arrived and in_hand
+
+    def test_vocation_covers_craft_beyond_this_codebase(self) -> None:
+        for name, text in self._vocation_texts().items():
+            with self.subTest(surface=name):
+                self.assertTrue(
+                    self._names_craft_beyond_codebase(text),
+                    f"{name} narrowed craft back to turtleOS/Magic; workshops and "
+                    "research services are craft too",
+                )
+
+    def test_vocation_distinguishes_friction_from_work_in_hand(self) -> None:
+        for name, text in self._vocation_texts().items():
+            with self.subTest(surface=name):
+                self.assertTrue(
+                    self._splits_friction_from_work(text),
+                    f"{name} lost the mode split; intake would run on work that "
+                    "is not broken",
+                )
+
+    def test_pre_widening_vocation_fails_both_checks(self) -> None:
+        """Positive control: an empty result would otherwise prove nothing."""
+        old_prompt = (
+            "You are **Craft Turtle** — Turtle in builder mode, resident of turtleOS.\n"
+            "Your job is harness/product diagnostics and learning intake, not "
+            "ordinary practice companionship.\n"
+            "- Treat new messages as **learning intake** when they reveal friction."
+        )
+        old_rules = (
+            "You are Craft Turtle: persistent Spirit in **builder mode** for turtleOS "
+            "and Magic craft. This is learning intake — harness/product friction — "
+            "not ordinary life practice.\n**Intake moves (in order):**\n"
+        )
+        for old in (old_prompt, old_rules):
+            self.assertFalse(self._names_craft_beyond_codebase(old))
+            self.assertFalse(self._splits_friction_from_work(old))
+
     def test_non_craft_discord_prompt_still_names_spirit(self) -> None:
         """Out of scope by decision: River / main bot keep the mage identity line."""
         with patch("prompts.get_mage_type", return_value="mage"):

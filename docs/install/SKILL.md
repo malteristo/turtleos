@@ -9,9 +9,11 @@ Use this skill when the practitioner wants to install turtleOS on local hardware
 
 ## Outcome
 
+The house is a **private** river and a **community** river, Turtle in both. **Today this skill leaves them in the private river.** Community at install is the remaining half ([practice-channels.md](../design/practice-channels.md)). Do not tell them they already have two rooms.
+
 A running bot where:
 
-1. Practitioner has a **private Discord server** with a **river** channel
+1. Practitioner has a **private Discord server** with a **river** channel (their private room)
 2. **Ollama** serves a small River model and a capable Turtle model
 3. **Practice root** exists with `character/`, `flows/`, `chronicle/`, `state/`
 4. Dropping text in the river yields acts (ack + Materialize eddy button)
@@ -95,9 +97,9 @@ Guide the practitioner through (cannot fully automate):
 1. [Discord Developer Portal](https://discord.com/developers/applications) → New Application
 2. Bot → Add Bot → copy **token**
 3. Enable intents: **Message Content Intent**, **Server Members Intent**
-4. OAuth2 → URL Generator → scopes: `bot` → permissions: **Administrator** on a private household server. Narrower channel permissions are not enough for `!admin invite`.
+4. OAuth2 → URL Generator → scopes: `bot` → permissions: **Administrator** on a private server they own. Narrower channel permissions are not enough to create rivers.
 5. Invite bot to the practitioner's **private server**
-6. Create a text channel named e.g. `river` — this is the practice surface
+6. Create a text channel named e.g. `river` — this is their private room
 
 Collect:
 
@@ -181,22 +183,24 @@ Confirm with the practitioner:
 - Models in use
 - How to restart bot
 
-Point to `TURTLE_SPEC.md`, `README.md`, and `docs/ux/faq.md` for product law and the household path.
+Point to `TURTLE_SPEC.md`, `README.md`, and `docs/ux/faq.md` for the house and the dest.
 
 ---
 
-## Optional — a household (after first success)
+## Optional — a shared room (second pass today)
 
-Install is one river. A second adult and a shared room are a second pass, still on this server. Confirm the other adult has a **registered** Discord account. Discord’s age floor where they live applies (16 in Germany / the EU). Do not use a guest or unclaimed session, and do not create accounts for children who cannot join Discord.
+First success is one private river. The destination is that **community** exists at install. Until that ships, a shared room on this server is a second pass.
 
-In the administrator’s river:
+A second adult needs their own Discord account and joins **this** server. That join is membership: they get a private river, and if a shared room already exists they are seated in it. Discord’s age floor where they live applies (16 in Germany / the EU). Do not use a guest or unclaimed session.
+
+`!admin invite` is only if you want a claim room before they arrive:
 
 ```
 !admin
 !admin invite <name> <emoji> en --member @them
 ```
 
-They open the link, claim `#river-<name>`, and talk to Turtle there. Then a shared room:
+To create the shared room today:
 
 ```
 !admin space create family --members @you @them --context family --policy members_only

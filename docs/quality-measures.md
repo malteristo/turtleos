@@ -214,6 +214,7 @@ Append-only. One row per defect, dated by the commit that introduced it.
 | 2026-08-18 | §3.2 packet persistence named; `current.yaml` debounce was the only write | 2026-08-11 | 7 days | declaration with no mechanism |
 | 2026-08-18 | Artifacts the save tool wrote to `state/notes/` never reached the reviewer; the Forge pull took `navigator-*.md` only | 2026-06-29 | 50 days | reader allowlist narrower than the writer |
 | 2026-08-18 | A second spec→module index lived inside `ARCHITECTURE.md` — 26 rows, a spec version behind, one row still calling shipped work pending — through the consolidation whose stated job was to leave exactly one | 2026-06-20 | 59 days | duplicate enumerated by name, not by shape |
+| 2026-08-30 | Leave only logged; join told the operator to `!admin invite` | 2026-07-28 | 33 days | destination written as current topology |
 
 Two classes account for seven of nine. That is the finding this document was
 created to keep in view.

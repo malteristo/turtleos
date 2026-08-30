@@ -201,6 +201,14 @@ def collect_doctor_findings(
                 "⚠️ Member cache looks empty — enable **Server Members Intent** on River, "
                 "then `./restart.sh`. Check with `!admin members`."
             )
+        else:
+            from roster_sync import compute_roster_drift, format_roster_doctor_lines
+
+            drift = compute_roster_drift(
+                registry,
+                human_ids=[str(m.id) for m in humans],
+            )
+            findings.extend(format_roster_doctor_lines(drift))
 
     from space_provisioning import prune_orphaned_channels
 

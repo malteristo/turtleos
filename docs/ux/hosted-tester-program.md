@@ -2,7 +2,7 @@
 
 **Status:** Draft — friends & family beta (2026-06-24)  
 **Cohort language:** English only (product copy, onboarding, flows).  
-**Strategy:** Learn **Layer 1 UX** (River + eddies + Turtle) without sovereign install friction.  
+**Strategy:** Learn the rooms (River + eddies + Turtle) without sovereign install friction.  
 **Related:** [onboarding.md](onboarding.md) · [install-journey.md](install-journey.md) · TURTLE_SPEC §15 · [design-hosted-river.md](../chapters/design-hosted-river.md)
 
 ---
@@ -31,12 +31,12 @@ Sovereign install (Ollama, Discord apps, drivers, config) is a **parallel chapte
 
 ### Invite message (send to guest)
 
-> I set up a private **river** channel for you on Discord — personal AI that runs on my machine, but **your channel is yours**.
+> I set up a private **river** for you on Discord. It runs on my machine. The channel is yours.
 >
-> **River** (main channel) doesn’t chat like ChatGPT — you’ll see buttons and short acts. That’s normal.  
+> **River** (the main channel) does not chat in paragraphs — you will see buttons and short acts. That is normal.
 > **Eddies** are threads: click **`new eddy`**, send a message (that **names** the thread — no reply yet), then send a **second** message and **Turtle** replies there.
 >
-> Use it like any chat app — follow up, paste links, come back to threads later.
+> Follow up, paste links, come back to threads later.
 >
 > **Optional:** inside an eddy, open the **flow library** and pick **Feedback** anytime you want to tell me what worked or what didn’t.
 >

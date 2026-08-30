@@ -1,33 +1,22 @@
 # turtleOS
 
-**Family friendly AI.** It runs on a machine you own, and it is built to be in a room with people who love each other.
+**A place for practices** — each a channel with its own Turtle and River. It runs on a machine you own, in a Discord server you own.
 
-turtleOS runs on a machine you own and lives in a Discord server you own. Everyone in the household is a **member** — the person who installed it included. It holds the things a family keeps losing: the date nobody wrote down, the thing that was never resolved, the plan that lived in one person's head. And it is built, first, to know when to stay out of the way.
+The house has two rooms: a **private** channel that is only yours, and a **community** channel that is everyone’s. When someone joins the server, they get their private channel and they are already in community. When they leave, they are gone from turtleOS.
 
-Most assistants are designed for one person getting things done. This one is designed for several people who have to keep living with each other afterwards. That changes almost every decision in it.
+Craft, a relationship practice, a game — those are **practices you add**. Each sits on the same two primitives, solo or shared. The private channel and the community channel are not practices. They are the rooms the house comes with.
 
-**Care before operations.** The stance in full: [docs/design/family-care-operating-model.md](docs/design/family-care-operating-model.md)
+A practice is work you return to. It has a goal that outlives a chat, a place that holds the week, and a way of working that gets better because you did it again. turtleOS is that place, running: rooms you can walk into, a partner that talks in conversation, a record that stays on your hardware.
+
+*What a new install creates today is still one private river. Community at install is the remaining half of the house. Join already opens a private river and seats the person in a shared room if one exists. See the table below.*
+
+**Care before operations** — the stance this household runs: [docs/design/family-care-operating-model.md](docs/design/family-care-operating-model.md)  
+**The house:** [docs/design/practice-channels.md](docs/design/practice-channels.md)  
 **Canonical law:** [TURTLE_SPEC.md](TURTLE_SPEC.md)
 
 ---
 
-## Why restraint is the feature
-
-An assistant that is wrong about a task wastes a minute. An assistant that is wrong about a *moment* — that offers to organise your week while you are describing a hard night — teaches a family that the thing in the corner does not understand them, and they stop bringing it anything real.
-
-So the interesting engineering here is mostly refusal:
-
-- **It reads the register before it offers anything.** A structured "shall I turn this into a plan?" is welcome when you are sorting out logistics and unwelcome when you are not. That judgement is a model call, made fresh, and it **fails closed** — when the check cannot run, nothing is offered. The rule was added after measuring the alternative: across eight weeks of one real household, offers that misread the moment outnumbered the useful ones by a wide margin, and the take rate looked like disinterest when it was actually a register problem.
-- **It writes carefully, because the record outlives the conversation.** Notes are the durable part. So: no clinical or characterological labels, anywhere, in any language. One person's account of another is recorded as *their account*, never as established fact. In a heavy moment the note gets **shorter and plainer, not deeper** — it records what was said and what was left open, and does not diagnose anyone.
-- **It attributes.** In a shared room, notes name who said what and never merge two people into one voice. What the AI said stays the AI's, never retold as your realization.
-- **It carries its own age.** The standing rule for anything the system remembers and brings forward: say how old it is. "In motion since March" is honest; the same thing asserted in the present tense, six weeks stale, is not. This one is a standard the project is still finishing bringing every surface into line with — the most recent correction landed the week this was written.
-- **It is not a referee.** turtleOS witnesses; it does not adjudicate between members, and it is not built to. If you are looking for something to settle arguments, this is the wrong tool.
-
-None of this is aspirational copy. Each line above corresponds to a rule in the prompt layer or a gate in the code, most of them added *after* the running system got it wrong and the failure was measured.
-
----
-
-## How it works
+## The rooms
 
 ```
 River (a channel)                    Eddy (a thread)
@@ -43,39 +32,63 @@ Standing "new eddy" bar      →       Stays in your sidebar; return anytime
 | **River** | A channel | No — acts only: buttons, embeds, reactions, the chronicle |
 | **Turtle** | Eddies (threads) | Yes — the dialogue partner |
 
-Each member gets their own private river. A household can also have a **shared** river that several members are in at once — which is where the attribution and record rules above stop being theoretical.
+Each member has a private river. Community is the shared room. Turtle answers in both. A practice you add is another channel of the same kind.
 
-**Local models by default** (via Ollama): a small model for intake and action selection, a larger one (~30B class) for conversation. Cloud APIs are opt-in, per instance.
+---
 
-**What "private" does and does not mean here.** Your practice root — every note, every date, everything remembered — lives on your machine, and with local models the inference does too: no conversation is sent to a model provider unless you deliberately configure one. But **Discord is the transport**, so the messages themselves pass through and are stored by Discord like any other server you run. That is a real limit, and it is the honest trade for the thing that makes this usable at all: a family will actually open an app they already have. If Discord's involvement is unacceptable for your household, this is not the tool for you yet.
+## How Turtle holds a room
 
-**Relations, not roles.** Members are `household`, `kin`, or `guest`, and who can reach whom follows from that. A guest is the default; widening it is a deliberate act.
+These are rules in the prompt layer or gates in the code, most of them added after the running house got them wrong and the failure was measured.
+
+- **It reads the register before it offers anything.** A structured “shall I turn this into a plan?” belongs in logistics and not in a hard night. That judgement is a model call, made fresh, and it **fails closed** — when the check cannot run, nothing is offered.
+- **It writes carefully, because the record outlives the conversation.** No clinical or characterological labels, in any language. One person’s account of another is recorded as *their account*, never as established fact. In a heavy moment the note gets **shorter and plainer, not deeper**.
+- **It attributes.** In a shared room, notes name who said what and never merge two people into one voice. What Turtle said stays Turtle’s.
+- **It carries its own age.** Anything remembered and brought forward says how old it is. “In motion since March” is the form.
+- **It witnesses.** It does not adjudicate between members.
+
+---
+
+## The record
+
+**turtleOS is a practice root that’s yours and readable, running on a shell you can verify.**
+
+One practice root per member. Markdown is the contract; the Python shell is the engine. Notes, dates, and what a turn knew live on your machine. Local models (Ollama) are the default: a small model for intake, a larger one (~30B class) for conversation. Cloud APIs are opt-in.
+
+Discord is the door. The messages themselves pass through Discord, like any other server you run. The practice root does not.
+
+| Path | Purpose |
+|------|---------|
+| `character/` | Turtle's identity — soul, conduct |
+| `flows/` | Optional guided conversations |
+| `chronicle/` | Event log, offer ledger, record gaps |
+| `state/` | Notes, artifacts, what is currently in motion |
+| `story/` | Conversation and daily notes |
+
+See [template/README.md](template/README.md). What must stay a file: [TURTLE_SPEC.md](TURTLE_SPEC.md) §3.2.
+
+**Roster.** A human on the server is a turtleOS member. One without the other is an error. Among members, `household` or `kin` may say who can reach whom. They do not decide whether someone is a member.
+
+---
+
+## Members
+
+The people in a practice are not a test population.
+
+- **Even the administrator is a member** with additional rights.
+- **Non-participation is a valid answer.** A member who does not want a feature has given design input.
+- **Anything built *about* a member needs that member's voice**, not merely their data.
 
 ---
 
 ## What is live, and what is designed
 
-Honest status, because a family adopting this deserves to know which is which.
-
 | | |
 |---|---|
-| **Live** | Private and shared rivers · eddies with a persistent lifecycle bar · optional guided **flows** · **dates and reminders** captured from ordinary conversation, in English and German · working plans you can keep · per-conversation and daily notes · relations and reach · announcements to shared rivers |
-| **Designed, not built** | **Topics** — member-made threads that stay alive until members resolve them · a read-only **family surface** (the "fridge") · a derived, zero-input **household barometer**, symmetric by construction · kin spaces |
+| **Live** | One private river at install · optional shared rivers · join opens a private river and seats the person in an existing shared room · leave archives the river and drops the seat · `!admin doctor` reports Discord ≠ registry · eddies with a persistent lifecycle bar · optional guided **flows** · **dates and reminders** from ordinary conversation, in English and German · working plans · per-conversation and daily notes · relations and reach · announcements to shared rivers |
+| **Designed, not built** | Community created at install — [practice-channels.md](docs/design/practice-channels.md) · **Topics** that stay alive until members resolve them · a read-only household surface (the "fridge") · a derived, zero-input **household barometer** · kin spaces |
 | **Deliberately absent** | Engagement metrics · streaks · mood scoring · anything that ranks members against each other |
 
-The measure this project holds itself to is not usage. It is whether the practical business of a household gets lighter, and whether the people in it have a better time with each other. Those are hard to measure, which is a reason to be careful about the claim, not a reason to substitute an easy metric for it.
-
----
-
-## Members, not users
-
-The people in a household are not a test population.
-
-- **Even the administrator is a member** with additional rights, not a different species.
-- **Non-participation is a valid answer.** A member who doesn't want a feature has given design input, not a problem to be solved.
-- **Anything built *about* a member needs that member's voice**, not merely their data.
-
-This is written down because it is easy to agree with and easy to violate the first time a feature would be more convenient without it.
+The measure is whether the practical business of a household gets lighter, and whether the people in it have a better time with each other.
 
 ---
 
@@ -94,7 +107,7 @@ No cloud API key needed for the default path.
 
 If you use Claude Code, Codex, or similar, hand your agent the install skill:
 
-**[docs/install/SKILL.md](docs/install/SKILL.md)** — clone → practice root → models → Discord bot → running river → (optional) household.
+**[docs/install/SKILL.md](docs/install/SKILL.md)** — clone → practice root → models → Discord bot → running river. A shared room is still a second pass. The destination is private + community at install ([practice-channels.md](docs/design/practice-channels.md)).
 
 ### Manual install
 
@@ -132,9 +145,9 @@ python discord_bot.py
 
 Then, optionally: open the flow library inside an eddy and try **Navigator**. See [docs/ux/onboarding.md](docs/ux/onboarding.md).
 
-### A household
+### A household (shared practice — second pass today)
 
-First success is one member, one river. A household is a second pass, on the same server:
+First success is still one member, one private river. A shared room on the same server is a second pass. The destination is that community exists at install, and a relationship practice is a channel you add:
 
 1. Each adult who will practise needs their own Discord account. Discord’s age floor where you live applies — in Germany it is 16. Younger children are not members; a guest login is not a workaround.
 2. In your river, `!admin` then `!admin invite <name> <emoji> --member @them` for each adult.
@@ -143,24 +156,6 @@ First success is one member, one river. A household is a second pass, on the sam
 `!admin doctor` checks the house. Questions an administrator actually hits: [docs/ux/faq.md](docs/ux/faq.md).
 
 Install law in full: [TURTLE_SPEC.md](TURTLE_SPEC.md) §13. Hosted rivers and shared rooms: §15.
-
----
-
-## Practice root
-
-**turtleOS is a practice root that's yours and readable, running on a shell you can verify.**
-
-One per member. The practice root is the readable part you own; the repo is the shell that runs it. What must stay a file vs what may stay ephemeral is the readability contract in [TURTLE_SPEC.md](TURTLE_SPEC.md) §3.2 — its first test is persisting the context packet a turn used.
-
-| Path | Purpose |
-|------|---------|
-| `character/` | Turtle's identity — soul, conduct |
-| `flows/` | Optional guided conversations |
-| `chronicle/` | Event log, offer ledger, record gaps |
-| `state/` | Notes, artifacts, what is currently in motion |
-| `story/` | Conversation and daily notes |
-
-See [template/README.md](template/README.md).
 
 ---
 

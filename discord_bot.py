@@ -703,7 +703,8 @@ async def on_guild_channel_update(before, after):
 async def on_member_join(member):
     if member.bot:
         return
-    from river_keys import list_unclaimed_river_hints, try_auto_admit_on_member_join
+    from river_keys import try_auto_admit_on_member_join
+    from roster_sync import admit_on_join
 
     admitted = None
     try:
@@ -711,29 +712,23 @@ async def on_member_join(member):
     except Exception as exc:
         print(f"auto-admit on join failed for {member.name}: {exc}")
 
+    if not admitted:
+        try:
+            admitted = await admit_on_join(member)
+        except Exception as exc:
+            print(f"roster admit on join failed for {member.name}: {exc}")
+
     if admitted:
         await log_activity(
             f"New member joined: **{member.display_name}** ({member.name}). {admitted}",
             "\U0001f44b",
         )
     else:
-        pending = list_unclaimed_river_hints()
-        if pending:
-            hints = ", ".join(f"`{k}`" for k in pending[:8])
-            more = f" (+{len(pending) - 8} more)" if len(pending) > 8 else ""
-            await log_activity(
-                f"New member joined: **{member.display_name}** ({member.name}). "
-                f"Unclaimed rooms: {hints}{more}. "
-                f"If they cannot see their river: "
-                f"`!admin rivers admit <name> {member.name}`",
-                "\U0001f44b",
-            )
-        else:
-            await log_activity(
-                f"New member joined: **{member.display_name}** ({member.name}). "
-                f"Use `!admin invite <name> <emoji> --member {member.name}` to open their river.",
-                "\U0001f44b",
-            )
+        await log_activity(
+            f"New member joined: **{member.display_name}** ({member.name}). "
+            f"No membership change (other server, or admit failed — see logs).",
+            "\U0001f44b",
+        )
     print(f"New member joined: {member.name} (id: {member.id})")
 
 
@@ -741,8 +736,17 @@ async def on_member_join(member):
 async def on_member_remove(member):
     if member.bot:
         return
+    from roster_sync import depart_on_leave
+
+    departed = None
+    try:
+        departed = await depart_on_leave(member)
+    except Exception as exc:
+        print(f"roster depart on leave failed for {member.name}: {exc}")
+
+    detail = f" {departed}" if departed else ""
     await log_activity(
-        f"Member left: **{member.display_name}** ({member.name}).",
+        f"Member left: **{member.display_name}** ({member.name}).{detail}",
         "\U0001f6aa"
     )
     print(f"Member left: {member.name} (id: {member.id})")

@@ -2,6 +2,7 @@
 
 **Date:** 2026-08-17
 **Status:** Specification — decisions below are marked `decided` / `open` / `contradicts-prior`. **Open cells stay open.** Filling one with prose is a defect, not a completion.
+**Container (2026-08-30):** [practice-channels.md](../design/practice-channels.md) — solo/shared primitives, install pair, roster. This chapter names *kinds* of practice channel; that file names the house they sit in.
 **Spec reference (candidate):** TURTLE_SPEC §15 (shared spaces), §8 (eddies), §7.4 (attunement), §6.2 (river acts)
 **Supersedes:** [design-topic-channels.md](design-topic-channels.md) — its surface recommendation only; see § The overturn.
 **Origin:** an operator craft conversation on consistent terminology for users, 2026-08-16 – 2026-08-17. Target condition confirmed by the operator, revised once, direction held.
