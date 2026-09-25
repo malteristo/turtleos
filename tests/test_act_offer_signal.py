@@ -105,7 +105,7 @@ class TestMaybeOfferTurtleIntent(unittest.IsolatedAsyncioTestCase):
         channel.parent_id = 12345
 
         with patch("mage.river_bot_enabled", return_value=True), patch(
-            "prompts.uses_native_turtle_prompt", return_value=True
+            "prompts.river_posts_turtle_offers", return_value=True
         ), patch("eddy_spawn.is_awaiting_flow_intake", return_value=False), patch(
             "eddy_spawn.is_awaiting_title", return_value=False
         ), patch(
@@ -120,6 +120,62 @@ class TestMaybeOfferTurtleIntent(unittest.IsolatedAsyncioTestCase):
         post_mock.assert_awaited_once()
         kwargs = post_mock.await_args.kwargs
         self.assertIn("checkpoint", kwargs.get("description", "").lower())
+
+    async def _run_intent(self, channel, *, native, craft, post_mock):
+        with patch("mage.river_bot_enabled", return_value=True), patch(
+            "prompts.uses_native_turtle_prompt", return_value=native
+        ), patch("prompts.uses_craft_surface", return_value=craft), patch(
+            "eddy_spawn.is_awaiting_flow_intake", return_value=False
+        ), patch("eddy_spawn.is_awaiting_title", return_value=False), patch(
+            "eddy_lifecycle_bar.post_act_suggestion_row", new=post_mock
+        ):
+            return await res.maybe_offer_turtle_intent_after_turn(
+                channel, practitioner_message_id=1001
+            )
+
+    async def test_craft_parent_posts_even_when_not_native(self):
+        """The 2026-08-14 / 09-03 defect: craft Turtle queued; River never posted."""
+        aos.propose_act_offer(99, 1001, "checkpoint")
+        channel = MagicMock()
+        channel.id = 99
+        channel.name = "eddy"
+        channel.parent_id = 12345
+        post_mock = AsyncMock(return_value=MagicMock())
+
+        offered = await self._run_intent(channel, native=False, craft=True, post_mock=post_mock)
+
+        self.assertTrue(offered)
+        post_mock.assert_awaited_once()
+
+    async def test_health_parent_does_not_post(self):
+        aos.propose_act_offer(99, 1001, "checkpoint")
+        channel = MagicMock()
+        channel.id = 99
+        channel.name = "eddy"
+        channel.parent_id = 12345
+        recorded: list[tuple] = []
+        post_mock = AsyncMock(return_value=MagicMock())
+
+        with patch.object(
+            res, "_log_contextual_skip", lambda ch, kind, why: recorded.append((kind, why))
+        ):
+            offered = await self._run_intent(
+                channel, native=False, craft=False, post_mock=post_mock
+            )
+
+        self.assertFalse(offered)
+        post_mock.assert_not_awaited()
+        self.assertIn(("turtle_intent", "parent_not_offer_surface"), recorded)
+
+    async def test_old_native_only_gate_would_skip_craft(self):
+        """Positive control: the pre-lift gate fails the case we just shipped."""
+        from prompts import uses_native_turtle_prompt, river_posts_turtle_offers
+
+        with patch("prompts.uses_native_eddy", return_value=False), patch(
+            "prompts.uses_craft_surface", return_value=True
+        ):
+            self.assertFalse(uses_native_turtle_prompt(12345))
+            self.assertTrue(river_posts_turtle_offers(12345))
 
 
 if __name__ == "__main__":

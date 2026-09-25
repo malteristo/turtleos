@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from datetime import datetime, timezone
 
 import discord
@@ -25,6 +26,7 @@ from dialogue_attachments import (
     attachment_display_names,
     attachments_from_forward_chain,
     gather_dialogue_attachments,
+    intake_primitive_attachments,
 )
 from dialogue_message import (
     forward_source_ref,
@@ -63,6 +65,7 @@ from mage import get_pd, resolve_dialogue_channel_id
 from practice_io import read_thread_state
 from prompts import (
     get_craft_channel_prompt,
+    get_health_channel_prompt,
     get_native_eddy_prompt,
     get_system_prompt,
     get_thread_prompt,
@@ -86,8 +89,216 @@ from state import (
     thread_configs,
 )
 from thread_registry import register_thread, update_thread_activity
-from tos_tools import build_tool_report, execute_tos_tool, tools_for_channel
+from tos_tools import (
+    build_tool_report,
+    execute_tos_tool,
+    local_governed_tools_for_channel,
+    memory_tools_for_channel,
+    team_tools_for_channel,
+    tools_for_channel,
+)
 from triage import triage_message
+from turn_trace import (
+    CARD_EDIT_INTERVAL_SECONDS,
+    CARD_TICK_SECONDS,
+    PROGRESS_AFTER_SECONDS,
+    AttunementSteps,
+    Step,
+    attunement_step_list,
+    describe_tool,
+    prose_step,
+    render_card,
+    render_log,
+    render_trace,
+    tool_names,
+)
+
+# A message the prompt has already grown past: a link spill or an attachment
+# is in it, or the practitioner wrote at length. The room's topic memory then
+# renders compact (one excerpt per topic) — the memory is kept, its cost is
+# not doubled on the turns that are already the slow ones.
+COMPACT_TOPICS_MESSAGE_CHARS = int(os.environ.get("COMPACT_TOPICS_MESSAGE_CHARS", "4000"))
+
+
+class _StepCard:
+    """Show the turn working: one message in the channel, edited as steps happen.
+
+    Discord has no token stream; it has edits. The card is posted at the first
+    significant operation — a link or attachment already read, or the first
+    lookup the model makes — and otherwise only once the turn has run past
+    ``PROGRESS_AFTER_SECONDS``; a quick reply with nothing to show posts
+    nothing. While it runs, each lookup and each sentence the model wrote
+    before a lookup is appended, edits are spaced ``CARD_EDIT_INTERVAL_SECONDS``
+    apart so Discord is never asked to redraw faster than it will, and every
+    ``CARD_TICK_SECONDS`` the elapsed time is refreshed so a long compose is
+    visibly still alive.
+
+    ``full`` decides what the card becomes when the reply lands: on craft
+    surfaces and personal rooms it stays as the step list next to the answer
+    (the operator's ask: watch Turtle work, keep the record); in a shared room
+    it collapses to the one-line trace, so the room reads an answer and not a
+    process log. A Discord failure here never costs the turn.
+    """
+
+    def __init__(self, channel, steps: AttunementSteps, model: str, started: float,
+                 *, full: bool = False, after: float | None = None):
+        self.channel = channel
+        self.attunement = steps
+        self.model = model
+        self.started = started
+        self.full = full
+        self.after = PROGRESS_AFTER_SECONDS if after is None else after
+        self.steps: list[Step] = attunement_step_list(steps)
+        self.operations = bool(steps.links or steps.attachments or steps.dereferenced or steps.forwarded)
+        self.posted = None
+        self._timer = None
+        self._tick = None
+        self._pending_edit = None
+        self._last_edit = 0.0
+        self._closed = False
+
+    def _elapsed(self) -> float:
+        return time.monotonic() - self.started
+
+    def start(self) -> None:
+        if self.operations:
+            self._timer = asyncio.ensure_future(self._post())
+        elif self.after > 0:
+            self._timer = asyncio.ensure_future(self._post_after(self.after))
+
+    async def on_event(self, kind: str, payload: dict) -> None:
+        if self._closed:
+            return
+        if kind == "prose":
+            step = prose_step(str(payload.get("text") or ""))
+            if step:
+                self.steps.append(step)
+        elif kind == "tool":
+            self.steps.append(describe_tool(
+                str(payload.get("name") or ""), payload.get("args") or {}, str(payload.get("result") or "")
+            ))
+        else:
+            return
+        if self.posted is None:
+            if self._timer is not None and not self._timer.done():
+                self._timer.cancel()
+            await self._post()
+        else:
+            self._request_edit()
+
+    async def _post_after(self, delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+            await self._post()
+        except asyncio.CancelledError:
+            raise
+
+    async def _post(self) -> None:
+        if self.posted is not None or self._closed:
+            return
+        try:
+            self.posted = await self.channel.send(render_card(self.steps, self._elapsed(), self.model))
+            self._last_edit = time.monotonic()
+            if CARD_TICK_SECONDS > 0:
+                self._tick = asyncio.ensure_future(self._tick_loop())
+        except Exception as exc:
+            print(f"Step card post failed: {type(exc).__name__}: {exc}")
+
+    def _request_edit(self) -> None:
+        if self._pending_edit is not None and not self._pending_edit.done():
+            return  # the pending edit renders whatever has accumulated by then
+        wait = max(0.0, self._last_edit + CARD_EDIT_INTERVAL_SECONDS - time.monotonic())
+        self._pending_edit = asyncio.ensure_future(self._edit_after(wait))
+
+    async def _edit_after(self, wait: float) -> None:
+        try:
+            if wait:
+                await asyncio.sleep(wait)
+            if self._closed or self.posted is None:
+                return
+            await self.posted.edit(content=render_card(self.steps, self._elapsed(), self.model))
+            self._last_edit = time.monotonic()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"Step card edit failed: {type(exc).__name__}: {exc}")
+
+    async def _tick_loop(self) -> None:
+        try:
+            while not self._closed:
+                await asyncio.sleep(CARD_TICK_SECONDS)
+                if not self._closed:
+                    self._request_edit()
+        except asyncio.CancelledError:
+            raise
+
+    async def settle(self, tools_executed) -> None:
+        self._closed = True
+        for task in (self._timer, self._tick, self._pending_edit):
+            if task is not None and not task.done():
+                task.cancel()
+        if self.posted is None:
+            return
+        try:
+            if self.full:
+                content = render_card(self.steps, self._elapsed(), self.model, done=True)
+            else:
+                content = render_trace(self.attunement, self._elapsed(), self.model, tool_names(tools_executed))
+            await self.posted.edit(content=content)
+        except Exception as exc:
+            print(f"Step card close failed: {type(exc).__name__}: {exc}")
+
+
+# How many model calls the local remembering loop may spend. Two: one to look,
+# one to answer. `LOCAL_MEMORY_TOOLS=0` switches the loop off entirely.
+LOCAL_MEMORY_TOOL_ROUNDS = int(os.environ.get("LOCAL_MEMORY_TOOL_ROUNDS", "2"))
+LOCAL_TEAM_TOOL_ROUNDS = int(os.environ.get("LOCAL_TEAM_TOOL_ROUNDS", "3"))
+
+
+def local_memory_tools(parent_channel_id) -> list[dict]:
+    """The remembering pair for a local-model turn, or [] when it has nothing to read.
+
+    Offered only when the room's memory has been built (``memory/topics.yaml``
+    exists under the practice root). A room without one keeps the plain call —
+    the tools would find nothing the packet did not already carry, and the
+    loop costs a non-streaming round trip.
+    """
+    if os.environ.get("LOCAL_MEMORY_TOOLS", "1").strip() in {"0", "false", "no", "off"}:
+        return []
+    try:
+        from memory_agent import memory_dir, TOPICS_YAML
+
+        if not (memory_dir(get_pd()) / TOPICS_YAML).exists():
+            return []
+        return memory_tools_for_channel(parent_channel_id)
+    except Exception as exc:
+        print(f"Local memory tools unavailable: {type(exc).__name__}: {exc}")
+        return []
+
+
+def local_turn_tools(parent_channel_id) -> tuple[list[dict], int]:
+    """Capability-scoped local tools; governed state works without an API model.
+
+    Memory pair (when a memory is built) + team tools + the room's governed
+    tools. The governed set is what a health room on the local model was
+    missing until 2026-09-21: the catalog offered `recap_health_visit`, this
+    function did not, and the rules text promised a write that could not land.
+    """
+    tools = list(local_memory_tools(parent_channel_id))
+    governed = list(team_tools_for_channel(parent_channel_id))
+    governed.extend(local_governed_tools_for_channel(parent_channel_id))
+    names = {
+        (item.get("function") or {}).get("name") or item.get("name")
+        for item in tools
+    }
+    for item in governed:
+        name = (item.get("function") or {}).get("name") or item.get("name")
+        if name in names:
+            continue
+        names.add(name)
+        tools.append(item)
+    rounds = LOCAL_TEAM_TOOL_ROUNDS if governed else LOCAL_MEMORY_TOOL_ROUNDS
+    return tools, rounds
 
 # Last resort, and it should now be genuinely rare: the model is unreachable
 # rather than merely slow. Turtle's own voice, no traceback — a practitioner
@@ -144,13 +355,69 @@ async def handle_dialogue(message, *, reply: bool = True):
             return
 
     channel_id = message.channel.id
-    attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (
-        await gather_dialogue_attachments(message)
+    parent_ch_id = resolve_dialogue_channel_id(message)
+    from mage import (
+        address_for_mage_key,
+        channel_has_capability,
+        get_actor_key,
+        get_channel_primitive,
     )
+    from team_lanes import bind_current_eddy, gate_lane_turn
+
+    bind_current_eddy(
+        channel_id if isinstance(message.channel, discord.Thread) else None
+    )
+    if isinstance(message.channel, discord.Thread):
+        lane_gate = gate_lane_turn(
+            channel_id,
+            actor=get_actor_key(),
+            primitive=get_channel_primitive(parent_ch_id),
+        )
+        if not lane_gate.allowed:
+            owner = address_for_mage_key(lane_gate.owner) if lane_gate.owner else "another member"
+            await message.reply(
+                f"This is {owner}'s lane. You may read it, but continue from "
+                "your own eddy so both paths can advance independently.",
+                mention_author=False,
+            )
+            print(
+                f"Team lane turn refused [{channel_id}]: {lane_gate.reason}"
+            )
+            return
+
+    intake_context = ""
+    if channel_has_capability(parent_ch_id, "source_intake") and message.attachments:
+        intake_results, intake_context = await intake_primitive_attachments(
+            message,
+            parent_ch_id,
+            practice_dir=get_pd(),
+            actor=get_actor_key() or "unknown",
+        )
+        raw_attachments = list(message.attachments)
+        attachments = []
+        attachment_names = [result.filename for result in intake_results]
+        attachment_source = "primitive source store"
+        states = ", ".join(
+            f"{result.filename}: {result.status}" for result in intake_results
+        )
+        attachment_note = f" [record intake: {states}]"
+    else:
+        attachments, attachment_names, attachment_note, raw_attachments, attachment_source = (
+            await gather_dialogue_attachments(message)
+        )
     # Discord converts pastes over the character limit into message.txt (often
     # with an empty body). Fold text attachments into the practitioner content
     # so triage/history see the article, not "(attachment: message.txt)".
     text_atts, vision_atts = split_text_and_vision_attachments(attachments)
+    if channel_has_capability(parent_ch_id, "source_intake") and vision_atts:
+        # A reply-parent attachment was readable for this turn but was not the
+        # direct upload persisted above. Never send sensitive bytes to Gemini.
+        skipped = ", ".join(filename for _, _, filename in vision_atts)
+        attachment_note += (
+            f" [record attachment not imported from reply ({skipped}); "
+            "upload it directly in this eddy]"
+        )
+        vision_atts = []
     if text_atts:
         primary, extras = format_text_attachments_for_dialogue(text_atts)
         if primary:
@@ -170,7 +437,6 @@ async def handle_dialogue(message, *, reply: bool = True):
         attachment_names = [fn for _, _, fn in vision_atts]
     if not visible_content.strip() and raw_attachments:
         visible_content = f"(attachment: {attachment_display_names(raw_attachments)})"
-    parent_ch_id = resolve_dialogue_channel_id(message)
     native_eddy = isinstance(message.channel, discord.Thread) and uses_native_turtle_prompt(parent_ch_id)
 
     if native_eddy:
@@ -254,6 +520,8 @@ async def handle_dialogue(message, *, reply: bool = True):
 
     # Include fetched content in history so it persists across turns
     user_entry = f"[{message.author.display_name}]: {visible_content}{attachment_note}"
+    if intake_context:
+        user_entry += f"\n\n[Locally extracted record evidence]:\n{intake_context}"
     if url_content:
         user_entry += f"\n\n[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
     if dereferenced_context:
@@ -361,6 +629,7 @@ async def continue_dialogue_turn(
     pending_incidental_urls: list[str] | None = None,
 ):
     channel_id = message.channel.id
+    turn_started = time.monotonic()
     now = datetime.now(timezone.utc)
     is_new_session = channel_id not in active_sessions or active_sessions[channel_id]["closed"]
     if channel_id not in active_sessions:
@@ -386,11 +655,31 @@ async def continue_dialogue_turn(
         # INT-023: Context loads silently. Healthy state needs no announcement.
 
     parent_ch_id = resolve_dialogue_channel_id(message)
-    from mage import uses_craft_surface, get_channel_default_context
+    from mage import (
+        get_actor_key,
+        get_channel_default_context,
+        get_channel_primitive,
+        get_registry,
+    )
+    from health_room import vet_health_reply
+    from primitive_runtime import runtime_for
 
-    craft_surface = uses_craft_surface(parent_ch_id)
+    primitive = get_channel_primitive(parent_ch_id)
+    primitive_runtime = runtime_for(primitive)
+    prompt_profile = (
+        primitive_runtime.prompt_profile if primitive_runtime else "native"
+    )
+    craft_surface = bool(
+        primitive_runtime and primitive_runtime.parent_handler == "craft_intake"
+    )
+    health_surface = bool(
+        primitive and primitive.data_policy == "sensitive_local"
+    )
+    exclude_shared_memory = bool(
+        primitive and primitive.memory_boundary == "personal_without_shared"
+    )
     cfg = thread_configs.get(channel_id)
-    if native_eddy:
+    if prompt_profile == "native" and native_eddy:
         from eddy_spawn import hydrate_native_eddy_context
 
         parent_for_hydrate = (
@@ -406,7 +695,7 @@ async def continue_dialogue_turn(
         system_prompt = get_native_eddy_prompt(ctx)
         thread_use_api = False
         thread_model = (cfg or {}).get("model") or TURTLE_MODEL
-    elif craft_surface:
+    elif prompt_profile == "craft":
         from llm import resolve_model
 
         ctx = (cfg or {}).get("context_type") if cfg else None
@@ -424,6 +713,13 @@ async def continue_dialogue_turn(
             thread_model, thread_use_api = resolve_model(cfg["model"])
         else:
             thread_model, thread_use_api = resolve_model(CRAFT_MODEL)
+    elif prompt_profile == "health":
+        ctx = (cfg or {}).get("context_type") if cfg else None
+        if not ctx:
+            ctx = get_channel_default_context(parent_ch_id) or "health"
+        system_prompt = get_health_channel_prompt(ctx)
+        thread_use_api = USE_API
+        thread_model = DIALOGUE_MODEL
     elif cfg:
         ctx = cfg.get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
@@ -475,11 +771,13 @@ async def continue_dialogue_turn(
     # Declared outside the try so a CE failure leaves an empty candidate list
     # rather than an undefined name at persist time.
     room_memory_considered: list[dict] = []
+    topics_considered: list[dict] = []
     try:
         from continuity_engine import get_scope, render_substrate_packet
 
         pd = get_pd()
         scope = get_scope(pd, channel_id)
+        message_text = str(getattr(message, "content", "") or "")
         current_block = render_substrate_packet(
             pd,
             dialogue_model=thread_model,
@@ -487,6 +785,11 @@ async def continue_dialogue_turn(
             scope=scope,
             current_thread=str(channel_id),
             considered=room_memory_considered,
+            message_text=message_text,
+            topics_considered=topics_considered,
+            compact_topics=bool(url_content) or bool(attachments)
+            or len(message_text) > COMPACT_TOPICS_MESSAGE_CHARS,
+            exclude_shared_rooms=exclude_shared_memory,
         )
         if current_block:
             system_prompt = current_block + system_prompt
@@ -543,8 +846,29 @@ async def continue_dialogue_turn(
 
     from act_offer_signal import act_offer_turn_context, extract_and_propose_from_reply
 
+    steps = AttunementSteps(
+        links=(url_source_count or len(urls)) if url_content else 0,
+        link_chars=len(url_content or ""),
+        attachments=list(attachment_names or []),
+        forwarded=bool(forwarded_context),
+        dereferenced=dereferenced_count or 0,
+        topics=[str(t.get("label")) for t in topics_considered if t.get("selected")],
+        room_notes=sum(1 for n in room_memory_considered if n.get("selected")),
+        home_plan=bool(home_block),
+        absorbed_threads=len(contexts) if contexts and not cfg else 0,
+        prompt_chars=len(system_prompt),
+    )
+    try:
+        from mage import space_members_for_practice_dir
+
+        card_full = bool(craft_surface) or not space_members_for_practice_dir(get_pd())
+    except Exception:
+        card_full = False  # unknown room → the shared-room shape
+    progress = _StepCard(message.channel, steps, thread_model, turn_started, full=card_full)
+
     async with message.channel.typing():
         with act_offer_turn_context(channel_id, message.id):
+            progress.start()
             if native_eddy:
                 try:
                     await ensure_native_presence(message.channel)
@@ -584,27 +908,43 @@ async def continue_dialogue_turn(
                     if thread_use_api:
                         reply, tools_executed = await chat_anthropic_with_model(
                             system_prompt, messages_for_llm, thread_model, use_tools=True,
-                            tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool)
+                            tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
+                            on_event=progress.on_event)
                         tool_report = build_tool_report(tools_executed)
                     else:
                         reply, tools_executed = await chat_ollama_with_tools(
                             system_prompt, messages_for_llm, model_override=thread_model,
-                            tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool)
+                            tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
+                            on_event=progress.on_event)
                         tool_report = build_tool_report(tools_executed)
                 elif thread_use_api:
                     reply, tools_executed = await chat_anthropic_with_model(
                         system_prompt, messages_for_llm, thread_model, use_tools=True,
-                        tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool)
+                        tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
+                        on_event=progress.on_event)
                     tool_report = build_tool_report(tools_executed)
                 else:
-                    # Direct commands are handled before dialogue. For ordinary
-                    # local replies, avoid the conversational tool loop so Qwen
-                    # does not spend turns searching or routing while Discord waits.
+                    # Direct commands are handled before dialogue. The full
+                    # tool loop stays off here so a local model does not spend
+                    # turns routing while Discord waits — but a room whose
+                    # memory has been built gets the read-only remembering pair
+                    # (memory_tools_for_channel) with a two-round cap, so "what
+                    # do you remember about…" can be answered by looking rather
+                    # than by narrating a look (2026-09-01). Rooms without a
+                    # built memory keep the plain call.
                     # Act offers: use [[act-offer:…]] trailer (stripped before send).
-                    reply = await chat_ollama(
-                        system_prompt, messages_for_llm, model=thread_model,
-                        num_ctx=32768, think=False)
-                    tools_executed = []
+                    local_tools, local_rounds = local_turn_tools(parent_ch_id)
+                    if local_tools:
+                        reply, tools_executed = await chat_ollama_with_tools(
+                            system_prompt, messages_for_llm, model_override=thread_model,
+                            tos_tools=local_tools, execute_tool=execute_tos_tool,
+                            max_rounds=local_rounds, on_event=progress.on_event)
+                        tool_report = build_tool_report(tools_executed)
+                    else:
+                        reply = await chat_ollama(
+                            system_prompt, messages_for_llm, model=thread_model,
+                            num_ctx=32768, think=False)
+                        tools_executed = []
 
                 if not reply:
                     reply = "(no response generated)"
@@ -632,6 +972,8 @@ async def continue_dialogue_turn(
                 if not reply:
                     reply = TURN_UNAVAILABLE_REPLY
                     print(f"Dialogue gave up [{channel_id}] — held reply posted")
+            finally:
+                await progress.settle(tools_executed)
 
     # Persist the inject this turn used. Not current.yaml — that file already
     # exists from CE's debounce write. The packet is the named blocks that
@@ -652,11 +994,29 @@ async def continue_dialogue_turn(
                 "forwarded_messages": forwarded_context,
                 "discord_context": dereferenced_context,
             },
-            considered=room_memory_considered,
+            considered=room_memory_considered + [
+                {"topic": t.get("topic"), "title": f"topic: {t.get('label')}",
+                 "when": t.get("last_seen"), "heat": t.get("heat"),
+                 "selected": t.get("selected")}
+                for t in topics_considered
+            ],
             tools_executed=tools_executed,
         )
     except Exception as exc:
         print(f"Turn packet persist failed: {type(exc).__name__}: {exc}")
+
+    try:
+        from continuity_open import persist_first_exchange
+
+        persist_first_exchange(
+            get_pd(),
+            channel_id,
+            practitioner_text=str(getattr(message, "content", "") or ""),
+            turtle_text=reply,
+            thread_loaded=bool(current_block),
+        )
+    except Exception as exc:
+        print(f"Continuity open persist failed: {type(exc).__name__}: {exc}")
 
     # Detect and remove repeated paragraphs before sending
     paragraphs = reply.split("\n\n")
@@ -673,6 +1033,8 @@ async def continue_dialogue_turn(
             print(f"Dedup: removed {len(paragraphs) - len(deduped)} repeated paragraphs")
             reply = "\n\n".join(deduped)
 
+    if health_surface:
+        reply = vet_health_reply(reply)
     if native_eddy:
         from flow_runner import apply_flow_reply_guard, strip_model_operational_lines
 
@@ -683,6 +1045,41 @@ async def continue_dialogue_turn(
         reply, guard_notes = apply_flow_reply_guard(reply, flow_id, history)
         if guard_notes:
             print(f"Flow reply guard: {guard_notes}")
+        if (
+            flow_id == "dnd_dm"
+            and primitive
+            and primitive.has("member_lanes")
+            and reply != TURN_UNAVAILABLE_REPLY
+        ):
+            try:
+                from campaign_state import extract_scene_boundary, record_turn
+
+                actor = get_actor_key()
+                if not actor:
+                    raise PermissionError("campaign turn has no registered actor")
+                reply, scene_boundary = extract_scene_boundary(reply)
+                recorded = record_turn(
+                    get_pd(),
+                    primitive=primitive,
+                    actor=actor,
+                    thread_id=channel_id,
+                    player_text=str(getattr(message, "content", "") or ""),
+                    turtle_text=reply,
+                    scene_boundary=scene_boundary,
+                )
+                print(
+                    f"Campaign event {recorded['event']['event_id']} "
+                    f"persisted for {actor}"
+                )
+            except Exception as exc:
+                print(
+                    f"Campaign turn held before send: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                reply = (
+                    "*The scene holds for a moment; this turn could not be "
+                    "written into the shared story, so nothing advances yet.*"
+                )
     # Structured River act offer (tool and/or [[act-offer:…]] trailer) — never visible in Discord.
     reply, act_intent = extract_and_propose_from_reply(reply, channel_id, message.id)
     if act_intent:
@@ -701,8 +1098,37 @@ async def continue_dialogue_turn(
     history.append({"role": "assistant", "content": reply})
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
-    if native_eddy:
-        print(f"Native Turtle reply sent [{message.channel.name}]: {len(reply)} chars")
+    if (
+        primitive
+        and primitive.has("intersection_state")
+        and isinstance(message.channel, discord.Thread)
+    ):
+        from team_federation import mark_offered_delivered
+
+        delivered = mark_offered_delivered()
+        if delivered:
+            print(
+                f"Team federation delivered {delivered} sibling event(s) "
+                f"to eddy {channel_id}"
+            )
+    if health_surface:
+        try:
+            from health_record_ui import post_pending_health_proposals
+
+            primitive = get_channel_primitive(parent_ch_id)
+            if primitive and primitive.subject:
+                await post_pending_health_proposals(
+                    message.channel,
+                    get_pd(),
+                    subject=primitive.subject,
+                    registry=get_registry(),
+                )
+        except Exception as exc:
+            print(f"Health proposal UI failed: {type(exc).__name__}: {exc}")
+    print(render_log(
+        message.channel.name, steps, time.monotonic() - turn_started, thread_model,
+        len(reply), tool_names(tools_executed),
+    ))
 
     # Super-ego: think aloud after sustained conversation
     asyncio.ensure_future(maybe_reflect(message.channel, history))
@@ -727,7 +1153,9 @@ async def continue_dialogue_turn(
                 eddy = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
                 register_thread(
                     message.channel.id, message.channel.name,
-                    parent_channel=parent_name, model=model_label,
+                    parent_channel=parent_name,
+                    parent_channel_id=message.channel.parent_id,
+                    model=model_label,
                     attunement=att, context_type=ctx_type, eddy_type=eddy,
                 )
                 update_thread_activity(message.channel.id)

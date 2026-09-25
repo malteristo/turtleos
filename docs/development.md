@@ -27,6 +27,14 @@ Chapter pattern:
 4. **Document operation** — Update `ARCHITECTURE.md`, operator docs, prompts, skills, or procedures so the implementation can be used and rebuilt.
 5. **Verify by consequence** — Run checks proportionate to the blast radius. **Spirit quick gate:** `./scripts/spirit_verify.sh` (full unit suite). Chapter-close: relevant `shake_*.py` per [functional-gate-protocol.md](automation/functional-gate-protocol.md).
 6. **Harvest** — Record what the chapter taught: what pattern should repeat, what remains intentionally deferred, and what future authority would require.
+7. **Integration close** — Ask what the hands-on work exposed that the plan did
+   not name, then trace downstream through spec/architecture, runtime consumers,
+   configuration and examples, tests and positive controls, operations/live
+   state, and the practice that uses the change. Integrate clear remainder now;
+   otherwise record owner + next condition, a deliberate no-action reason, or
+   the exact sanction needed. A clean pass is valid; an unplaced finding is not.
+   Private practice updates belong to the operating practice, not this public
+   repository.
 
 Example chapter: the read-only live update surface. The tension was safe updates for a live shell. The spec defines inspect/propose/heal authority in `TURTLE_SPEC.md` §20. The implemented slice stops at `update check/plan`, with tests and canary source coverage, while automated apply/restart remains outside operator default authority.
 

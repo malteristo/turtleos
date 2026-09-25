@@ -151,6 +151,10 @@ the first cut: `docs/chapters/design-layer-boundaries.md`.
 | 2026-08-15 | 95 | 3 | 7 | 47034 | 22658 | 0.48 | 1325 | 46 | 2 | 241 |
 | 2026-08-15 | 95 | 3 | 7 | 47256 | 22829 | 0.48 | 1334 | 46 | 2 | 241 |
 | 2026-08-15 | 84 | 4 | 7 | 47227 | 23004 | 0.49 | 1340 | 46 | 2 | 241 |
+| 2026-09-03 | 94 | 4 | 7 | 52053 | 27086 | 0.52 | 1585 | 49 | 2 | 241 |
+| 2026-09-07 | 109 | 4 | 10 | 59398 | 30232 | 0.51 | 1721 | 51 | 2 | 241 |
+| 2026-09-13 | 112 | 4 | 10 | 61994 | 31969 | 0.52 | 1804 | 51 | 2 | 241 |
+| 2026-09-16 | 117 | 4 | 10 | 63206 | 33280 | 0.53 | 1896 | 51 | 2 | 241 |
 
 The 2026-08-15 row is the first tests-collected number this table can defend.
 Until that morning `_test_count` read the digit out of pytest's summary line and
@@ -215,6 +219,22 @@ Append-only. One row per defect, dated by the commit that introduced it.
 | 2026-08-18 | Artifacts the save tool wrote to `state/notes/` never reached the reviewer; the Forge pull took `navigator-*.md` only | 2026-06-29 | 50 days | reader allowlist narrower than the writer |
 | 2026-08-18 | A second spec→module index lived inside `ARCHITECTURE.md` — 26 rows, a spec version behind, one row still calling shipped work pending — through the consolidation whose stated job was to leave exactly one | 2026-06-20 | 59 days | duplicate enumerated by name, not by shape |
 | 2026-08-30 | Leave only logged; join told the operator to `!admin invite` | 2026-07-28 | 33 days | destination written as current topology |
+| 2026-09-03 | Room memory read only the last 7 days; a topic with 30 notes behind it reached the packet 0 times once its newest note was 7.5 days old | 2026-07-29 | 36 days | window where recurrence was meant |
+| 2026-09-03 | Local-model turns had no tool loop; Turtle narrated "checking the history" with no way to check | 2026-03 (approx) | ~180 days | narration unbound from action |
+| 2026-09-03 | `state/alive.yaml` written on every checkpoint, read by no turn since 2026-08-05 — the "alive topics" a member asked for existed as write-only state | 2026-08-05 | 29 days | write-only artifact |
+| 2026-09-04 | Step card showed `ToolResult[blocked]` and dropped the Exa query; the first live watch could not read what was asked | 2026-09-03 `c6d9c7e` | ~15 hours | generic result preview where the ask was meant |
+| 2026-09-04 | Live Turtle reply printed `$\rightarrow$` as literal LaTeX | 2026-09-01 (intake) | 3 days | model dialect sent on a transport that has no math mode |
+| 2026-09-07 | `dnd_dm` told Turtle to maintain campaign state; world, scene, consequences and player files remained empty while only a transcript checkpoint changed | 2026-07-03 (first live campaign) | 66 days | declaration with no mechanism |
+| 2026-09-10 | Quiet-window deploy and full-draft professional mail lived in Magic's Seal; the production Craft prompt (and every key-eval condition) never carried them | 2026-08-15 (deploy) / 2026-08-25 (mail) | 26 / 16 days | rule written on the mouth that does not read it |
+| 2026-09-12 | First blank-eddy message renamed the thread and Turtle stayed silent | 2026-06 (split-bot first-message return) | ~80 days | destination held on a path the live process does not take |
+| 2026-09-13 | Craft Turtle announced a checkpoint button River was gated from posting | 2026-08-08 (first orphaned craft act-offer) / found 2026-08-14 | 30 days to find, 30 more to lift | announcement bound to a gate the announced surface cannot pass |
+| 2026-09-13 | Nightly ops never opened `discord.log` / `river.log` | named 2026-08-14 | 30 days after naming | a log nobody reads is not an instrument |
+| 2026-09-13 | `*reflects*` posted `(no response generated)` | 2026-08-15 | 29 days | length floor treating a sentinel as content |
+| 2026-09-13 | First blank-eddy message answered twice (inbound + handoff) | 2026-09-12 `755c26f` | ~1 day | a fallback that still fires when the primary path already ran |
+| 2026-09-13 | Recommended Turtle was 27B-class, then 31B-only; ~15 GB could not hold it | 2026-08-24 Reed run 1 | 20 days | destination written as a fork, then left unnamed |
+| 2026-09-13 | Continuity claim (adaptive attunement, ambient River, navigable twine) had no eddy-open record | CE era / named today | months | declaration with no mechanism |
+| 2026-09-21 | Health rules said "call `recap_health_visit` so it sticks"; the local-model path offered a health room no tool at all. Ten evening prompts, one spoken recap, zero writes | 2026-09-17 `ee8b7c5` | 4 days | the catalog was tested, not the path the room runs |
+| 2026-09-21 | Craft intake dereference died on `_MissingSentinel.is_set` in River; the WRONG-CLIENT detector said so 18 times in `river.log` and the nightly log-watch had no class for it and dropped untimestamped stderr lines at the window cut | 2026-09-16 | 5 days | a detector the reader cannot see |
 
 Two classes account for seven of nine. That is the finding this document was
 created to keep in view.

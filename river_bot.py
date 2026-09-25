@@ -42,6 +42,10 @@ import discord
 
 from mage import (
     get_attunement_profile,
+    get_actor_key,
+    get_current_channel_primitive,
+    get_pd,
+    get_runtime_dir,
     is_practice_channel,
     is_river_message,
     maybe_reload_mage_registry,
@@ -50,7 +54,8 @@ from mage import (
     set_practice_context_for_channel,
 )
 from mage import _get_channel_type
-from river_handler import ensure_river_eddy_bar, handle_eddy_first_message, handle_river_message
+from first_eddy_handoff import maybe_request_first_eddy_dialogue
+from river_handler import ensure_river_eddy_bar, handle_eddy_first_message
 from hosted_river_onboarding import ensure_hosted_river_onboarding
 from river_keys import try_river_key_claim
 from river_state import river_bot_token, river_client
@@ -236,6 +241,28 @@ async def on_message(message: discord.Message):
         parent_id = message.channel.parent_id
         if not parent_id:
             return
+        from eddy_lifecycle_bar import (
+            is_ellipsis_glance,
+            is_go_breath,
+            post_ellipsis_glance,
+            post_ellipsis_memory,
+        )
+
+        if is_ellipsis_glance(message.content):
+            await _ensure_turtle_in_eddy(message.channel)
+            try:
+                await post_ellipsis_glance(message.channel, river_client)
+            except Exception as exc:
+                print(f"Ellipsis glance failed: {type(exc).__name__}: {exc}")
+            await post_ellipsis_memory(message.channel, river_client)
+            return
+
+        if is_go_breath(message.content):
+            from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
+
+            await _ensure_turtle_in_eddy(message.channel)
+            await touch_eddy_lifecycle_bar(message, from_practitioner=True)
+            return
         from eddy_spawn import is_awaiting_title, is_awaiting_flow_intake
 
         if is_awaiting_flow_intake(message.channel.id, parent_id):
@@ -247,6 +274,9 @@ async def on_message(message: discord.Message):
             lock = get_channel_lock(message.channel.id)
             async with lock:
                 renamed = await handle_eddy_first_message(message)
+                maybe_request_first_eddy_dialogue(
+                    message, renamed=renamed, runtime_dir=get_runtime_dir()
+                )
             from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
 
             await _ensure_turtle_in_eddy(message.channel)
@@ -278,9 +308,35 @@ async def on_message(message: discord.Message):
     set_practice_context(message)
     set_practice_context_for_channel(message.channel.id)
 
-    lock = get_channel_lock(message.channel.id)
-    async with lock:
-        await handle_river_message(message)
+    from bar_anchor import schedule_river_bar_reconcile
+    from craft_intake import schedule_craft_intake
+    from primitive_runtime import dispatch_parent_message
+    from river_handler import handle_river_message
+
+    primitive = get_current_channel_primitive()
+    if primitive is not None and primitive.name == "health":
+        from health_record_ui import maybe_capture_checkin
+        from helpers import local_now
+
+        async with get_channel_lock(message.channel.id):
+            if await maybe_capture_checkin(
+                message,
+                primitive,
+                practice_dir=get_pd(),
+                actor=get_actor_key(),
+                today=local_now().date(),
+            ):
+                return
+
+    await dispatch_parent_message(
+        message,
+        river_client,
+        primitive,
+        lock=get_channel_lock(message.channel.id),
+        craft_handler=schedule_craft_intake,
+        river_handler=handle_river_message,
+        reconcile_bar=schedule_river_bar_reconcile,
+    )
 
 
 def main() -> None:
@@ -297,9 +353,12 @@ def main() -> None:
         return
 
     _ensure_single_instance()
-    logging.basicConfig(level=logging.WARNING, stream=sys.stdout, force=True)
+    from turn_trace import install_timestamps
+
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
+    install_timestamps()
+    logging.basicConfig(level=logging.WARNING, stream=sys.stdout, force=True)
     river_client.run(token)
 
 

@@ -1,0 +1,16 @@
+{
+  "id": "b-aged-carry",
+  "expect_b": false,
+  "held": [
+    {
+      "fact": "the garden shed lock",
+      "current": false,
+      "last_true": "2026-07-16"
+    },
+    {
+      "fact": "the kettle is on the stove",
+      "current": true
+    }
+  ],
+  "transcript": "Last noted the garden shed lock on 16 July (three weeks ago). The kettle is on the stove."
+}

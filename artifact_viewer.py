@@ -57,6 +57,7 @@ SHELF_DEFS: tuple[Shelf, ...] = (
     Shelf("state", "State", "Continuity engine (current.yaml, notes)"),
     Shelf("intake", "Intake", "Your pasted captures"),
     Shelf("links", "Saved links", "Distilled URLs from `!fetch`"),
+    Shelf("artifacts", "Practice artifacts", "Long outputs made by this practice"),
     Shelf("proposals", "Proposals", "Host self-development notes (operator only)"),
     Shelf("craft", "Craft", "turtleOS backlog and the moves made on it (operator only)"),
 )
@@ -110,6 +111,10 @@ def is_artifact_readable(rel_path: str, *, mage_type: str | None = None) -> bool
         return True
     if rel.startswith("story/daily/") and rel.endswith(".md"):
         return True
+    # The memory agent's view of the story notes (memory_agent.py) — derived
+    # from Tier-1 corpus, so readable wherever the notes are.
+    if rel.startswith("memory/") and rel.endswith(".md"):
+        return True
     if rel.startswith("state/notes/") and rel.endswith(".md"):
         return True
     if rel.startswith("thread-archive/") and rel.endswith(".md"):
@@ -119,6 +124,8 @@ def is_artifact_readable(rel_path: str, *, mage_type: str | None = None) -> bool
     if rel == "state/current.yaml":
         return True
     if rel.startswith("box/intake/") and rel.endswith(".md"):
+        return True
+    if rel.startswith("artifacts/") and rel.endswith(".md"):
         return True
     if mage_type != "practitioner" and rel.startswith("proposals/") and rel.endswith(".md"):
         return True
@@ -139,9 +146,12 @@ def is_artifact_directory(rel_dir: str, *, mage_type: str | None = None) -> bool
         "story",
         "story/eddies",
         "story/daily",
+        "memory",
+        "memory/topics",
         "state/notes",
         "thread-archive",
         "box/intake",
+        "artifacts",
     )
     if rel_dir in allowed_prefixes:
         return True
@@ -264,6 +274,12 @@ def list_shelf_artifacts(shelf_key: str, *, mage_type: str | None = None) -> lis
             for name in sorted(os.listdir(base), reverse=True):
                 if name.endswith(".md"):
                     paths.append(f"box/intake/{name}")
+    elif key == "artifacts":
+        base = os.path.join(pd, "artifacts")
+        if os.path.isdir(base):
+            for name in sorted(os.listdir(base), reverse=True):
+                if name.endswith(".md"):
+                    paths.append(f"artifacts/{name}")
     elif key == "links":
         lr = _link_resonance_dir()
         if os.path.isdir(lr):
@@ -327,6 +343,8 @@ def shelf_title_for_path(path: str) -> str:
         return "Proposals"
     if path.startswith("craft/"):
         return "Craft"
+    if path.startswith("artifacts/"):
+        return "Practice artifacts"
     return "Artifact"
 
 

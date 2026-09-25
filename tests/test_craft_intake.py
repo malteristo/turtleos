@@ -3,6 +3,7 @@ import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 discord_mod = MagicMock()
@@ -103,7 +104,10 @@ class CraftIntakeChannelGateTests(unittest.TestCase):
         msg.author.bot = False
         msg.channel.id = 99001
         msg.channel.parent_id = None
-        with patch("mage.uses_craft_surface", return_value=True):
+        with patch(
+            "primitive_runtime.runtime_for",
+            return_value=SimpleNamespace(parent_handler="craft_intake"),
+        ):
             self.assertTrue(craft_intake.is_craft_intake_channel(msg))
 
     def test_craft_eddy_thread_is_not_intake(self) -> None:
@@ -111,7 +115,10 @@ class CraftIntakeChannelGateTests(unittest.TestCase):
         msg.author.bot = False
         msg.channel.id = 99002
         msg.channel.parent_id = 99001
-        with patch("mage.uses_craft_surface", return_value=True):
+        with patch(
+            "primitive_runtime.runtime_for",
+            return_value=SimpleNamespace(parent_handler="craft_intake"),
+        ):
             self.assertFalse(craft_intake.is_craft_intake_channel(msg))
 
 

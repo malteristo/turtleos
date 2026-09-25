@@ -49,6 +49,7 @@ def _threads() -> dict:
             "501": {
                 "name": "identity",
                 "parent_channel": "craft-turtle",
+                "parent_channel_id": "111",
                 "last_activity": fresh,
                 "message_count": 12,
                 "harvest_status": "pending",
@@ -99,16 +100,26 @@ class SurveyEddiesTests(unittest.TestCase):
             rows = space_survey.survey_eddies()
         self.assertEqual(len(rows), 3)
         by_id = {r["id"]: r for r in rows}
-        self.assertEqual(by_id["501"]["status"], "active")
-        self.assertEqual(by_id["502"]["status"], "quiet")
-        self.assertEqual(by_id["503"]["status"], "cooled")
+        self.assertEqual(by_id["501"]["state"], "live")
+        self.assertEqual(by_id["502"]["state"], "live")
+        self.assertEqual(by_id["503"]["state"], "resting")
+        self.assertEqual(by_id["501"]["status"], "live")
 
     def test_status_and_parent_filters(self) -> None:
         with patch("thread_registry.load_registry", return_value=_threads()):
             active = space_survey.survey_eddies(status="active")
+            live = space_survey.survey_eddies(status="live")
             craft = space_survey.survey_eddies(channel_id="craft-turtle")
-        self.assertEqual({r["id"] for r in active}, {"501"})
+            by_id = space_survey.survey_eddies(channel_id="111")
+        self.assertEqual({r["id"] for r in active}, {"501", "502"})
+        self.assertEqual({r["id"] for r in live}, {"501", "502"})
         self.assertEqual({r["id"] for r in craft}, {"501", "502"})
+        self.assertEqual({r["id"] for r in by_id}, {"501"})
+
+    def test_days_window_drops_old_live(self) -> None:
+        with patch("thread_registry.load_registry", return_value=_threads()):
+            recent = space_survey.survey_eddies(days=5)
+        self.assertEqual({r["id"] for r in recent}, {"501", "503"})
 
     def test_empty_registry_returns_empty(self) -> None:
         with patch("thread_registry.load_registry", return_value={"threads": {}}):
@@ -128,6 +139,33 @@ class ToolDispatchTests(unittest.TestCase):
         self.assertNotEqual(text, "No registered channels.")
         parsed = json.loads(text)
         self.assertEqual(len(parsed), 2)
+
+    def test_survey_eddies_defaults_to_this_river(self) -> None:
+        primitive = MagicMock()
+        primitive.channel_id = "111"
+        with patch("thread_registry.load_registry", return_value=_threads()), patch(
+            "mage.get_current_channel_primitive", return_value=primitive
+        ), patch.object(tos_tools, "get_registry", return_value=_registry()):
+            text = tos_tools._execute_tos_tool_raw("survey_eddies", {"days": 5})
+        parsed = json.loads(text)
+        names = {row["name"] for row in parsed}
+        self.assertEqual(names, {"identity"})
+        self.assertNotIn("done topic", names)
+
+    def test_survey_eddies_dispatch_respects_days(self) -> None:
+        schema = next(
+            t for t in tos_tools.TOS_TOOLS
+            if (t.get("function") or {}).get("name") == "survey_eddies"
+        )
+        self.assertIn("days", schema["function"]["parameters"]["properties"])
+        with patch("thread_registry.load_registry", return_value=_threads()):
+            text = tos_tools._execute_tos_tool_raw(
+                "survey_eddies",
+                {"days": 5, "channel_id": "craft-turtle"},
+            )
+        parsed = json.loads(text)
+        self.assertEqual({row["id"] for row in parsed}, {"501"})
+        self.assertEqual(parsed[0]["state"], "live")
 
 
 if __name__ == "__main__":

@@ -77,6 +77,29 @@ class ThreadRegistryPersistenceTests(unittest.TestCase):
             tr.register_thread(123, "test-eddy", parent_channel="river")
             self.assertEqual(persist.call_count, 1)
 
+    def test_numeric_parent_is_persisted_and_repairs_existing_entry(self) -> None:
+        import thread_registry as tr
+
+        registry = {"threads": {}}
+        with patch.object(tr, "load_registry", return_value=registry), patch.object(
+            tr, "save_registry"
+        ):
+            created = tr.register_thread(
+                123,
+                "test-eddy",
+                parent_channel="health",
+                parent_channel_id=456,
+            )
+            self.assertEqual(created["parent_channel_id"], 456)
+
+            repaired = tr.register_thread(
+                123,
+                "test-eddy",
+                parent_channel="health",
+                parent_channel_id=789,
+            )
+            self.assertEqual(repaired["parent_channel_id"], 789)
+
 
 if __name__ == "__main__":
     unittest.main()

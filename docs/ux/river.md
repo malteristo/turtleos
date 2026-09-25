@@ -55,11 +55,17 @@ The River model classifies each practitioner message into acts. **Parent channel
 | `acknowledge` | Thin input (hi, emoji) | Often suppressed in render — low signal |
 | `offer_flow_menu` | Practitioner asks about flows / programs on **this message** | Reply with flow buttons on **that message** |
 | `offer_flow` | One flow clearly named | Reply with “Open {flow}” button on **that message** |
+| `show_threads` | Practitioner asks to see threads / eddies (optionally a window) | Glance embed + Open link per named eddy |
+| `show_waiting` | Practitioner asks what is waiting / where the heat is | Only ready / proposed / waiting rows. Whose move. Not an inventory. |
+| `show_channel_menu` | Practitioner asks to change the channel or see its controls | Buttons from the primitive’s `parent_controls` |
+| `file_intake` | Craft drop that is not a display request | Same gather/register as before — chosen, not the only mouth |
 | `error` | Degraded / parse failure | Red embed in channel |
+
+**Spoken displays.** Ordinary language in the parent channel can ask for a display. “show me threads from the last 5 days” does not go through `!threads`. River **sees** the craft drop (it is not stolen by intake). A display request draws the glance plus an Open link; anything else in craft files intake. The harness runs the same collectors the bang commands use. River still does not write prose.
 
 **Not emitted in parent channel:** `offer_eddy`, `revise_offer` — materialize is the standing bar’s job.
 
-**Implementation:** `classify_river_acts`, `finalize_parent_river_acts`, `render_acts`; prompt in `template/character/river_prompt.md`.
+**Implementation:** `river_display.parse_display_request`, `classify_river_acts`, `finalize_parent_river_acts`, `render_acts`; prompt in `template/character/river_prompt.md`.
 
 ---
 

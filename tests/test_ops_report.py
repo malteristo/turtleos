@@ -56,6 +56,26 @@ class OpsReportTests(unittest.TestCase):
         bundle["write_paths"] = {}
         self.assertNotIn("Write-path ratios", format_ops_markdown(bundle))
 
+    def test_log_watch_section_reaches_the_report(self) -> None:
+        from scripts.write_ops_report import format_ops_markdown
+
+        bundle = {
+            "meta": {"job": "test", "generated_at": "", "hostname": "h"},
+            "ops_overall": "pass",
+            "shake_report": {"functional_gate": "pass", "artifacts": []},
+            "canary": {"overall": "green", "checks": []},
+            "updates": {},
+            "suite_steps": [],
+            "log_watch": {
+                "section": "## Log watch (last 24h)\n\n| `reflection:empty` | 1 |",
+            },
+        }
+        md = format_ops_markdown(bundle)
+        self.assertIn("Log watch", md)
+        self.assertIn("reflection:empty", md)
+        bundle["log_watch"] = {}
+        self.assertNotIn("Log watch", format_ops_markdown(bundle))
+
     def test_every_shake_script_runs_in_the_nightly_suite(self) -> None:
         """Name the class: no shake script may exist outside the suite unexempted.
 

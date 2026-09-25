@@ -47,6 +47,24 @@ class PublicSurfaceTests(unittest.TestCase):
             "public",
         )
 
+    def test_every_tracked_top_level_directory_is_decided(self):
+        """A new top-level package is private by default, silently.
+
+        mcp_server.py shipped while mcp_access/ did not: a public tree that
+        cannot import. Each tracked top-level directory must be named DIR or
+        DENY, so a new one fails here until someone decides.
+        """
+        conf = (ROOT / "scripts" / "public_surface.conf").read_text().splitlines()
+        named = set()
+        for line in conf:
+            parts = line.split()
+            if len(parts) == 2 and parts[0] in ("DIR", "DENY"):
+                named.add(parts[1].rstrip("/"))
+        tracked = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+        top = {p.split("/", 1)[0] for p in tracked if "/" in p}
+        self.assertEqual(sorted(top - named), [])
+        self.assertEqual(_check("mcp_access/protocol.py"), "public")
+
     def test_instance_facts_do_not_ship(self):
         self.assertEqual(_check("docs/live-runtime.md"), "private")
         self.assertEqual(_check("docs/learnings.md"), "private")

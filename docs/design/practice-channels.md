@@ -1,9 +1,9 @@
 # Practice channels — destination
 
 **Date:** 2026-08-30  
-**Status:** Destination — install pair (criterion 1) not built. Join/leave roster (criteria 2–3) landed 2026-08-30.  
+**Status:** Destination — install pair (criterion 1) not built. Join/leave roster (criteria 2–3) landed 2026-08-30. Resolved practice presets landed 2026-09-07.
 **Spec:** TURTLE_SPEC §3.1 (promise). Current install topology remains §13.3 until a later slice.  
-**Companion:** [design-channel-primitives.md](../chapters/design-channel-primitives.md) (relational / thematic types). This file is the *container* those types sit in. The *process* that is supposed to leave you in this house: [install-experience.md](install-experience.md) (sanctioned 2026-08-30).
+**Companion:** [design-channel-primitives.md](../chapters/design-channel-primitives.md) (relational / thematic types). This file is the *container* those types sit in. The *process* that is supposed to leave you in this house: [install-experience.md](install-experience.md) (administrator) · [member-onboarding.md](member-onboarding.md) (everyone after).
 
 Practitioner-visible change. Four artifacts first (`docs/development.md` §12). No mechanism in the press release.
 
@@ -63,14 +63,17 @@ Stop claiming the install pair if, after someone is already on the server, an op
 
 | Layer | What |
 |-------|------|
-| **Primitives** | solo · shared |
+| **Topology** | solo · shared |
 | **Install pair** | **Private** (solo, one per member) · **Community** (shared, all members) |
-| **Practice channels** | Everything else, each on one primitive. Craft is the solo model. A relationship practice is a shared model. |
+| **Practice presets** | Atomic validated recipes: private, shared, craft, partnership, health, team. |
+| **Practice channels** | Instances of a preset with one root, audience and role assignment. Craft is solo work; partnership is a two-person relationship room; Quest is the user-facing name of the first live team instance. |
 | **Roster** | Discord server member (humans) ≡ turtleOS member. One without the other is an error. Bots that run the house are not members. |
 
 `household` / `kin` may still distinguish *among* members. They do not decide whether someone is one. Today’s **guest** — on Discord, not a member — is that error wearing a name.
 
-**Live today (do not contradict):** one river at install; shared space optional (this household's is still `#family`, not renamed). Join on the practice server opens a private river and seats the person in the existing shared room — no `!admin invite`. Leave archives the private river and drops the seat. `!admin doctor` reports Discord humans ≠ registry. `!admin invite` remains for pre-creating a claim room before someone joins. Community is **not** created at install.
+**Live today (do not contradict):** one river at install; community-at-install is still destination. **This instance** has `#community` (2026-09-12) — the house shared room. Join seats a new member there. `find_community_space` is fail-closed on that explicit key; partnership / health / team are not a fallback. The existing two-person `#family` channel is a partnership practice instance; its display name is not an architectural promise that children or a whole household share its historical memory. Leave archives the private river and drops the community seat. `!admin doctor` reports Discord humans ≠ registry. `!admin invite` remains for pre-creating a claim room before someone joins.
+
+A **coach studio** is a private river for a house-bot identity (`roster: false` on the mage row). It is not a member seat. Doctor must stay clean when the studio exists. Spirit uses it for live testing only; collaboration with Craft Turtle stays in the craft channel. Community remains observe-first. Provision: `scripts/provision_spirit_studio.py`.
 
 ---
 

@@ -127,7 +127,10 @@ def fallback_acts(reason: str = "River model unavailable") -> list[dict[str, Any
 
 async def classify_river_acts(content: str, practice_dir: str | None = None) -> list[dict[str, Any]]:
     """Call the River model and return normalized act list."""
-    prompt = load_river_prompt(practice_dir)
+    from river_house import attach_house_to_prompt, gather_house_facts, withhold_offers
+
+    facts = gather_house_facts()
+    prompt = attach_house_to_prompt(load_river_prompt(practice_dir), facts)
     user = content.strip() or "(empty message)"
     try:
         raw = await chat_ollama(
@@ -146,7 +149,7 @@ async def classify_river_acts(content: str, practice_dir: str | None = None) -> 
         print(f"River harness rejected output: {reason} — raw[:200]={raw[:200]!r}")
         return fallback_acts("Could not parse river acts; offering materialize only.")
 
-    return finalize_parent_river_acts(acts)
+    return withhold_offers(finalize_parent_river_acts(acts), facts)
 
 
 def _append_chronicle(practice_dir: str, surface: str, deep: dict | None = None) -> None:
@@ -402,6 +405,150 @@ async def _reply_with_view(message: discord.Message, view: discord.ui.View) -> N
     await message.reply("\u200b", view=view, mention_author=False)
 
 
+class ThreadDisplayView(discord.ui.View):
+    """One Open link per named eddy. No prose."""
+
+    def __init__(self, specs: list[dict[str, str]]):
+        super().__init__(timeout=86400)
+        for spec in specs:
+            self.add_item(
+                discord.ui.Button(
+                    style=discord.ButtonStyle.link,
+                    label=spec["label"],
+                    url=spec["url"],
+                )
+            )
+
+
+class ChannelMenuView(discord.ui.View):
+    """Controls the channel primitive named. Same tools as the standing bar."""
+
+    def __init__(self, specs: list[dict[str, str]], source: discord.Message):
+        super().__init__(timeout=86400)
+        self._source = source
+        self._channel_id = source.channel.id
+        for spec in specs:
+            button = discord.ui.Button(
+                label=spec["label"],
+                custom_id=f"river:menu:{spec['id']}:{self._channel_id}",
+                style=discord.ButtonStyle.secondary,
+            )
+            button.callback = self._callback_for(spec["id"])
+            self.add_item(button)
+
+    def _callback_for(self, key: str):
+        async def callback(interaction: discord.Interaction):
+            if key == "new_eddy":
+                await interaction.response.defer()
+                await _materialize_from_bar(interaction)
+                return
+            if key == "threads":
+                await interaction.response.defer()
+                await _reply_thread_display(self._source, days=None)
+                return
+            if key == "artifacts":
+                from bar_anchor import hold_river_bar
+                from eddy_lifecycle_bar import _run_river_act_command
+
+                hold_river_bar(self._channel_id)
+                await interaction.response.defer()
+                await _run_river_act_command(interaction, "artifacts", [])
+                return
+            await interaction.response.send_message("Unknown control.", ephemeral=True)
+
+        return callback
+
+
+async def _reply_thread_display(message: discord.Message, *, days: int | None) -> None:
+    """Same collector as !threads; spoken window is a filter, not a new list."""
+    from cmd_threads import collect_five_state_thread_records
+    from eddy_five_state import group_lines_by_five_state
+    from river_display import (
+        BUTTON_ROW,
+        compose_thread_glance_body,
+        filter_records_by_days,
+        thread_button_specs,
+        threads_title,
+    )
+    from state import EMBED_COLORS
+    from thread_registry import load_registry
+
+    source = message.channel
+    if isinstance(source, discord.Thread):
+        source = source.parent
+    now = datetime.now(timezone.utc)
+    records = collect_five_state_thread_records(
+        list(getattr(source, "threads", None) or []),
+        load_registry().get("threads", {}),
+        parent_name=getattr(source, "name", None),
+        parent_id=getattr(source, "id", None),
+        show_all=False,
+        now=now,
+    )
+    records = filter_records_by_days(records, days)
+    grouped = group_lines_by_five_state([(row["state"], row["line"]) for row in records])
+    embed = discord.Embed(
+        title=threads_title(grouped, days),
+        description=compose_thread_glance_body(records) or None,
+        color=EMBED_COLORS["help"],
+    )
+    live = [row for row in records if row.get("state") == "live"]
+    guild_id = getattr(getattr(message, "guild", None), "id", None)
+    specs = thread_button_specs(live, guild_id=guild_id)
+    view = ThreadDisplayView(specs) if specs else None
+    if len(live) > BUTTON_ROW:
+        embed.set_footer(text="Same order as the sidebar")
+    await message.reply(embed=embed, view=view, mention_author=False)
+
+
+async def _reply_waiting_display(message: discord.Message) -> None:
+    """Only rows waiting for a session or a word. Not another inventory."""
+    from core.craft_readiness import waiting_glance_rows
+    from mage import get_runtime_dir
+    from river_display import (
+        BUTTON_ROW,
+        compose_waiting_body,
+        thread_button_specs,
+        waiting_title,
+    )
+    from state import EMBED_COLORS
+    from thread_registry import load_registry
+
+    source = message.channel
+    if isinstance(source, discord.Thread):
+        source = source.parent
+    records = waiting_glance_rows(
+        get_runtime_dir(),
+        load_registry().get("threads", {}),
+        parent_name=getattr(source, "name", None),
+        parent_id=getattr(source, "id", None),
+    )
+    embed = discord.Embed(
+        title=waiting_title(records),
+        description=compose_waiting_body(records) or None,
+        color=EMBED_COLORS["help"],
+    )
+    guild_id = getattr(getattr(message, "guild", None), "id", None)
+    specs = thread_button_specs(records, guild_id=guild_id)
+    view = ThreadDisplayView(specs) if specs else None
+    if len(records) > BUTTON_ROW:
+        embed.set_footer(text="Session first, then you")
+    await message.reply(embed=embed, view=view, mention_author=False)
+
+
+async def _reply_channel_menu(message: discord.Message) -> None:
+    from mage import get_channel_primitive
+    from river_display import channel_menu_specs
+    from state import EMBED_COLORS
+
+    primitive = get_channel_primitive(message.channel.id)
+    name = primitive.name if primitive else "channel"
+    controls = primitive.parent_controls if primitive else ("new_eddy",)
+    embed = discord.Embed(title=f"{name} channel", color=EMBED_COLORS["help"])
+    view = ChannelMenuView(channel_menu_specs(controls), message)
+    await message.reply(embed=embed, view=view, mention_author=False)
+
+
 async def render_acts(
     message: discord.Message,
     acts: list[dict[str, Any]],
@@ -446,6 +593,35 @@ async def render_acts(
                 surface = f"{surface} ({jump})"
             if surface:
                 _append_chronicle(practice_dir, surface, act.get("deep"))
+
+        elif kind == "show_threads":
+            days = act.get("days")
+            try:
+                days = int(days) if days is not None else None
+            except (TypeError, ValueError):
+                days = None
+            await _reply_thread_display(message, days=days)
+            summary["views"] += 1
+
+        elif kind == "show_waiting":
+            await _reply_waiting_display(message)
+            summary["views"] += 1
+
+        elif kind == "show_channel_menu":
+            await _reply_channel_menu(message)
+            summary["views"] += 1
+
+        elif kind == "file_intake":
+            from craft_intake import schedule_craft_intake
+
+            client = _river_client_for_channel(message.channel)
+            if client is None:
+                from state import client as fallback_client
+
+                client = fallback_client
+            if client:
+                await schedule_craft_intake(message, client)
+                summary["filed"] = True
 
         elif kind == "present_artifacts":
             from artifact_presenter import ArtifactIntent, compose_artifact_surface, reply_artifact_surface
@@ -764,6 +940,41 @@ def _river_client_for_channel(channel):
     return channel.guild._state._get_client() if channel.guild else None
 
 
+def compose_parent_river_glance_text(
+    thread_names: list[str],
+    *,
+    toward: str = "",
+    latest: str = "",
+) -> str:
+    """What's live on this river, and one next — or that it is not a conversation."""
+    if not thread_names:
+        return (
+            "This channel isn't a conversation. "
+            "Open an eddy, or type `...` inside one."
+        )
+    live = ", ".join(f"**{n}**" for n in thread_names[:5])
+    aimed = f" Aimed at **{toward}**." if toward else ""
+    nxt = latest or thread_names[0]
+    return f"Live here: {live}.{aimed} Next: continue **{nxt}**, or open a new eddy."
+
+
+async def post_parent_river_glance(channel, *, toward: str = "") -> None:
+    """Parent `...` — glance, do not swallow."""
+    names: list[str] = []
+    latest = ""
+    try:
+        threads = list(getattr(channel, "threads", None) or [])
+        named = [t for t in threads if getattr(t, "name", None)]
+        named.sort(key=lambda t: int(getattr(t, "id", 0) or 0), reverse=True)
+        names = [str(t.name) for t in named]
+        if named:
+            latest = str(named[0].name)
+    except Exception as exc:
+        print(f"Parent river glance threads: {type(exc).__name__}: {exc}")
+    text = compose_parent_river_glance_text(names, toward=toward, latest=latest)
+    await channel.send(text)
+
+
 async def handle_river_message(message: discord.Message) -> None:
     """Entry point for native river channel messages (acts only, no Turtle prose)."""
     content = message.content.strip()
@@ -773,14 +984,33 @@ async def handle_river_message(message: discord.Message) -> None:
     bar_client = _river_client_for_channel(message.channel)
 
     # Continuation breath — settle floor without River model round-trip.
-    if content in {".", "..", "...", "go", "continue", "next"}:
+    # `...` glances this river (or says it is not a conversation). Not go-on.
+    from practice_gestures import glance_toward, is_ellipsis_glance, is_go_breath
+
+    if is_ellipsis_glance(content):
+        await post_parent_river_glance(
+            message.channel, toward=glance_toward(content)
+        )
+        return
+    if is_go_breath(content) or content in {"..", "go", "continue", "next"}:
         if bar_client:
             from bar_anchor import schedule_river_bar_reconcile
 
             schedule_river_bar_reconcile(message.channel, bar_client)
         return
 
-    acts = await classify_river_acts(content)
+    from craft_intake import is_craft_intake_channel
+    from river_display import parse_display_request, settle_parent_acts
+
+    craft = is_craft_intake_channel(message)
+    display = parse_display_request(content)
+    if display:
+        acts = [display]
+    elif craft:
+        acts = []
+    else:
+        acts = await classify_river_acts(content)
+    acts = settle_parent_acts(acts, craft=craft)
     summary = await render_acts(message, acts)
     print(f"River [{message.author.display_name}]: {summary['acts']} views={summary['views']}")
 

@@ -16,11 +16,12 @@ from mage import (
     _resolve_mage_from_author,
     address_for_mage_key,
     channel_is_shared_space,
+    get_current_channel_primitive,
     get_mage_key,
     get_mage_name,
     get_registry,
 )
-from practice_io import get_thread_state_dir, read_safe, read_thread_state
+from practice_io import get_thread_state_dir, read_thread_state
 from state import (
     DIALOGUE_MODEL,
     EDDY_DEFAULT,
@@ -38,6 +39,37 @@ def thread_card_excerpt(value: str, limit: int = 700) -> str:
     if len(text) <= limit:
         return text
     return text[:limit].rsplit(" ", 1)[0] + " ..."
+
+
+def _append_river_window_line(lines: list[str], message) -> None:
+    """Fail-soft: Turtle sees a count, never a recital of names."""
+    try:
+        from datetime import datetime, timezone
+
+        channel = message.channel
+        if not isinstance(channel, discord.Thread) or channel.parent is None:
+            return
+        parent = channel.parent
+        threads = getattr(parent, "threads", None)
+        if not isinstance(threads, (list, tuple)):
+            return
+        from cmd_threads import collect_five_state_thread_records
+        from river_display import river_window_line
+        from thread_registry import load_registry
+
+        records = collect_five_state_thread_records(
+            list(threads),
+            load_registry().get("threads", {}),
+            parent_name=getattr(parent, "name", None),
+            parent_id=getattr(parent, "id", None),
+            show_all=False,
+            now=datetime.now(timezone.utc),
+        )
+        line = river_window_line(records, parent_name=getattr(parent, "name", None))
+        if line:
+            lines.append(line)
+    except Exception:
+        return
 
 
 def build_runtime_env(message, cfg):
@@ -91,33 +123,19 @@ def build_runtime_env(message, cfg):
     lines.append(f"- **Model:** {model}")
     lines.append(f"- **Attunement:** {attunement}")
 
-    if mage_key == "family":
+    primitive = get_current_channel_primitive()
+    if primitive and primitive.base == "shared":
         lines.append(f"- **Message from:** {message.author.display_name}")
-        space = get_registry().get("spaces", {}).get("family", {})
+        space = get_registry().get("spaces", {}).get(mage_key, {})
         members = space.get("members", [])
         if members:
             lines.append(f"- **Space members:** {', '.join(m.capitalize() for m in members)}")
 
-        speaking_mage, personal_pd = _resolve_mage_from_author(message.author)
-        if speaking_mage and personal_pd:
-            lines.append(f"- **Speaking mage workspace:** {personal_pd}")
-            compass_path = os.path.join(personal_pd, "compass.md")
-            if os.path.exists(compass_path):
-                compass = read_safe(compass_path)
-                if compass.strip():
-                    lines.append("")
-                    lines.append(
-                        f"**{speaking_mage.capitalize()}'s personal compass** "
-                        "(from their sovereign workspace):"
-                    )
-                    lines.append(compass[:3000])
-
         lines.append("")
         lines.append(
-            "**Context:** Shared family space. Keep responses accessible and warm. "
-            "You have access to the speaking member's personal practice state "
-            "via their workspace above. Reference it naturally when relevant. "
-            "Each member's data is sovereign — only share what the speaker asks about."
+            "**Context boundary:** This shared room may read only its own practice root. "
+            "Never load or infer a member's private workspace, compass, or private-room "
+            "memory. Private material enters only through an explicit member share."
         )
     elif thread_name and cfg and cfg.get("attunement") == "raw":
         lines.append("")
@@ -126,6 +144,7 @@ def build_runtime_env(message, cfg):
             "Be direct and focused on the topic at hand."
         )
 
+    _append_river_window_line(lines, message)
     return "\n".join(lines) + "\n\n"
 
 
@@ -220,7 +239,37 @@ def build_native_runtime_env(message, cfg, history: list[dict] | None = None):
     flow_id = (cfg or {}).get("context_type")
     if flow_id:
         lines.append(f"- **Flow:** {flow_id}")
+    primitive = get_current_channel_primitive()
+    if primitive and primitive.has("shared_work"):
+        from mage import get_pd
+        from team_federation import render_intersections
+        from team_lanes import lane_context
+        from team_state import render_context
+
+        actor, _ = _resolve_mage_from_author(message.author)
+        lane_block = lane_context(channel.id) if isinstance(channel, discord.Thread) else ""
+        lines.extend(["", render_context(get_pd(), actor)])
+        if lane_block:
+            lines.extend(["", lane_block])
+            if flow_id == "dnd_dm":
+                from campaign_state import render_context as render_campaign_context
+
+                campaign = render_campaign_context(
+                    get_pd(),
+                    thread_id=channel.id,
+                    actor=actor,
+                )
+                if campaign:
+                    lines.extend(["", campaign])
+            intersections = render_intersections(
+                get_pd(),
+                thread_id=channel.id,
+                actor=actor,
+            )
+            if intersections:
+                lines.extend(["", intersections])
     lines.append("")
+    _append_river_window_line(lines, message)
     return "\n".join(lines) + "\n\n"
 
 

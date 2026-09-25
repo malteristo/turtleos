@@ -388,6 +388,7 @@ def write_space_registry(
         "mage": space_key,
         "type": "shared-river",
         "default_context": default_context,
+        "discord_category": "Practice",
         "description": f"Shared practice space ({space_key})",
     }
     save_registry(registry)

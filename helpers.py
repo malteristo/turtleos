@@ -16,6 +16,9 @@ from state import (
 # ─── Message Splitting ──────────────────────────────────────────
 
 def split_message(text, limit=1900):
+    from discord_plain import for_discord
+
+    text = for_discord(text)
     if len(text) <= limit:
         return [text]
     chunks = []
@@ -69,6 +72,41 @@ async def deliver_channel_embed(channel_or_id, embed, *, silent: bool = True) ->
     if target is None:
         target = await state.client.fetch_channel(channel_id)
     await target.send(embed=embed, silent=silent)
+
+
+async def deliver_channel_text(channel_or_id, content: str, *, silent: bool = False) -> int | None:
+    """Send message content via the correct bot identity (River bot in split mode).
+
+    Mentions only notify when they sit in content and ``silent`` is false.
+    Returns the Discord message id when the send succeeds.
+    """
+    from mage import river_bot_enabled
+    from river_state import river_bot_token
+
+    channel_id = channel_or_id if isinstance(channel_or_id, int) else getattr(channel_or_id, "id", None)
+    if channel_id is None:
+        raise ValueError("deliver_channel_text requires a channel id")
+    if not content:
+        raise ValueError("deliver_channel_text requires content")
+
+    if river_bot_enabled():
+        token = river_bot_token()
+        if token:
+            intents = discord.Intents.default()
+            ephemeral = discord.Client(intents=intents)
+            try:
+                await ephemeral.login(token)
+                ch = await ephemeral.fetch_channel(channel_id)
+                sent = await ch.send(content=content, silent=silent)
+                return getattr(sent, "id", None)
+            finally:
+                await ephemeral.close()
+
+    target = channel_or_id if not isinstance(channel_or_id, int) else state.client.get_channel(channel_id)
+    if target is None:
+        target = await state.client.fetch_channel(channel_id)
+    sent = await target.send(content=content, silent=silent)
+    return getattr(sent, "id", None)
 
 
 async def _deliver_channel_embed(channel, embed) -> None:

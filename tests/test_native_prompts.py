@@ -19,7 +19,8 @@ class NativePromptTests(unittest.TestCase):
         conduct = load_character_file("conduct.md")
         self.assertIn("think-aloud", conduct.lower())
 
-    def test_build_native_prompt_includes_soul_and_conduct(self) -> None:
+    @patch("prompts.get_pd", return_value="/nonexistent/practice")
+    def test_build_native_prompt_includes_soul_and_conduct(self, _pd) -> None:
         prompt = build_native_eddy_prompt()
         self.assertIn("What You Are", prompt)
         self.assertIn("Eddy Entry", prompt)

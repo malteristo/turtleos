@@ -1,13 +1,14 @@
-"""River-side eddy seneschal — post-Turtle contextual act rows (D3).
+"""River-side eddy seneschal — Turtle signals after a turn.
 
-After Turtle replies in a native eddy, River may post **one** situational act row:
-Save to library (uncached URL) or Checkpoint (explicit practitioner intent).
-Runs in the **River bot process** only.
+Decided 2026-09-15: River does not offer proactively. Turtle offers after
+``...``; this module executes Turtle act-offer signals only. Heuristic
+Save / Checkpoint / working-plan / date-keep helpers remain for execution
+and tests. They are not called from the poll unless
+``RIVER_PROACTIVE_SENESCHAL_OFFERS`` is flipped (it is not).
 
-**Positioning (intentional):** contextual rows stay on the timeline where the turn
-happened — close to the link-read / dialogue that triggered them. They are *not*
-bottom-anchored. Only the standing **flow library bar** re-anchors to the thread
-bottom after each turn (see ``bar_anchor``).
+**Positioning (intentional):** signal rows stay on the timeline where the turn
+happened. They are *not* bottom-anchored. Only the standing **flow library bar**
+re-anchors to the thread bottom after each turn (see ``bar_anchor``).
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ from link_read import external_urls
 _save_offer_seen: dict[int, set[str]] = defaultdict(set)
 _home_plan_offer_seen: set[int] = set()
 _contextual_poll_tasks: dict[int, asyncio.Task] = {}
+
+# Decided 2026-09-15 — not "never got to." Flip only with a new sitting.
+RIVER_PROACTIVE_SENESCHAL_OFFERS = False
 
 _CHECKPOINT_INTENT_RE = re.compile(
     r"\b(?:"
@@ -323,13 +327,13 @@ async def maybe_offer_home_plan_after_turtle_reply(
     from home_plan_ui import offer_home_plan
     from home_plans import title_from_plan_body
     from mage import get_pd, river_bot_enabled
-    from prompts import uses_native_turtle_prompt
+    from prompts import river_posts_turtle_offers
     from river_state import river_client
 
     if not river_bot_enabled():
         return False
     parent_id = getattr(channel, "parent_id", None)
-    if not parent_id or not uses_native_turtle_prompt(parent_id):
+    if not parent_id or not river_posts_turtle_offers(parent_id):
         return False
 
     history = _dialogue_history_snapshot(channel.id)
@@ -381,12 +385,12 @@ async def maybe_offer_date_keep_after_turn(
         parse_date_commitment,
     )
     from mage import get_pd, river_bot_enabled
-    from prompts import uses_native_turtle_prompt
+    from prompts import river_posts_turtle_offers
 
     if not river_bot_enabled() or practitioner_message is None:
         return False
     parent_id = getattr(channel, "parent_id", None)
-    if not parent_id or not uses_native_turtle_prompt(parent_id):
+    if not parent_id or not river_posts_turtle_offers(parent_id):
         return False
 
     text = (getattr(practitioner_message, "content", None) or "").strip()
@@ -497,7 +501,7 @@ async def maybe_offer_turtle_intent_after_turn(
     from act_offer_signal import consume_act_offer
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
     from mage import river_bot_enabled
-    from prompts import uses_native_turtle_prompt
+    from prompts import river_posts_turtle_offers
 
     # Every gate below used to return False without a word, so an offer Turtle
     # had queued vanished with no record of which gate ate it. Six orphaned
@@ -511,11 +515,11 @@ async def maybe_offer_turtle_intent_after_turn(
     if not parent_id:
         _log_contextual_skip(channel, "turtle_intent", "no_parent_channel")
         return False
-    if not uses_native_turtle_prompt(parent_id):
-        # Turtle offers act buttons wherever it converses; River posts them on
-        # natively-attuned surfaces only. In craft-turtle (attunement `craft`)
-        # that gap swallowed every offer Turtle has ever made.
-        _log_contextual_skip(channel, "turtle_intent", "parent_not_native")
+    if not river_posts_turtle_offers(parent_id):
+        # Turtle offers act buttons wherever it converses. River posts them on
+        # native rivers *and* craft — craft is where the operator watches, and
+        # native-only gating left every craft offer on disk (2026-08-14).
+        _log_contextual_skip(channel, "turtle_intent", "parent_not_offer_surface")
         return False
     if is_awaiting_flow_intake(channel.id, parent_id) or is_awaiting_title(channel.id, parent_id):
         _log_contextual_skip(channel, "turtle_intent", "awaiting_intake_or_title")
@@ -544,13 +548,13 @@ async def maybe_offer_contextual_act_after_turn(
     from cmd_link_resonance import get_cached_resonance
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
     from mage import river_bot_enabled
-    from prompts import uses_native_turtle_prompt
+    from prompts import river_posts_turtle_offers
     from state import MIN_EXCHANGES_FOR_CHECKPOINT
 
     if not river_bot_enabled():
         return
     parent_id = getattr(channel, "parent_id", None)
-    if not parent_id or not uses_native_turtle_prompt(parent_id):
+    if not parent_id or not river_posts_turtle_offers(parent_id):
         return
     if is_awaiting_flow_intake(channel.id, parent_id) or is_awaiting_title(channel.id, parent_id):
         return
@@ -740,27 +744,29 @@ async def _run_contextual_offer_poll(practitioner_message: discord.Message) -> N
     # Brief settle so multi-chunk Turtle replies land in shared history / Discord.
     await asyncio.sleep(1.5)
 
-    home_offered = await maybe_offer_home_plan_after_turtle_reply(
+    # Decided 2026-09-15: River does not offer proactively. Turtle offers
+    # after `...`; River executes Turtle signals only. The helpers below
+    # stay for execution and skip-reason tests — not "never got to."
+    await maybe_offer_turtle_intent_after_turn(
         channel,
-        practitioner_text=practitioner_text,
-        practitioner_message=practitioner_message,
+        practitioner_message_id=practitioner_message.id,
     )
-    date_offered = False
-    if not home_offered:
-        date_offered = await maybe_offer_date_keep_after_turn(
+    if RIVER_PROACTIVE_SENESCHAL_OFFERS:
+        home_offered = await maybe_offer_home_plan_after_turtle_reply(
             channel,
+            practitioner_text=practitioner_text,
             practitioner_message=practitioner_message,
         )
-    turtle_offered = False
-    if not home_offered and not date_offered:
-        turtle_offered = await maybe_offer_turtle_intent_after_turn(
-            channel,
-            practitioner_message_id=practitioner_message.id,
-        )
-    if pre_offer and not home_offered and not date_offered and not turtle_offered:
-        await maybe_offer_contextual_act_after_turn(
-            channel, practitioner_text=practitioner_text
-        )
+        date_offered = False
+        if not home_offered:
+            date_offered = await maybe_offer_date_keep_after_turn(
+                channel,
+                practitioner_message=practitioner_message,
+            )
+        if pre_offer and not home_offered and not date_offered:
+            await maybe_offer_contextual_act_after_turn(
+                channel, practitioner_text=practitioner_text
+            )
 
     await _reanchor_standing_eddy_bars(channel)
 

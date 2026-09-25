@@ -6,28 +6,35 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import eddy_lifecycle_bar as bar
 
 
 class TestLifecycleBarEligibility(unittest.TestCase):
+    def _runtime(self):
+        return patch(
+            "primitive_runtime.runtime_for",
+            return_value=SimpleNamespace(lifecycle_bar=True),
+        )
+
     def test_bootstrap_allows_awaiting_title(self) -> None:
         with patch("eddy_spawn.is_awaiting_title", return_value=True):
             with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
-                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                with self._runtime():
                     self.assertTrue(bar.bootstrap_bar_eligible(11, 22))
 
     def test_live_blocks_awaiting_title(self) -> None:
         with patch("eddy_spawn.is_awaiting_title", return_value=True):
             with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
-                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                with self._runtime():
                     self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
 
     def test_blocks_awaiting_intake(self) -> None:
         with patch("eddy_spawn.is_awaiting_title", return_value=False):
             with patch("eddy_spawn.is_awaiting_flow_intake", return_value=True):
-                with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                with self._runtime():
                     self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
                     self.assertFalse(bar.bootstrap_bar_eligible(11, 22))
 
@@ -35,7 +42,7 @@ class TestLifecycleBarEligibility(unittest.TestCase):
         with patch.object(bar, "standing_lifecycle_bar_enabled", return_value=True):
             with patch("eddy_spawn.is_awaiting_title", return_value=False):
                 with patch("eddy_spawn.is_awaiting_flow_intake", return_value=False):
-                    with patch("prompts.uses_native_turtle_prompt", return_value=True):
+                    with self._runtime():
                         self.assertTrue(bar.lifecycle_bar_eligible(11, 22))
 
     def test_native_enables_standing_bar(self) -> None:
@@ -64,7 +71,7 @@ class TestLifecycleBarArtifactsButton(unittest.TestCase):
         self.assertIn("eddy:lifecycle:flowpick:", block)
         self.assertIn('label="checkpoint"', block)
         self.assertIn('label="share"', block)
-        self.assertIn('phase == "live"', block)
+        self.assertIn("lifecycle_act_labels", block)
 
 
 class TestBarPhaseState(unittest.TestCase):
@@ -137,9 +144,15 @@ class TestLifecycleBarRehydration(unittest.TestCase):
             def add_view(self, view):
                 registered.append(view)
 
+        class _View:
+            children = [object()]
+
+            def __init__(self, *args, **kwargs):
+                pass
+
         with patch.object(bar, "_load_state", return_value={"101": 9001, "102": 9002}):
             with patch.object(bar, "get_bar_phase", return_value="live"):
-                with patch("flow_runner.list_flow_ids_for_bar_phase", return_value=["f1"]):
+                with patch.object(bar, "EddyLifecycleBarView", _View):
                     count = bar.rehydrate_lifecycle_bar_views(_Client())
 
         self.assertEqual(count, 2)
@@ -152,9 +165,15 @@ class TestLifecycleBarRehydration(unittest.TestCase):
             def add_view(self, view):
                 raise AssertionError("must not register an empty view")
 
+        class _Empty:
+            children = []
+
+            def __init__(self, *args, **kwargs):
+                pass
+
         with patch.object(bar, "_load_state", return_value={"101": 9001}):
             with patch.object(bar, "get_bar_phase", return_value="bootstrap"):
-                with patch("flow_runner.list_flow_ids_for_bar_phase", return_value=[]):
+                with patch.object(bar, "EddyLifecycleBarView", _Empty):
                     self.assertEqual(bar.rehydrate_lifecycle_bar_views(_Client()), 0)
 
     def test_one_bad_row_does_not_cost_the_rest(self) -> None:
@@ -171,9 +190,15 @@ class TestLifecycleBarRehydration(unittest.TestCase):
                 raise RuntimeError("phase state unreadable")
             return phases[str(thread_id)]
 
+        class _View:
+            children = [object()]
+
+            def __init__(self, *args, **kwargs):
+                pass
+
         with patch.object(bar, "_load_state", return_value={"101": 1, "102": 2}):
             with patch.object(bar, "get_bar_phase", side_effect=_phase):
-                with patch("flow_runner.list_flow_ids_for_bar_phase", return_value=["f1"]):
+                with patch.object(bar, "EddyLifecycleBarView", _View):
                     self.assertEqual(bar.rehydrate_lifecycle_bar_views(_Client()), 1)
         self.assertEqual(len(seen), 1)
 

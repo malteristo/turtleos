@@ -47,7 +47,13 @@ from mage import (
 )
 from state import REFLECTION_MODEL
 
-EDDIES_SUBDIR = Path("story") / "eddies"
+from story_entries import (  # noqa: E402 — re-exported for existing importers
+    EDDIES_SUBDIR,
+    EddyEntry,
+    _ENTRY_FRONT_RE,
+    entry_from_front as _entry_from_front,
+    parse_eddy_file_entries,
+)
 
 _HELD = "---HELD---"
 _RELATION = "---RELATION---"
@@ -292,22 +298,6 @@ class EddyNoteResult:
     proposed_themes: list[str] = field(default_factory=list)
 
 
-@dataclass
-class EddyEntry:
-    """One checkpoint entry from an eddy note file, ready for daily synthesis."""
-
-    thread: str
-    title: str
-    trigger: str
-    timestamp: datetime
-    related_topics: list[str]
-    body: str
-    source_path: Path
-    participants: list[str] = field(default_factory=list)
-    proposed_themes: list[str] = field(default_factory=list)
-
-
-_ENTRY_FRONT_RE = re.compile(r"---\n(.*?)---\n\n", re.S)
 
 
 async def write_eddy_note(
@@ -343,7 +333,9 @@ async def write_eddy_note(
                      manufacture a connection that did not exist; backfill
                      passes ``[]`` and the note simply carries no relation.
     """
-    set_practice_context_for_channel(parent_channel_id or channel_id)
+    set_practice_context_for_channel(
+        parent_channel_id or channel_id, require_registered=True
+    )
     practice_dir = Path(get_pd())
     mage_name = get_mage_name()
 
@@ -392,9 +384,29 @@ async def write_eddy_note(
             # Counted, not printed with its contents: the dropped label is the
             # thing that should not be written down.
             print(f"Theme gate held back {len(dropped)} label(s) for {channel_id}")
+    if witness:
+        from provenance_guard import guard_distillation
+
+        transcript = [
+            _speaker_and_body(entry, mage_name, names)
+            for entry in history
+            if str(entry.get("content") or "").strip()
+        ]
+        guarded = guard_distillation(
+            "\n".join(part for part in (held, relation) if part),
+            transcript,
+        )
+        if not guarded.ok:
+            codes = ", ".join(finding.code for finding in guarded.findings)
+            raise EddyNoteError(
+                f"shared reflection failed provenance guard: {codes}"
+            )
     _promote_proposed_themes(practice_dir, proposed, trigger)
 
     title = title or _resolve_thread_title(channel_id)
+    from thread_registry import get_thread_team_lane
+
+    lane = get_thread_team_lane(channel_id) or {}
     entry_text = _compose_entry(
         channel_id,
         title,
@@ -404,6 +416,8 @@ async def write_eddy_note(
         topics,
         proposed,
         _participants(history, mage_name, names) if witness else None,
+        activity_id=lane.get("activity_id"),
+        lane_owner=lane.get("lane_owner"),
         occurred_at=occurred_at,
     )
 
@@ -774,6 +788,8 @@ def _compose_entry(
     proposed: list[str] | None = None,
     participants: list[str] | None = None,
     *,
+    activity_id: str | None = None,
+    lane_owner: str | None = None,
     occurred_at: datetime | None = None,
 ) -> str:
     fields = {
@@ -788,6 +804,10 @@ def _compose_entry(
     # without re-deriving authorship from prose.
     if participants:
         fields["participants"] = list(participants)
+    if activity_id:
+        fields["activity"] = str(activity_id)
+    if lane_owner:
+        fields["lane-owner"] = str(lane_owner)
     dumped = yaml.safe_dump(
         fields, sort_keys=False, allow_unicode=True, default_flow_style=None
     ).strip()
@@ -835,66 +855,9 @@ def read_alive_snapshot(practice_dir: Path) -> dict:
     return read_alive(practice_dir) or {}
 
 
-def parse_eddy_file_entries(content: str) -> list[tuple[dict, str]]:
-    """Split an eddy note file into (front_matter, body) per checkpoint entry."""
-    matches = list(_ENTRY_FRONT_RE.finditer(content))
-    entries: list[tuple[dict, str]] = []
-    for i, match in enumerate(matches):
-        try:
-            front = yaml.safe_load(match.group(1))
-        except yaml.YAMLError:
-            continue
-        if not isinstance(front, dict):
-            continue
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-        body = content[match.end() : end].strip()
-        entries.append((front, body))
-    return entries
-
-
-def _entry_from_front(
-    front: dict, body: str, source_path: Path, tz: ZoneInfo
-) -> EddyEntry | None:
-    timestamp_raw = front.get("timestamp")
-    if not timestamp_raw:
-        return None
-    try:
-        parsed_ts = datetime.fromisoformat(str(timestamp_raw).strip())
-        if parsed_ts.tzinfo is None:
-            parsed_ts = parsed_ts.replace(tzinfo=tz)
-        else:
-            parsed_ts = parsed_ts.astimezone(tz)
-    except (TypeError, ValueError):
-        return None
-
-    topics = front.get("related-topics") or []
-    if not isinstance(topics, list):
-        topics = []
-    related_topics = [str(t).strip() for t in topics if str(t).strip()]
-
-    participants = front.get("participants") or []
-    if not isinstance(participants, list):
-        participants = []
-
-    # Written on every checkpoint since the theme proposer shipped and, until
-    # room memory read them, consumed by nothing. `related-topics` is the
-    # field the schema advertises for this and it is empty in every entry on
-    # the node; `proposed-themes` is the one that is actually populated.
-    themes = front.get("proposed-themes") or []
-    if not isinstance(themes, list):
-        themes = []
-
-    return EddyEntry(
-        participants=[str(p).strip() for p in participants if str(p).strip()],
-        proposed_themes=[str(t).strip() for t in themes if str(t).strip()],
-        thread=str(front.get("thread") or "").strip(),
-        title=str(front.get("title") or "").strip(),
-        trigger=str(front.get("trigger") or "").strip(),
-        timestamp=parsed_ts,
-        related_topics=related_topics,
-        body=body.strip(),
-        source_path=source_path,
-    )
+# ``parse_eddy_file_entries`` / ``_entry_from_front`` moved to ``story_entries``
+# (a leaf) so readers of notes need not join the runtime component; re-exported
+# above for existing importers.
 
 
 def collect_recent_eddy_entries(

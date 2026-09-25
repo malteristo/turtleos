@@ -27,6 +27,7 @@ When implementation and these docs disagree, **implementation wins until someone
 | Topic | Doc |
 |-------|-----|
 | Cross-cutting intent (River/Turtle, consent, visibility) | [principles.md](principles.md) |
+| System-state glance (counts, attention order, collapse) | [system-state.md](system-state.md) |
 | River bar, acts, chronicle | [river.md](river.md) |
 | Blank eddy, deferred presence, system lines | [eddy-entry.md](eddy-entry.md) |
 | Eddy lifecycle bar (flow pick / checkpoint / share) | [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md) |

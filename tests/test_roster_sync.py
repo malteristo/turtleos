@@ -29,6 +29,7 @@ from roster_sync import (
 
 
 def _registry_with_house() -> dict:
+    """Live leak shape: untagged family shared-river, no house community."""
     return {
         "mages": {
             "alex": {"discord_id": "1", "relation": "household"},
@@ -39,6 +40,32 @@ def _registry_with_house() -> dict:
         },
         "spaces": {
             "family": {"members": ["alex"], "share_policy": "members_only"},
+        },
+    }
+
+
+def _registry_with_community() -> dict:
+    """House pair: private river + explicit community. Family is partnership."""
+    return {
+        "mages": {
+            "alex": {"discord_id": "1", "relation": "household"},
+        },
+        "channels": {
+            "100": {"mage": "alex", "type": "river"},
+            "200": {
+                "mage": "family",
+                "type": "shared-river",
+                "primitive": "partnership",
+            },
+            "201": {
+                "mage": "community",
+                "type": "shared-river",
+                "primitive": "shared",
+            },
+        },
+        "spaces": {
+            "family": {"members": ["alex"], "share_policy": "members_only"},
+            "community": {"members": ["alex"], "share_policy": "members_only"},
         },
     }
 
@@ -61,6 +88,42 @@ class RosterDriftTests(unittest.TestCase):
         drift = compute_roster_drift(registry, human_ids=[])
         self.assertEqual(drift.registered_not_on_discord, ("42",))
         self.assertIn("sam", drift.missing_private)
+
+    def test_coach_studio_is_not_a_roster_member(self) -> None:
+        registry = {
+            "mages": {
+                "alex": {"discord_id": "1"},
+                "spirit": {"discord_id": "1487", "roster": False},
+            },
+            "channels": {
+                "100": {"mage": "alex", "type": "river"},
+                "900": {"mage": "spirit", "type": "river"},
+            },
+            "spaces": {
+                "community": {"members": ["alex"], "share_policy": "members_only"},
+            },
+        }
+        registry["channels"]["201"] = {
+            "mage": "community",
+            "type": "shared-river",
+            "primitive": "shared",
+        }
+        drift = compute_roster_drift(registry, human_ids=["1"])
+        self.assertTrue(drift.is_clean())
+        self.assertNotIn("1487", drift.registered_not_on_discord)
+        self.assertNotIn("spirit", drift.missing_private)
+        self.assertNotIn("spirit", drift.community_missing_seats)
+
+    def test_numeric_id_without_roster_false_is_owed_a_human(self) -> None:
+        """Positive control: a bot-shaped id still drifts until roster: false."""
+        registry = {
+            "mages": {"spirit": {"discord_id": "1487"}},
+            "channels": {"900": {"mage": "spirit", "type": "river"}},
+            "spaces": {},
+        }
+        drift = compute_roster_drift(registry, human_ids=[])
+        self.assertEqual(drift.registered_not_on_discord, ("1487",))
+        self.assertFalse(drift.is_clean())
 
     def test_placeholder_discord_id_is_not_a_member(self) -> None:
         registry = {
@@ -91,16 +154,51 @@ class RosterDriftTests(unittest.TestCase):
         )
         self.assertEqual(registry["mages"]["sam"]["relation"], "kin")
         self.assertEqual(registry["channels"]["300"]["type"], "hosted-river")
-        self.assertIn("sam", registry["spaces"]["family"]["members"])
+        self.assertEqual(
+            registry["channels"]["300"]["discord_category"], "Practice"
+        )
+        self.assertNotIn("sam", registry["spaces"]["family"]["members"])
         drift = compute_roster_drift(registry, human_ids=["1", "42"])
         self.assertTrue(drift.is_clean())
-        self.assertEqual(drift.community_space, "family")
+        self.assertIsNone(drift.community_space)
 
-    def test_community_prefers_named_community_over_family(self) -> None:
+    def test_untagged_family_is_not_community_fallback(self) -> None:
         registry = _registry_with_house()
-        registry["channels"]["201"] = {"mage": "community", "type": "shared-river"}
-        registry["spaces"]["community"] = {"members": ["alex"]}
+        self.assertIsNone(find_community_space(registry))
+        apply_admit_registry(
+            registry,
+            mage_key="sam",
+            discord_id="42",
+            display_name="Sam",
+            channel_id=300,
+        )
+        self.assertNotIn("sam", registry["spaces"]["family"]["members"])
+
+    def test_only_explicit_community_is_a_seat(self) -> None:
+        registry = _registry_with_community()
         self.assertEqual(find_community_space(registry), "community")
+        apply_admit_registry(
+            registry,
+            mage_key="sam",
+            discord_id="42",
+            display_name="Sam",
+            channel_id=300,
+        )
+        self.assertIn("sam", registry["spaces"]["community"]["members"])
+        self.assertNotIn("sam", registry["spaces"]["family"]["members"])
+
+    def test_partnership_is_not_a_house_wide_community_seat(self) -> None:
+        registry = _registry_with_house()
+        registry["channels"]["200"]["primitive"] = "partnership"
+        self.assertIsNone(find_community_space(registry))
+        apply_admit_registry(
+            registry,
+            mage_key="sam",
+            discord_id="42",
+            display_name="Sam",
+            channel_id=300,
+        )
+        self.assertNotIn("sam", registry["spaces"]["family"]["members"])
 
     def test_unique_key_avoids_space_and_mage_collision(self) -> None:
         registry = _registry_with_house()
@@ -150,18 +248,19 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         channel = MagicMock()
         channel.id = 300
         channel.name = "river-sam"
-        channel.send = AsyncMock()
+        posted = MagicMock(id=7, pin=AsyncMock())
+        channel.send = AsyncMock(return_value=posted)
         guild.create_text_channel = AsyncMock(return_value=channel)
         member.guild = guild
         return member
 
     async def test_join_provisions_private_and_community_without_invite(self) -> None:
-        registry = _registry_with_house()
+        registry = _registry_with_community()
         member = self._member()
-        family_ch = MagicMock()
-        family_ch.id = 200
+        community_ch = MagicMock()
+        community_ch.id = 201
         member.guild.get_channel.side_effect = (
-            lambda cid: family_ch if cid == 200 else (MagicMock() if cid == 100 else None)
+            lambda cid: community_ch if cid == 201 else (MagicMock() if cid == 100 else None)
         )
 
         with patch("mage.get_registry", return_value=registry), patch(
@@ -172,19 +271,47 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
             "discord_reconcile.expect_channel_registry_binding"
         ), patch(
             "mage.ensure_space_channel_access", new_callable=AsyncMock
-        ) as seat:
+        ) as seat, patch(
+            "hosted_river_onboarding.is_onboarding_posted", return_value=False
+        ), patch(
+            "hosted_river_onboarding.mark_onboarding_posted"
+        ) as mark:
             summary = await admit_on_join(member)
+
+        from member_first_run import first_run_text
 
         self.assertIsNotNone(summary)
         self.assertIn("river-sam", summary or "")
-        self.assertIn("family", summary or "")
+        self.assertIn("community", summary or "")
         self.assertNotIn("invite", (summary or "").lower())
+        self.assertNotIn("family", (summary or "").lower())
         seed.assert_called_once_with("sam")
         save.assert_called()
         seat.assert_awaited()
         self.assertEqual(registry["mages"]["sam"]["discord_id"], "42")
-        self.assertIn("sam", registry["spaces"]["family"]["members"])
+        self.assertIn("sam", registry["spaces"]["community"]["members"])
+        self.assertNotIn("sam", registry["spaces"]["family"]["members"])
         member.guild.create_text_channel.assert_awaited_once()
+        channel = member.guild.create_text_channel.return_value
+        sent = channel.send.await_args.args[0]
+        self.assertEqual(sent, first_run_text())
+        self.assertIn("new eddy", sent.lower())
+        self.assertNotIn("Bound", sent)
+        mark.assert_called_once()
+
+    async def test_join_skips_first_run_when_already_posted(self) -> None:
+        from roster_sync import _post_join_first_run
+
+        channel = MagicMock()
+        channel.id = 300
+        channel.send = AsyncMock()
+        with patch(
+            "hosted_river_onboarding.is_onboarding_posted", return_value=True
+        ), patch("hosted_river_onboarding.mark_onboarding_posted") as mark:
+            msg = await _post_join_first_run(channel)
+        self.assertIsNone(msg)
+        channel.send.assert_not_called()
+        mark.assert_not_called()
 
     async def test_join_on_other_guild_does_nothing(self) -> None:
         registry = _registry_with_house()
@@ -201,7 +328,7 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         member.guild.create_text_channel.assert_not_called()
 
     async def test_leave_archives_river_and_drops_community_seat(self) -> None:
-        registry = _registry_with_house()
+        registry = _registry_with_community()
         apply_admit_registry(
             registry,
             mage_key="sam",
@@ -213,7 +340,7 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         private = MagicMock()
         private.edit = AsyncMock()
         member.guild.get_channel.side_effect = (
-            lambda cid: private if cid == 300 else (MagicMock() if cid in (100, 200) else None)
+            lambda cid: private if cid == 300 else (MagicMock() if cid in (100, 201) else None)
         )
 
         with patch("mage.get_registry", return_value=registry), patch(
@@ -225,12 +352,13 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("sam", summary or "")
         self.assertTrue(registry["mages"]["sam"]["departed"])
         self.assertTrue(registry["channels"]["300"]["archived"])
+        self.assertNotIn("sam", registry["spaces"]["community"]["members"])
         self.assertNotIn("sam", registry["spaces"]["family"]["members"])
         save.assert_called()
         private.edit.assert_awaited()
 
     async def test_rejoin_restores_departed_member(self) -> None:
-        registry = _registry_with_house()
+        registry = _registry_with_community()
         apply_admit_registry(
             registry,
             mage_key="sam",
@@ -243,7 +371,7 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         private = MagicMock()
         private.edit = AsyncMock()
         member.guild.get_channel.side_effect = (
-            lambda cid: private if cid == 300 else (MagicMock() if cid in (100, 200) else None)
+            lambda cid: private if cid == 300 else (MagicMock() if cid in (100, 201) else None)
         )
 
         with patch("mage.get_registry", return_value=registry), patch(
@@ -254,7 +382,8 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Restored", summary or "")
         self.assertFalse(registry["mages"]["sam"].get("departed"))
         self.assertNotIn("archived", registry["channels"]["300"])
-        self.assertIn("sam", registry["spaces"]["family"]["members"])
+        self.assertIn("sam", registry["spaces"]["community"]["members"])
+        self.assertNotIn("sam", registry["spaces"]["family"]["members"])
         member.guild.create_text_channel.assert_not_called()
 
     async def test_already_a_member_does_not_mint_a_second_river(self) -> None:
@@ -276,6 +405,9 @@ class RosterHookWiringTests(unittest.TestCase):
         self.assertIn("depart_on_leave", src)
         join = src.split("async def on_member_join", 1)[1].split("async def on_member_remove", 1)[0]
         self.assertNotIn("Use `!admin invite", join)
+        admit = Path(__file__).resolve().parents[1].joinpath("roster_sync.py").read_text()
+        self.assertNotIn("**Bound.**", admit)
+        self.assertIn("post_member_first_run", admit)
 
 
 if __name__ == "__main__":

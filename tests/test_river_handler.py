@@ -179,6 +179,56 @@ class HandleRiverMessageTests(unittest.IsolatedAsyncioTestCase):
             classify.assert_not_awaited()
             schedule.assert_called_once()
 
+    async def test_aimed_dot_reanchors_without_classify(self) -> None:
+        message = MagicMock()
+        message.content = ". turtle"
+        message.attachments = []
+        message.author.display_name = "Kermit"
+        message.channel = MagicMock()
+
+        with patch("river_handler.classify_river_acts", new_callable=AsyncMock) as classify, patch(
+            "river_handler._river_client_for_channel", return_value=MagicMock()
+        ), patch("bar_anchor.schedule_river_bar_reconcile") as schedule:
+            await handle_river_message(message)
+            classify.assert_not_awaited()
+            schedule.assert_called_once()
+
+    async def test_parent_ellipsis_posts_a_glance(self) -> None:
+        message = MagicMock()
+        message.content = "... later"
+        message.attachments = []
+        message.author.display_name = "Kermit"
+        message.channel = MagicMock()
+        message.channel.threads = []
+
+        with patch("river_handler.classify_river_acts", new_callable=AsyncMock) as classify, patch(
+            "river_handler.post_parent_river_glance", new_callable=AsyncMock
+        ) as glance:
+            await handle_river_message(message)
+            classify.assert_not_awaited()
+            glance.assert_awaited_once()
+            self.assertEqual(glance.await_args.kwargs.get("toward"), "later")
+
+
+class ParentRiverGlanceCopyTests(unittest.TestCase):
+    def test_empty_river_says_it_is_not_a_conversation(self) -> None:
+        from river_handler import compose_parent_river_glance_text
+
+        text = compose_parent_river_glance_text([])
+        self.assertIn("isn't a conversation", text)
+        self.assertIn("...", text)
+
+    def test_live_eddies_name_one_next(self) -> None:
+        from river_handler import compose_parent_river_glance_text
+
+        text = compose_parent_river_glance_text(
+            ["alpha", "beta"], toward="craft", latest="beta"
+        )
+        self.assertIn("**alpha**", text)
+        self.assertIn("**beta**", text)
+        self.assertIn("craft", text)
+        self.assertIn("continue **beta**", text)
+
 
 if __name__ == "__main__":
     unittest.main()

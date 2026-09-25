@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 ACTIVE_WITHIN_DAYS = 7.0
+_STATUS_ALIAS = {
+    "active": "live",
+    "quiet": "live",
+    "cooled": "resting",
+    "dissolved": "gone",
+}
 
 
 def survey_space(
@@ -52,30 +58,40 @@ def survey_eddies(
     *,
     channel_id: str | None = None,
     status: str = "all",
+    days: int | None = None,
 ) -> list[dict[str, Any]]:
-    """One row per known eddy. Empty only when the thread registry is empty."""
+    """One row per known eddy. Empty only when the thread registry is empty.
+
+    ``status`` is a five-state name (live / resting / kept / sealed / gone).
+    Old inventory words still resolve: active→live, cooled→resting.
+    """
+    from eddy_five_state import eddy_five_state
     from thread_registry import load_registry
 
     threads = (load_registry() or {}).get("threads") or {}
     now = datetime.now(timezone.utc)
-    wanted = (status or "all").strip().lower()
-    needle = (channel_id or "").strip()
+    wanted = _STATUS_ALIAS.get((status or "all").strip().lower(), (status or "all").strip().lower())
+    needles = [n.strip() for n in str(channel_id or "").split(",") if n.strip()]
     rows: list[dict[str, Any]] = []
     for tid, info in threads.items():
         entry = info if isinstance(info, dict) else {}
         parent = str(entry.get("parent_channel") or "")
-        if needle and needle not in (tid, parent):
-            continue
-        row_status = _eddy_status(entry, now)
-        if wanted != "all" and row_status != wanted:
+        parent_id = str(entry.get("parent_channel_id") or "")
+        if needles and not any(n in (tid, parent, parent_id) for n in needles):
             continue
         age = _age_days(entry.get("last_activity"), now)
+        if days is not None and (age is None or age > float(days)):
+            continue
+        state = eddy_five_state(entry)
+        if wanted != "all" and state != wanted:
+            continue
         rows.append(
             {
                 "id": str(tid),
                 "name": entry.get("name") or "",
                 "parent_channel": parent,
-                "status": row_status,
+                "state": state,
+                "status": state,
                 "age_days": age,
                 "message_count": int(entry.get("message_count") or 0),
                 "last_activity": entry.get("last_activity") or "",

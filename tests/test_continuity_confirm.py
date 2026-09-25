@@ -50,6 +50,24 @@ class TestThemeConfirmHelpers(unittest.TestCase):
             self.assertEqual(len(ce.list_active_threads(tmp)), 1)
 
 
+class TestAnnounceThemeHarvest(unittest.IsolatedAsyncioTestCase):
+    async def test_announce_posts_without_a_view(self) -> None:
+        message = MagicMock()
+        message.reply = AsyncMock()
+        sent = await cc.announce_theme_harvest(message, ["earlier evening walks"])
+        self.assertTrue(sent)
+        message.reply.assert_awaited_once()
+        args, kwargs = message.reply.await_args
+        self.assertIn("Harvested", args[0])
+        self.assertNotIn("view", kwargs)
+
+    def test_harvest_copy_has_no_button_ask(self) -> None:
+        text = cc.compose_theme_harvest_text(["earlier evening walks"])
+        self.assertIn("Harvested", text)
+        self.assertIn("earlier evening walks", text)
+        self.assertNotIn("Keep them in mind", text)
+
+
 class TestOfferThemeConfirm(unittest.IsolatedAsyncioTestCase):
     async def test_offer_posts_reply_with_view(self) -> None:
         message = MagicMock()
@@ -76,7 +94,7 @@ class TestOfferThemeConfirm(unittest.IsolatedAsyncioTestCase):
 
 
 class TestCmdCheckpointOffersConfirm(unittest.IsolatedAsyncioTestCase):
-    async def test_checkpoint_offers_confirm_after_surface(self) -> None:
+    async def test_checkpoint_announces_harvest_after_surface(self) -> None:
         import cmd_sessions as cs
         import story_notes
         from sessions import CheckpointResult
@@ -111,7 +129,7 @@ class TestCmdCheckpointOffersConfirm(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "cmd_sessions.reply_artifact_surface", new_callable=AsyncMock
         ), patch(
-            "cmd_sessions._offer_theme_confirm_if_any", new_callable=AsyncMock
+            "cmd_sessions._announce_theme_harvest_if_any", new_callable=AsyncMock
         ) as offer:
             await cs.cmd_checkpoint(message)
 

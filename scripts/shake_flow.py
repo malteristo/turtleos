@@ -44,6 +44,7 @@ FLOW_SPECS: dict[str, dict] = {
     "dnd_dm": {
         "flow_id": "dnd_dm",
         "checkpoint_rel": "campaign/checkpoints/latest.md",
+        "checkpoint_mode": "runtime_event",
         "prompt_markers": ["Dungeon Master", "Don't Panic", "campaign/"],
         "presence_markers": ["Dungeon Master"],
         "shake_message": (
@@ -85,7 +86,15 @@ def check_offline(flow_id: str) -> list[str]:
         errors.append(f"load_flow_spec({flow_id}) returned None")
         return errors
 
-    if spec_cfg["checkpoint_rel"] not in spec.writes:
+    event_backed = spec_cfg.get("checkpoint_mode") == "runtime_event"
+    if event_backed:
+        if spec.writes:
+            errors.append("event-backed flow still declares model write paths")
+        if spec_cfg["checkpoint_rel"] not in spec.reads:
+            errors.append(
+                f"expected derived checkpoint read missing: {spec_cfg['checkpoint_rel']}"
+            )
+    elif spec_cfg["checkpoint_rel"] not in spec.writes:
         errors.append(f"expected write path missing: {spec_cfg['checkpoint_rel']}")
 
     sections, _ = build_flow_prompt_sections(flow_id)
@@ -109,7 +118,13 @@ def check_offline(flow_id: str) -> list[str]:
             {"role": "assistant", "content": "I'm here."},
         ]
         written = write_flow_checkpoint(spec, history, "Spirit", tmp)
-        if not written:
+        if event_backed and written:
+            errors.append("event-backed flow wrote a model checkpoint")
+        elif event_backed:
+            campaign = (REPO / "campaign_state.py").read_text(encoding="utf-8")
+            if "campaign/events.jsonl" not in campaign or "def record_turn(" not in campaign:
+                errors.append("event-backed flow has no executable campaign writer")
+        elif not written:
             errors.append("write_flow_checkpoint wrote nothing")
         else:
             path = Path(tmp) / spec_cfg["checkpoint_rel"]

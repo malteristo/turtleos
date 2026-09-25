@@ -204,6 +204,70 @@ T1/T2 are the pair. T2 without T1 is a system that never helps; T1 without T2 is
 
 ---
 
+## Continuity judge — B-calibration (instrument)
+
+**Spec:** CE axis B (false carry) — banked synthetic fixtures, not live turns.
+**Status:** Instrument. A green night means the judge classified the pair, not that live turns are clean.
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| B1 | Present-tense stale | A planted transcript asserts a no-longer-true fact without age; the judge flags B |
+| B2 | Age attached | The same fact, carried with its age, is not flagged |
+
+B1 without B2 is a judge that calls every mention a lie. B2 without B1 is a judge that never fires. Suite PASS iff both classifications are correct. Planted B that the judge *detects* is not an ops failure.
+
+**Verification:** `scripts/shake_continuity.py` (pair + `--self-test` inverted-judge control). No live root. No Mage gate — this is not a feel scenario.
+
+---
+
+## Health channel primitive
+
+**Spec:** §3.2.1
+**Design:** `docs/chapters/design-channel-primitives.md`  
+**Functional gate:** `scripts/shake_health_record.py`
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| N1 | Upload a 20.43 MB PDF in a health eddy | Immutable local original and manifest are saved although the file exceeds the prompt-inline limit; visible status reaches Ready / Needs review / Failed |
+| N2 | Scan, native PDF, archive, and duplicate intake | Local `deu+eng` OCR preserves page boundaries and confidence; native text stays exact; unsafe archive fails closed; exact duplicate does not create a second source |
+| N3 | Ask a factual record question and “where does that come from?” | Health-only retrieval returns source/page citations; generic file browsing is absent; a source or claim can be traced |
+| N4 | “Save this observation,” another member reports one, then “that is wrong” | Owner testimony records visibly on explicit request; another member stays attributed/pending; correction supersedes without erasing |
+| N5 | Propose findings from a document | Facts without reachable evidence are rejected; values/units/citations survive; owner Confirm/Reject controls the board; concurrent confirm applies once |
+| N6 | The record owner uses the complete loop naturally | Upload → status → review → conversation → correction requires no paths, commands, OCR/RAG vocabulary, or Cursor |
+
+---
+
+## Resolved channel architecture
+
+**Spec:** §3.2.1
+**Functional gate:** `scripts/shake_channel_architecture.py`
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| C1 | Resolve every shipped preset | private, shared, craft, partnership, health-solo, health-shared, and team each produce one complete valid contract and runtime |
+| C2 | Use one root from private and craft | parent-channel context selects the right prompt, memory, tools and parent posture; root order grants no authority |
+| C3 | Speak in a shared partnership room | packet, prompt, memory, tools and writes stay in the shared root; no member compass/private workspace enters |
+| C4 | Plant a new domain helper or incoherent team | the architecture guard catches `uses_team_surface`; team without a member coordinator fails closed |
+| C5 | Reorganize a practice channel in Discord | an explicit channel-instance category is audited and `!admin space sync` restores placement without changing permissions, memory, capabilities or authority |
+
+---
+
+## Team work and asynchronous Quest activities
+
+**Spec:** §3.2.1
+**Functional gate:** `scripts/shake_team_work.py`
+
+| # | Scenario | Pass criteria |
+|---|----------|---------------|
+| Q1 | Propose a shared horizon and member fronts | Horizon remains pending until every member confirms; each member alone confirms their own front; coordinator cannot speak for another member |
+| Q2 | Work in two readable member lanes | Both members may read both eddies; a non-owner message produces a plain notice and no model turn or state mutation |
+| Q3 | Advance lanes at different times | Each member turn persists without waiting; the other lane later receives a bounded attributed development, never a copied transcript |
+| Q4 | Reduce campaign state, then fail the reducer | Raw source event survives first; readable views rebuild; reducer failure stays pending instead of losing or inventing state |
+| Q5 | Migrate an established shared activity | Parent channel ID, shared root, membership, and prologue history stay fixed while the valid team contract and two member lanes appear |
+| Q6 | Continue Galactic Adventure naturally | Both members can follow their own story without round-robin pressure; meaningful effects cross in-world and the result still feels like one adventure |
+
+---
+
 ## Adding scenarios
 
 New chapter? Add a section here with spec §, chapter path, numbered steps, and test/shake commands. Acceptance is the integration layer above unit tests.

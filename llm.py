@@ -160,13 +160,27 @@ async def chat_anthropic(system_prompt, messages):
     return await chat_anthropic_with_model(system_prompt, messages, DIALOGUE_MODEL)
 
 
+async def _emit(on_event, kind: str, **payload) -> None:
+    """Tell the turn what the loop just did. A listener failure never costs the reply."""
+    if on_event is None:
+        return
+    try:
+        await on_event(kind, payload)
+    except Exception as exc:
+        print(f"Turn event listener failed ({kind}): {type(exc).__name__}: {exc}")
+
+
 async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=False,
-                                     tos_tools=None, execute_tool=None):
+                                     tos_tools=None, execute_tool=None, on_event=None):
     """Chat with Anthropic API, optionally with tOS tool use.
 
     Args:
         tos_tools: List of tool definitions (TOS_TOOLS format)
         execute_tool: Function to execute a tool call: execute_tool(name, args) -> str
+        on_event: async ``on_event(kind, payload)`` — ``"prose"`` (text the model
+            wrote before calling tools, payload ``text``) and ``"tool"`` (payload
+            ``name``, ``args``, ``result``), as they happen. The step card in
+            ``dialogue_turn`` listens; the log line does not depend on it.
     """
     import anthropic as _anthropic
     aclient = _anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
@@ -216,6 +230,8 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
                 text = _text_after_tools_only(tools_executed)
             return text or "(no response generated)", tools_executed
 
+        if round_text:
+            await _emit(on_event, "prose", text=round_text)
         kwargs["messages"].append({"role": "assistant", "content": response.content})
         tool_results = []
         round_failed = False
@@ -231,6 +247,7 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
             )
             tools_executed.append({"name": tu.name, "args": tu.input, "result": result})
             print(f"  Tool ({model}): {tu.name} -> {result}")
+            await _emit(on_event, "tool", name=tu.name, args=tu.input, result=result)
             if _tool_result_failed(result):
                 round_failed = True
             tool_results.append({
@@ -422,12 +439,17 @@ async def chat_ollama(system_prompt, messages, model=None, num_ctx=16384, think=
 
 
 async def chat_ollama_with_tools(system_prompt, messages, model_override=None,
-                                  tos_tools=None, execute_tool=None):
+                                  tos_tools=None, execute_tool=None,
+                                  max_rounds=None, on_event=None):
     """Ollama dialogue with tOS tool support (non-streaming).
 
     Args:
         tos_tools: List of tool definitions
         execute_tool: Function to execute a tool call: execute_tool(name, args) -> str
+        max_rounds: cap on model calls (default MAX_TOOL_ROUNDS). The memory
+            loop on the local path uses a small cap: two reads is remembering,
+            eight is wandering while a family waits on Discord.
+        on_event: see ``chat_anthropic_with_model``.
     """
     model = model_override or DIALOGUE_MODEL
     all_messages = [{"role": "system", "content": system_prompt}, *messages]
@@ -437,7 +459,8 @@ async def chat_ollama_with_tools(system_prompt, messages, model_override=None,
     # dropped on the floor. This path serves the family rivers, where nobody is
     # positioned to notice a reply went missing.
     prose_parts: list[str] = []
-    for _ in range(MAX_TOOL_ROUNDS):
+    rounds = max_rounds if max_rounds is not None else MAX_TOOL_ROUNDS
+    for _ in range(rounds):
         blocking_timeout = httpx.Timeout(
             connect=10.0, read=OLLAMA_BLOCKING_READ_SECONDS, write=10.0, pool=None
         )
@@ -465,6 +488,8 @@ async def chat_ollama_with_tools(system_prompt, messages, model_override=None,
             text = "\n\n".join(prose_parts).strip()
             return text or "(no response generated)", tools_executed
 
+        if content.strip():
+            await _emit(on_event, "prose", text=content.strip())
         all_messages.append(msg)
         for tc in tool_calls:
             func = tc.get("function", {})
@@ -477,6 +502,7 @@ async def chat_ollama_with_tools(system_prompt, messages, model_override=None,
             )
             tools_executed.append({"name": tool_name, "args": args, "result": result})
             print(f"  Tool: {tool_name} -> {result}")
+            await _emit(on_event, "tool", name=tool_name, args=args, result=result)
             all_messages.append({"role": "tool", "content": result})
 
     text = "\n\n".join(prose_parts).strip()

@@ -1,6 +1,6 @@
 # Provenance guard (distillation-time)
 
-**Status:** Design spec — proposed, not built. Follow-on to the `Say only what was said` principle ([../ux/principles.md](../ux/principles.md)).
+**Status:** First-line guard implemented 2026-09-07 in `provenance_guard.py`; generation-time prose and future judge calibration remain layered work. Follow-on to the `Say only what was said` principle ([../ux/principles.md](../ux/principles.md)).
 **Date:** 2026-07-21
 **Warrant:** A shared-space eddy (2026-07-20) where Turtle attributed a hurtful characterization to a member who never said it. Caught by the other member. The generation-time fix (template `character/` prose) reduces the failure at the source; this guard is the backstop for the path that makes it *permanent* — distillation into persisted state.
 
@@ -32,7 +32,7 @@ Escalation by harm:
 
 ## Implementation, in order of robustness
 
-1. **Cheap first-line (heuristic):** regex for attribution-verb + name proximity, cross-checked against a harm lexicon. Zero model cost; catches the highest-stakes case (harmful attribution) with high precision. Ship this first.
+1. **Cheap first-line (heuristic):** regex for attribution-verb + name proximity, cross-checked against a harm lexicon. Zero model cost; catches the highest-stakes case (harmful attribution) with high precision. **Shipped:** `provenance_guard.guard_distillation`; health persisted events additionally require typed provenance and reachable evidence.
 2. **Robust (LLM-judge pass):** a single verification call — *"For each statement this summary attributes to a person, is it supported by the transcript below? List unsupported attributions."* More coverage, one extra call per checkpoint. Layer on where checkpoint latency allows.
 
 ## Open questions

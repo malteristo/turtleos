@@ -140,9 +140,36 @@ def resolve_surface(rel_path: str) -> Path:
     return path
 
 
+DISCORD_LIMIT = 2000
+
+
 def surface_footer(rel_path: str) -> str:
     """Where the workspace lives, appended to the opener."""
     return f"\n\n-# 📄 shared workspace: `{rel_path}` — ask me to render it to read it here"
+
+
+def opener_content(body: str, rel_path: str) -> str:
+    return body.rstrip() + surface_footer(rel_path)
+
+
+def assert_opener_fits(body: str, rel_path: str) -> str:
+    """Refuse a too-long opener before any thread exists.
+
+    Spawn-then-check left empty threads when the ask did not fit
+    (2026-09-13 remainder). The footer counts; Discord's cap is the body
+    that actually sends.
+    """
+    content = opener_content(body, rel_path)
+    if len(content) > DISCORD_LIMIT:
+        footer_len = len(surface_footer(rel_path))
+        file_len = len(body.rstrip())
+        raise RuntimeError(
+            f"Opener is {len(content)} chars, over Discord's {DISCORD_LIMIT}. "
+            f"Your file has {file_len} chars; the footer takes {footer_len}. "
+            "Shorten it — the surface carries the detail, the opener carries the ask. "
+            "Chunking here has previously made Turtle answer part 1 before part 4 arrived."
+        )
+    return content
 
 
 def workspace_note(rel_path: str) -> str:
@@ -205,9 +232,6 @@ def mark_prepared(thread_id: int, surface: str, topic: str) -> None:
     print(f"marked prepared in {path}")
 
 
-DISCORD_LIMIT = 2000
-
-
 def river_token(env: dict) -> str:
     token = env.get("RIVER_BOT_TOKEN") or env.get("DISCORD_BOT_TOKEN")
     if not token:
@@ -239,13 +263,7 @@ async def post_opener(env: dict, thread_id: int, body: str, rel: str) -> None:
     if not token:
         raise RuntimeError("SPIRIT_BOT_TOKEN not found in .env")
 
-    content = body.rstrip() + surface_footer(rel)
-    if len(content) > DISCORD_LIMIT:
-        raise RuntimeError(
-            f"Opener is {len(content)} chars, over Discord's {DISCORD_LIMIT}. "
-            "Shorten it — the surface carries the detail, the opener carries the ask. "
-            "Chunking here has previously made Turtle answer part 1 before part 4 arrived."
-        )
+    content = assert_opener_fits(body, rel)
 
     client = discord.Client(intents=discord.Intents.default())
     await client.login(token)
@@ -283,6 +301,9 @@ async def main_async(args: argparse.Namespace) -> dict:
 
     if not args.topic or not args.opener:
         raise RuntimeError("--topic and --opener are required when opening a new eddy")
+
+    # Length before spawn: an over-limit ask must not leave an empty thread.
+    assert_opener_fits(body, args.surface)
 
     # One act: spawn, deliver the surface, then ask. A prepared eddy missing its
     # surface is the half-completed write this repo keeps rediscovering, so the

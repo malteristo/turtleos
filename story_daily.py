@@ -20,7 +20,7 @@ import yaml
 from core.atomic_io import atomic_write_text
 from helpers import local_now
 from llm import chat_ollama
-from mage import current_practice_dir, get_pd, list_registered_practice_dirs
+from mage import _MAGE_REGISTRY, current_practice_dir, get_pd, list_registered_practice_dirs
 from state import REFLECTION_MODEL
 from story_notes import (
     _NO_SECOND_PERSON_RULE,
@@ -458,6 +458,53 @@ async def run_scheduled_daily_note(
         print(f"Date reminders scheduled pass failed: {type(exc).__name__}: {exc}")
 
     return last
+
+
+async def run_scheduled_health_checkins() -> int:
+    """Its own short tick: an hourly loop's phase is the last restart's minute."""
+    try:
+        return await _run_scheduled_health_checkins()
+    except Exception as exc:
+        print(f"Health check-in scheduled pass failed: {type(exc).__name__}: {exc}")
+        return 0
+
+
+async def _run_scheduled_health_checkins() -> int:
+    """One notifying prompt per enabled health instance after its hour."""
+    from helpers import deliver_channel_text
+    from health_checkin import (
+        already_logged,
+        checkin_content,
+        due_now,
+        health_channel_targets,
+        notify_kwargs,
+        posted_message_id,
+        send_then_mark,
+    )
+
+    now = local_now()
+    today = now.date()
+    posted = 0
+    for target in health_channel_targets(_MAGE_REGISTRY):
+        config = target["config"]
+        root = target["practice_dir"]
+        if not due_now(config, now):
+            continue
+        if already_logged(root, today) or posted_message_id(root, today):
+            continue
+        mention = f"<@{target['discord_id']}>" if target["discord_id"] else ""
+        content, draft = await checkin_content(
+            config, root, today, mention=mention
+        )
+        if notify_kwargs(content)["silent"] is not False:
+            raise RuntimeError("check-in send would suppress notifications")
+
+        async def _deliver(body: str, channel_id=target["channel_id"]) -> str | None:
+            return await deliver_channel_text(channel_id, body, silent=False)
+
+        if await send_then_mark(root, today, content, _deliver, draft=draft):
+            posted += 1
+    return posted
 
 
 async def _run_scheduled_daily_note_for_root(

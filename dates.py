@@ -541,7 +541,9 @@ def owning_channel_id_for_practice_dir(practice_dir: str | Path) -> int | None:
     if kind == "mage":
         return river_channel_id_for_mage_key(key)
 
-    # space → shared-river bound to this space key
+    # Space → channel whose resolved practice contract owns dates.
+    from channel_primitives import resolve_primitive
+
     for ch_id_str, entry in (_MAGE_REGISTRY.get("channels") or {}).items():
         if not isinstance(entry, dict):
             continue
@@ -549,7 +551,8 @@ def owning_channel_id_for_practice_dir(practice_dir: str | Path) -> int | None:
             continue
         if entry.get("mage") != key:
             continue
-        if entry.get("type") != "shared-river":
+        primitive = resolve_primitive(_MAGE_REGISTRY, ch_id_str)
+        if primitive is None or not primitive.has("dates"):
             continue
         try:
             return int(ch_id_str)

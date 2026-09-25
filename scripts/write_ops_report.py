@@ -103,6 +103,11 @@ def format_ops_markdown(bundle: dict[str, Any]) -> str:
         lines.append("")
         lines.append(record_gaps["section"])
 
+    log_watch = bundle.get("log_watch") or {}
+    if log_watch.get("section"):
+        lines.append("")
+        lines.append(log_watch["section"])
+
     canary_checks = canary.get("checks") or []
     non_green = [c for c in canary_checks if c.get("status") != "green"]
     if non_green:

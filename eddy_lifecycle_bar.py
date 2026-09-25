@@ -14,6 +14,8 @@ from urllib.parse import quote, unquote
 
 import discord
 
+from practice_gestures import glance_toward, is_ellipsis_glance, is_go_breath
+
 _ACT_CUSTOM_ID_PREFIX = "river:act:"
 _ACT_CUSTOM_ID_MAX = 100
 _PENDING_ACT_COMMANDS: dict[str, str] = {}
@@ -23,8 +25,54 @@ _revert_tasks: dict[int, asyncio.Task] = {}
 _dissolve_in_progress: set[int] = set()
 
 
+GLANCE_TIMEOUT = 180
+
+
 def standing_lifecycle_bar_enabled() -> bool:
     """Standing eddy action bar — flows · checkpoint · share at thread bottom."""
+    return True
+
+
+def lifecycle_act_labels(phase: str) -> list[str]:
+    """Acts the bar and the glance show for a phase — availability, not ranking."""
+    from flow_runner import list_flow_ids_for_bar_phase
+
+    labels: list[str] = []
+    if list_flow_ids_for_bar_phase(phase):
+        labels.append("flow")
+    if phase == "live":
+        labels.extend(["checkpoint", "share"])
+    return labels
+
+
+def glance_phase(thread_id: int) -> str:
+    """Craft has no standing bar, so a glance there is always live."""
+    return get_bar_phase(thread_id) or "live"
+
+
+def _flow_ids_for_labels(labels: list[str], phase: str) -> list[str]:
+    if "flow" not in labels:
+        return []
+    try:
+        from flow_runner import list_flow_ids_for_bar_phase
+
+        raw = list_flow_ids_for_bar_phase(phase)
+    except Exception:
+        return []
+    return [fid for fid in raw] if isinstance(raw, list) else []
+
+
+def glance_eligible(thread_id: int, parent_id: int | None) -> bool:
+    """Glance follows eddy parents (river, craft, health), not only native bars."""
+    if not parent_id:
+        return False
+    from eddy_spawn import is_awaiting_flow_intake
+    from mage import supports_eddy_bar
+
+    if not supports_eddy_bar(parent_id):
+        return False
+    if is_awaiting_flow_intake(thread_id, parent_id):
+        return False
     return True
 
 
@@ -136,9 +184,11 @@ def bootstrap_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
     if not parent_id:
         return False
     from eddy_spawn import is_awaiting_flow_intake
-    from prompts import uses_native_turtle_prompt
+    from mage import get_channel_primitive
+    from primitive_runtime import runtime_for
 
-    if not uses_native_turtle_prompt(parent_id):
+    runtime = runtime_for(get_channel_primitive(parent_id))
+    if runtime is None or not runtime.lifecycle_bar:
         return False
     if is_awaiting_flow_intake(thread_id, parent_id):
         return False
@@ -152,9 +202,11 @@ def lifecycle_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
     if not parent_id:
         return False
     from eddy_spawn import is_awaiting_flow_intake, is_awaiting_title
-    from prompts import uses_native_turtle_prompt
+    from mage import get_channel_primitive
+    from primitive_runtime import runtime_for
 
-    if not uses_native_turtle_prompt(parent_id):
+    runtime = runtime_for(get_channel_primitive(parent_id))
+    if runtime is None or not runtime.lifecycle_bar:
         return False
     if is_awaiting_flow_intake(thread_id, parent_id):
         return False
@@ -402,9 +454,8 @@ class EddyLifecycleBarView(discord.ui.View):
         self._parent_id = parent_id
         self._phase = phase if phase in ("bootstrap", "live") else "live"
 
-        from flow_runner import list_flow_ids_for_bar_phase
-
-        flow_ids = list_flow_ids_for_bar_phase(self._phase)
+        labels = lifecycle_act_labels(self._phase)
+        flow_ids = _flow_ids_for_labels(labels, self._phase)
         if flow_ids:
             placeholder = (
                 "Load a guided flow…"
@@ -423,7 +474,7 @@ class EddyLifecycleBarView(discord.ui.View):
             select.callback = self._on_flow_pick
             self.add_item(select)
 
-        if self._phase == "live":
+        if "checkpoint" in labels:
             checkpoint_btn = discord.ui.Button(
                 label="checkpoint",
                 custom_id=f"eddy:lifecycle:checkpoint:{thread_id}",
@@ -433,6 +484,7 @@ class EddyLifecycleBarView(discord.ui.View):
             checkpoint_btn.callback = self._on_checkpoint
             self.add_item(checkpoint_btn)
 
+        if "share" in labels:
             share_btn = discord.ui.Button(
                 label="share",
                 custom_id=f"eddy:lifecycle:share:{thread_id}",
@@ -483,6 +535,185 @@ class EddyLifecycleBarView(discord.ui.View):
             return
         await interaction.response.defer()
         await _run_lifecycle_command(interaction, "share")
+
+
+class EddyGlanceView(discord.ui.View):
+    """Ephemeral River half of `...` — same acts as the bar, then it goes away."""
+
+    def __init__(self, thread_id: int, parent_id: int, *, phase: str = "live"):
+        super().__init__(timeout=GLANCE_TIMEOUT)
+        self._thread_id = thread_id
+        self._parent_id = parent_id
+        self._phase = phase if phase in ("bootstrap", "live") else "live"
+
+        labels = lifecycle_act_labels(self._phase)
+        flow_ids = _flow_ids_for_labels(labels, self._phase)
+        if flow_ids:
+            placeholder = (
+                "Load a guided flow…"
+                if self._phase == "bootstrap"
+                else "Load or switch flow…"
+            )
+            options = [
+                discord.SelectOption(label=_flow_display_name(fid)[:100], value=fid)
+                for fid in flow_ids[:25]
+            ]
+            select = discord.ui.Select(
+                placeholder=placeholder,
+                options=options,
+                custom_id=f"eddy:glance:flowpick:{thread_id}",
+            )
+            select.callback = self._on_flow_pick
+            self.add_item(select)
+
+        if "checkpoint" in labels:
+            checkpoint_btn = discord.ui.Button(
+                label="checkpoint",
+                custom_id=f"eddy:glance:checkpoint:{thread_id}",
+                style=discord.ButtonStyle.secondary,
+                emoji="💾",
+            )
+            checkpoint_btn.callback = self._on_checkpoint
+            self.add_item(checkpoint_btn)
+
+        if "share" in labels:
+            share_btn = discord.ui.Button(
+                label="share",
+                custom_id=f"eddy:glance:share:{thread_id}",
+                style=discord.ButtonStyle.secondary,
+                emoji="📤",
+            )
+            share_btn.callback = self._on_share
+            self.add_item(share_btn)
+
+    async def _dismiss(self, interaction: discord.Interaction) -> None:
+        self.stop()
+        try:
+            if interaction.message:
+                await interaction.message.delete()
+        except discord.HTTPException:
+            pass
+
+    async def on_timeout(self) -> None:
+        self.stop()
+
+    async def _on_flow_pick(self, interaction: discord.Interaction):
+        values = interaction.data.get("values") or []
+        flow_id = values[0] if values else None
+        if not flow_id:
+            await interaction.response.send_message("No flow selected.", ephemeral=True)
+            return
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread) or thread.id != self._thread_id:
+            await interaction.response.send_message("Open this from the eddy thread.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        from eddy_flow_library import _complete_flow_pick
+
+        parent_id = self._parent_id or getattr(thread, "parent_id", 0) or 0
+        await _complete_flow_pick(
+            interaction,
+            thread_id=self._thread_id,
+            parent_id=parent_id,
+            flow_id=flow_id,
+            dismiss_message=False,
+        )
+        await self._dismiss(interaction)
+
+    async def _on_checkpoint(self, interaction: discord.Interaction):
+        if interaction.channel.id != self._thread_id:
+            await interaction.response.send_message("Wrong thread.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await _run_lifecycle_command(interaction, "checkpoint")
+        await self._dismiss(interaction)
+
+    async def _on_share(self, interaction: discord.Interaction):
+        if interaction.channel.id != self._thread_id:
+            await interaction.response.send_message("Wrong thread.", ephemeral=True)
+            return
+        await interaction.response.defer()
+        await _run_lifecycle_command(interaction, "share")
+        await self._dismiss(interaction)
+
+
+async def post_ellipsis_glance(thread: discord.Thread, client) -> discord.Message | None:
+    """River's half of `...` — buttons only. Turtle still answers the same message."""
+    parent_id = thread.parent_id
+    if not parent_id or not glance_eligible(thread.id, parent_id):
+        return None
+    phase = glance_phase(thread.id)
+    if not lifecycle_act_labels(phase):
+        return None
+    from bar_anchor import channel_for_client
+
+    ch = await channel_for_client(thread, client)
+    view = EddyGlanceView(ch.id, parent_id, phase=phase)
+    if not view.children:
+        return None
+    try:
+        msg = await ch.send("\u200b", view=view, silent=True)
+    except discord.HTTPException as exc:
+        print(f"Ellipsis glance post failed for {ch.id}: {type(exc).__name__}: {exc}")
+        return None
+    # Timed views stay on the message. add_view is for persistent (no timeout)
+    # views and raises ValueError here — which skipped Memory on 2026-09-05.
+    return msg
+
+
+def _glance_reach_text(thread: discord.Thread, practice_dir: str) -> str:
+    from memory_agent import conversation_reach_text, note_text_for_thread
+
+    dialogue = None
+    try:
+        from helpers import get_history
+
+        dialogue = get_history(thread.id, fresh=True)
+    except Exception:
+        dialogue = None
+    return conversation_reach_text(
+        getattr(thread, "name", "") or "",
+        dialogue=dialogue,
+        note_text=note_text_for_thread(practice_dir, thread.id),
+    )
+
+
+async def post_ellipsis_memory(thread: discord.Thread, client) -> discord.Message | None:
+    """Memory's half of `...` — related sediment, or nothing. River's mouth."""
+    parent_id = thread.parent_id
+    name = getattr(thread, "name", thread.id)
+    if not parent_id or not glance_eligible(thread.id, parent_id):
+        print(f"Ellipsis memory glance skip (ineligible) in #{name}")
+        return None
+    try:
+        from mage import get_channel_primitive, get_pd
+        from memory_agent import render_memory_glance
+
+        practice_dir = get_pd()
+        if not practice_dir:
+            print(f"Ellipsis memory glance quiet in #{name} (no practice dir)")
+            return None
+        body = render_memory_glance(
+            practice_dir,
+            _glance_reach_text(thread, practice_dir),
+            exclude_thread=str(thread.id),
+            exclude_shared_rooms=bool(
+                (primitive := get_channel_primitive(parent_id))
+                and primitive.memory_boundary == "personal_without_shared"
+            ),
+        )
+        if not body.strip():
+            print(f"Ellipsis memory glance quiet in #{name} (nothing related)")
+            return None
+        from bar_anchor import channel_for_client
+
+        ch = await channel_for_client(thread, client)
+        msg = await ch.send(f"**Memory**\n{body}")
+        print(f"Ellipsis memory glance posted in #{name}")
+        return msg
+    except Exception as exc:
+        print(f"Ellipsis memory glance failed for {thread.id}: {type(exc).__name__}: {exc}")
+        return None
 
 
 class EddyDissolveConfirmView(discord.ui.View):

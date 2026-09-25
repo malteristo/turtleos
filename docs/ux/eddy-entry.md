@@ -14,11 +14,11 @@ How practitioners enter eddies and what they see before Turtle speaks.
 |------|----------------------------|
 | Materialize | Thread titled **`new eddy`**; Discord thread card in river |
 | First message | They speak first — that message **is** the opening |
-| Rename | River harness retitles thread from first message content (`generate_topic`); **`!rename Exact title`** anytime in-eddy for manual override |
+| Rename | River harness retitles from first-message words (`generate_topic`); invented nouns fall back to the first line. **`!rename Exact title`** anytime in-eddy for manual override |
 | First Turtle reply | `river added turtle` system line, then dialogue |
 | **Resume** (return after days) | Same thread — history reloads from disk or Discord; Turtle continues without recap disclaimer |
 
-**Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`; `load_thread_history`, `dialogue_store`, `_build_native_runtime_env` in `discord_bot.py`.
+**Implementation:** `spawn_river_eddy`, `handle_eddy_first_message`, `write_awaiting_title` / `pop_awaiting_title` in `eddy_spawn.py` + `river_handler.py`; split-bot first reply via `first_eddy_handoff.py` (River writes) and `dialogue_routing.process_first_eddy_handoff` (Turtle watcher routes); `load_thread_history`, `dialogue_store`, `_build_native_runtime_env` in `discord_bot.py`.
 
 **Lifecycle bar (planned):** After first practitioner message, River posts checkpoint/release/dissolve bar at thread bottom — not on empty materialize. See [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md).
 

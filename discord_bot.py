@@ -62,7 +62,7 @@ from state import (
 )
 
 from mage import (
-    get_pd, get_mage_name, get_mage_key,
+    get_pd, get_mage_name, get_mage_key, get_runtime_dir,
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
     get_registry, _resolve_mage_from_author,
@@ -105,7 +105,14 @@ from helpers import (
 from sessions import session_monitor, checkpoint_session, close_session, maybe_reflect
 from eddy_spawn import handle_eddy_spawn_interaction
 from intake_server import start_intake_server
-from background import interoception_loop, daily_reminders_loop, health_canary_loop, daily_note_loop
+from background import (
+    interoception_loop,
+    daily_reminders_loop,
+    health_canary_loop,
+    daily_note_loop,
+    health_checkin_loop,
+    memory_loop,
+)
 
 from commands import (
     try_direct_command, DIRECT_COMMANDS, ControlPanelView,
@@ -296,14 +303,17 @@ async def on_ready():
     except Exception as exc:
         print(f"Share view registration failed: {exc}")
     try:
-        from craft_ready_ui import rehydrate_ready_views
-        from mage import get_runtime_dir
+        from primitive_runtime import rehydrate_runtime_views
 
-        restored = rehydrate_ready_views(client, get_runtime_dir())
-        if restored:
-            print(f"Craft readiness offers restored: {restored}")
+        for surface, count in rehydrate_runtime_views(
+            client,
+            get_registry(),
+            default_runtime_dir=get_runtime_dir(),
+        ).items():
+            if count:
+                print(f"{surface} views restored: {count}")
     except Exception as exc:
-        print(f"Craft readiness view registration failed: {exc}")
+        print(f"Primitive view registration failed: {exc}")
     print(f"Turtle online: {client.user}")
     try:
         from eddy_spawn import cache_turtle_bot_user_id
@@ -369,6 +379,14 @@ async def on_ready():
         print("Flow bootstrap watcher started")
     except Exception as exc:
         print(f"Intake handoff watcher failed to start: {exc}")
+
+    try:
+        from dialogue_routing import start_first_eddy_handoff_watcher
+
+        start_first_eddy_handoff_watcher(client)
+        print("First eddy handoff watcher started")
+    except Exception as exc:
+        print(f"First eddy handoff watcher failed to start: {exc}")
 
     # Pre-warm delegate edit model to avoid cold-start latency
     async def _prewarm_edit_model():
@@ -559,6 +577,12 @@ async def on_ready():
         if not daily_note_loop.is_running():
             daily_note_loop.start()
             print("daily_note_loop started")
+        if not health_checkin_loop.is_running():
+            health_checkin_loop.start()
+            print("health_checkin_loop started")
+        if not memory_loop.is_running():
+            memory_loop.start()
+            print("memory_loop started")
         if not health_canary_loop.is_running():
             health_canary_loop.start()
             print("health_canary_loop started (INT-027)")
@@ -629,7 +653,9 @@ async def on_thread_create(thread):
             created = thread.created_at.isoformat() if thread.created_at else None
             register_thread(
                 thread.id, thread.name,
-                parent_channel=parent_name, created=created,
+                parent_channel=parent_name,
+                parent_channel_id=thread.parent_id,
+                created=created,
             )
             await _update_thread_state(thread, None, [])
             try:
@@ -806,9 +832,12 @@ def main():
         return
 
     import logging
-    logging.basicConfig(level=logging.WARNING, stream=sys.stdout, force=True)
+    from turn_trace import install_timestamps
+
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
+    install_timestamps()  # every log line says when — the log had no clock until 2026-09-03
+    logging.basicConfig(level=logging.WARNING, stream=sys.stdout, force=True)
     client.run(token)
 
 

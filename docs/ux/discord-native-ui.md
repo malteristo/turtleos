@@ -80,7 +80,12 @@ Blessed provisioning (`!admin space create`, invite / river-key) suppresses dupl
 
 ### Edit channel
 
-Registered channels: rename syncs `discord_name` in `mage_registry.yaml`; category moves and permission drift are logged with `!admin space sync` / `!admin audit` / `!admin rivers sync-names` repair hints. Hosted rivers SHOULD stay `#river-<name>`.
+Registered channels: rename syncs `discord_name` in `mage_registry.yaml`.
+Category moves and permission drift are logged. When a channel instance declares
+`discord_category`, `!admin space sync` repairs its placement without changing
+channel permissions; `!admin audit` reports remaining drift.
+`!admin rivers sync-names` repairs hosted-river names. Hosted rivers SHOULD stay
+`#river-<name>`.
 
 ### Delete channel
 

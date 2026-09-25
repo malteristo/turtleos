@@ -41,6 +41,48 @@ Eddy (thread) message
 
 **Retired from vanilla target:** proprioceptor, reflex, river-entry monologue, vortex/prism, Turtle speech in river.
 
+### Resolved channel contract
+
+Every parent channel and eddy resolves through one identity-bearing contract:
+
+```
+registry channel instance + validated preset
+                    │
+                    ▼
+        Resolved Channel Contract
+        channel id · root · members · roles
+        topology · prompt · memory · capabilities
+        parent posture · data policy
+           │          │          │
+         River      Turtle    services
+```
+
+`channel_primitives.py` owns the atomic preset catalogue and fail-closed
+validation. `mage.py` carries the registered parent channel in a context variable
+alongside the practice root; the root alone is deliberately insufficient because
+private and craft channels may share one root. `primitive_runtime.py` compiles
+the contract into parent dispatch, prompt profile, memory inclusion, readiness,
+startup restoration and lifecycle behavior.
+
+Shared contracts read their own root. Personal material reaches one only through
+an explicit share. The runtime does not inject the speaking member's private
+workspace. Legacy registry `type` strings remain a bounded topology/provisioning
+adapter while existing installations migrate to explicit `primitive` declarations.
+
+The `team` preset makes its previously declarative work capabilities executable
+without creating a Quest subsystem. `governed_state.py` supplies policy-neutral
+proposal transactions and append-only events; `team_state.py` applies
+horizon/member-front authority and rebuilds `team/current.*`; `team_lanes.py`
+binds a readable eddy to one member; `team_federation.py` carries bounded,
+attributed sibling developments through per-lane cursors. A coordinator tends
+the surface but cannot confirm another member's front.
+
+Event-backed activities compose on that seam. `campaign_state.py` records a raw
+player/Turtle exchange before reducing campaign views, publishes a bounded
+activity summary, and leaves reducer failures retryable. The `dnd_dm` flow is a
+prompt policy over this mechanism; it no longer depends on the model remembering
+to edit campaign files.
+
 ---
 
 ## Migration Status (2026-07-04)
@@ -86,7 +128,13 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 |--------|---------------|---------|
 | `core/models.py` | ~100 | Two-stack model routing: River (Qwen), Turtle (Gemma), background stack, KNOWN_MODELS aliases, API opt-in. |
 | `state.py` | 305 | Shared mutable state: bot client, config constants, locks, histories, model re-exports, channel mappings, thread configs. |
-| `mage.py` | 250 | Mage/practitioner registry, channel→practice-dir routing, contextvars for per-channel async isolation. |
+| `channel_primitives.py` | — | Atomic practice presets, narrow topology variants, role predicates, and fail-closed channel/eddy contract resolution. |
+| `primitive_runtime.py` | — | Contract-to-runtime binding for parent posture, prompts, memory, readiness, startup hooks and lifecycle. |
+| `governed_state.py` | — | Policy-neutral immutable proposals, idempotent transaction decisions and atomic event append. |
+| `team_state.py` | — | Shared horizons, member-owned fronts, tasks, decisions, artifacts and rebuildable team views. |
+| `team_lanes.py` / `team_federation.py` | — | Member-lane write ownership plus bounded attributed cross-lane developments. |
+| `campaign_state.py` | — | Raw-first asynchronous campaign events and rebuildable shared/per-member views. |
+| `mage.py` | — | Registry routing plus root, actor, and parent-channel contextvars for per-turn async isolation. |
 | `practice_io.py` | 184 | File I/O helpers for practice directories: read, write, list, search, section extraction, links. |
 | `helpers.py` | 110 | Discord/practice utilities: message splitting, activity logging, history access, local time. |
 
@@ -111,6 +159,8 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 | `attunement.py` | 216 | Attunement helpers and digest-age checks. |
 | `outfacing.py` | 242 | Autonomous signal evaluation and signal draft persistence, now gated by crystallization and daily cap. |
 | `load_command.py` | 284 | `!load` context/resonance loader for circles and bundles. |
+| `memory_agent.py` | 960 | Agent-as-memory (leaf): forms topics from every eddy note with a 21-day heat half-life, names them by model with keyword fallback and a neutral-naming guard, writes `memory/topics.{md,yaml}`, renders the passive topic block, and rebuilds on staleness at quiet windows. Boundary rule `memory_roots_for` is pure; `mage.memory_roots` is its registry glue. |
+| `story_entries.py` | 104 | Eddy-note front-matter parsing (`EddyEntry`), extracted so readers of the notes do not import the runtime component. |
 
 ### Layer 3: Conversation, Session, and River Orchestration
 
@@ -119,7 +169,8 @@ Line counts are approximate snapshots from the deployed shell. Prefer the respon
 | `discord_bot.py` | 937 | Main entry point and event handlers; message dispatch; dialogue path; thread updates; startup orchestration; singleton guard. |
 | `commands.py` | 2556 | Direct command dispatcher plus Discord views/modals. Current largest gravity well. |
 | `sessions.py` | 378 | Session monitor, checkpoint orchestration (eddy note via `story_notes`, day-file assembly), practice-state extraction, manual-release dissolution. |
-| `background.py` | — | Scheduled loops: reminders, daily notes, health canary; practice-health + interoception retired. |
+| `background.py` | — | Scheduled loops: reminders, daily notes, health canary, hourly room-memory maintenance; practice-health + interoception retired. |
+| `turn_trace.py` | 301 | The step card a turn edits as it works (attunement steps, lookups named by what was asked, policy blocks as `blocked: <reason>`, the model's pre-lookup prose), the closing trace, the timed reply-sent log line, and the stdout timestamp stream both bots install. |
 | `boom_thread.py` | 437 | Standing boom thread intake, distillation, and follow-up interactions. |
 | `eddy_spawn.py` | 720 | Thread/eddy creation, intake-thread launcher, vortex/prism routing, resonance detection. |
 | `thread_registry.py` | 233 | Thread registry, backfill, activity tracking, lifecycle metadata. |
@@ -261,7 +312,9 @@ Set on every message via `set_practice_context(message)`. All downstream code ca
 
 ## Mage Registry
 
-`mage_registry.yaml` maps Discord channels to mages and their practice directories:
+`mage_registry.yaml` maps Discord parent channels to channel instances and their
+practice roots. `discord_category` is optional navigation metadata; it never
+changes the resolved primitive or audience:
 
 ```yaml
 mages:
@@ -282,9 +335,18 @@ spaces:
     members: [default, companion]
 
 channels:
-  '<dialogue-channel-id>': default
-  '<companion-channel-id>': companion
-  '<shared-channel-id>': shared
+  '<dialogue-channel-id>':
+    mage: default
+    primitive: private
+    discord_category: Rivers
+  '<companion-channel-id>':
+    mage: companion
+    primitive: private
+    discord_category: Rivers
+  '<shared-channel-id>':
+    mage: shared
+    primitive: partnership
+    discord_category: Family
 ```
 
 **Type routing:**
@@ -351,7 +413,7 @@ Message arrives
         └─ EDIT_DELEGATE_MODEL — delegate file edits
 ```
 
-**Instance defaults** (see `.env.template`): `RIVER_MODEL=qwen3.5:4b`, `TURTLE_MODEL=gemma4:31b`. Faster eddy fallback: `!thread --model gemma-26b`. Cloud dialogue remains opt-in via `DIALOGUE_MODEL=claude-*` or per-thread `--model claude`.
+**Instance defaults** (see `.env.template`): `RIVER_MODEL=qwen3.5:4b`, `TURTLE_MODEL=gemma4:31b`. Install Lighter (~16 GB): `TURTLE_MODEL=gemma4:12b` (`!thread --model gemma-12b`). Faster eddy fallback: `!thread --model gemma-26b`. Cloud dialogue remains opt-in via `DIALOGUE_MODEL=claude-*` or per-thread `--model claude`.
 
 ## Session Lifecycle
 

@@ -35,8 +35,10 @@ def _heuristic_triage(text: str) -> dict:
     if t.startswith("!"):
         return {"category": "command", "needs_state": False}
 
-    # Continuation
-    if t in (".", "..", "...", "go", "continue", "next"):
+    # Continuation — `.` / `. toward`. `...` is a glance, not this.
+    from practice_gestures import is_go_breath
+
+    if is_go_breath(t) or t in ("..", "go", "continue", "next"):
         return {"category": "continuation", "needs_state": False}
 
     # Greetings

@@ -166,5 +166,29 @@ class SyncMappingStatedOnce(unittest.TestCase):
             self.assertIn(lit, text, f"the one copy lost {lit}")
 
 
+class ChapterCloseHarvestHasOneHome(unittest.TestCase):
+    def test_loop_and_matrix_name_the_same_harvest_home(self):
+        agents = (REPO / "AGENTS.md").read_text(encoding="utf-8")
+        matrix = (REPO / "docs" / "traceability-matrix.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("append harvest to `docs/learnings.md`", agents)
+        self.assertIn(
+            "Append the reusable class/pattern harvest to `docs/learnings.md`",
+            matrix,
+        )
+        self.assertNotIn(
+            "Append harvest to `docs/chapters/YYYY-MM-DD-*.md`",
+            matrix,
+        )
+
+    def test_conflicting_old_instruction_would_be_detected(self):
+        planted = "4. Append harvest to `docs/chapters/YYYY-MM-DD-*.md`."
+        self.assertIn(
+            "Append harvest to `docs/chapters/YYYY-MM-DD-*.md`",
+            planted,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

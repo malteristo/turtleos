@@ -226,6 +226,82 @@ def list_by_state(runtime_dir: str | Path, state: str) -> list[tuple[str, dict[s
     ]
 
 
+# Session first, then his confirm, then a held ball. Not an inventory.
+_WAITING_GLANCE = (READY, PROPOSED, WAITING)
+_MOVE_CLIP = 40
+
+
+def whose_move(entry: dict[str, Any] | None) -> str:
+    """One modifier: who holds the next act."""
+    row = entry or {}
+    state = row.get("state")
+    if state == READY:
+        return "session"
+    if state == PROPOSED:
+        return "confirm"
+    if state == WAITING:
+        on = str(row.get("waiting_on") or WAITING_ON_PRACTITIONER).strip()
+        if on in (WAITING_ON_PRACTITIONER, PRACTITIONER, ""):
+            return "you"
+        return on if len(on) <= _MOVE_CLIP else on[: _MOVE_CLIP - 1] + "…"
+    return ""
+
+
+def _same_parent(
+    info: dict[str, Any],
+    parent_name: str | None,
+    parent_id: int | str | None,
+) -> bool:
+    stored_id = info.get("parent_channel_id")
+    if stored_id is not None and parent_id is not None:
+        try:
+            return int(stored_id) == int(parent_id)
+        except (TypeError, ValueError):
+            return False
+    stored_name = info.get("parent_channel")
+    if stored_name and parent_name:
+        return stored_name == parent_name
+    return False
+
+
+def waiting_glance_rows(
+    runtime_dir: str | Path,
+    registry_threads: dict[str, Any] | None,
+    *,
+    parent_name: str | None = None,
+    parent_id: int | str | None = None,
+) -> list[dict[str, Any]]:
+    """Eddies waiting for a session or a word. Fail-closed on parent.
+
+    Absent parent facts, or a row from another river, stay off the glance.
+    Acted and refused are not waiting.
+    """
+    if parent_name is None and parent_id is None:
+        return []
+    threads = registry_threads if isinstance(registry_threads, dict) else {}
+    ranked: list[dict[str, Any]] = []
+    for tid, entry in _rows(load_sidecar(runtime_dir)).items():
+        if not isinstance(entry, dict) or entry.get("state") not in _WAITING_GLANCE:
+            continue
+        info = threads.get(str(tid))
+        if not isinstance(info, dict) or not _same_parent(info, parent_name, parent_id):
+            continue
+        move = whose_move(entry)
+        name = str(info.get("name") or "").strip() or "eddy"
+        ranked.append(
+            {
+                "thread_id": str(tid),
+                "name": name,
+                "state": entry.get("state"),
+                "move": move,
+                "line": f"**{name}** · {move}",
+            }
+        )
+    order = {name: i for i, name in enumerate(_WAITING_GLANCE)}
+    ranked.sort(key=lambda row: (order.get(row["state"], 99), row["name"].lower()))
+    return ranked
+
+
 def _write(runtime_dir: str | Path, thread_id: int, entry: dict[str, Any]) -> dict[str, Any]:
     data = load_sidecar(runtime_dir)
     _rows(data)[str(thread_id)] = entry

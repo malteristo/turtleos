@@ -165,7 +165,26 @@ def _collect_write_paths() -> dict[str, Any]:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
+def _collect_log_watch() -> dict[str, Any]:
+    """Exception / skip / dialogue / reflection classes in the bot logs."""
+    try:
+        from core.log_watch import collect_log_watch, default_log_paths
+
+        previous: list[str] = []
+        latest = TEST_RUNS / "ops-report-latest.json"
+        if latest.is_file():
+            try:
+                prev = json.loads(latest.read_text(encoding="utf-8"))
+                previous = list((prev.get("log_watch") or {}).get("class_ids") or [])
+            except (OSError, json.JSONDecodeError):
+                previous = []
+        return collect_log_watch(default_log_paths(REPO), previous_ids=previous)
+    except Exception as exc:  # pragma: no cover - reporting must not break the gate
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def _collect_record_gaps() -> dict[str, Any]:
+
     """Holes in the practice record — a dropped note nobody can see."""
     try:
         from mage import list_registered_practice_dirs
@@ -274,6 +293,7 @@ def run_ops(
         "updates": updates,
         "write_paths": _collect_write_paths(),
         "record_gaps": _collect_record_gaps(),
+        "log_watch": _collect_log_watch(),
     }
     bundle["ops_overall"] = _compute_ops_overall(shake_report, canary, suite_steps)
 

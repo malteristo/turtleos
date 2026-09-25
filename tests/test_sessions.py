@@ -12,7 +12,7 @@ sys.modules.setdefault("discord.ext.tasks", MagicMock())
 
 import story_notes
 from helpers import local_now
-from sessions import CheckpointResult, checkpoint_session, close_session
+from sessions import CheckpointResult, checkpoint_session, close_session, maybe_reflect
 
 
 HISTORY_4 = [
@@ -606,6 +606,51 @@ class ManualEddyDissolveGateTests(unittest.IsolatedAsyncioTestCase):
             dissolve_mock.assert_awaited_once()
         finally:
             self._cleanup(303)
+
+
+class MaybeReflectTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        from state import reflection_loop_counters
+
+        reflection_loop_counters.clear()
+
+    def tearDown(self) -> None:
+        from state import reflection_loop_counters
+
+        reflection_loop_counters.clear()
+
+    def test_old_length_floor_would_post_the_sentinel(self) -> None:
+        """Positive control: `(no response generated)` is 24 chars."""
+        self.assertGreater(len(story_notes._NO_RESPONSE_SENTINEL), 20)
+
+    async def test_sentinel_is_not_posted(self) -> None:
+        channel = MagicMock()
+        channel.id = 4242
+        channel.send = AsyncMock()
+        history = [{"role": "user", "content": "hello there"}]
+        with patch(
+            "sessions.chat_ollama",
+            AsyncMock(return_value=story_notes._NO_RESPONSE_SENTINEL),
+        ), patch("sessions.get_mage_name", return_value="Kermit"), patch(
+            "state.REFLECTION_LOOP_INTERVAL", 1
+        ):
+            await maybe_reflect(channel, history)
+        channel.send.assert_not_awaited()
+
+    async def test_a_real_reflection_still_posts(self) -> None:
+        channel = MagicMock()
+        channel.id = 4243
+        channel.send = AsyncMock()
+        history = [{"role": "user", "content": "hello there"}]
+        body = "I notice we keep circling the same question without landing."
+        with patch("sessions.chat_ollama", AsyncMock(return_value=body)), patch(
+            "sessions.get_mage_name", return_value="Kermit"
+        ), patch("state.REFLECTION_LOOP_INTERVAL", 1):
+            await maybe_reflect(channel, history)
+        channel.send.assert_awaited_once()
+        sent = channel.send.await_args.args[0]
+        self.assertTrue(sent.startswith("*reflects*"))
+        self.assertIn(body, sent)
 
 
 if __name__ == "__main__":

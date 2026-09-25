@@ -434,6 +434,62 @@ class CraftReadinessTests(unittest.TestCase):
             cr.HOT,
         )
 
+    def test_waiting_glance_is_not_an_inventory(self) -> None:
+        cr.propose(self.runtime, 1, target_condition=CONDITION)
+        cr.confirm(self.runtime, 1)
+        cr.propose(self.runtime, 2, target_condition=CONDITION)
+        cr.mark_waiting(self.runtime, 3)
+        cr.propose(self.runtime, 4, target_condition=CONDITION)
+        cr.confirm(self.runtime, 4)
+        cr.mark_acted(self.runtime, 4)
+        cr.refuse(self.runtime, 5, gap="the target is undecided in the thread")
+        cr.propose(self.runtime, 6, target_condition=CONDITION)
+        registry = {
+            "1": {
+                "name": "ready one",
+                "parent_channel": "craft-turtle",
+                "parent_channel_id": "10",
+            },
+            "2": {
+                "name": "proposed one",
+                "parent_channel": "craft-turtle",
+                "parent_channel_id": "10",
+            },
+            "3": {
+                "name": "held one",
+                "parent_channel": "craft-turtle",
+                "parent_channel_id": "10",
+            },
+            "4": {
+                "name": "SECRET-ACTED",
+                "parent_channel": "craft-turtle",
+                "parent_channel_id": "10",
+            },
+            "5": {
+                "name": "SECRET-REFUSED",
+                "parent_channel": "craft-turtle",
+                "parent_channel_id": "10",
+            },
+            "6": {
+                "name": "SECRET-OTHER",
+                "parent_channel": "family",
+                "parent_channel_id": "99",
+            },
+        }
+        rows = cr.waiting_glance_rows(
+            self.runtime, registry, parent_name="craft-turtle", parent_id=10
+        )
+        names = [row["name"] for row in rows]
+        self.assertEqual(names, ["ready one", "proposed one", "held one"])
+        self.assertEqual([row["move"] for row in rows], ["session", "confirm", "you"])
+        self.assertNotIn("SECRET-ACTED", names)
+        self.assertNotIn("SECRET-REFUSED", names)
+        self.assertNotIn("SECRET-OTHER", names)
+
+    def test_waiting_glance_without_a_parent_is_empty(self) -> None:
+        cr.propose(self.runtime, 1, target_condition=CONDITION)
+        self.assertEqual(cr.waiting_glance_rows(self.runtime, {"1": {"name": "x"}}), [])
+
 
 if __name__ == "__main__":
     unittest.main()

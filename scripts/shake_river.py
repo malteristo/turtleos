@@ -95,7 +95,8 @@ async def check_classify_live() -> list[str]:
             errors.append(f"parent river should not include offer_eddy (standing bar): {types}")
         prose_types = [t for t in types if t not in (
             "acknowledge", "revise_offer", "offer_flow_menu",
-            "offer_flow", "error", "chronicle",
+            "offer_flow", "error", "chronicle", "present_artifacts",
+            "show_threads", "show_waiting", "show_channel_menu", "file_intake",
         )]
         if prose_types:
             errors.append(f"unknown act types: {prose_types}")

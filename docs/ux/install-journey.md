@@ -103,7 +103,7 @@ Checking this Mac…
 
 Recommended: Standard
   River (fast):  qwen3.5:4b   (~2.5 GB)
-  Turtle (chat): gemma3:27b  (~16 GB)
+  Turtle (chat): gemma4:31b  (~19 GB)
 
 This matches a daily ChatGPT-style loop on your hardware.
 
@@ -114,7 +114,16 @@ This matches a daily ChatGPT-style loop on your hardware.
 Choice [1]:
 ```
 
-**If they pick Lighter**, show one line why (“Fine for trying turtleOS; long eddies may feel thinner”) and different model names — no catalog wall.
+**If they pick Lighter**, one line and the names — no catalog:
+
+```
+Fine for trying turtleOS; long eddies may feel thinner.
+
+  River (fast):  qwen3.5:4b   (~2.5 GB)
+  Turtle (chat): gemma4:12b  (~8 GB)
+
+Set TURTLE_MODEL=gemma4:12b
+```
 
 ### Step 1.3 — Practice root
 
@@ -146,7 +155,7 @@ Ollama is running.
 
 Pulling models (this may take 20–40 minutes)…
   [████████░░░░] qwen3.5:4b
-  [██░░░░░░░░░░] gemma3:27b
+  [██░░░░░░░░░░] gemma4:31b
 
 ✓ Models ready
 ```

@@ -158,6 +158,8 @@ See [per-member-periodic-notes.md](per-member-periodic-notes.md) §Delivery with
 
 ## 9. What this does not do
 
+> **Amended 2026-09-03** by `agent-as-memory.md`: *not permanent* became *derived* (a standing `memory/` view rebuilt from the notes), and *not cross-root* became *one direction only* (a personal root may carry the shared rooms its practitioner belongs to; a shared room never reads a personal root). The other two bullets stand; "nothing retrieved becomes state" still holds for turns.
+
 - **Not a replacement for `!focus`.** Deliberate narrowing to one thread already exists (`scopes.yaml`) and stays practitioner-initiated. Retrieval is ambient; focus is chosen.
 - **Not cross-root.** A room's memory is its own notes. Nothing reads another root, ever (§15.5, charter §3.2).
 - **Not mood or state inference.** Retrieval surfaces what was written, attributed, and nothing else.

@@ -185,6 +185,29 @@ See [review-checklist.md](review-checklist.md).
 
 ---
 
+## Five-state register (2026-09-13 · mapped 2026-09-16)
+
+Agreed in `#craft-turtle` *better eddy management*. Internal labels collapse to five names a practitioner can see in Discord. The mapper is `eddy_five_state.eddy_five_state`. `!threads` is a glance of those names ([system-state.md](system-state.md)); Turtle's awareness line still carries machine fields for the prompt. Step 4 (agent loop) is not this.
+
+**live · resting · kept · sealed · gone**
+
+| Name | Product facts (first match wins) |
+|------|----------------------------------|
+| **gone** | `harvest_status == dissolved` |
+| **sealed** | Discord `locked` or registry `locked` |
+| **kept** | `continuity == keep` (`!keep`) or a pinned working-plan home (`is_home`) |
+| **resting** | `harvest_status == cooled` or Discord `archived` |
+| **live** | everything else that is still a thread |
+
+Four-step order (do not start at 4):
+
+1. Silence routine auto-archive pings so health check-ins can be heard. **Shipped 2026-09-14** — `mode=="cooled"` does not post.
+2. Map the five names onto Discord thread states the product already has. **Shipped 2026-09-16** — `eddy_five_state.py`.
+3. Register the mapping here and in the craft backlog. **This table is step 3.** A dest that only lists the names is not a mapping; `tests/test_eddy_five_state.py` fails if the table loses `harvest_status == dissolved`.
+4. Agent-driven loop that opens overdue eddies instead of only pinging. **Not this chapter.**
+
+---
+
 ## Evolution log
 
 | Date | Change |

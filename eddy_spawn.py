@@ -50,7 +50,8 @@ MULTI_PARAGRAPH_THRESHOLD = 3
 TOPIC_PROMPT = (
     "Generate a short, specific thread title (2-5 words) for a conversation "
     "about the following content. Be concrete, not generic. No quotes, no "
-    "punctuation, lowercase preferred.\n\nContent:\n{content}"
+    "punctuation, lowercase preferred. Use only words that appear in the "
+    "content — do not invent people, places, or events.\n\nContent:\n{content}"
 )
 
 # Above one member, a title generated from the opening message promotes one
@@ -68,7 +69,8 @@ NEUTRAL_TOPIC_PROMPT = (
     "included\". Use no clinical or judgemental words. Name no one as the "
     "cause of anything.\n\n"
     "Be concrete, not generic. No quotes, no punctuation, lowercase "
-    "preferred.\n\nContent:\n{content}"
+    "preferred. Use only words that appear in the content — do not invent "
+    "people, places, or events.\n\nContent:\n{content}"
 )
 
 INTAKE_PROMPT = (
@@ -472,6 +474,53 @@ def should_offer_eddy(message) -> bool:
     return False
 
 
+_TITLE_STOP = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "what",
+        "whats",
+        "about",
+        "just",
+        "have",
+        "been",
+        "your",
+        "you",
+        "are",
+        "was",
+        "not",
+    }
+)
+
+
+def title_is_grounded(title: str, source: str) -> bool:
+    """Every content word in the title must appear in the opening message.
+
+    The namer is a small local model. It will invent a life if nothing
+    refuses. A title that adds a place or event the practitioner did not
+    write is a durable lie on the sidebar.
+    """
+    src = {w for w in re.findall(r"[a-z0-9]+", (source or "").lower()) if len(w) > 2}
+    words = [
+        w
+        for w in re.findall(r"[a-z0-9]+", (title or "").lower())
+        if len(w) > 2 and w not in _TITLE_STOP
+    ]
+    if not words:
+        return False
+    return all(w in src for w in words)
+
+
+def fallback_topic(content: str) -> str:
+    first_line = (content or "").strip().split("\n")[0][:80]
+    return first_line if first_line else "new thread"
+
+
 async def generate_topic(content: str, *, neutral: bool = False) -> str:
     """Generate a thread topic from content using a fast local model.
 
@@ -494,7 +543,7 @@ async def generate_topic(content: str, *, neutral: bool = False) -> str:
         if result:
             topic = result.strip().strip('"\'').strip()
             topic = topic.split("\n")[0][:80]
-            if topic:
+            if topic and title_is_grounded(topic, content):
                 return topic
     except (asyncio.TimeoutError, Exception) as e:
         print(f"Topic generation failed: {type(e).__name__}: {e}")
@@ -505,8 +554,7 @@ async def generate_topic(content: str, *, neutral: bool = False) -> str:
         domain = urlparse(urls[0]).netloc.replace("www.", "")
         return f"shared from {domain}"
 
-    first_line = content.strip().split("\n")[0][:60]
-    return first_line if first_line else "new thread"
+    return fallback_topic(content)
 
 
 async def spawn_eddy_in_channel(channel, content: str, topic: str | None = None,
@@ -556,6 +604,7 @@ async def spawn_eddy_in_channel(channel, content: str, topic: str | None = None,
     register_thread(
         thread.id, topic,
         parent_channel=channel.name if hasattr(channel, "name") else "unknown",
+        parent_channel_id=channel.id,
         model="local", attunement=attunement, eddy_type=eddy_type,
     )
 
@@ -624,6 +673,7 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
     register_thread(
         thread.id, topic,
         parent_channel=message.channel.name if hasattr(message.channel, "name") else "unknown",
+        parent_channel_id=parent_id,
         model="local", attunement=attunement, eddy_type=eddy_type,
     )
 
@@ -1291,6 +1341,7 @@ async def spawn_river_eddy(
         thread.id,
         thread_name,
         parent_channel=message.channel.name if hasattr(message.channel, "name") else "river",
+        parent_channel_id=parent_id,
         model="local",
         attunement=attunement,
         eddy_type=eddy_type,
@@ -1414,6 +1465,7 @@ async def spawn_blank_river_eddy(
         thread.id,
         thread_name,
         parent_channel=channel.name if hasattr(channel, "name") else "river",
+        parent_channel_id=channel.id,
         model=model_label,
         attunement=attunement,
         eddy_type=eddy_type,

@@ -145,13 +145,37 @@ class ContinuityThemeConfirmView(discord.ui.View):
         await interaction.response.edit_message(content=body, view=None)
 
 
+def compose_theme_harvest_text(themes: list[str]) -> str:
+    """Announce what checkpoint already put in the alive layer — no button."""
+    labels = themes_for_confirm(themes)
+    if not labels:
+        return ""
+    bullets = "\n".join(f"• {t}" for t in labels)
+    return (
+        f"Harvested from this eddy:\n{bullets}\n\n"
+        "Already held as live — no button to press."
+    )
+
+
+async def announce_theme_harvest(
+    message,
+    themes: list[str],
+) -> bool:
+    """River announces the harvest. Promotion already ran unasked."""
+    text = compose_theme_harvest_text(themes)
+    if not text:
+        return False
+    await message.reply(text, mention_author=False)
+    return True
+
+
 async def offer_theme_confirm(
     message,
     themes: list[str],
     *,
     practice_dir: str | None = None,
 ) -> bool:
-    """Post the Keep-these surface. Returns True when a confirm was sent."""
+    """Keep-these button — kept for a typed upgrade path, not the checkpoint."""
     labels = themes_for_confirm(themes)
     if not labels:
         return False

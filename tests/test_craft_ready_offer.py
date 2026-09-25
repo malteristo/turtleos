@@ -14,6 +14,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import sessions
@@ -23,6 +24,14 @@ from craft_readiness_noticer import Proposal, Reading
 THREAD = 4242
 CRAFT_PARENT = 101
 CONDITION = "a formal specification of channel primitives exists in the spec"
+
+
+def _primitive(enabled: bool):
+    return (
+        SimpleNamespace(has=lambda capability: capability == "craft_readiness")
+        if enabled
+        else None
+    )
 
 
 class CraftReadinessOfferTests(unittest.IsolatedAsyncioTestCase):
@@ -40,7 +49,7 @@ class CraftReadinessOfferTests(unittest.IsolatedAsyncioTestCase):
         thread.id = THREAD
         return (
             patch("mage.get_runtime_dir", return_value=str(self.runtime)),
-            patch("mage.uses_craft_surface", return_value=craft),
+            patch("mage.get_channel_primitive", return_value=_primitive(craft)),
             patch("craft_readiness_noticer.read_note", new=AsyncMock(return_value=proposal)),
             patch("craft_ready_ui.offer_ready_confirm", new=AsyncMock(return_value=True)),
             patch.object(sessions.state, "client", MagicMock(get_channel=lambda _cid: thread)),
@@ -56,11 +65,23 @@ class CraftReadinessOfferTests(unittest.IsolatedAsyncioTestCase):
             for p in reversed(patches):
                 p.stop()
 
-    async def test_a_craft_eddy_gets_a_proposal_and_an_offer(self) -> None:
+    async def test_a_craft_eddy_gets_a_proposal_and_an_announce(self) -> None:
+        thread = MagicMock()
+        thread.id = THREAD
+        thread.send = AsyncMock()
         with patch("craft_ready_ui.offer_ready_confirm", new=AsyncMock()) as offer:
-            patches = self._patches()[:3] + (
-                patch("craft_ready_ui.offer_ready_confirm", new=offer),
-                self._patches()[4],
+            patches = (
+                patch("mage.get_runtime_dir", return_value=str(self.runtime)),
+                patch("mage.get_channel_primitive", return_value=_primitive(True)),
+                patch(
+                    "craft_readiness_noticer.read_note",
+                    new=AsyncMock(
+                        return_value=Reading(proposal=Proposal(CONDITION, "warrants a spec"))
+                    ),
+                ),
+                patch.object(
+                    sessions.state, "client", MagicMock(get_channel=lambda _cid: thread)
+                ),
             )
             for p in patches:
                 p.start()
@@ -71,13 +92,16 @@ class CraftReadinessOfferTests(unittest.IsolatedAsyncioTestCase):
                     p.stop()
         self.assertEqual(cr.state_of(self.runtime, THREAD), cr.PROPOSED)
         self.assertEqual(cr.target_condition_of(self.runtime, THREAD), CONDITION)
-        offer.assert_awaited_once()
+        offer.assert_not_awaited()
+        thread.send.assert_awaited_once()
+        self.assertIn("Harvested", thread.send.await_args.args[0])
+        self.assertIn(CONDITION, thread.send.await_args.args[0])
 
     async def test_a_non_craft_eddy_is_never_read(self) -> None:
         """Positive control on the gate: the model is not even asked."""
         with patch("craft_readiness_noticer.read_note", new=AsyncMock()) as read:
             with patch("mage.get_runtime_dir", return_value=str(self.runtime)):
-                with patch("mage.uses_craft_surface", return_value=False):
+                with patch("mage.get_channel_primitive", return_value=None):
                     await sessions._maybe_offer_craft_readiness(THREAD, self.result, 999)
         read.assert_not_awaited()
         self.assertIsNone(cr.state_of(self.runtime, THREAD))
@@ -91,7 +115,10 @@ class CraftReadinessOfferTests(unittest.IsolatedAsyncioTestCase):
         cr.confirm(self.runtime, THREAD)
         with patch("craft_readiness_noticer.read_note", new=AsyncMock()) as read:
             with patch("mage.get_runtime_dir", return_value=str(self.runtime)):
-                with patch("mage.uses_craft_surface", return_value=True):
+                with patch(
+                    "mage.get_channel_primitive",
+                    return_value=_primitive(True),
+                ):
                     await sessions._maybe_offer_craft_readiness(THREAD, self.result, CRAFT_PARENT)
         read.assert_not_awaited()
         self.assertEqual(cr.state_of(self.runtime, THREAD), cr.READY)
@@ -109,7 +136,10 @@ class CraftReadinessOfferTests(unittest.IsolatedAsyncioTestCase):
         """A proposal that could not be posted is still a proposal Spirit can read."""
         patches = (
             patch("mage.get_runtime_dir", return_value=str(self.runtime)),
-            patch("mage.uses_craft_surface", return_value=True),
+            patch(
+                "mage.get_channel_primitive",
+                return_value=_primitive(True),
+            ),
             patch(
                 "craft_readiness_noticer.read_note",
                 new=AsyncMock(return_value=Reading(proposal=Proposal(CONDITION, ""))),

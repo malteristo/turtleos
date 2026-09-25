@@ -592,7 +592,7 @@ async def _resolve_craft_thread(request, thread_id: int):
     Craft-gated on purpose. A readiness offer or a gap landing in a family river
     would be the eddy-bar-in-the-wrong-channel mistake with worse content.
     """
-    from mage import uses_craft_surface
+    from mage import channel_has_capability
 
     client = request.app.get("discord_client")
     if client is None:
@@ -604,7 +604,7 @@ async def _resolve_craft_thread(request, thread_id: int):
         except Exception as exc:
             raise web.HTTPNotFound(text=f"thread {thread_id} not reachable: {exc}") from None
     parent_id = getattr(thread, "parent_id", None)
-    if not uses_craft_surface(parent_id or thread_id):
+    if not channel_has_capability(parent_id or thread_id, "craft_readiness"):
         raise web.HTTPForbidden(text="not a craft eddy")
     return thread
 

@@ -1506,6 +1506,7 @@ async def cmd_admin(message, args):
             await message.reply("\n".join(lines), mention_author=False)
 
         elif space_sub == "sync" and len(args) > 2:
+            from discord_reconcile import ensure_channel_category
             from space_provisioning import normalize_space_key
 
             try:
@@ -1517,14 +1518,27 @@ async def cmd_admin(message, args):
             if not binding:
                 await message.reply(f"No active shared-river space `{space_key}`.", mention_author=False)
                 return
-            ch_id_str, _entry = binding
+            ch_id_str, entry = binding
             channel = guild.get_channel(int(ch_id_str))
             if channel is None:
                 await message.reply(f"Channel `{ch_id_str}` not found on server.", mention_author=False)
                 return
-            changed = await ensure_space_channel_access(channel, guild=guild)
+            permissions_changed = await ensure_space_channel_access(
+                channel, guild=guild
+            )
+            category_changed = await ensure_channel_category(channel, entry)
+            changed = permissions_changed or category_changed
+            detail = []
+            detail.append(
+                f"permissions {'updated' if permissions_changed else 'aligned'}"
+            )
+            if entry.get("discord_category"):
+                detail.append(
+                    f"category {'updated' if category_changed else 'aligned'}"
+                )
             await message.reply(
-                f"Synced **`{space_key}`** — permissions {'updated' if changed else 'already aligned'}.",
+                f"Synced **`{space_key}`** — {', '.join(detail)}"
+                f"{'' if changed else ' (no changes)'}.",
                 mention_author=False,
             )
 

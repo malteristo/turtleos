@@ -107,7 +107,7 @@ class TestMaybeOfferEddySaveAfterTurn(unittest.IsolatedAsyncioTestCase):
         text = f"what do you think {url}"
 
         with patch("mage.river_bot_enabled", return_value=True), patch(
-            "prompts.uses_native_turtle_prompt", return_value=True
+            "prompts.river_posts_turtle_offers", return_value=True
         ), patch("eddy_spawn.is_awaiting_flow_intake", return_value=False), patch(
             "eddy_spawn.is_awaiting_title", return_value=False
         ), patch("cmd_link_resonance.get_cached_resonance", return_value=None), patch(
@@ -293,7 +293,7 @@ Here is a break-time plan you can rotate through between development sessions.
             {"role": "assistant", "content": plan},
         ]
         with patch("mage.river_bot_enabled", return_value=True), patch(
-            "prompts.uses_native_turtle_prompt", return_value=True
+            "prompts.river_posts_turtle_offers", return_value=True
         ), patch("mage.get_pd", return_value="/tmp"), patch(
             "home_plans.get_by_eddy", return_value=None
         ), patch.object(
@@ -316,6 +316,38 @@ Here is a break-time plan you can rotate through between development sessions.
         self.assertTrue(offered)
         offer_mock.assert_awaited_once()
         self.assertIn(55, res._home_plan_offer_seen)
+
+
+class TestProactivePollIsOff(unittest.IsolatedAsyncioTestCase):
+    async def test_poll_executes_turtle_signals_only(self) -> None:
+        """Positive control: heuristic offers stay callable, the poll does not call them."""
+        self.assertFalse(res.RIVER_PROACTIVE_SENESCHAL_OFFERS)
+        message = MagicMock()
+        message.content = "what do you think https://example.com/article"
+        message.id = 7
+        message.channel.id = 99
+        message.channel.name = "test-eddy"
+        message.channel.parent_id = 12345
+        with patch.object(res, "_wait_for_turtle_reply_after", new_callable=AsyncMock, return_value=True), patch.object(
+            res, "maybe_offer_home_plan_after_turtle_reply", new_callable=AsyncMock
+        ) as home, patch.object(
+            res, "maybe_offer_date_keep_after_turn", new_callable=AsyncMock
+        ) as date, patch.object(
+            res, "maybe_offer_contextual_act_after_turn", new_callable=AsyncMock
+        ) as contextual, patch.object(
+            res, "maybe_offer_turtle_intent_after_turn", new_callable=AsyncMock
+        ) as turtle, patch.object(
+            res, "_reanchor_standing_eddy_bars", new_callable=AsyncMock
+        ), patch("mage.set_practice_context"), patch(
+            "mage.set_practice_context_for_channel"
+        ), patch("cmd_link_resonance.get_cached_resonance", return_value=None), patch.object(
+            res, "pick_contextual_offer", return_value=None
+        ):
+            await res._run_contextual_offer_poll(message)
+        turtle.assert_awaited_once()
+        home.assert_not_awaited()
+        date.assert_not_awaited()
+        contextual.assert_not_awaited()
 
 
 if __name__ == "__main__":

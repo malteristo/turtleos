@@ -15,5 +15,6 @@ Before merging a change that touches practitioner-facing behavior:
 11. **Read vs distill:** Does dialogue fetch stay separate from `!fetch` / `link-resonance/`?
 12. **Thread naming:** Does link-read or any shell path fight River-owned titles?
 13. **Document:** Update the relevant file under [docs/ux/](README.md) if the principle or pattern changed.
+14. **System state:** If this shows house or eddy state, is it a glance (attention order, one modifier, parked collapsed) rather than an inventory dump? See [system-state.md](system-state.md).
 
 **Topic docs:** [principles.md](principles.md) · [link-reading.md](link-reading.md) · [rejected.md](rejected.md)

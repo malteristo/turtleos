@@ -28,6 +28,9 @@
 #   shared        — legacy multi-practitioner dialogue (migrate to shared-river)
 #   shared-river  — multi-member space river (acts in parent, shared eddies) — see docs/chapters/design-family-shared-river.md
 #   craft         — builder vocation surface (design chapter: docs/chapters/design-craft-channel.md)
+#   health        — living picture (Turtle owns the parent; not a river). Bind a
+#                   spaces.* entry with memory: isolated so personal rivers
+#                   do not absorb it. default_context: health.
 #
 # Two-bot native mode (TURTLE_SPEC §5.8): set RIVER_BOT_TOKEN in .env and run river_bot.py
 # (com.turtle.river). River bot posts acts in the main channel; Turtle bot speaks in eddies.
@@ -43,6 +46,16 @@ mages:
     admin: true
     relation: household
 
+  # Coach studio — a house-bot identity, not a member. Doctor stays clean.
+  # spirit:
+  #   discord_id: "SPIRIT_BOT_USER_ID"
+  #   address: "Spirit"
+  #   practice_dir: ~/workshops/spirit
+  #   runtime_dir: ~/workshops/spirit
+  #   type: practitioner
+  #   relation: guest
+  #   roster: false
+
 # Do not pre-create spaces here. A spaces.family stub with no Discord channel
 # makes `!admin space create family` say the space already exists and create
 # nothing. Provision with:
@@ -53,14 +66,43 @@ channels:
   "YOUR_DIALOGUE_CHANNEL_ID":
     mage: default
     type: river
+    primitive: private
     default_context: null
+    discord_category: Rivers
     description: Private practice surface
+
+  # "YOUR_SPIRIT_STUDIO_CHANNEL_ID":
+  #   mage: spirit
+  #   type: river
+  #   primitive: private
+  #   default_context: null
+  #   discord_category: Rivers
+  #   description: Coach studio — Spirit sits as a practitioner; not a roster member
 
   "YOUR_CRAFT_CHANNEL_ID":
     mage: default
     type: craft
+    primitive: craft
     attunement: craft
     default_context: craft
+    discord_category: Craft
     description: Craft Turtle builder surface — learning intake for harness/product friction
+
+  "YOUR_HEALTH_CHANNEL_ID":
+    mage: health
+    type: health
+    primitive: health
+    attunement: native
+    default_context: health
+    discord_category: Health
+    description: Living picture — best current explanation
+
+# spaces:
+#   health:
+#     practice_dir: ~/workshops/health
+#     runtime_dir: ~/workshops/health
+#     members: [default, partner]
+#     share_policy: members_only
+#     memory: isolated
 
 default_mage: default

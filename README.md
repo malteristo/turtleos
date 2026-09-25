@@ -128,12 +128,20 @@ cp mage_registry.example.yaml mage_registry.yaml
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Local models — sizes are examples; evaluate against your hardware
+# 4. Local models — Standard (~32 GB RAM)
 ollama pull qwen3.5:4b     # intake / action selection
-ollama pull gemma3:27b     # conversation
+ollama pull gemma4:31b     # conversation
 
 # 5. Start
 python discord_bot.py
+```
+
+On about **16 GB RAM**, take Lighter instead of the Standard pull: `qwen3.5:4b` and `gemma4:12b`, then set `TURTLE_MODEL=gemma4:12b` in `.env`. Long eddies may feel thinner. Do not pull `gemma4:31b` on that machine.
+
+```bash
+ollama pull qwen3.5:4b
+ollama pull gemma4:12b
+echo "lighter models pulled — set TURTLE_MODEL=gemma4:12b in .env"
 ```
 
 ### First success
@@ -150,7 +158,7 @@ Then, optionally: open the flow library inside an eddy and try **Navigator**. Se
 First success is still one member, one private river. A shared room on the same server is a second pass. The destination is that community exists at install, and a relationship practice is a channel you add:
 
 1. Each adult who will practise needs their own Discord account. Discord’s age floor where you live applies — in Germany it is 16. Younger children are not members; a guest login is not a workaround.
-2. In your river, `!admin` then `!admin invite <name> <emoji> --member @them` for each adult.
+2. Send them a Discord invite to this server. Join is membership: they get a private river, and if a shared room already exists they are seated in it.
 3. A shared room: `!admin space create family --members @you @them --context family --policy members_only`.
 
 `!admin doctor` checks the house. Questions an administrator actually hits: [docs/ux/faq.md](docs/ux/faq.md).

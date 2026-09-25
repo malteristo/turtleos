@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from channel_primitives import resolve_primitive
 from mage import get_registry, may_reach
 
 
@@ -32,14 +33,16 @@ def river_channel_for_mage(mage_key: str) -> int | None:
     (`shared_river_channel_for_space` has always skipped archived spaces; this
     is the same rule on the solo side.)
     """
-    for ch_id_str, entry in get_registry().get("channels", {}).items():
+    registry = get_registry()
+    for ch_id_str, entry in registry.get("channels", {}).items():
         if not isinstance(entry, dict):
             continue
         if entry.get("mage") != mage_key:
             continue
         if entry.get("archived"):
             continue
-        if entry.get("type") not in ("river", "hosted-river"):
+        primitive = resolve_primitive(registry, ch_id_str)
+        if primitive is None or primitive.name != "private":
             continue
         try:
             return int(ch_id_str)
@@ -102,15 +105,17 @@ def runtime_dir_for_space(space_key: str) -> str:
 
 
 def shared_river_channel_for_space(space_key: str) -> int | None:
-    """Parent shared-river channel id for a registry space key."""
-    for ch_id_str, entry in get_registry().get("channels", {}).items():
+    """Parent channel whose contract permits explicit sharing."""
+    registry = get_registry()
+    for ch_id_str, entry in registry.get("channels", {}).items():
         if not isinstance(entry, dict):
-            continue
-        if entry.get("type") != "shared-river":
             continue
         if entry.get("archived"):
             continue
         if entry.get("mage") != space_key:
+            continue
+        primitive = resolve_primitive(registry, ch_id_str)
+        if primitive is None or not primitive.has("sharing"):
             continue
         try:
             return int(ch_id_str)

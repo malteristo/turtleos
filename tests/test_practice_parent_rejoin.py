@@ -27,6 +27,14 @@ class PracticeParentChannelIdsTests(unittest.TestCase):
         mage._MAGE_REGISTRY.clear()
         mage._MAGE_REGISTRY.update(
             {
+                "spaces": {
+                    "health": {
+                        "members": ["default", "partner"],
+                        "subject": "partner",
+                        "steward": "default",
+                        "memory": "isolated",
+                    }
+                },
                 "channels": {
                     "111": {"type": "river", "mage": "kermit"},
                     "222": {"type": "shared-river", "mage": "sandbox"},
@@ -42,15 +50,18 @@ class PracticeParentChannelIdsTests(unittest.TestCase):
                         "archived": True,
                     },
                     "666": {"type": "craft", "mage": "kermit"},
+                    "777": {"type": "health", "mage": "health"},
                 }
             }
         )
         with patch("mage._resolve_dialogue_channel_id", return_value=111):
             ids = mage.practice_parent_channel_ids()
-        self.assertEqual(ids, [111, 222, 333, 666])
+        self.assertEqual(ids, [111, 222, 333, 666, 777])
         self.assertTrue(mage.supports_eddy_bar(111))
         self.assertTrue(mage.supports_eddy_bar(666))
-        self.assertFalse(mage._channel_is_river(666))
+        self.assertTrue(mage.supports_eddy_bar(777))
+        self.assertTrue(mage._channel_is_river(666))
+        self.assertTrue(mage._channel_is_river(777))
 
     def test_adds_dialogue_fallback_when_unlisted(self) -> None:
         mage._MAGE_REGISTRY.clear()

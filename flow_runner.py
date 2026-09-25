@@ -169,7 +169,12 @@ def _safe_practice_path(rel: str, practice_dir: str) -> Path | None:
 
 def _has_flow_checkpoint(spec: FlowSpec, practice_dir: str) -> bool:
     """True when a non-empty checkpoint exists in flow write paths."""
-    for rel in spec.writes:
+    checkpoint_reads = tuple(
+        rel
+        for rel in spec.reads
+        if rel.endswith("/checkpoints/latest.md") or rel.endswith("/state.json")
+    )
+    for rel in tuple(spec.writes) + checkpoint_reads:
         path = _safe_practice_path(rel, practice_dir)
         if path and path.is_file() and path.read_text(encoding="utf-8").strip():
             return True
@@ -177,29 +182,26 @@ def _has_flow_checkpoint(spec: FlowSpec, practice_dir: str) -> bool:
 
 
 def ensure_campaign_bootstrap(spec: FlowSpec, practice_dir: str | None = None) -> list[str]:
-    """Create empty campaign/ scaffold on first flow load (dnd_dm and similar)."""
+    """Create campaign directories, never empty files that impersonate state."""
     pd = practice_dir or get_pd()
     if not any(rel.startswith("campaign/") for rel in spec.reads):
         return []
-    world = _safe_practice_path("campaign/world.md", pd)
-    if world and world.is_file():
+    state = _safe_practice_path("campaign/state.json", pd)
+    events = _safe_practice_path("campaign/events.jsonl", pd)
+    if (state and state.is_file()) or (events and events.is_file()):
         return []
 
-    skip = frozenset({"campaign/campaign_seed.md", "campaign/checkpoints/latest.md"})
     created: list[str] = []
-    for rel in spec.reads:
-        if not rel.startswith("campaign/") or rel in skip:
-            continue
+    for rel in (
+        "campaign/checkpoints",
+        "campaign/player_state",
+        "campaign/prologue",
+    ):
         path = _safe_practice_path(rel, pd)
-        if not path or path.is_file():
+        if not path or path.is_dir():
             continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("", encoding="utf-8")
-        created.append(rel)
-
-    cp_dir = _safe_practice_path("campaign/checkpoints/latest.md", pd)
-    if cp_dir:
-        cp_dir.parent.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True)
+        created.append(f"{rel}/")
     return created
 
 

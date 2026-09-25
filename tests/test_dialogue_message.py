@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import dialogue_message
 
@@ -61,6 +61,57 @@ class ForwardSourceRefTests(unittest.TestCase):
         message = MagicMock(message_snapshots=[MagicMock()], reference=ref)
 
         self.assertEqual(dialogue_message.forward_source_ref(message), (1, 100, 200))
+
+
+class FetchingClientIsProcessCorrectTests(unittest.TestCase):
+    """Craft intake dereference runs in River; it must not reach for Turtle's client.
+
+    Live 2026-09-16 → 09-21: every forwarded-source dereference in River died on
+    `_MissingSentinel.is_set` and wrote the traceback into the intake file.
+    """
+
+    def test_river_process_uses_the_river_client(self) -> None:
+        import river_state
+        import state
+
+        sentinel = object()
+        with (
+            patch.dict("os.environ", {"TURTLE_PROCESS_ROLE": "river"}),
+            patch.object(river_state, "_river_client", sentinel),
+            patch.object(state, "_ensure_client", side_effect=AssertionError("built Turtle's client in River")),
+        ):
+            self.assertIs(dialogue_message.fetching_client(), sentinel)
+
+    def test_turtle_process_uses_turtles_client(self) -> None:
+        import state
+
+        sentinel = object()
+        with (
+            patch.dict("os.environ", {"TURTLE_PROCESS_ROLE": "turtle"}),
+            patch.object(state, "_client", sentinel),
+        ):
+            self.assertIs(dialogue_message.fetching_client(), sentinel)
+
+    def test_the_fetch_hands_that_client_to_the_reader(self) -> None:
+        import asyncio
+
+        seen = {}
+
+        async def fake_fetch(client, refs, *, label, limit):
+            seen["client"] = client
+            seen["refs"] = refs
+            return "", 0
+
+        marker = object()
+        with (
+            patch.object(dialogue_message, "fetching_client", return_value=marker),
+            patch("discord_ref_read.fetch_discord_message_context", new=fake_fetch),
+        ):
+            asyncio.run(
+                dialogue_message.fetch_discord_message_context([(None, 5, 6)], label="x")
+            )
+        self.assertIs(seen["client"], marker)
+        self.assertEqual(seen["refs"], [(0, 5, 6)])
 
 
 class ForwardedSnapshotPartialTests(unittest.TestCase):

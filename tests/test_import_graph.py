@@ -50,8 +50,12 @@ import import_graph  # noqa: E402
 #
 # Any future raise needs a reason of that kind, written here. "The number went
 # up" is not one.
-LARGEST_RUNTIME_CYCLE = 53
-HUB_FAN_IN = 63
+# 2026-08-30: roster_sync entered the component when join became admit
+# (Discord humans ≡ members). That is a new production edge, not a rename.
+# member_first_run is a leaf and is not in the cycle. Raise only to the
+# measured dest-day size; do not raise again for first-run copy.
+LARGEST_RUNTIME_CYCLE = 54
+HUB_FAN_IN = 64
 HUB_MODULE = "mage"
 
 

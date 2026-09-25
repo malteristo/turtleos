@@ -14,10 +14,27 @@ from space_provisioning import (
     parse_space_close_args,
     resolve_member_keys,
     validate_space_available,
+    write_space_registry,
 )
 
 
 class AdminSpaceParsingTests(unittest.TestCase):
+    def test_new_space_declares_its_provisioned_category(self) -> None:
+        registry: dict = {}
+        with patch("space_provisioning.save_registry") as save:
+            write_space_registry(
+                registry,
+                space_key="study",
+                channel_id=42,
+                member_keys=["default", "partner"],
+                share_policy="members_only",
+                default_context=None,
+            )
+        self.assertEqual(
+            registry["channels"]["42"]["discord_category"], "Practice"
+        )
+        save.assert_called_once_with(registry)
+
     def test_normalize_space_key(self) -> None:
         self.assertEqual(normalize_space_key("guest_play"), "guest_play")
         self.assertEqual(normalize_space_key("Guest-Play"), "guest_play")

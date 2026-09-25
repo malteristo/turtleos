@@ -15,7 +15,10 @@ This is not caution. A restart is not a pause — the bot identifies fresh, Disc
 python3 scripts/deploy_guard.py          # QUIET / BUSY, exit 0 / 1
 ./restart.sh                             # waits for quiet
 ./restart.sh --force                     # bypass — logged to logs/self-dev.log
+./scripts/deploy_when_quiet.sh --expect-sha <HEAD>   # poll, then restart.sh; does not pull
 ```
+
+`deploy_when_quiet.sh` waits for the guard and restarts **already-applied** code at a pinned HEAD. It times out non-zero, propagates `restart.sh`'s exit code, and refuses if the checkout moved. It does not `git pull`.
 
 `--force` is for the one case the rule does not cover: shipping a fix for something already broken, where fifteen seconds of gap beats leaving it broken. Bypasses are logged so they can be counted; if they become routine the threshold is wrong, not the rule.
 

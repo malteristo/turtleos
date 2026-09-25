@@ -12,9 +12,13 @@ Spirit closes the **functional gate** before the Mage dogfoods practice UX. The 
 | Layer | Owner | Method |
 |-------|-------|--------|
 | **Spirit gate** | Spirit (Forge + Mini) | `unittest`, `shake_*.py` offline, `SHAKE_LIVE=1` live on Mini |
-| **Mage gate** | Mage (async) | Screenshot + felt-sense in Forge; acceptance scenarios marked UX-only |
+| **Spirit sit** | Spirit as practitioner in `#spirit` | Live-test only. Watch Turtle, River, memory. Do not plan or collaborate here. |
+| **Spirit × Craft Turtle** | `#craft-turtle` | Collaboration: diagnosis, handoff, behind-the-scene pairing. Craft Turtle is the Forge-attuned vocation. Do not ask the Mage to type a plumbing probe. |
+| **Mage gate** | Mage, in his own time | Felt sense: tone, would he reach for it, first-run as himself, anything that is his life on the page. A sitting does not wait on this. |
 
 Standing rule from `cast_shake.md`: Spirit owns technical functioning and integration. Mage owns practitioner experience — tone, pacing, whether they would reach for it again.
+
+Desk split: `desk/notes/on_spirit_and_craft_turtle.md` (Magic workshop).
 
 ---
 
@@ -59,6 +63,7 @@ cd ~/turtleos && git pull origin main
 - `shake_share_eddy.py` — S1+
 - `shake_hosted_river.py` — O-rows
 - `shake_spawn_eddy.py` — helper for live flow shake (not standalone gate)
+- `shake_continuity.py` — B-calibration instrument (synthetic pair; red only when the judge is wrong)
 - `shake_report.py` — aggregates `test-runs/shake-*-latest.json`
 
 River noise during development is acceptable; scope live runs to what the chapter touched plus a **smoke** (`navigator --live`) when unsure.
@@ -114,6 +119,16 @@ Chapter intent template (Mage → Spirit translation):
 ```
 
 Spirit produces: chapter doc, spec § trace, acceptance rows, implementation slice, shake mapping.
+
+After the slice, name the Spirit sit — or name that the suite already sees it:
+
+> If Spirit sat this as a practitioner, what would they do, and what would a miss look like in Turtle, in River, and in memory?
+
+If the slice changes what an agent receives, also name the **role need** it feeds — or that the suite already sees it. Lens: `docs/design/role-needs.md`.
+
+Sometimes the answer is *nothing — the suite already sees it*. That is a good answer. The sit is informal and happens in `#spirit` only. Collaboration — what it means, what to change — happens in `#craft-turtle` with Craft Turtle. Not a runner. Not a sitting blocker. The Mage still owns felt sense, in his own time.
+
+Repertoire and vocation: Magic `desk/notes/on_spirit_and_craft_turtle.md`.
 
 ---
 

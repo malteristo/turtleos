@@ -21,6 +21,7 @@ requests~=2.32.5
 aiohttp~=3.13.3
 tweepy~=4.16.0
 trafilatura~=2.0.0
+PyMuPDF~=1.28.0  # sensitive-local PDF text extraction/rendering; OCR binary is host-managed
 
 # Web search in craft attunement. Optional at runtime — `tos_tools._exa_search`
 # reports itself unavailable when the package or `EXA_API_KEY` is missing, rather

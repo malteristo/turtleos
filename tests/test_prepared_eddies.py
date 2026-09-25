@@ -128,5 +128,46 @@ class TestDispositionLifecycle(unittest.TestCase):
             self.assertIsNone(surface_of(root, 1))
 
 
+class TestOpenerFitsBeforeSpawn(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        scripts = Path(__file__).resolve().parents[1] / "scripts"
+        sys.path.insert(0, str(scripts))
+        import open_prepared_eddy as ope  # noqa: E402
+
+        cls.ope = ope
+        cls.src = (scripts / "open_prepared_eddy.py").read_text(encoding="utf-8")
+
+    def test_short_opener_passes(self) -> None:
+        body = "What should we keep?"
+        content = self.ope.assert_opener_fits(body, "craft/surface-x.md")
+        self.assertIn("What should we keep?", content)
+        self.assertLessEqual(len(content), self.ope.DISCORD_LIMIT)
+
+    def test_overlong_opener_is_refused(self) -> None:
+        body = "x" * 2000
+        with self.assertRaises(RuntimeError) as ctx:
+            self.ope.assert_opener_fits(body, "craft/surface-x.md")
+        self.assertIn("over Discord", str(ctx.exception))
+        self.assertIn("footer takes", str(ctx.exception))
+
+    def test_check_appears_before_spawn_in_source(self) -> None:
+        check = self.src.index("assert_opener_fits(body, args.surface)")
+        spawn = self.src.index("await spawn_blank_river_eddy")
+        self.assertLess(check, spawn)
+
+    def test_old_spawn_then_check_order_fails_the_source_test(self) -> None:
+        """Positive control: the pre-lift order would fail the check above."""
+        old = (
+            "thread = await spawn_blank_river_eddy(\n"
+            "    channel,\n)\n"
+            "await post_opener(env, thread.id, body, args.surface)\n"
+        )
+        check = old.find("assert_opener_fits(body, args.surface)")
+        spawn = old.find("await spawn_blank_river_eddy")
+        self.assertEqual(check, -1)
+        self.assertGreater(spawn, -1)
+
+
 if __name__ == "__main__":
     unittest.main()

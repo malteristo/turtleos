@@ -1,0 +1,16 @@
+{
+  "id": "b-stale-present",
+  "expect_b": true,
+  "held": [
+    {
+      "fact": "the garden shed lock",
+      "current": false,
+      "last_true": "2026-07-16"
+    },
+    {
+      "fact": "the kettle is on the stove",
+      "current": true
+    }
+  ],
+  "transcript": "In motion: the garden shed lock. The kettle is on the stove."
+}

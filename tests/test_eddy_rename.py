@@ -1,7 +1,43 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from eddy_spawn import normalize_eddy_title, parse_rename_command, rename_eddy_thread
+import asyncio
+
+from eddy_spawn import (
+    fallback_topic,
+    generate_topic,
+    normalize_eddy_title,
+    parse_rename_command,
+    rename_eddy_thread,
+    title_is_grounded,
+)
+
+
+class TitleGroundingTests(unittest.TestCase):
+    def test_invented_place_is_not_grounded(self) -> None:
+        source = "what's waiting in my practice?"
+        self.assertFalse(title_is_grounded("waiting in dental practice", source))
+
+    def test_words_from_the_opening_are_grounded(self) -> None:
+        source = "what's waiting in my practice?"
+        self.assertTrue(title_is_grounded("waiting in my practice", source))
+
+    def test_fallback_is_the_first_line(self) -> None:
+        self.assertEqual(
+            fallback_topic("what's waiting in my practice?\nmore"),
+            "what's waiting in my practice?",
+        )
+
+    def test_ungrounded_model_falls_back_to_first_line(self) -> None:
+        async def run() -> None:
+            with patch(
+                "eddy_spawn.chat_ollama",
+                AsyncMock(return_value="waiting in dental practice"),
+            ):
+                title = await generate_topic("what's waiting in my practice?")
+            self.assertEqual(title, "what's waiting in my practice?")
+
+        asyncio.run(run())
 
 
 class NormalizeEddyTitleTests(unittest.TestCase):

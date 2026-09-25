@@ -1013,6 +1013,10 @@ def render_substrate_packet(
     current_thread: str | None = None,
     stale_minutes: float = DEFAULT_STALE_MINUTES,
     considered: list[dict[str, Any]] | None = None,
+    message_text: str = "",
+    topics_considered: list[dict[str, Any]] | None = None,
+    compact_topics: bool = False,
+    exclude_shared_rooms: bool = False,
 ) -> str:
     """Seam entry for the shell: freshly compose the current layer, fold in the
     alive headers and the room's recent memory, return the single inject block.
@@ -1024,6 +1028,23 @@ def render_substrate_packet(
 
     ``current_thread`` is the eddy being spoken in; its own notes are excluded,
     since that conversation is already present as history.
+
+    Two memories, two questions. The recency block answers *what has been said
+    here lately* (7 days, 5 notes). The topic block — ``memory_agent`` — answers
+    *what this space keeps returning to*, all time, with a heat that decays by
+    half-life, and ``message_text`` lets a topic the room has not touched in
+    weeks surface when a member brings it up again. On 2026-09-01 a member asked
+    about a topic with 30 notes behind it and Turtle saw none: the newest was
+    7.5 days old. The recency window was doing its job; it was the only reader.
+
+    ``compact_topics`` renders the topic block with one excerpt per topic and
+    half the budget — for turns whose prompt is already long (a link spill, an
+    attachment). The 2026-09-03 rerun carried an 8k transcript plus 5k of
+    memory through a 31B local model and took 3.5 minutes; the memory stays,
+    its excerpts are what give.
+
+    ``exclude_shared_rooms`` is the craft-surface cut (see
+    ``memory_agent.render_topic_memory_block``). Native river leaves it false.
 
     Time is always fresh; the current.yaml write is debounced; the persisted
     checkpoint one-liner is carried forward so it survives the rewrite.
@@ -1048,6 +1069,23 @@ def render_substrate_packet(
     scope_block = render_scope_block(
         practice_dir, thread, current_thread=current_thread, considered=considered
     )
+    try:
+        from memory_agent import TOPIC_BLOCK_CHAR_BUDGET, render_topic_memory_block
+
+        topic_block = render_topic_memory_block(
+            practice_dir,
+            message_text,
+            considered=topics_considered,
+            exclude_thread=current_thread,
+            char_budget=TOPIC_BLOCK_CHAR_BUDGET // 2 if compact_topics else TOPIC_BLOCK_CHAR_BUDGET,
+            excerpts_per_topic=1 if compact_topics else None,
+            exclude_shared_rooms=exclude_shared_rooms,
+        )
+    except Exception as exc:  # a broken memory view must not cost the turn
+        print(f"Topic memory block failed: {type(exc).__name__}: {exc}")
+        topic_block = ""
+    if topic_block:
+        scope_block = (scope_block + "\n" if scope_block else "") + topic_block
     return render_substrate_block(
         data,
         alive,

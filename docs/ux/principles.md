@@ -105,3 +105,13 @@ Harvest: hosted-practitioner feedback 2026-07-20/21 — see `docs/learnings.md`.
 - **Write-time is the danger zone.** Generation-time fabrication misleads for a turn; distilled into chronicle/resonance/state it becomes history. Prose in `template/character/` is the generation-time guard; a distillation-time provenance check is the structural backstop ([provenance-guard.md](../design/provenance-guard.md)).
 
 Harvest: hosted-practitioner feedback 2026-07-20 (a shared-space eddy where a fabricated attribution was caught by the other member) — see `docs/learnings.md`.
+
+---
+
+## System state is a glance, not an inventory
+
+When the shell reports what the house holds — eddies, readiness, a status table — the job is **cognitive ergonomics**: attach to how a person scans, not to how the registry is stored.
+
+Counts and names in attention order. One modifier that changes the next act. Parked things collapse to a count. Operator leftovers (ids, `unconfigured`, a second taxonomy) stay off the practitioner surface.
+
+Pattern: [system-state.md](system-state.md). First reader: `!threads`.

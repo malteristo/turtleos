@@ -116,6 +116,58 @@ class MageChannelResolutionTests(unittest.TestCase):
         )
         self.assertEqual(mage.resolve_registry_channel_id(thread_id), parent_id)
 
+    def test_resolve_registry_channel_id_from_durable_numeric_parent(self) -> None:
+        """Positive control: no channel name or slug is needed after title assignment."""
+        parent_id = 201
+        thread_id = 304
+        self._write_registry(
+            {
+                str(parent_id): {
+                    "type": "shared-river",
+                    "mage": "health",
+                }
+            },
+            mages={
+                "health": {
+                    "practice_dir": os.path.join(self._tmpdir.name, "health"),
+                    "runtime_dir": self._runtime_root,
+                },
+            },
+        )
+        reg_dir = Path(self._runtime_root) / "thread-state"
+        reg_dir.mkdir(parents=True, exist_ok=True)
+        reg_dir.joinpath("registry.yaml").write_text(
+            "\n".join(
+                [
+                    "threads:",
+                    f"  '{thread_id}':",
+                    "    name: health check-in",
+                    "    parent_channel: health",
+                    f"    parent_channel_id: {parent_id}",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(mage.resolve_registry_channel_id(thread_id), parent_id)
+        self.assertEqual(
+            mage.set_practice_context_for_channel(thread_id),
+            os.path.join(self._tmpdir.name, "health"),
+        )
+
+    def test_unresolved_thread_refuses_primary_root_fallback(self) -> None:
+        self._write_registry(
+            {"201": {"type": "shared-river", "mage": "health"}},
+            mages={
+                "health": {
+                    "practice_dir": os.path.join(self._tmpdir.name, "health"),
+                    "runtime_dir": self._runtime_root,
+                },
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "refusing primary-root fallback"):
+            mage.set_practice_context_for_channel(999, require_registered=True)
+
     def test_set_practice_context_for_thread_uses_parent_workshop(self) -> None:
         guest_pd = os.path.join(self._tmpdir.name, "guest")
         os.makedirs(guest_pd, exist_ok=True)
@@ -282,6 +334,31 @@ class EffectiveAttunementThroughThreadsTests(MageChannelResolutionTests):
             for t in tos_tools.tools_for_channel(thread_id)
         }
         self.assertIn("exa_search", names)
+
+    def test_shared_root_does_not_choose_authority_by_registry_order(self) -> None:
+        root = os.path.join(self._tmpdir.name, "operator")
+        self._write_registry(
+            {
+                "100": {"type": "river", "mage": "operator"},
+                "200": {
+                    "type": "craft",
+                    "primitive": "craft",
+                    "mage": "operator",
+                },
+            },
+            mages={
+                "operator": {
+                    "practice_dir": root,
+                    "runtime_dir": self._runtime_root,
+                }
+            },
+        )
+        mage._channel_id_ctx.set(None)
+        self.assertIsNone(mage.primitive_for_practice_dir(root))
+
+        mage.set_practice_context_for_channel(200)
+        self.assertEqual(mage.get_current_channel_primitive().name, "craft")
+        self.assertEqual(mage.primitive_for_practice_dir(root).name, "craft")
 
 
 if __name__ == "__main__":

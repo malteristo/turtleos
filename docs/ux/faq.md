@@ -16,7 +16,7 @@ No. You need a machine you can leave running, a Discord account, and about an af
 
 ## What do I need?
 
-- A Mac or Linux machine that can run a local conversation model (roughly a ~30B-class model, or a smaller one you accept)
+- A Mac or Linux machine: about **32 GB RAM** for Standard (`gemma4:31b`), or about **16 GB** for Lighter (`gemma4:12b`)
 - Python 3.11+, Git, [Ollama](https://ollama.ai)
 - A Discord account and a **private** Discord server you own
 - No cloud API key for the default path
@@ -31,7 +31,7 @@ Details: [onboarding.md](onboarding.md).
 
 They need their own Discord account, and they join **your** server. That join is the admit — they get a private river, and if you already have a shared room they are seated in it. No further command.
 
-`!admin invite` is still there if you want to pre-create a claim room before they arrive. `!admin rivers` lists who has a river. `!admin doctor` reports when Discord membership and turtleOS membership disagree. The bot needs **Administrator** on the server or channel create fails.
+`!admin rivers` lists who has a river. `!admin doctor` reports when Discord membership and turtleOS membership disagree. The bot needs **Administrator** on the server or channel create fails.
 
 ## How do we get a room we share?
 

@@ -177,7 +177,7 @@ class FlowRunnerTests(unittest.TestCase):
                 fh.write("# Hitchhiker seed\n\n" + ("x" * 80))
             self.assertEqual(_checkpoint_line(spec, tmp), "Fresh start — no prior checkpoint.")
 
-    def test_ensure_campaign_bootstrap_creates_skeleton(self) -> None:
+    def test_ensure_campaign_bootstrap_creates_dirs_not_false_state(self) -> None:
         from flow_runner import ensure_campaign_bootstrap
 
         spec = load_flow_spec("dnd_dm")
@@ -188,9 +188,10 @@ class FlowRunnerTests(unittest.TestCase):
             with open(seed_path, "w", encoding="utf-8") as fh:
                 fh.write("# seed")
             created = ensure_campaign_bootstrap(spec, tmp)
-            self.assertIn("campaign/world.md", created)
-            self.assertIn("campaign/current_scene.md", created)
-            self.assertTrue(os.path.isfile(os.path.join(tmp, "campaign", "world.md")))
+            self.assertIn("campaign/player_state/", created)
+            self.assertIn("campaign/prologue/", created)
+            self.assertFalse(os.path.isfile(os.path.join(tmp, "campaign", "world.md")))
+            self.assertFalse(os.path.isfile(os.path.join(tmp, "campaign", "state.json")))
             self.assertTrue(os.path.isdir(os.path.join(tmp, "campaign", "checkpoints")))
             self.assertEqual(ensure_campaign_bootstrap(spec, tmp), [])
 

@@ -9,12 +9,14 @@ from __future__ import annotations
 import discord
 
 from commands import dispatch_direct_command
-from craft_intake import is_craft_intake_channel, schedule_craft_intake
 from dialogue_routing import route_practice_dialogue, should_skip_native_starter
 from eddy_spawn import handle_intake_message, is_intake_thread
 from founder_keys import try_founder_key_entry
 from mage import (
     _get_channel_type,
+    get_actor_key,
+    get_current_channel_primitive,
+    get_pd,
     is_practice_channel,
     maybe_reload_mage_registry,
     river_bot_enabled,
@@ -100,11 +102,35 @@ async def dispatch_incoming_message(message: discord.Message) -> None:
         return
 
     if turtle_handles_native_river(message):
+        from bar_anchor import schedule_river_bar_reconcile
+        from craft_intake import schedule_craft_intake
+        from primitive_runtime import dispatch_parent_message
         from river_handler import handle_river_message
 
-        lock = get_channel_lock(message.channel.id)
-        async with lock:
-            await handle_river_message(message)
+        primitive = get_current_channel_primitive()
+        if primitive is not None and primitive.name == "health":
+            from health_record_ui import maybe_capture_checkin
+            from helpers import local_now
+
+            async with get_channel_lock(message.channel.id):
+                if await maybe_capture_checkin(
+                    message,
+                    primitive,
+                    practice_dir=get_pd(),
+                    actor=get_actor_key(),
+                    today=local_now().date(),
+                ):
+                    return
+
+        await dispatch_parent_message(
+            message,
+            state.client,
+            primitive,
+            lock=get_channel_lock(message.channel.id),
+            craft_handler=schedule_craft_intake,
+            river_handler=handle_river_message,
+            reconcile_bar=schedule_river_bar_reconcile,
+        )
         return
 
     if (
@@ -130,12 +156,6 @@ async def dispatch_incoming_message(message: discord.Message) -> None:
                     return
                 _processed_messages.append(message.id)
             await route_practice_dialogue(message)
-            return
-
-    lock = get_channel_lock(message.channel.id)
-    async with lock:
-        if is_craft_intake_channel(message):
-            await schedule_craft_intake(message, state.client)
             return
 
     await route_practice_dialogue(message)

@@ -1,13 +1,12 @@
 """Discord humans ≡ turtleOS members.
 
-Join admits (private river + community seat when a shared room exists).
+Join admits (private river + community seat when a generic shared room exists).
 Leave departs (archive the private river, drop space seats).
 Doctor reads the same drift the hooks are supposed to keep empty.
 
 Install still creates one river (§13.3). This module does not create a
-community channel. It seats a new member in the house shared room if one
-already exists (`community`, else the first live shared-river — on this
-household that is often `family`, which we do not rename).
+community channel. It never treats a partnership, health, or team practice as
+the house-wide room merely because they use shared topology.
 """
 
 from __future__ import annotations
@@ -27,7 +26,6 @@ from river_keys import (
 from space_provisioning import find_shared_river_channel
 
 PRIVATE_RIVER_TYPES = frozenset({"river", "hosted-river"})
-PREFERRED_COMMUNITY_KEYS = ("community",)
 JOIN_RELATION = "kin"
 
 
@@ -53,10 +51,17 @@ def _now() -> str:
 
 
 def is_live_mage(mage: Any) -> bool:
-    """A registry row that should have a Discord human opposite it."""
+    """A registry row that should have a Discord human opposite it.
+
+    ``roster: false`` is a coach studio or other house-bot identity.
+    Bots that run the house are not members. A numeric discord_id
+    without this flag *is* owed a human — that is the positive control.
+    """
     if not isinstance(mage, dict):
         return False
     if mage.get("departed") or mage.get("archived"):
+        return False
+    if mage.get("roster") is False:
         return False
     raw = str(mage.get("discord_id") or "").strip()
     return raw.isdigit()
@@ -97,17 +102,21 @@ def find_private_river_channel_id(registry: dict[str, Any], mage_key: str) -> st
 
 
 def find_community_space(registry: dict[str, Any]) -> str | None:
-    """House shared room. Prefer `community`; else first live shared-river."""
+    """House shared room. Fail-closed: only an explicit ``community`` key.
+
+    Partnership, health, team, and any other shared-river are not a fallback
+    seat. Untagged ``shared-river`` is not a seat.
+    """
+    from channel_primitives import resolve_primitive
     from space_provisioning import list_active_spaces
 
-    rows = list_active_spaces(registry)
-    if not rows:
-        return None
-    keys = {row["space_key"] for row in rows}
-    for preferred in PREFERRED_COMMUNITY_KEYS:
-        if preferred in keys:
-            return preferred
-    return rows[0]["space_key"]
+    for row in list_active_spaces(registry):
+        if row["space_key"] != "community":
+            continue
+        primitive = resolve_primitive(registry, row["channel_id"])
+        if primitive is not None and primitive.name == "shared":
+            return "community"
+    return None
 
 
 def unique_mage_key(
@@ -281,6 +290,7 @@ def apply_admit_registry(
         "type": "hosted-river",
         "name": river_name,
         "discord_name": river_name,
+        "discord_category": "Practice",
         "description": f"Private practice river for {display_name}",
     }
     seat_in_community(registry, mage_key)
@@ -421,6 +431,22 @@ async def _hide_private_river(
         print(f"roster_sync: hide private river failed: {exc}")
 
 
+async def _post_join_first_run(channel) -> object | None:
+    """First-run, then mark posted so the hosted welcome embed does not follow."""
+    from hosted_river_onboarding import is_onboarding_posted, mark_onboarding_posted
+    from member_first_run import post_member_first_run
+
+    channel_id = getattr(channel, "id", None)
+    if channel_id is None:
+        return None
+    if is_onboarding_posted(channel_id):
+        return None
+    msg = await post_member_first_run(channel)
+    if msg is not None:
+        mark_onboarding_posted(channel_id, getattr(msg, "id", None))
+    return msg
+
+
 async def admit_on_join(member: discord.Member) -> str | None:
     """Open or restore membership. None = not this house (or a bot)."""
     if getattr(member, "bot", False):
@@ -484,12 +510,9 @@ async def admit_on_join(member: discord.Member) -> str | None:
     await _ensure_community_access(guild, registry)
 
     try:
-        await channel.send(
-            f"**Bound.** Welcome, {display_name}. This is your private river (`#{river_name}`).",
-            silent=True,
-        )
-    except discord.HTTPException:
-        pass
+        await _post_join_first_run(channel)
+    except ValueError as exc:
+        print(f"roster_sync: first-run copy invalid: {exc}")
 
     space = find_community_space(registry)
     if space:

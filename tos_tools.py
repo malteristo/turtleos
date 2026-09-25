@@ -277,7 +277,8 @@ TOS_TOOLS = [
             "description": (
                 "Read an allowlisted practice artifact (internal context). "
                 "In Discord replies: quote at most ~3 lines from an artifact; point to `!read <path>` for the full note — do not paste full bodies (§11.5.5). "
-                "Practice artifacts: sessions/, state/notes/, state/current.yaml, thread-archive/, chronicle/surface.md, box/intake/."
+                "Practice artifacts: memory/topics.md (what this space keeps returning to; one page per topic under memory/topics/), "
+                "story/eddies/ (checkpoint notes), story/daily/, sessions/, state/notes/, state/current.yaml, thread-archive/, chronicle/surface.md, box/intake/."
             ),
             "parameters": {
                 "type": "object",
@@ -384,6 +385,7 @@ TOS_TOOLS = [
             "description": (
                 "Search across practice or workshop files for a text pattern. "
                 "Returns matching lines with file paths and line numbers. "
+                "To remember what this space has discussed, search directory='memory' first, then 'story/eddies'. "
                 "Use directory='library' or 'system' to search workshop knowledge."
             ),
             "parameters": {
@@ -633,9 +635,10 @@ TOS_TOOLS = [
         "function": {
             "name": "survey_eddies",
             "description": (
-                "List known eddies with status (active/quiet/cooled), age, message "
-                "count, and parent channel. Use to find where conversations are "
-                "happening and which eddies are stale. Read-only."
+                "The same eddy glance the river can draw: five-state names "
+                "(live, resting, kept, sealed, gone), age, and parent. "
+                "Use when the conversation turns to recent work. Read-only. "
+                "Do not recite the full list unasked."
             ),
             "parameters": {
                 "type": "object",
@@ -643,16 +646,398 @@ TOS_TOOLS = [
                     "channel_id": {
                         "type": "string",
                         "description": (
-                            "Filter to this eddy id or parent channel name. "
-                            "Omit for all eddies."
+                            "Parent channel name or id (e.g. craft-turtle). "
+                            "Omit to stay on this river. Pass a name only to look elsewhere."
                         ),
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["active", "quiet", "cooled", "all"],
-                        "description": "Filter by lifecycle status. Default all.",
+                        "enum": [
+                            "live",
+                            "resting",
+                            "kept",
+                            "sealed",
+                            "gone",
+                            "all",
+                            "active",
+                            "quiet",
+                            "cooled",
+                        ],
+                        "description": "Five-state filter. Default all. Old words still resolve.",
+                    },
+                    "days": {
+                        "type": "number",
+                        "description": "Only eddies with activity in this many days. Use 5 for the recent window.",
                     },
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_record_evidence",
+            "description": (
+                "Search the current practice's private source corpus before answering "
+                "a factual record question. Results contain stable source/page citations."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 12},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_record_evidence",
+            "description": (
+                "Read one page from a source returned by search_record_evidence. "
+                "Use its source id and page number; preserve the returned citation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "page": {"type": "integer", "minimum": 1},
+                },
+                "required": ["source_id", "page"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "trace_record_source",
+            "description": (
+                "Show the manifest and indexed page range behind a source citation. "
+                "Use when asked where a model statement comes from."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"source_id": {"type": "string"}},
+                "required": ["source_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recap_health_visit",
+            "description": (
+                "Record a visit recap when the practitioner tells you what "
+                "happened at an appointment. Call this instead of several "
+                "save/keep calls. Clinician words stay attributed. Ideas are "
+                "labelled models. Dates stay local (not written "
+                "to a calendar). Do not call this for incidental chat."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "observations": {
+                        "type": "string",
+                        "description": "Owner observations, one per line.",
+                    },
+                    "clinician_said": {
+                        "type": "string",
+                        "description": (
+                            "What a clinician said, one per line, as "
+                            "'Name: words'."
+                        ),
+                    },
+                    "questions": {
+                        "type": "string",
+                        "description": "Questions to keep, one per line.",
+                    },
+                    "dates": {
+                        "type": "string",
+                        "description": "Named dates or holds, one per line.",
+                    },
+                    "medications": {
+                        "type": "string",
+                        "description": (
+                            "Medication named or refused, one per line. "
+                            "Prefix refused lines with 'refused:'."
+                        ),
+                    },
+                    "ideas": {
+                        "type": "string",
+                        "description": (
+                            "Hypotheses from the hour, one per line. "
+                            "Stored as unconfirmed inference."
+                        ),
+                    },
+                    "occurred_at": {
+                        "type": "string",
+                        "description": "When the visit happened, in their words.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_health_observation",
+            "description": (
+                "Save an observation only when the practitioner explicitly asks to "
+                "record/save/keep it. Incidental conversation must not call this."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "occurred_at": {
+                        "type": "string",
+                        "description": "Date/time in the practitioner's words when known.",
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "keep_health_question",
+            "description": (
+                "Keep an unresolved health question only when the practitioner "
+                "explicitly asks to save or remember the question."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_health_record_update",
+            "description": (
+                "Stage evidence-linked findings from one locally indexed source. "
+                "Never invent a page or source id. The record owner will see Confirm/Reject."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "claims": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "page": {"type": "integer"},
+                                "kind": {"type": "string"},
+                                "value": {"type": ["number", "string", "null"]},
+                                "unit": {"type": ["string", "null"]},
+                                "document_date": {"type": ["string", "null"]},
+                                "confidence": {"type": "number"},
+                            },
+                            "required": ["text", "page"],
+                        },
+                    },
+                },
+                "required": ["source_id", "claims"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "correct_health_record",
+            "description": (
+                "Supersede a saved observation or question when the record owner "
+                "explicitly says it is wrong. Never erase the earlier event."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "string"},
+                    "correction": {"type": "string"},
+                },
+                "required": ["event_id", "correction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "trace_health_claim",
+            "description": "Show the evidence citations and state behind one health-model claim id.",
+            "parameters": {
+                "type": "object",
+                "properties": {"claim_id": {"type": "string"}},
+                "required": ["claim_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prepare_health_appointment",
+            "description": (
+                "Create a readable appointment-preparation artifact from confirmed "
+                "questions, observations, and evidence-linked findings."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"title": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_team_state",
+            "description": (
+                "Read the confirmed shared horizon, member fronts, commitments, "
+                "tasks, decisions, artifacts, and intersections for this team."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_team_horizon",
+            "description": (
+                "Propose a broad, revisable shared horizon. It becomes current "
+                "only after every active team member confirms it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_my_team_front",
+            "description": (
+                "Set the speaking member's own current sub-goal or exploration. "
+                "Never use this to assign another member."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "relation": {
+                        "type": "string",
+                        "enum": ["advance", "explore", "support", "challenge", "paused"],
+                    },
+                    "next_move": {"type": "string"},
+                    "dependencies": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["text", "relation"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_team_task",
+            "description": (
+                "Propose an open or member-owned task. A named owner must confirm "
+                "before the assignment becomes current."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "owner": {"type": ["string", "null"]},
+                    "status": {"type": "string"},
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_team_decision",
+            "description": (
+                "Propose a team decision and name the members it affects. "
+                "Affected members confirm; a proposal is not an agreement."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "affected_members": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "decide_team_proposal",
+            "description": (
+                "Confirm or reject one pending team proposal as the speaking member."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "proposal_id": {"type": "string"},
+                    "decision": {
+                        "type": "string",
+                        "enum": ["confirm", "reject"],
+                    },
+                },
+                "required": ["proposal_id", "decision"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "record_team_contribution",
+            "description": (
+                "Record an explicit attributed contribution from the speaking "
+                "member. Incidental conversation is not a contribution."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "kind": {"type": "string"},
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "register_team_artifact",
+            "description": (
+                "Register a shared artifact with its path or URL and attributed "
+                "contributor; this does not imply team approval of its contents."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "location": {"type": "string"},
+                    "status": {"type": "string"},
+                },
+                "required": ["title", "location"],
             },
         },
     },
@@ -676,6 +1061,43 @@ TOS_TOOLS = [
 _TOOL_SCOPES: dict[str, frozenset[str]] = {
     "exa_search": frozenset({"craft"}),
 }
+_TOOL_CAPABILITIES: dict[str, str] = {
+    "search_record_evidence": "corpus_retrieval",
+    "read_record_evidence": "corpus_retrieval",
+    "trace_record_source": "corpus_retrieval",
+    "recap_health_visit": "governed_record",
+    "save_health_observation": "governed_record",
+    "keep_health_question": "governed_record",
+    "propose_health_record_update": "governed_record",
+    "correct_health_record": "governed_record",
+    "trace_health_claim": "governed_record",
+    "prepare_health_appointment": "appointment_prep",
+    "read_team_state": "shared_work",
+    "propose_team_horizon": "goal_state",
+    "set_my_team_front": "goal_state",
+    "propose_team_task": "task_state",
+    "propose_team_decision": "decision_state",
+    "decide_team_proposal": "shared_work",
+    "record_team_contribution": "shared_work",
+    "register_team_artifact": "artifact_state",
+}
+_SENSITIVE_TOOL_ALLOWLIST = frozenset(
+    {
+        "search_record_evidence",
+        "read_record_evidence",
+        "trace_record_source",
+        "recap_health_visit",
+        "save_health_observation",
+        "keep_health_question",
+        "propose_health_record_update",
+        "correct_health_record",
+        "trace_health_claim",
+        "prepare_health_appointment",
+        "offer_river_act",
+        "list_turtle_capabilities",
+        "read_turtle_capability",
+    }
+)
 
 
 def tool_scopes(name: str) -> frozenset[str] | None:
@@ -693,6 +1115,86 @@ def tools_for_attunement(attunement: str) -> list[dict]:
     return allowed
 
 
+# The read-only pair a local model may use to remember. The local path had no
+# tool loop at all, so a family-room Turtle asked what it remembered could only
+# answer from the packet — and on 2026-09-01 it narrated a search it had no way
+# to make. Two tools, both reads, both already scoped by `is_readable`.
+MEMORY_TOOL_NAMES: frozenset[str] = frozenset({"search_practice_files", "read_practice_file"})
+TEAM_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "read_team_state",
+        "propose_team_horizon",
+        "set_my_team_front",
+        "propose_team_task",
+        "propose_team_decision",
+        "decide_team_proposal",
+        "record_team_contribution",
+        "register_team_artifact",
+    }
+)
+
+
+def _this_river_survey_filter() -> str | None:
+    """Stay on this parent unless the model names another. Id and name both match."""
+    from mage import get_current_channel_primitive
+
+    primitive = get_current_channel_primitive()
+    if primitive is None or not primitive.channel_id:
+        return None
+    bits = [str(primitive.channel_id)]
+    entry = (get_registry().get("channels") or {}).get(str(primitive.channel_id)) or {}
+    if not isinstance(entry, dict):
+        entry = {}
+    for key in ("name", "discord_name"):
+        val = str(entry.get(key) or "").strip()
+        if val:
+            bits.append(val)
+    return ",".join(dict.fromkeys(bits))
+
+
+# Governed tools a local model may run in a room whose primitive grants the
+# capability. Until 2026-09-21 the local turn offered only the memory pair and
+# the team set, so a health room on the local model saw *no* tool: its rules
+# text told Turtle to call `recap_health_visit` and the loop never showed it.
+# The catalog (`tools_for_channel`) said yes; the path that ran said nothing.
+# Membership here is by capability, not by name, so a governed tool added to
+# a health primitive later is offered without a second edit.
+LOCAL_GOVERNED_CAPABILITIES: frozenset[str] = frozenset(
+    {"governed_record", "appointment_prep", "corpus_retrieval"}
+)
+
+
+def local_governed_tools_for_channel(channel_id=None) -> list[dict]:
+    """Capability-scoped governed tools the local path may offer in this room."""
+    return [
+        tool
+        for tool in tools_for_channel(channel_id)
+        if _TOOL_CAPABILITIES.get(
+            (tool.get("function") or {}).get("name") or tool.get("name") or ""
+        )
+        in LOCAL_GOVERNED_CAPABILITIES
+    ]
+
+
+def memory_tools_for_channel(channel_id=None) -> list[dict]:
+    """The remembering subset of what this surface may see — never wider."""
+    return [
+        tool
+        for tool in tools_for_channel(channel_id)
+        if ((tool.get("function") or {}).get("name") or tool.get("name")) in MEMORY_TOOL_NAMES
+    ]
+
+
+def team_tools_for_channel(channel_id=None) -> list[dict]:
+    """The governed team subset for local Turtle; absent outside team channels."""
+    return [
+        tool
+        for tool in tools_for_channel(channel_id)
+        if ((tool.get("function") or {}).get("name") or tool.get("name"))
+        in TEAM_TOOL_NAMES
+    ]
+
+
 def tools_for_channel(channel_id=None) -> list[dict]:
     """The tool set a given surface may see.
 
@@ -704,9 +1206,24 @@ def tools_for_channel(channel_id=None) -> list[dict]:
     if channel_id is None:
         return tools_for_attunement("")
     try:
-        from mage import get_effective_attunement
+        from mage import get_channel_primitive, get_effective_attunement
 
-        return tools_for_attunement(get_effective_attunement(channel_id))
+        primitive = get_channel_primitive(channel_id)
+        tools = tools_for_attunement(get_effective_attunement(channel_id))
+        allowed = []
+        for tool in tools:
+            name = (tool.get("function") or {}).get("name") or tool.get("name") or ""
+            capability = _TOOL_CAPABILITIES.get(name)
+            if capability and not (primitive and primitive.has(capability)):
+                continue
+            if (
+                primitive
+                and primitive.data_policy == "sensitive_local"
+                and name not in _SENSITIVE_TOOL_ALLOWLIST
+            ):
+                continue
+            allowed.append(tool)
+        return allowed
     except Exception:
         return tools_for_attunement("")
 
@@ -741,6 +1258,269 @@ def _execute_tos_tool_raw(name, arguments):
         if hits:
             return format_search_results(hits, query)
         return f"No matches for '{query}'"
+
+    if name == "search_record_evidence":
+        from practice_corpus import format_results, search
+
+        return format_results(
+            search(
+                get_pd(),
+                str(arguments.get("query") or ""),
+                limit=_coerce_int(arguments.get("limit"), 6),
+            )
+        )
+
+    if name == "read_record_evidence":
+        from practice_corpus import read_page
+
+        row = read_page(
+            get_pd(),
+            str(arguments.get("source_id") or ""),
+            _coerce_int(arguments.get("page"), 1),
+        )
+        return json.dumps(row, indent=2, ensure_ascii=False) if row else "Evidence page not found."
+
+    if name == "trace_record_source":
+        from practice_corpus import source_trace
+
+        row = source_trace(get_pd(), str(arguments.get("source_id") or ""))
+        return json.dumps(row, indent=2, ensure_ascii=False) if row else "Source not found."
+
+    if name in {
+        "recap_health_visit",
+        "save_health_observation",
+        "keep_health_question",
+        "propose_health_record_update",
+        "correct_health_record",
+        "trace_health_claim",
+        "prepare_health_appointment",
+    }:
+        from health_record import (
+            appointment_prep,
+            correct_event,
+            keep_question,
+            propose_source_claims,
+            recap_health_visit,
+            save_observation,
+            trace_claim,
+        )
+        from mage import get_actor_key, get_current_channel_primitive
+
+        primitive = get_current_channel_primitive()
+        actor = get_actor_key()
+        if primitive is None or not primitive.has("governed_record") or not actor:
+            return "Health record action unavailable in this context."
+        if name == "recap_health_visit":
+            result = recap_health_visit(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                observations=str(arguments.get("observations") or ""),
+                clinician_said=str(arguments.get("clinician_said") or ""),
+                questions=str(arguments.get("questions") or ""),
+                dates=str(arguments.get("dates") or ""),
+                medications=str(arguments.get("medications") or ""),
+                ideas=str(arguments.get("ideas") or ""),
+                occurred_at=arguments.get("occurred_at"),
+            )
+        elif name == "save_health_observation":
+            result = save_observation(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                text=str(arguments.get("text") or ""),
+                occurred_at=arguments.get("occurred_at"),
+            )
+        elif name == "keep_health_question":
+            result = keep_question(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                text=str(arguments.get("text") or ""),
+            )
+        elif name == "propose_health_record_update":
+            result = propose_source_claims(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                claims=list(arguments.get("claims") or []),
+                source_id=str(arguments.get("source_id") or ""),
+            )
+        elif name == "correct_health_record":
+            result = correct_event(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                event_id=str(arguments.get("event_id") or ""),
+                correction=str(arguments.get("correction") or ""),
+            )
+        elif name == "trace_health_claim":
+            result = trace_claim(get_pd(), str(arguments.get("claim_id") or ""))
+            return (
+                json.dumps(result, indent=2, ensure_ascii=False)
+                if result
+                else "Health claim not found."
+            )
+        elif name == "prepare_health_appointment":
+            path = appointment_prep(
+                get_pd(), str(arguments.get("title") or "Appointment preparation")
+            )
+            return f"Appointment preparation created: {path.relative_to(get_pd())}"
+        else:  # guarded by the name set above
+            return "Unknown health record action."
+        return json.dumps(result, indent=2, ensure_ascii=False)
+
+    if name in {
+        "read_team_state",
+        "propose_team_horizon",
+        "set_my_team_front",
+        "propose_team_task",
+        "propose_team_decision",
+        "decide_team_proposal",
+        "record_team_contribution",
+        "register_team_artifact",
+    }:
+        from mage import get_actor_key, get_current_channel_primitive
+        from team_lanes import get_current_eddy_id
+        from team_state import (
+            decide_change,
+            propose_change,
+            read_state,
+            record_event,
+            render_state,
+        )
+
+        primitive = get_current_channel_primitive()
+        actor = get_actor_key()
+        if primitive is None or not primitive.has("shared_work") or not actor:
+            return "Team state action unavailable in this context."
+        source_eddy = get_current_eddy_id()
+        if name == "read_team_state":
+            return render_state(read_state(get_pd()))
+        if name == "propose_team_horizon":
+            result = propose_change(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                kind="horizon",
+                payload={"text": str(arguments.get("text") or "")},
+                source_eddy=source_eddy,
+            )
+        elif name == "set_my_team_front":
+            result = propose_change(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                kind="member_front",
+                payload={
+                    "member": actor,
+                    "text": str(arguments.get("text") or ""),
+                    "relation": str(arguments.get("relation") or "explore"),
+                    "next_move": str(arguments.get("next_move") or ""),
+                    "dependencies": list(arguments.get("dependencies") or []),
+                },
+                source_eddy=source_eddy,
+                explicit=True,
+            )
+        elif name == "propose_team_task":
+            owner = str(arguments.get("owner") or "").strip() or None
+            result = propose_change(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                kind="task",
+                payload={
+                    "text": str(arguments.get("text") or ""),
+                    "owner": owner,
+                    "status": str(arguments.get("status") or "open"),
+                },
+                source_eddy=source_eddy,
+                explicit=owner in {None, actor},
+            )
+        elif name == "propose_team_decision":
+            result = propose_change(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                kind="decision",
+                payload={
+                    "text": str(arguments.get("text") or ""),
+                    "affected_members": list(
+                        arguments.get("affected_members") or primitive.members
+                    ),
+                },
+                source_eddy=source_eddy,
+            )
+        elif name == "decide_team_proposal":
+            result = decide_change(
+                get_pd(),
+                str(arguments.get("proposal_id") or ""),
+                primitive=primitive,
+                actor=actor,
+                decision=str(arguments.get("decision") or ""),
+            )
+        elif name == "record_team_contribution":
+            text = str(arguments.get("text") or "")
+            result = record_event(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                kind="contribution",
+                payload={
+                    "text": text,
+                    "kind": str(arguments.get("kind") or "contribution"),
+                },
+                source_eddy=source_eddy,
+            )
+            if source_eddy is not None:
+                from team_federation import record_activity_event
+                from thread_registry import get_thread_team_lane
+
+                lane = get_thread_team_lane(source_eddy)
+                if lane:
+                    result["activity_event"] = record_activity_event(
+                        get_pd(),
+                        primitive=primitive,
+                        actor=actor,
+                        activity_id=str(lane["activity_id"]),
+                        lane_id=source_eddy,
+                        summary=text,
+                        event_kind="contribution",
+                        source_eddy=source_eddy,
+                    )
+        elif name == "register_team_artifact":
+            title = str(arguments.get("title") or "")
+            result = record_event(
+                get_pd(),
+                primitive=primitive,
+                actor=actor,
+                kind="artifact",
+                payload={
+                    "title": title,
+                    "location": str(arguments.get("location") or ""),
+                    "status": str(arguments.get("status") or "working"),
+                },
+                source_eddy=source_eddy,
+            )
+            if source_eddy is not None:
+                from team_federation import record_activity_event
+                from thread_registry import get_thread_team_lane
+
+                lane = get_thread_team_lane(source_eddy)
+                if lane:
+                    result["activity_event"] = record_activity_event(
+                        get_pd(),
+                        primitive=primitive,
+                        actor=actor,
+                        activity_id=str(lane["activity_id"]),
+                        lane_id=source_eddy,
+                        summary=f"Artifact: {title}",
+                        event_kind="artifact",
+                        source_eddy=source_eddy,
+                    )
+        else:  # guarded by the name set above
+            return "Unknown team state action."
+        return json.dumps(result, indent=2, ensure_ascii=False)
 
     if name == "list_practice_files":
         directory = arguments.get("directory", "")
@@ -820,9 +1600,15 @@ def _execute_tos_tool_raw(name, arguments):
     if name == "survey_eddies":
         from space_survey import survey_eddies
 
+        days_raw = arguments.get("days")
+        try:
+            days = int(days_raw) if days_raw is not None and str(days_raw).strip() != "" else None
+        except (TypeError, ValueError):
+            days = None
         rows = survey_eddies(
-            channel_id=arguments.get("channel_id") or None,
+            channel_id=arguments.get("channel_id") or _this_river_survey_filter(),
             status=arguments.get("status") or "all",
+            days=days,
         )
         if not rows:
             return "No eddies match."

@@ -104,7 +104,8 @@ def clear_registry_cache_for_tests() -> None:
 def register_thread(thread_id: int, name: str, parent_channel: str = "",
                     model: str = "default", attunement: str = "semi",
                     context_type: str | None = None, eddy_type: str = "fast",
-                    created: str | None = None, message_count: int = 0):
+                    created: str | None = None, message_count: int = 0,
+                    parent_channel_id: int | None = None):
     registry = load_registry()
     tid = str(thread_id)
     now = datetime.now(timezone.utc).isoformat()
@@ -123,9 +124,15 @@ def register_thread(thread_id: int, name: str, parent_channel: str = "",
             "eddy_type": eddy_type,
             "harvest_status": "pending",
         }
+        if parent_channel_id is not None:
+            registry["threads"][tid]["parent_channel_id"] = int(parent_channel_id)
     else:
         entry = registry["threads"][tid]
         entry["name"] = name
+        if parent_channel:
+            entry["parent_channel"] = parent_channel
+        if parent_channel_id is not None:
+            entry["parent_channel_id"] = int(parent_channel_id)
         if message_count > entry.get("message_count", 0):
             entry["message_count"] = message_count
 
@@ -162,6 +169,52 @@ def update_thread_context_type(thread_id: int, context_type: str | None) -> None
         return
     registry["threads"][tid]["context_type"] = context_type
     save_registry(registry)
+
+
+_TEAM_LANE_FIELDS = frozenset(
+    {"activity_id", "lane_owner", "lane_role", "lane_character", "sibling_lane_ids"}
+)
+
+
+def update_thread_team_lane(thread_id: int, **metadata) -> dict:
+    """Persist member-lane identity without widening arbitrary registry writes."""
+    unknown = set(metadata) - _TEAM_LANE_FIELDS
+    if unknown:
+        raise ValueError(f"unsupported team lane metadata: {', '.join(sorted(unknown))}")
+    registry = load_registry()
+    tid = str(thread_id)
+    if tid not in registry["threads"]:
+        raise KeyError(f"thread is not registered: {thread_id}")
+    entry = registry["threads"][tid]
+    for key, value in metadata.items():
+        if value in (None, "", (), []):
+            entry.pop(key, None)
+        elif key == "sibling_lane_ids":
+            entry[key] = [str(item) for item in value]
+        else:
+            entry[key] = str(value)
+    save_registry(registry, force=True)
+    return dict(entry)
+
+
+def get_thread_team_lane(thread_id: int | str) -> dict | None:
+    entry = load_registry().get("threads", {}).get(str(thread_id))
+    if not entry or not entry.get("activity_id") or not entry.get("lane_owner"):
+        return None
+    return {
+        key: entry.get(key)
+        for key in _TEAM_LANE_FIELDS
+        if entry.get(key) not in (None, "", [], ())
+    }
+
+
+def team_activity_threads(activity_id: str) -> dict[str, dict]:
+    """Return every registered member lane in one shared activity."""
+    return {
+        str(thread_id): dict(entry)
+        for thread_id, entry in load_registry().get("threads", {}).items()
+        if entry.get("activity_id") == activity_id and entry.get("lane_owner")
+    }
 
 
 CONTINUITY_DEFAULT = "default"
@@ -296,23 +349,17 @@ def format_thread_awareness_line(thread_id: str, info: dict, now: datetime | Non
     now = now or datetime.now(timezone.utc)
     created = _age_label(_parse_dt(info.get("created")), now)
     last = _age_label(_parse_dt(info.get("last_activity")), now)
-    status = thread_activity_status(info, now)
+    from eddy_five_state import eddy_five_state
+
+    state = eddy_five_state(info)
     model = info.get("model") or "default"
     attunement = info.get("attunement") or "semi"
     eddy = info.get("eddy_type") or "fast"
     messages = info.get("message_count", 0)
-    lock_tag = " · 🔒locked" if info.get("locked") else ""
-    continuity = info.get("continuity", CONTINUITY_DEFAULT)
-    continuity_tag = ""
-    if continuity == CONTINUITY_KEEP:
-        continuity_tag = " · 📌keep"
-    elif continuity == CONTINUITY_IGNORE:
-        continuity_tag = " · 🚫ignore"
-    cooled_tag = " · 🧊cooled" if status == "cooled" else ""
     return (
         f"- **{info.get('name', 'unknown')}** — `{model}` / `{attunement}` · "
-        f"`{eddy}` · status:{status} · created:{created} ago · last:{last} ago · "
-        f"messages:{messages}{lock_tag}{continuity_tag}{cooled_tag} · id:{thread_id}"
+        f"`{eddy}` · {state} · created:{created} ago · last:{last} ago · "
+        f"messages:{messages} · id:{thread_id}"
     )
 
 
@@ -519,6 +566,7 @@ async def backfill_from_discord(guild, parent_channels: list[int] | None = None)
             registry["threads"][tid] = {
                 "name": t.name,
                 "parent_channel": parent_name,
+                "parent_channel_id": int(t.parent_id),
                 "created": created,
                 "last_activity": (t.archive_timestamp or t.created_at or datetime.now(timezone.utc)).isoformat(),
                 "message_count": msg_count,
@@ -532,6 +580,8 @@ async def backfill_from_discord(guild, parent_channels: list[int] | None = None)
         else:
             entry = registry["threads"][tid]
             entry["name"] = t.name
+            entry["parent_channel"] = parent_name
+            entry["parent_channel_id"] = int(t.parent_id)
             if msg_count > entry.get("message_count", 0):
                 entry["message_count"] = msg_count
             if getattr(t, "locked", False):

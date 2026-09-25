@@ -41,6 +41,8 @@ def _env(name: str, default: str) -> str:
 
 # Primary stack (instance defaults — not platform law; see TURTLE_SPEC §5.7, §7.4)
 TURTLE_MODEL = _env("TURTLE_MODEL", "gemma4:31b")
+# Install Lighter path — ~16 GB RAM. Not a runtime default.
+LIGHTER_TURTLE_MODEL = "gemma4:12b"
 DIALOGUE_MODEL = _env("DIALOGUE_MODEL", TURTLE_MODEL)
 CRAFT_MODEL = _env("CRAFT_MODEL", "claude-sonnet-4-6")
 RIVER_MODEL = _env("RIVER_MODEL", "qwen3.5:4b")
@@ -62,6 +64,7 @@ KNOWN_MODELS: dict[str, str | None] = {
     "qwen-27b": "qwen3.5:27b",
     # Turtle stack (capable local)
     "gemma": "gemma4:31b",
+    "gemma-12b": LIGHTER_TURTLE_MODEL,
     "gemma-26b": "gemma4:26b",
     "gemma-31b": "gemma4:31b",
     "turtle": TURTLE_MODEL,

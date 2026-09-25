@@ -34,7 +34,7 @@ Sovereign install (Ollama, Discord apps, drivers, config) is a **parallel chapte
 > I set up a private **river** for you on Discord. It runs on my machine. The channel is yours.
 >
 > **River** (the main channel) does not chat in paragraphs — you will see buttons and short acts. That is normal.
-> **Eddies** are threads: click **`new eddy`**, send a message (that **names** the thread — no reply yet), then send a **second** message and **Turtle** replies there.
+> **Eddies** are threads: click **`new eddy`**, send a message. That names the thread and Turtle replies there.
 >
 > Follow up, paste links, come back to threads later.
 >
@@ -91,8 +91,7 @@ Use this during a **phone/video walkthrough** (hosted river #2 — the second pr
 |------|----------------|-------------|
 | Guest sees claim room | Sees `#river-<name>` in channel list (or opens via deep link) | **Already a member:** use `invite --member` or grant perms + deep link (a third practitioner, 2026-07-25). **New join:** retry channel invite. Do **not** “Sync Now” on Practice category. |
 | Key ceremony | Guest drops emoji → river stays `#river-<name>`, permissions lock | Wrong key → re-read pinned claim copy. Channel name does **not** change to `*-dialogue`. |
-| First eddy | `new eddy` → guest sends message → thread title changes, Turtle added | Normal — **first message does not get a Turtle reply** |
-| Turtle reply | Guest sends **second** message in eddy → Turtle responds | If silent after message 2: check `Turtle inbound` in `~/turtleos/logs/discord.log`. Post-`7c23593`: registry hot-reload — no restart after claim. |
+| First eddy | `new eddy` → guest sends message → thread title changes, Turtle added, Turtle replies | If silent: check `First eddy handoff` / `Turtle inbound` in `~/turtleos/logs/discord.log`. Post-`7c23593`: registry hot-reload — no restart after claim. |
 | Handoff | Guest understands River ≠ chatbot; knows to open more eddies async | Point at pinned onboarding embed |
 
 ### Why the empty server / invisible claim room happens
@@ -109,10 +108,7 @@ River bot reloads `mage_registry.yaml` on claim; Turtle bot historically loaded 
 
 ### Eddy UX (set expectation)
 
-- **Message 1** in a blank eddy → names the thread, adds Turtle (no reply).
-- **Message 2+** → Turtle dialogue.
-
-Say this aloud during the first eddy demo so silence is not read as failure.
+- First message in a blank eddy names the thread, adds Turtle, and Turtle replies.
 
 ### Post-call
 

@@ -27,7 +27,7 @@ Cloud API keys are **not** required for the default path.
 
 Confirm with the practitioner:
 
-- [ ] macOS or Linux machine with enough RAM/VRAM for ~30B class model (or agreed smaller Turtle model)
+- [ ] macOS or Linux machine: **Standard** ~32 GB RAM (`gemma4:31b`) or **Lighter** ~16 GB RAM (`gemma4:12b`)
 - [ ] Python 3.11+
 - [ ] Discord account
 - [ ] Git installed
@@ -72,15 +72,25 @@ echo "venv ready"
 
 ## Step 4 — Ollama models
 
-Pull models appropriate to hardware. Example defaults (adjust per machine):
+Pull models for the machine in front of you. **Standard** is the daily loop. **Lighter** is the path when ~16 GB is all there is.
+
+Standard (~32 GB RAM):
 
 ```bash
 ollama pull qwen3.5:4b
-ollama pull gemma3:27b
-echo "models pulled"
+ollama pull gemma4:31b
+echo "standard models pulled"
 ```
 
-Record chosen model names for `.env` / config. River: 4B–9B class. Turtle: ~30B class target.
+Lighter (~16 GB RAM):
+
+```bash
+ollama pull qwen3.5:4b
+ollama pull gemma4:12b
+echo "lighter models pulled"
+```
+
+Record chosen model names for `.env` / config. River stays `qwen3.5:4b`. Turtle is `gemma4:31b` on Standard, `gemma4:12b` on Lighter (`TURTLE_MODEL=` that tag). Long eddies on Lighter may feel thinner.
 
 Verify:
 
@@ -119,7 +129,7 @@ cp mage_registry.example.yaml mage_registry.yaml
 
 The bot reads `mage_registry.yaml` **in this clone**, not `~/turtleos/`. Edit the file you just copied.
 
-Edit `.env` — at minimum set Discord bot token and model names per current shell expectations.
+Edit `.env` — at minimum set the Discord bot token. On Lighter set `TURTLE_MODEL=gemma4:12b` (and `DIALOGUE_MODEL` if you set it). Standard can leave the template defaults.
 
 Edit `mage_registry.yaml`:
 
@@ -192,13 +202,6 @@ Point to `TURTLE_SPEC.md`, `README.md`, and `docs/ux/faq.md` for the house and t
 First success is one private river. The destination is that **community** exists at install. Until that ships, a shared room on this server is a second pass.
 
 A second adult needs their own Discord account and joins **this** server. That join is membership: they get a private river, and if a shared room already exists they are seated in it. Discord’s age floor where they live applies (16 in Germany / the EU). Do not use a guest or unclaimed session.
-
-`!admin invite` is only if you want a claim room before they arrive:
-
-```
-!admin
-!admin invite <name> <emoji> en --member @them
-```
 
 To create the shared room today:
 

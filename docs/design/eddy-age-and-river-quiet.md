@@ -1,6 +1,6 @@
 # Eddies Age — River Quiet
 
-**Status:** Design note (Spirit thin-craft, 2026-07-20)  
+**Status:** Design note (Spirit thin-craft, 2026-07-20). Routine cools quiet as of 2026-09-14 — `post_eddy_lifecycle_feedback` returns on `mode=="cooled"`.  
 **Trigger:** Operator boom + same-evening Discord digest (river ≈ Closed-eddy firehose)  
 **Spec touch (candidate):** TURTLE_SPEC §8 lifecycle copy / river acts  
 **Backlog:** residual of `2026-07-08-eddy-dissolve-semantics` — previously “optional polish”; boom elevates to product semantics

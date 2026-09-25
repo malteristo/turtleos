@@ -1,4 +1,6 @@
+import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -8,13 +10,20 @@ sys.modules.setdefault("discord.ui", MagicMock())
 from state import THREAD_CONTEXTS
 import mage
 from prompts import (
+    CRAFT_KEY_HEADER,
+    CRAFT_OPS_BLOCK,
+    CRAFT_OPS_DEPLOY_PHRASE,
+    CRAFT_OPS_MAIL_PHRASE,
     CRAFT_VOCATION_HEADER,
     LEGACY_IDENTITY_OPENER,
     MAGE_DIALOGUE_WHO,
     build_craft_channel_prompt,
     build_discord_prompt,
+    build_health_channel_prompt,
+    build_native_eddy_prompt,
     get_thread_prompt,
     load_character_file,
+    river_posts_turtle_offers,
     uses_native_turtle_prompt,
 )
 
@@ -71,6 +80,7 @@ class CraftAttunementTests(unittest.TestCase):
         self.assertTrue(mage.uses_craft_surface(self.CRAFT_CHANNEL))
         self.assertFalse(mage.uses_native_eddy(self.CRAFT_CHANNEL))
         self.assertFalse(uses_native_turtle_prompt(self.CRAFT_CHANNEL))
+        self.assertTrue(river_posts_turtle_offers(self.CRAFT_CHANNEL))
 
     def test_craft_type_infers_craft_when_global_native(self) -> None:
         self._set_registry(
@@ -91,6 +101,24 @@ class CraftAttunementTests(unittest.TestCase):
         )
         self.assertEqual(mage.get_effective_attunement(self.RIVER_CHANNEL), "native")
         self.assertTrue(uses_native_turtle_prompt(self.RIVER_CHANNEL))
+        self.assertTrue(river_posts_turtle_offers(self.RIVER_CHANNEL))
+
+    def test_health_is_not_an_offer_surface(self) -> None:
+        """Craft needed the button. Health did not come along for the ride."""
+        health = 202
+        self._set_registry(
+            attunement="native",
+            channels={
+                str(health): {
+                    "type": "health",
+                    "primitive": "health",
+                    "attunement": "health",
+                }
+            },
+        )
+        self.assertFalse(uses_native_turtle_prompt(health))
+        self.assertFalse(mage.uses_craft_surface(health))
+        self.assertFalse(river_posts_turtle_offers(health))
 
     @patch("prompts.build_discord_prompt", return_value="practice block")
     @patch("prompts._build_context_resonance", return_value="craft context block")
@@ -216,6 +244,105 @@ class CraftAttunementTests(unittest.TestCase):
         out = get_thread_prompt("semi", False, context_type="craft", channel_id=self.CRAFT_CHANNEL)
         self.assertEqual(out, "craft prompt")
         mock_craft.assert_called_once_with("craft")
+
+    # ── Practice key (Turtle narrative) ─────────────────────────────
+    #
+    # Craft Turtle attunes to key-turtle.md — a narrative of the path,
+    # not a dump of workshop files. Native and health surfaces must not
+    # receive it. A missing file is empty, not a crash.
+
+    PLANTED_KEY = "PLANTED-TURTLE-KEY-9f3a-must-appear-only-on-craft"
+
+    def _plant_turtle_key(self, root: str) -> None:
+        key_dir = os.path.join(root, "readings", "the-practice")
+        os.makedirs(key_dir, exist_ok=True)
+        with open(os.path.join(key_dir, "key-turtle.md"), "w") as fh:
+            fh.write(self.PLANTED_KEY)
+
+    @patch("prompts.build_discord_prompt", return_value="practice block")
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    def test_craft_prompt_includes_planted_turtle_key(self, _soul, _ctx, _practice) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            self._plant_turtle_key(td)
+            with patch("prompts.get_pd", return_value=td):
+                prompt = build_craft_channel_prompt("craft")
+        self.assertIn(self.PLANTED_KEY, prompt)
+        self.assertIn(CRAFT_KEY_HEADER.split("\n")[0], prompt)
+
+    @patch("prompts.build_discord_prompt", return_value="practice block")
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    def test_craft_prompt_survives_missing_turtle_key(self, _soul, _ctx, _practice) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with patch("prompts.get_pd", return_value=td):
+                prompt = build_craft_channel_prompt("craft")
+        self.assertNotIn(self.PLANTED_KEY, prompt)
+        self.assertNotIn(CRAFT_KEY_HEADER.split("\n")[0], prompt)
+        self.assertIn(CRAFT_VOCATION_HEADER.split("\n")[0], prompt)
+
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    def test_native_prompt_excludes_planted_turtle_key(self, _soul, _ctx) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            self._plant_turtle_key(td)
+            with patch("prompts.get_pd", return_value=td):
+                with patch("prompts.get_mage_type", return_value="mage"):
+                    prompt = build_native_eddy_prompt()
+        self.assertNotIn(self.PLANTED_KEY, prompt)
+        self.assertNotIn(CRAFT_KEY_HEADER.split("\n")[0], prompt)
+
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    @patch("health_room.load_health_picture", return_value="")
+    def test_health_prompt_excludes_planted_turtle_key(self, _pic, _soul, _ctx) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            self._plant_turtle_key(td)
+            with patch("prompts.get_pd", return_value=td):
+                prompt = build_health_channel_prompt("health")
+        self.assertNotIn(self.PLANTED_KEY, prompt)
+        self.assertNotIn(CRAFT_KEY_HEADER.split("\n")[0], prompt)
+
+    # ── Craft ops (quiet-window deploy + full-draft mail) ───────────
+    #
+    # The key-eval base prompt missed both rules in all three conditions.
+    # They live next to vocation, not in the key and not in conduct.md.
+    # Native and health must stay clean. A stripped vocation is the
+    # positive control — empty absence is not evidence.
+
+    @staticmethod
+    def _carries_craft_ops(text: str) -> bool:
+        return CRAFT_OPS_DEPLOY_PHRASE in text and CRAFT_OPS_MAIL_PHRASE in text
+
+    @patch("prompts.build_discord_prompt", return_value="practice block")
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    def test_craft_prompt_includes_ops_block(self, _soul, _ctx, _practice) -> None:
+        prompt = build_craft_channel_prompt("craft")
+        self.assertIn(CRAFT_OPS_BLOCK, prompt)
+        self.assertTrue(self._carries_craft_ops(prompt))
+
+    def test_stripped_vocation_fails_ops_check(self) -> None:
+        """Positive control: vocation alone would have passed an empty check."""
+        self.assertFalse(self._carries_craft_ops(CRAFT_VOCATION_HEADER))
+        self.assertNotIn(CRAFT_OPS_DEPLOY_PHRASE, CRAFT_VOCATION_HEADER)
+        self.assertNotIn(CRAFT_OPS_MAIL_PHRASE, CRAFT_VOCATION_HEADER)
+
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    def test_native_prompt_excludes_craft_ops(self, _soul, _ctx) -> None:
+        with patch("prompts.get_mage_type", return_value="mage"):
+            prompt = build_native_eddy_prompt()
+        self.assertFalse(self._carries_craft_ops(prompt))
+        self.assertNotIn(CRAFT_OPS_BLOCK.split("\n")[0], prompt)
+
+    @patch("prompts._build_context_resonance", return_value="")
+    @patch("prompts.load_character_file", return_value="You are Turtle")
+    @patch("health_room.load_health_picture", return_value="")
+    def test_health_prompt_excludes_craft_ops(self, _pic, _soul, _ctx) -> None:
+        prompt = build_health_channel_prompt("health")
+        self.assertFalse(self._carries_craft_ops(prompt))
+        self.assertNotIn(CRAFT_OPS_BLOCK.split("\n")[0], prompt)
 
 
 if __name__ == "__main__":

@@ -435,6 +435,87 @@ class SubstratePacketTests(unittest.TestCase):
             self.assertIn("What this space has been about recently", block)
             self.assertIn("vocabulary firewall idea", block)
 
+    def test_packet_carries_topic_memory_beyond_the_recency_window(self) -> None:
+        """2026-09-01: 30 notes on a topic, newest 7.5 days old, window 7 days.
+
+        The recency block is right to drop it. The topic block must carry it,
+        and the message must be able to reach for it.
+        """
+        import memory_agent
+
+        with tempfile.TemporaryDirectory() as tmp:
+            edir = Path(tmp) / "story" / "eddies"
+            edir.mkdir(parents=True)
+            for i in range(4):
+                ts = (datetime.now(BERLIN) - timedelta(days=8 + i * 5)).isoformat()
+                (edir / f"{i}-x.md").write_text(
+                    f"---\nthread: '{i}'\ntitle: the lighthouse keeper again\ntrigger: idle\n"
+                    f"timestamp: '{ts}'\nrelated-topics: []\nproposed-themes: [lighthouse keeper]\n"
+                    f"participants: [alpha]\n"
+                    f"---\n\nAlpha returned to the lighthouse keeper's boundary stones.\n"
+                )
+            considered: list[dict] = []
+            block = render_substrate_packet(
+                tmp, message_text="what do you remember about the lighthouse keeper?",
+                topics_considered=considered,
+            )
+            self.assertNotIn("lighthouse", block.lower(), "nothing built yet: nothing carried")
+            self.assertEqual(considered, [])
+
+            memory_agent.build_room_memory(tmp)
+            block = render_substrate_packet(
+                tmp, message_text="what do you remember about the lighthouse keeper?",
+                topics_considered=considered, current_thread="0",
+            )
+            self.assertIn("What this space keeps returning to", block)
+            self.assertIn("lighthouse", block.lower())
+            self.assertIn("4 conversations", block)
+            self.assertTrue(any(c["selected"] for c in considered))
+            # The recency block still says, honestly, that nothing is recent.
+            self.assertIn("Nothing else in this space has been written down recently", block)
+
+    def test_packet_can_drop_shared_room_topics_on_a_craft_surface(self) -> None:
+        """The packet flag is what a craft turn passes; the index stays merged."""
+        import yaml
+
+        with tempfile.TemporaryDirectory() as tmp:
+            mdir = Path(tmp) / "memory"
+            mdir.mkdir()
+            record = {
+                "version": 1,
+                "roots": [
+                    {"room": "kermit", "path": tmp},
+                    {"room": "family", "path": "/tmp/family"},
+                ],
+                "topics": [
+                    {
+                        "id": "lighthouse",
+                        "label": "lighthouse keeper",
+                        "summary": "",
+                        "keywords": ["lighthouse"],
+                        "heat": 3.0,
+                        "conversations": 2,
+                        "since": "2026-07-01",
+                        "last_seen": "2026-08-20",
+                        "entries": [
+                            {
+                                "when": "2026-08-20T12:00",
+                                "thread": "1",
+                                "title": "lighthouse visit",
+                                "room": "family",
+                                "who": "alpha",
+                                "excerpt": "The keeper moved the stones again.",
+                            }
+                        ],
+                    }
+                ],
+            }
+            (mdir / "topics.yaml").write_text(yaml.safe_dump(record), encoding="utf-8")
+            native = render_substrate_packet(tmp)
+            self.assertIn("lighthouse", native.lower())
+            craft = render_substrate_packet(tmp, exclude_shared_rooms=True)
+            self.assertNotIn("lighthouse", craft.lower())
+
     def test_packet_carries_checkpoint_one_liner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             refresh_and_render(tmp, dialogue_model="gemma4:31b")

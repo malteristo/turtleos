@@ -11,6 +11,7 @@ from pathlib import Path
 
 import discord
 
+from channel_primitives import ChannelPrimitive, resolve_primitive
 from core.config import CHANNELS
 from state import get_channel
 
@@ -22,6 +23,8 @@ _practice_dir_ctx = contextvars.ContextVar("practice_dir", default=None)
 _runtime_dir_ctx = contextvars.ContextVar("runtime_dir", default=None)
 _mage_name_ctx = contextvars.ContextVar("mage_name", default="Practitioner")
 _mage_key_ctx = contextvars.ContextVar("mage_key", default="default")
+_actor_key_ctx = contextvars.ContextVar("actor_key", default=None)
+_channel_id_ctx = contextvars.ContextVar("practice_channel_id", default=None)
 
 
 # ─── Registry Loading ────────────────────────────────────────────
@@ -103,13 +106,13 @@ def get_attunement_profile() -> str:
 
 
 def get_channel_attunement(channel_id) -> str | None:
-    """Per-channel attunement override from mage_registry (native or craft)."""
+    """Per-channel attunement override during legacy-registry migration."""
     entry = _MAGE_REGISTRY.get("channels", {}).get(str(channel_id))
     if isinstance(entry, dict):
         att = entry.get("attunement")
         if att:
             normalized = att.strip().lower()
-            if normalized in ("native", "craft"):
+            if normalized in ("native", "craft", "health"):
                 return normalized
     return None
 
@@ -146,17 +149,30 @@ def get_effective_attunement(channel_id) -> str:
         resolved = resolve_registry_channel_id(channel_id)
     except (TypeError, ValueError):
         resolved = channel_id
+    primitive = get_channel_primitive(resolved)
+    if primitive is not None:
+        return primitive.attunement
     ch_att = get_channel_attunement(resolved)
     if ch_att:
         return ch_att
-    if _get_channel_type(resolved) == "craft":
-        return "craft"
     return get_attunement_profile()
 
 
 def uses_craft_surface(channel_id) -> bool:
     """True when channel should use Craft Turtle vocation (semi-attuned builder mode)."""
     return get_effective_attunement(channel_id) == "craft"
+
+
+def uses_health_surface(channel_id) -> bool:
+    """True when this channel or its parent resolves to the health primitive."""
+    if channel_id is None:
+        return False
+    try:
+        resolved = resolve_registry_channel_id(channel_id)
+    except (TypeError, ValueError):
+        resolved = channel_id
+    primitive = get_channel_primitive(resolved)
+    return bool(primitive and primitive.name == "health")
 
 
 def uses_native_eddy(channel_id) -> bool:
@@ -181,7 +197,7 @@ def _resolve_dialogue_channel_id() -> int | None:
 
 
 def _channel_is_river(ch_id: int) -> bool:
-    """True when channel id is a parent river, hosted-river, or shared-river surface."""
+    """True when the resolved primitive assigns its parent to River."""
     if is_channel_archived(ch_id):
         return False
     if str(ch_id) not in _MAGE_REGISTRY.get("channels", {}):
@@ -193,10 +209,13 @@ def _channel_is_river(ch_id: int) -> bool:
             dialogue = get_channel("dialogue")
             if not dialogue or ch_id != dialogue.id:
                 return False
-    ch_type = _get_channel_type(ch_id)
-    if ch_type in ("river", "hosted-river", "shared-river"):
-        return True
-    if ch_type is None and get_attunement_profile() == "native":
+    primitive = get_channel_primitive(ch_id)
+    if primitive is not None:
+        return primitive.parent_owner == "river"
+    if _get_channel_entry(ch_id) is not None:
+        # Registered but invalid/unknown primitive: fail closed.
+        return False
+    if get_attunement_profile() == "native":
         return True
     return False
 
@@ -263,6 +282,64 @@ def _get_channel_type(channel_id):
     if entry:
         return entry.get("type")
     return None
+
+
+def get_channel_primitive(channel_id) -> ChannelPrimitive | None:
+    """Resolved Channel + Turtle + River + Practice contract for a parent."""
+    try:
+        resolved = resolve_registry_channel_id(channel_id)
+    except (TypeError, ValueError):
+        resolved = channel_id
+    return resolve_primitive(_MAGE_REGISTRY, resolved)
+
+
+def get_current_channel_id() -> int | None:
+    """Registered parent channel carried by the current async task."""
+    return _channel_id_ctx.get()
+
+
+def get_current_channel_primitive() -> ChannelPrimitive | None:
+    """Resolved contract for the current turn; never infer it from a root."""
+    channel_id = get_current_channel_id()
+    return get_channel_primitive(channel_id) if channel_id is not None else None
+
+
+def channel_has_capability(channel_id, capability: str) -> bool:
+    primitive = get_channel_primitive(channel_id)
+    return bool(primitive and primitive.has(capability))
+
+
+def channel_member_role(channel_id, member_key: str | None = None) -> str | None:
+    """Role in this practice: subject, steward, member, or no access."""
+    primitive = get_channel_primitive(channel_id)
+    if primitive is None:
+        return None
+    return primitive.role_for(member_key or get_mage_key())
+
+
+def primitive_for_practice_dir(practice_dir=None) -> ChannelPrimitive | None:
+    """Resolve an unambiguous primitive for a root-only background operation.
+
+    Live turns must use :func:`get_current_channel_primitive`. A personal root
+    can own both private and craft channels, so registry order is not authority.
+    """
+    target = practice_dir or get_pd()
+    current = get_current_channel_primitive()
+    if current is not None:
+        current_root = _resolve_practice_dir_for_channel(current.channel_id)
+        if _normalized_dir(current_root) == _normalized_dir(target):
+            return current
+
+    key, _kind = registry_key_for_practice_dir(target)
+    if not key:
+        return None
+    matches: list[ChannelPrimitive] = []
+    for channel_id, entry in (_MAGE_REGISTRY.get("channels") or {}).items():
+        if isinstance(entry, dict) and entry.get("mage") == key:
+            primitive = resolve_primitive(_MAGE_REGISTRY, channel_id)
+            if primitive is not None:
+                matches.append(primitive)
+    return matches[0] if len(matches) == 1 else None
 
 
 def get_channel_default_context(channel_id):
@@ -576,6 +653,39 @@ def space_members_for_practice_dir(practice_dir) -> list[str]:
     return [str(m) for m in (space.get("members") or [])]
 
 
+def memory_roots(practice_dir) -> list:
+    """The roots this root's memory may read — registry glue for ``memory_agent``.
+
+    The rule itself (a personal root may carry the shared rooms it belongs to;
+    a shared room reads only itself; nobody reads another personal root) lives
+    in ``memory_agent.memory_roots_for`` as a pure function so it can be tested
+    with a dict. This is the one place the live registry is handed to it.
+    """
+    from memory_agent import memory_roots_for
+
+    key, kind = registry_key_for_practice_dir(practice_dir)
+    primitive = get_current_channel_primitive()
+    boundary = None
+    if primitive is not None:
+        current_root = _resolve_practice_dir_for_channel(primitive.channel_id)
+        if _normalized_dir(current_root) == _normalized_dir(practice_dir):
+            boundary = primitive.memory_boundary
+    return memory_roots_for(
+        practice_dir,
+        registry=_MAGE_REGISTRY,
+        key=key,
+        kind=kind,
+        boundary=boundary,
+    )
+
+
+def memory_rooms() -> list:
+    """Every registered practice root paired with what its memory may read."""
+    from pathlib import Path
+
+    return [(Path(p), memory_roots(p)) for p in list_registered_practice_dirs()]
+
+
 def channel_is_shared_space(channel_id) -> bool:
     """True when this channel maps to a space with more than one member.
 
@@ -717,6 +827,11 @@ def get_mage_name():
 
 def get_mage_key():
     return _mage_key_ctx.get()
+
+
+def get_actor_key() -> str | None:
+    """Registered human who authored the current message, distinct from room."""
+    return _actor_key_ctx.get()
 
 
 def get_mage_type():
@@ -929,18 +1044,32 @@ def set_practice_context(message):
     mage_name, mage_key = _resolve_mage_info_for_channel(ch_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
+    actor_key, _ = _resolve_mage_from_author(message.author)
+    _actor_key_ctx.set(actor_key)
+    _channel_id_ctx.set(ch_id if is_registered_parent_channel(ch_id) else None)
     return pd
 
 
-def set_practice_context_for_channel(channel_id):
-    """Set full practice context from a raw channel ID (for thread creation, session close, etc.)."""
+def set_practice_context_for_channel(channel_id, *, require_registered: bool = False):
+    """Set full practice context from a raw channel ID.
+
+    Writers that cannot safely inherit the primary root set
+    ``require_registered``. Other callers retain the legacy fallback while
+    their routing contracts are migrated independently.
+    """
     registry_id = resolve_registry_channel_id(channel_id)
+    if require_registered and not is_registered_parent_channel(registry_id):
+        raise ValueError(
+            f"unresolved practice channel {channel_id}; refusing primary-root fallback"
+        )
     pd = _resolve_practice_dir_for_channel(registry_id)
     _practice_dir_ctx.set(pd)
     _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(registry_id))
     mage_name, mage_key = _resolve_mage_info_for_channel(registry_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
+    _actor_key_ctx.set(None)
+    _channel_id_ctx.set(registry_id if is_registered_parent_channel(registry_id) else None)
     return pd
 
 
@@ -957,6 +1086,8 @@ def set_practice_context_for_mage_key(mage_key: str) -> bool:
         _runtime_dir_ctx.set(rd)
         _mage_name_ctx.set(mage.get("address", mage_key.capitalize()))
         _mage_key_ctx.set(mage_key)
+        _actor_key_ctx.set(mage_key)
+        _channel_id_ctx.set(None)
         return True
     space = _MAGE_REGISTRY.get("spaces", {}).get(mage_key)
     if space:
@@ -966,6 +1097,8 @@ def set_practice_context_for_mage_key(mage_key: str) -> bool:
         _runtime_dir_ctx.set(rd)
         _mage_name_ctx.set(mage_key.capitalize())
         _mage_key_ctx.set(mage_key)
+        _actor_key_ctx.set(None)
+        _channel_id_ctx.set(None)
         return True
     return False
 
@@ -1013,12 +1146,11 @@ def is_registered_parent_channel(channel_id):
 
 
 def practice_parent_channel_ids(registry: dict | None = None) -> list[int]:
-    """Eddy-capable practice parent ids: rivers + craft (not archived/orphaned).
+    """Every active parent whose resolved contract permits eddies.
 
-    Used by River/Turtle startup rejoin and eddy-bar deploy so shared-river and
-    craft-turtle eddies stay subscribed after restart — not only the operator
-    dialogue channel. Craft is included for the bar and rejoin; it is still not
-    a river for ``is_river_message`` / the River act harness.
+    Used by River/Turtle startup rejoin and eddy-bar deploy so thematic and
+    shared practices stay subscribed after restart, not only the operator
+    channel.
     """
     reg = registry if registry is not None else _MAGE_REGISTRY
     ids: list[int] = []
@@ -1028,7 +1160,8 @@ def practice_parent_channel_ids(registry: dict | None = None) -> list[int]:
             continue
         if entry.get("archived") or entry.get("orphaned"):
             continue
-        if entry.get("type") not in ("river", "hosted-river", "shared-river", "craft"):
+        primitive = resolve_primitive(reg, ch_id_str)
+        if primitive is None or not primitive.eddy_parent:
             continue
         try:
             ch_id = int(ch_id_str)
@@ -1045,17 +1178,13 @@ def practice_parent_channel_ids(registry: dict | None = None) -> list[int]:
 
 
 def supports_eddy_bar(channel_id) -> bool:
-    """True when the parent channel gets a standing new-eddy bar.
-
-    Rivers and craft share the bar; craft is not a river for the act harness.
-    """
+    """True when the resolved primitive declares an eddy-capable parent."""
     try:
         ch_id = int(channel_id)
     except (TypeError, ValueError):
         return False
-    if _channel_is_river(ch_id):
-        return True
-    return _get_channel_type(ch_id) == "craft"
+    primitive = get_channel_primitive(ch_id)
+    return bool(primitive and primitive.eddy_parent)
 
 
 def get_thread_member_ids(channel_id):
@@ -1099,9 +1228,13 @@ def _shared_river_member_overwrite() -> discord.PermissionOverwrite:
 
 
 async def ensure_space_channel_access(channel, guild=None) -> bool:
-    """Grant registry space members access to a shared-river parent channel."""
-    ch_type = _get_channel_type(channel.id)
-    if ch_type != "shared-river":
+    """Grant members access where the resolved shared contract permits it."""
+    primitive = get_channel_primitive(channel.id)
+    if primitive is None or primitive.base != "shared":
+        return False
+    if primitive.data_policy == "sensitive_local":
+        # Sensitive rooms use their dedicated exact-viewer verifier. Generic
+        # membership reconciliation may only widen and must not touch them.
         return False
 
     mage_key = _get_channel_mage(channel.id)

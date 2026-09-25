@@ -451,102 +451,245 @@ async def cmd_eddy_check(message, args):
     )
 
 
+def _thread_age_str(created, now):
+    age = now - created
+    if age.total_seconds() >= 86400:
+        return f"{int(age.total_seconds() / 86400)}d"
+    if age.total_seconds() >= 3600:
+        return f"{int(age.total_seconds() / 3600)}h"
+    return f"{int(age.total_seconds() / 60)}m"
+
+
+def _parse_dt(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _glance_line(name: str, age_str: str = "", flagged: bool = False) -> str:
+    bits = [f"**{name}**"]
+    if age_str:
+        bits.append(age_str)
+    if flagged:
+        bits.append("ready")
+    return " · ".join(bits)
+
+
+def _same_parent(info: dict, parent_name: str | None, parent_id: int | None) -> bool:
+    """Registry rows with no parent do not belong on this channel's list."""
+    stored_id = info.get("parent_channel_id")
+    if stored_id is not None and parent_id is not None:
+        try:
+            return int(stored_id) == int(parent_id)
+        except (TypeError, ValueError):
+            return False
+    stored_name = info.get("parent_channel")
+    if stored_name and parent_name:
+        return stored_name == parent_name
+    return False
+
+
+def _aware(dt):
+    if dt is None:
+        return None
+    return dt if getattr(dt, "tzinfo", None) else dt.replace(tzinfo=timezone.utc)
+
+
+# Discord snowflakes are time-ordered. last_message_id is what the sidebar walks.
+_DISCORD_EPOCH_MS = 1_420_070_400_000
+
+
+def snowflake_unix(snowflake) -> float | None:
+    try:
+        value = int(snowflake)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    return ((value >> 22) + _DISCORD_EPOCH_MS) / 1000.0
+
+
+def thread_sidebar_rank(thread) -> int:
+    """Higher is more recently active — the same walk as Discord's thread list."""
+    for attr in ("last_message_id", "id"):
+        raw = getattr(thread, attr, None)
+        if raw is None:
+            continue
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def collect_five_state_thread_records(
+    discord_threads,
+    registry_threads: dict,
+    *,
+    parent_name: str | None,
+    parent_id: int | None = None,
+    show_all: bool,
+    now,
+    is_home=None,
+):
+    """Rows for a glance or a spoken River display. Sidebar recency first."""
+    from eddy_five_state import eddy_five_state
+
+    ranked = []
+    seen = set()
+    now_ts = now.timestamp()
+    for t in discord_threads:
+        cfg = thread_configs.get(t.id)
+        info = registry_threads.get(str(t.id), {})
+        rank = thread_sidebar_rank(t)
+        snowflake_ts = snowflake_unix(getattr(t, "last_message_id", None) or getattr(t, "id", None))
+        last = _aware(
+            _parse_dt(info.get("last_activity"))
+            or (cfg["created"] if cfg else getattr(t, "created_at", None))
+        )
+        if snowflake_ts is not None:
+            age_seconds = max(0.0, now_ts - snowflake_ts)
+            age_str = _thread_age_str(
+                datetime.fromtimestamp(snowflake_ts, tz=timezone.utc), now
+            )
+        else:
+            age_str = _thread_age_str(last, now) if last else ""
+            age_seconds = (now - last).total_seconds() if last else 1e18
+        flagged = t.id in threads_flagged_for_release
+        home = bool(is_home(t.id)) if is_home else False
+        state = eddy_five_state(
+            info,
+            discord_archived=bool(getattr(t, "archived", False)),
+            discord_locked=bool(getattr(t, "locked", False)),
+            is_home=home,
+        )
+        name = t.name
+        ranked.append(
+            {
+                "state": state,
+                "name": name,
+                "line": _glance_line(name, age_str, flagged),
+                "age_seconds": age_seconds,
+                "sidebar_rank": rank,
+                "thread_id": str(t.id),
+                "flagged": flagged,
+            }
+        )
+        seen.add(str(t.id))
+
+    for tid, info in registry_threads.items():
+        if tid in seen:
+            continue
+        if parent_name or parent_id is not None:
+            if not _same_parent(info, parent_name, parent_id):
+                continue
+        home = bool(is_home(tid)) if is_home else False
+        state = eddy_five_state(info, is_home=home)
+        if state == "gone" and not show_all:
+            continue
+        if state == "live" and tid not in seen:
+            # Open Discord threads already listed. A live registry row with no
+            # Discord handle is stale inventory — skip unless showing all.
+            if not show_all:
+                continue
+        last = _aware(_parse_dt(info.get("last_activity") or info.get("created")))
+        age_str = _thread_age_str(last, now) if last else ""
+        age_seconds = (now - last).total_seconds() if last else 1e18
+        try:
+            rank = int(tid)
+        except (TypeError, ValueError):
+            rank = 0
+        name = info.get("name", "unknown")
+        ranked.append(
+            {
+                "state": state,
+                "name": name,
+                "line": _glance_line(name, age_str),
+                "age_seconds": age_seconds,
+                "sidebar_rank": rank,
+                "thread_id": str(tid),
+                "flagged": False,
+            }
+        )
+    ranked.sort(key=lambda row: (-int(row.get("sidebar_rank") or 0), row["age_seconds"]))
+    return ranked
+
+
+def collect_five_state_thread_items(
+    discord_threads,
+    registry_threads: dict,
+    *,
+    parent_name: str | None,
+    parent_id: int | None = None,
+    show_all: bool,
+    now,
+    is_home=None,
+):
+    """Build (state, line) rows for !threads. Registry covers resting/gone Discord dropped."""
+    records = collect_five_state_thread_records(
+        discord_threads,
+        registry_threads,
+        parent_name=parent_name,
+        parent_id=parent_id,
+        show_all=show_all,
+        now=now,
+        is_home=is_home,
+    )
+    return [(row["state"], row["line"]) for row in records]
+
+
 async def cmd_threads(message, args):
     show_all = "--all" in args
     source = message.channel
     if isinstance(source, discord.Thread):
         source = source.parent
 
-    active_threads = []
-    dormant_threads = []
-    archived_threads = []
-    now = datetime.now(timezone.utc)
-
-    if source and hasattr(source, "threads"):
-        for t in source.threads:
-            cfg = thread_configs.get(t.id)
-            configured = cfg is not None
-            age = now - (cfg["created"] if cfg else t.created_at)
-            age_days = age.total_seconds() / 86400
-
-            if age.total_seconds() >= 86400:
-                age_str = f"{int(age_days)}d"
-            elif age.total_seconds() >= 3600:
-                age_str = f"{int(age.total_seconds() / 3600)}h"
-            else:
-                age_str = f"{int(age.total_seconds() / 60)}m"
-
-            eddy_type = cfg.get("eddy_type", EDDY_DEFAULT) if cfg else EDDY_DEFAULT
-            eddy_info = EDDY_TYPES[eddy_type]
-            flagged = " \u26a0\ufe0f" if t.id in threads_flagged_for_release else ""
-
-            if cfg:
-                line = (
-                    f"{eddy_info['emoji']} **{t.name}** \u2014 "
-                    f"`{cfg['model_label']}` / `{cfg['attunement']}` ({age_str}){flagged}"
-                )
-            else:
-                line = f"{eddy_info['emoji']} **{t.name}** \u2014 unconfigured ({age_str}){flagged}"
-
-            if configured or age_days < 7:
-                active_threads.append(line)
-            elif age_days < 20:
-                dormant_threads.append(line)
-            else:
-                archived_threads.append(line)
-
-    if not active_threads and not dormant_threads:
-        await message.reply("No active threads. Use `!thread \"topic\"` to create one.", mention_author=False)
-        history = get_history(message.channel.id)
-        history.append({"role": "user", "content": "!threads"})
-        history.append({"role": "assistant", "content": "[System: No active threads.]"})
-        return
-
-    parts = []
-    if active_threads:
-        parts.extend(active_threads)
-    if dormant_threads:
-        parts.append("\n\u2500\u2500\u2500 dormant \u2500\u2500\u2500")
-        parts.extend(dormant_threads)
-    if show_all and archived_threads:
-        parts.append("\n\u2500\u2500\u2500 archived \u2500\u2500\u2500")
-        parts.extend(archived_threads)
-
+    from eddy_five_state import (
+        five_state_fields,
+        five_state_title,
+        fit_embed_description,
+        group_lines_by_five_state,
+    )
     from thread_registry import load_registry
 
-    parent_id = str(source.id) if source else None
-    cooled_lines = []
-    for tid, info in load_registry().get("threads", {}).items():
-        if info.get("harvest_status") != "cooled":
-            continue
-        if parent_id and info.get("parent_channel") and info.get("parent_channel") != getattr(source, "name", None):
-            continue
-        keep_tag = " · 📌" if info.get("continuity") == "keep" else ""
-        cooled_lines.append(
-            f"\U0001f9ca **{info.get('name', 'unknown')}** — auto-archived{keep_tag} · id:{tid}"
-        )
-    if cooled_lines:
-        parts.append("\n\u2500\u2500\u2500 cooled (auto-archived) \u2500\u2500\u2500")
-        parts.extend(cooled_lines)
+    now = datetime.now(timezone.utc)
+    discord_threads = list(source.threads) if source and hasattr(source, "threads") else []
+    items = collect_five_state_thread_items(
+        discord_threads,
+        load_registry().get("threads", {}),
+        parent_name=getattr(source, "name", None),
+        parent_id=getattr(source, "id", None),
+        show_all=show_all,
+        now=now,
+    )
+    grouped = group_lines_by_five_state(items)
+    if not any(grouped[name] for name in grouped):
+        await message.reply("No threads. Use `!thread \"topic\"` to create one.", mention_author=False)
+        history = get_history(message.channel.id)
+        history.append({"role": "user", "content": "!threads"})
+        history.append({"role": "assistant", "content": "[System: No threads.]"})
+        return
 
-    title = f"\U0001f9f5 Threads \u2014 {len(active_threads)} active"
-    if dormant_threads:
-        title += f" \u00b7 {len(dormant_threads)} dormant"
-    if archived_threads:
-        title += f" \u00b7 {len(archived_threads)} archived"
-
+    fields = five_state_fields(grouped, expand=show_all)
     embed = discord.Embed(
-        title=title,
-        description="\n".join(parts),
+        title=five_state_title(grouped),
         color=EMBED_COLORS["help"],
     )
-    footer = "!thread-type <type> to change | !eddy-check to scan for dissolution | !keep / !ignore"
-    if not show_all and archived_threads:
-        footer += f" | !threads --all to show {len(archived_threads)} archived"
-    embed.set_footer(text=footer)
+    for name, value in fields:
+        embed.add_field(name=name, value=value, inline=False)
+    if not show_all and (grouped.get("resting") or grouped.get("gone")):
+        embed.set_footer(text="!threads --all lists what is parked")
     await message.reply(embed=embed, mention_author=False)
 
-    thread_summary = "Threads:\n" + "\n".join(parts)
+    thread_summary = "Eddies:\n" + fit_embed_description(grouped, expand=show_all)
     history = get_history(message.channel.id)
     history.append({"role": "user", "content": "!threads"})
     history.append({"role": "assistant", "content": f"[System: {thread_summary}]"})

@@ -73,3 +73,9 @@ else
     echo "[${TS}] com.turtle.river not loaded — Turtle only (single-bot fallback)" >> "${LOG}"
     echo "Restarted Turtle (River label not loaded — single-bot fallback)"
 fi
+
+if launchctl list "com.turtle.mcp" >/dev/null 2>&1; then
+    kickstart_label com.turtle.mcp
+    echo "[${TS}] Restarted com.turtle.mcp" >> "${LOG}"
+    echo "Restarted MCP access point"
+fi

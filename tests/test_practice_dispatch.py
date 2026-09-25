@@ -53,8 +53,6 @@ class DispatchIncomingMessageTests(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "practice_dispatch.turtle_handles_native_river", return_value=False
         ), patch(
-            "practice_dispatch.is_craft_intake_channel", return_value=False
-        ), patch(
             "practice_dispatch.route_practice_dialogue", new_callable=AsyncMock
         ) as route, patch.object(practice_dispatch, "_processed_messages", []):
             await practice_dispatch.dispatch_incoming_message(message)

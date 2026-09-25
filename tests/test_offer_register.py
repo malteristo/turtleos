@@ -98,7 +98,7 @@ class SeneschalWiringTests(unittest.IsolatedAsyncioTestCase):
 
         recorded: list[tuple] = []
         with patch.object(res, "river_bot_enabled", create=True), patch(
-            "prompts.uses_native_turtle_prompt", return_value=True
+            "prompts.river_posts_turtle_offers", return_value=True
         ), patch.object(
             res, "_dialogue_history_snapshot", return_value=[], create=True
         ), patch.object(

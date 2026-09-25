@@ -607,6 +607,7 @@ async def provision_unclaimed_river(
         "river_key": river_key,
         "name": channel_name,
         "discord_name": channel_name,
+        "discord_category": "Practice",
         "invite_code": invite.code,
         "invite_uses": int(invite.uses or 0),
         "default_context": None,

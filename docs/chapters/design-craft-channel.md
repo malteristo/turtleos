@@ -51,7 +51,7 @@ channels:
    - Source visibility preflight on forwards
    - Lived friction vs harness noise classification
    - Learning intake, not ordinary conversation
-2. **Craft character** — `~/workshops/kermit/character/craft/` or workshop-level craft overlay (TBD)
+2. **Practice key** — `readings/the-practice/key-turtle.md` on the practice root (Turtle's narrative of the path). Not a dump of workshop files. Native and health prompts do not load it. (Wired 2026-09-10.)
 3. **Per-channel attunement** — `get_attunement_profile(channel_id)` returns `craft` for this channel; magic-era deep prompt OR dedicated `build_craft_prompt()`
 
 ### What "semi-attuned to meta-practice" means (to decide in chapter)
@@ -108,6 +108,12 @@ This offloads bug/UX tracking from the Mage: drop friction in `#craft-turtle`, t
 - Craft intake = parent only; eddies are Craft Turtle dialogue
 - Frontier `CRAFT_MODEL` for craft eddies
 - Discord category **Craft** (Rivers → Craft → Family)
+
+## Shipped (2026-09-10) — practice key
+
+- `build_craft_channel_prompt` loads `readings/the-practice/key-turtle.md` when present
+- Planted-token test: craft includes it; native and health do not
+- Live after deploy; Mini copy lives next to the kermit practice root
 
 ## Related chapter
 

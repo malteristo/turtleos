@@ -140,6 +140,46 @@ class EddyNoteWriterTests(unittest.IsolatedAsyncioTestCase):
 
     # ── relation present ─────────────────────────────────────────────
 
+    async def test_shared_note_rejects_harmful_ungrounded_attribution(self) -> None:
+        planted = _response(
+            "Alex said Rowan is abusive, and Turtle held that as the key pattern.",
+            "none",
+            None,
+        )
+        history = [
+            {"role": "user", "content": "[Rowan]: I need a quieter evening."},
+            {"role": "assistant", "content": "Let us keep that request clear."},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            with self._patched(tmp, AsyncMock(return_value=planted)):
+                with patch(
+                    "story_notes.space_members_for_practice_dir",
+                    return_value=["alex", "rowan"],
+                ), patch(
+                    "story_notes.member_address_map",
+                    return_value={"alex": "Alex", "rowan": "Rowan"},
+                ):
+                    with self.assertRaisesRegex(
+                        story_notes.EddyNoteError,
+                        "provenance guard",
+                    ):
+                        await story_notes.write_eddy_note(
+                            CHANNEL_ID, history, trigger="idle"
+                        )
+            self.assertFalse((Path(tmp) / "story" / "eddies").exists())
+
+    async def test_writer_requires_a_resolved_parent_before_reflecting(self) -> None:
+        llm = AsyncMock(return_value=RELATION_RESPONSE)
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_alive(tmp)
+            with self._patched(tmp, llm):
+                await story_notes.write_eddy_note(
+                    CHANNEL_ID, HISTORY, trigger="idle"
+                )
+                story_notes.set_practice_context_for_channel.assert_called_once_with(
+                    CHANNEL_ID, require_registered=True
+                )
+
     async def test_relation_present_entry_structure_and_front_matter(self) -> None:
         llm = AsyncMock(return_value=RELATION_RESPONSE)
         with tempfile.TemporaryDirectory() as tmp:

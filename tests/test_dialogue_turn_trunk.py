@@ -61,6 +61,7 @@ discord = _real_discord()  # real, on purpose — see module docstring
 
 import dialogue_turn
 import state
+from channel_primitives import primitive_definition
 
 if getattr(dialogue_turn.discord, "__file__", None) is None:
     # The trunk was imported against a stub before we got here. Its own
@@ -163,7 +164,10 @@ def _turn_env(
         patch.object(dialogue_turn, "sync_history", MagicMock()),
         patch.object(dialogue_turn, "register_thread", MagicMock()),
         patch.object(dialogue_turn, "update_thread_activity", MagicMock()),
-        patch("mage.uses_craft_surface", return_value=False),
+        patch(
+            "mage.get_channel_primitive",
+            return_value=primitive_definition("private"),
+        ),
         patch("mage.get_channel_default_context", return_value=None),
         patch("continuity_engine.get_scope", return_value=None),
         patch("continuity_engine.render_substrate_packet", return_value=substrate),
@@ -287,6 +291,219 @@ class ContinueDialogueTurnTests(unittest.TestCase):
         self.assertEqual(calls["tools_for_channel"], [100])
         self.assertNotIn(777, calls["tools_for_channel"])
 
+    def test_a_long_turn_says_what_it_is_doing_and_leaves_the_trace(self) -> None:
+        # 2026-09-03: a 3.5-minute local turn showed only Discord's typing dot
+        # and the operator read it as a hang. Past the threshold the turn posts
+        # what it has read and remembered; when the reply lands, that line
+        # becomes the closing trace rather than disappearing.
+        msg = _message(thread=True, channel_id=777)
+        posted = MagicMock()
+        posted.edit = AsyncMock()
+        msg.channel.send = AsyncMock(return_value=posted)
+
+        async def slow_api(system_prompt, messages, model, **kwargs):
+            await asyncio.sleep(0.15)
+            return "an answer", [{"name": "search_practice_files", "args": {}, "result": "x"}]
+
+        with _turn_env() as (sent, _):
+            with (
+                patch.object(dialogue_turn, "PROGRESS_AFTER_SECONDS", 0.02),
+                patch.object(dialogue_turn, "chat_anthropic_with_model", new=slow_api),
+                patch("mage.space_members_for_practice_dir", return_value=["a", "b"]),
+            ):
+                _run_turn(
+                    msg, [], sent=sent,
+                    url_content="x" * 8034, url_source_count=1, urls=["https://example.org"],
+                )
+
+        self.assertTrue(sent[0].startswith("an answer"))
+        progress = msg.channel.send.await_args.args[0]
+        self.assertIn("working ·", progress)
+        self.assertIn("read 1 link (8,034 chars)", progress)
+        self.assertIn("claude-test is composing", progress)
+        # Shared-room shape (two members, no craft surface): the card
+        # collapses to the one-line trace when the reply lands.
+        trace = posted.edit.await_args.kwargs["content"]
+        self.assertIn("attuned in", trace)
+        self.assertIn("looked up: search_practice_files", trace)
+        self.assertNotIn("working ·", trace)
+
+    def test_in_a_personal_room_the_card_shows_each_lookup_and_stays(self) -> None:
+        # The operator's ask: watch Turtle work, step by step, and keep the
+        # record next to the answer. Events come out of the tool loop as they
+        # happen; the card appears at the first one, not after a timeout.
+        msg = _message(thread=True, channel_id=777)
+        posted = MagicMock()
+        posted.edit = AsyncMock()
+        msg.channel.send = AsyncMock(return_value=posted)
+
+        async def api_with_lookups(system_prompt, messages, model, on_event=None, **kwargs):
+            await on_event("prose", {"text": "Let me check what we said about the lighthouse."})
+            await on_event("tool", {"name": "search_practice_files", "args": {"query": "lighthouse"},
+                                    "result": "**3 snippet(s)** for `lighthouse`"})
+            await on_event("tool", {"name": "read_practice_file", "args": {"filename": "story/eddies/1.md"},
+                                    "result": "text"})
+            return "an answer", [{"name": "search_practice_files", "args": {}, "result": "x"},
+                                 {"name": "read_practice_file", "args": {}, "result": "x"}]
+
+        with _turn_env() as (sent, _):
+            with (
+                patch.object(dialogue_turn, "PROGRESS_AFTER_SECONDS", 60.0),
+                patch.object(dialogue_turn, "chat_anthropic_with_model", new=api_with_lookups),
+                patch("mage.space_members_for_practice_dir", return_value=[]),
+            ):
+                _run_turn(msg, [], sent=sent)
+
+        self.assertTrue(sent and sent[0].startswith("an answer"))
+        msg.channel.send.assert_awaited_once()
+        first = msg.channel.send.await_args.args[0]
+        self.assertIn("💭 *Let me check what we said about the lighthouse.*", first)
+        final = posted.edit.await_args.kwargs["content"]
+        self.assertIn("attuned in", final)
+        self.assertIn('🔎 searched notes for "lighthouse" → 3 match(es)', final)
+        self.assertIn("📖 read `story/eddies/1.md`", final)
+        self.assertNotIn("looked up:", final)  # the list is the record, not a summary
+
+    def test_a_quick_turn_posts_no_progress_line(self) -> None:
+        msg = _message()
+        msg.channel.send = AsyncMock()
+        with _turn_env() as (sent, _):
+            with patch.object(dialogue_turn, "PROGRESS_AFTER_SECONDS", 5.0):
+                _run_turn(msg, [], sent=sent)
+        self.assertEqual(sent, ["an answer"])
+        msg.channel.send.assert_not_awaited()
+
+    def test_a_link_in_the_message_asks_for_the_compact_topic_block(self) -> None:
+        msg = _message()
+        seen: dict = {}
+
+        def capture(pd, **kwargs):
+            seen.update(kwargs)
+            return ""
+
+        with _turn_env() as (sent, _):
+            with patch("continuity_engine.render_substrate_packet", side_effect=capture):
+                _run_turn(msg, [], sent=sent, url_content="transcript", url_source_count=1, urls=["u"])
+        self.assertTrue(seen["compact_topics"])
+        with _turn_env() as (sent, _):
+            with patch("continuity_engine.render_substrate_packet", side_effect=capture):
+                _run_turn(msg, [], sent=sent)
+        self.assertFalse(seen["compact_topics"])
+
+    def test_craft_surface_asks_the_packet_to_drop_shared_rooms(self) -> None:
+        msg = _message()
+        seen: dict = {}
+
+        def capture(pd, **kwargs):
+            seen.update(kwargs)
+            return ""
+
+        with _turn_env() as (sent, _):
+            with patch(
+                "mage.get_channel_primitive",
+                return_value=primitive_definition("craft"),
+            ):
+                with patch("continuity_engine.render_substrate_packet", side_effect=capture):
+                    _run_turn(msg, [], sent=sent)
+        self.assertTrue(seen["exclude_shared_rooms"])
+        seen.clear()
+        with _turn_env() as (sent, _):
+            with patch("continuity_engine.render_substrate_packet", side_effect=capture):
+                _run_turn(msg, [], sent=sent)
+        self.assertFalse(seen["exclude_shared_rooms"])
+
+    def test_health_parent_uses_health_prompt_not_system(self) -> None:
+        seen: list[str] = []
+
+        async def capture_api(system_prompt, messages, model, **kwargs):
+            seen.append(system_prompt)
+            return "an answer", []
+
+        msg = _message()
+        with _turn_env() as (sent, _):
+            with patch(
+                "mage.get_channel_primitive",
+                return_value=primitive_definition("health"),
+            ):
+                with patch(
+                    "dialogue_turn.get_health_channel_prompt",
+                    return_value="HEALTH BOARD",
+                ):
+                    with patch(
+                        "dialogue_turn.chat_anthropic_with_model",
+                        new=capture_api,
+                    ):
+                        _run_turn(msg, [], sent=sent)
+        self.assertTrue(any("HEALTH BOARD" in s for s in seen))
+        self.assertFalse(any("SYSTEM" == s or str(s).endswith("SYSTEM") for s in seen))
+
+    def test_planted_model_reply_is_not_replaced_on_health(self) -> None:
+        from health_room import HEALTH_DIAGNOSIS_FALLBACK
+
+        named = "Best current model: dysthymia would explain the baseline."
+        msg = _message()
+        with _turn_env() as (sent, _):
+            with patch(
+                "mage.get_channel_primitive",
+                return_value=primitive_definition("health"),
+            ):
+                with patch("dialogue_turn.get_health_channel_prompt", return_value="H"):
+                    with patch(
+                        "dialogue_turn.chat_anthropic_with_model",
+                        new=AsyncMock(return_value=(named, [])),
+                    ):
+                        _run_turn(msg, [], sent=sent)
+        self.assertTrue(sent)
+        self.assertEqual(sent[0], named)
+        self.assertNotEqual(sent[0], HEALTH_DIAGNOSIS_FALLBACK)
+
+    def test_local_path_remembers_with_the_read_only_pair_when_memory_is_built(self) -> None:
+        # 2026-09-01: the local path had no tool loop, so a family-room Turtle
+        # asked what it remembered narrated a search it could not make. With a
+        # built memory the plain call becomes a two-round loop over the
+        # remembering pair — and only that pair.
+        msg = _message(thread=True, channel_id=777)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "memory").mkdir()
+            (Path(tmp) / "memory" / "topics.yaml").write_text("version: 1\ntopics: []\n")
+            with _turn_env(practice_dir=tmp) as (sent, calls):
+                loop = AsyncMock(return_value=("remembered", []))
+                with (
+                    patch.object(dialogue_turn, "chat_ollama_with_tools", new=loop),
+                    patch.object(dialogue_turn, "get_native_eddy_prompt", return_value="NATIVE"),
+                    patch.object(dialogue_turn, "resolve_dialogue_channel_id", return_value=100),
+                    patch.object(
+                        dialogue_turn,
+                        "memory_tools_for_channel",
+                        return_value=[{"function": {"name": "search_practice_files"}}],
+                    ),
+                ):
+                    _run_turn(msg, [], sent=sent, native_eddy=True)
+
+        self.assertEqual(sent, ["remembered"])
+        self.assertEqual(calls["ollama"], [], "plain call must not run when the loop did")
+        kwargs = loop.await_args.kwargs
+        self.assertEqual(kwargs["max_rounds"], dialogue_turn.LOCAL_MEMORY_TOOL_ROUNDS)
+        self.assertEqual(
+            [t["function"]["name"] for t in kwargs["tos_tools"]], ["search_practice_files"]
+        )
+
+    def test_local_path_stays_plain_when_no_memory_is_built(self) -> None:
+        # Positive control for the test above: the loop is a consequence of a
+        # built memory, not a change to every local turn.
+        msg = _message(thread=True, channel_id=777)
+        with tempfile.TemporaryDirectory() as tmp:
+            with _turn_env(practice_dir=tmp) as (sent, calls):
+                loop = AsyncMock(return_value=("looped", []))
+                with (
+                    patch.object(dialogue_turn, "chat_ollama_with_tools", new=loop),
+                    patch.object(dialogue_turn, "get_native_eddy_prompt", return_value="NATIVE"),
+                ):
+                    _run_turn(msg, [], sent=sent, native_eddy=True)
+
+        self.assertEqual(sent, ["local fallback"])
+        loop.assert_not_awaited()
+
     def test_repeated_paragraphs_are_removed_before_sending(self) -> None:
         msg = _message()
         looped = "First point.\n\nSecond point.\n\nFirst point.\n\nThird point."
@@ -372,6 +589,23 @@ class TurnPacketPersistenceTests(unittest.TestCase):
             self.assertEqual(sent, ["an answer"])
 
 
+class ContinuityOpenPersistenceTests(unittest.TestCase):
+    def test_the_first_turn_writes_the_open_record(self) -> None:
+        from continuity_open import record_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            msg = _message(channel_id=500, content="where were we")
+            with _turn_env(practice_dir=tmp, substrate="SUBSTRATE") as (sent, _):
+                _run_turn(msg, [], sent=sent)
+            path = record_path(tmp, 500)
+            self.assertTrue(path.is_file(), f"open record missing at {path}")
+            body = path.read_text(encoding="utf-8")
+            self.assertIn("where were we", body)
+            self.assertIn("an answer", body)
+            self.assertIn("thread: loaded", body)
+            self.assertNotIn("caught up", body.lower())
+
+
 @contextlib.contextmanager
 def _handle_env(*, native: bool = False, locked: bool = False):
     """Patch `handle_dialogue`'s intake surroundings; the routing is under test."""
@@ -412,6 +646,23 @@ def _handle_env(*, native: bool = False, locked: bool = False):
 
 
 class HandleDialogueTests(unittest.TestCase):
+    def test_local_team_turn_receives_governed_tools_without_room_memory(self) -> None:
+        team_tool = {
+            "type": "function",
+            "function": {"name": "set_my_team_front", "parameters": {}},
+        }
+        with (
+            patch.object(dialogue_turn, "local_memory_tools", return_value=[]),
+            patch.object(
+                dialogue_turn,
+                "team_tools_for_channel",
+                return_value=[team_tool],
+            ),
+        ):
+            tools, rounds = dialogue_turn.local_turn_tools(100)
+        self.assertEqual(tools, [team_tool])
+        self.assertEqual(rounds, dialogue_turn.LOCAL_TEAM_TOOL_ROUNDS)
+
     def test_a_locked_eddy_is_not_answered(self) -> None:
         msg = _message(thread=True)
         history: list[dict] = []
@@ -423,6 +674,34 @@ class HandleDialogueTests(unittest.TestCase):
         # conversation talking back at them.
         continued.assert_not_awaited()
         self.assertEqual(history, [])
+
+    def test_a_non_owner_cannot_advance_another_members_lane(self) -> None:
+        from team_lanes import LaneGate
+
+        msg = _message(thread=True)
+        history: list[dict] = []
+        with _handle_env() as (continued, triage):
+            with (
+                patch.object(dialogue_turn, "get_history", return_value=history),
+                patch(
+                    "team_lanes.gate_lane_turn",
+                    return_value=LaneGate(
+                        False,
+                        activity_id="galactic-adventure",
+                        owner="member-a",
+                        reason="this is member-a's lane",
+                    ),
+                ),
+                patch("mage.get_actor_key", return_value="member-b"),
+                patch("mage.get_channel_primitive", return_value=MagicMock()),
+                patch("mage.address_for_mage_key", return_value="Member A"),
+            ):
+                asyncio.run(dialogue_turn.handle_dialogue(msg))
+
+        continued.assert_not_awaited()
+        triage.assert_not_awaited()
+        self.assertEqual(history, [])
+        self.assertIn("Member A's lane", msg.reply.await_args.args[0])
 
     def test_a_coalesced_message_enters_history_without_being_answered(self) -> None:
         # reply=False is the queue saying "a newer message is already waiting."

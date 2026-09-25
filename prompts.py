@@ -9,6 +9,7 @@ from mage import (
     get_mage_key,
     get_mage_type,
     get_attunement_profile,
+    get_channel_primitive,
     uses_craft_surface,
     uses_native_eddy,
 )
@@ -370,7 +371,8 @@ Your role:
 - Reference practice state when naturally relevant, don't force it
 - Have opinions. Push back. Be warm but honest
 - No session opening/closing rituals in Discord
-- When the Mage sends just `.` (a single dot), this is a continuation signal — proceed with whatever is next. Resume the active thread, offer the next natural step, or continue where you left off. Never just acknowledge it with an emoji.
+- When the Mage sends `.` or `.` plus a toward, that is go — continue, or drive on that toward. Do not open a new glance. Never just acknowledge it with an emoji.
+- When the Mage sends `...` or `...` plus a toward, that is the glance: where this conversation is, and one next move. Do not continue as if they had said go.
 
 ## Thread Orchestration (Appendix A — legacy operators)
 
@@ -590,7 +592,8 @@ You are in a Discord thread (eddy). Keep replies concise unless depth is invited
 - **No arrival monologue** — presence embed may appear just before your first reply; don't re-introduce yourself in prose.
 - **No Spirit/Magic/summoning vocabulary** unless the person explicitly uses it.
 - **Links:** when a URL is URL-primary, short commentary, or has a read cue, the shell **silently link-reads** before your reply — discuss the content directly. **Discord message permalinks** get the same treatment — visible Read embed, then informed reply. Long incidental links get a **Read article** offer instead. Typed `` `!fetch https://…` `` on River saves to the library (persistence), not a prerequisite to speak.
-- **Acts vs conversation:** checkpoint and share live on the lifecycle bar, `!release` and `!dissolve` are typed; `` `!fetch` `` and other platform acts via River — you converse, River executes persistence/structure.
+- **The pair:** `...` / `... [toward]` is the glance — where this conversation is, and one next move. `.` / `. [toward]` is go: continue, or drive on that toward. Do not open a glance on a go.
+- **Acts vs conversation:** checkpoint and share live on the lifecycle bar and on a glance; `!release` and `!dissolve` are typed; `` `!fetch` `` and other platform acts via River — you converse, River executes persistence/structure. River does not offer those acts on its own.
 - **Fetched content in history:** link-read injects excerpts; after `[Act: !fetch]` the library cache excerpt is also available — discuss directly; never disclaim missing content."""
 
 PRACTITIONER_NATIVE_EDDY_HINT = """## Practitioner Eddy
@@ -622,6 +625,36 @@ def load_character_file(name: str) -> str:
     return ""
 
 
+PRACTICE_KEY_DIR = os.path.join("readings", "the-practice")
+CRAFT_PRACTICE_KEY_MOUTH = "turtle"
+CRAFT_KEY_HEADER = (
+    "## Practice Key (Turtle)\n\n"
+    "This is Turtle's current reading of the Magic practice — a narrative of "
+    "the path, rewritten as sessions arrive. Attune to it. It is not a dump "
+    "of workshop files."
+)
+
+
+def practice_key_path(mouth: str = CRAFT_PRACTICE_KEY_MOUTH, root: str | None = None) -> str:
+    pd = root if root is not None else get_pd()
+    return os.path.join(pd, PRACTICE_KEY_DIR, f"key-{mouth}.md")
+
+
+def load_practice_key(mouth: str = CRAFT_PRACTICE_KEY_MOUTH, root: str | None = None) -> str:
+    """Private practice key for one mouth. Missing file is empty, not an error."""
+    return read_safe(practice_key_path(mouth, root=root)).strip()
+
+
+def render_practice_key_block(
+    mouth: str = CRAFT_PRACTICE_KEY_MOUTH,
+    root: str | None = None,
+) -> str:
+    body = load_practice_key(mouth, root=root)
+    if not body:
+        return ""
+    return f"{CRAFT_KEY_HEADER}\n\n{body}"
+
+
 def build_native_eddy_prompt(
     flow_id: str | None = None,
     context_type: str | None = None,
@@ -636,6 +669,11 @@ def build_native_eddy_prompt(
         parts.append(soul)
     if conduct:
         parts.append(conduct)
+    from practitioner_context import practitioner_context_block
+
+    here = practitioner_context_block(get_pd())
+    if here:
+        parts.append(here)
     if context_type:
         context_block = _build_context_resonance(context_type)
         if context_block:
@@ -674,6 +712,21 @@ def uses_native_turtle_prompt(channel_id=None) -> bool:
     return uses_native_eddy(channel_id)
 
 
+def river_posts_turtle_offers(channel_id=None) -> bool:
+    """River posts Turtle-announced and contextual acts on this parent.
+
+    Native rivers and craft. Craft Turtle announces checkpoints and act
+    offers; gating on native-only left those signals on disk and no button
+    in the thread (2026-08-14, 2026-09-03). Family/health/shared keep their
+    own offer politics — this is not a widening to every primitive.
+    """
+    if uses_native_turtle_prompt(channel_id):
+        return True
+    if channel_id is None:
+        return False
+    return uses_craft_surface(channel_id)
+
+
 # Phrases the craft prompt must not contain. Named so a test can fail them
 # as a fixture rather than as a vibe. Non-craft callers still use these.
 MAGE_DIALOGUE_WHO = "You are Spirit in persistent mode, in Discord with {mage_name}."
@@ -697,15 +750,34 @@ Reaching for intake when nothing is broken is the failure to watch for, and it i
 - Reference turtleOS runtime, spec, and proposals when it helps — meta-practice is allowed here.
 - Stay lore-light on lived practice; go deep on evidence, classification and verification when you are diagnosing."""
 
+# Operator rules the key-eval base prompt did not carry. Named phrases so a
+# test can fail them as a fixture. Native and health must not receive this.
+CRAFT_OPS_DEPLOY_PHRASE = (
+    "The quiet window is 10 minutes after the last spoken turn"
+)
+CRAFT_OPS_MAIL_PHRASE = (
+    "Draft the full letter. He edits. He sends. You never send."
+)
+
+CRAFT_OPS_BLOCK = f"""## Craft Ops
+
+These are operator rules for this surface. They are not suggestions.
+
+**Deploy.** Never interrupt a live conversation. Restarting verified code needs the check, not approval. {CRAFT_OPS_DEPLOY_PHRASE}. `--force` only to fix what is already broken. Asking is the error.
+
+**Professional mail.** {CRAFT_OPS_MAIL_PHRASE} Every fact about his life, calendar, or record is verified or flagged in a draft header. Stay in the existing thread unless you name why a new one."""
+
 
 def build_craft_channel_prompt(context_type: str | None = None) -> str:
     """Craft surface prompt — Turtle in builder mode, resident of turtleOS.
 
-    Loads the practice-root Turtle soul (not ``IDENTITY_DIR``). The Discord
-    practice-state block is included with identity stripped so the Spirit
-    persistent-mode line and the legacy identity seed cannot leak in.
-    Attunement resolution is unchanged: this does not widen or remove the
-    ``native``/``craft`` axis.
+    Loads the practice-root Turtle soul (not ``IDENTITY_DIR``) and the
+    Turtle practice key when present. The Discord practice-state block is
+    included with identity stripped so the Spirit persistent-mode line and
+    the legacy identity seed cannot leak in. Attunement resolution is
+    unchanged: this does not widen or remove the ``native``/``craft`` axis,
+    and the key and craft ops block are not injected into native or health
+    prompts.
     """
     ctx = context_type or "craft"
     context_block = _build_context_resonance(ctx)
@@ -714,12 +786,21 @@ def build_craft_channel_prompt(context_type: str | None = None) -> str:
     except Exception:
         practice_block = DIALOGUE_SYSTEM_FALLBACK
     soul = load_character_file("soul.md")
+    key_block = render_practice_key_block(CRAFT_PRACTICE_KEY_MOUTH)
     parts = []
     if soul:
         parts.append(soul)
+    if key_block:
+        parts.append(key_block)
     parts.append(CRAFT_VOCATION_HEADER)
+    parts.append(CRAFT_OPS_BLOCK)
     if context_block:
         parts.append(context_block)
+    from practitioner_context import practitioner_context_block
+
+    here = practitioner_context_block(get_pd())
+    if here:
+        parts.append(here)
     if practice_block:
         parts.append(practice_block)
     return "\n\n---\n\n".join(parts)
@@ -729,6 +810,42 @@ def get_craft_channel_prompt(context_type: str | None = None) -> str:
     return build_craft_channel_prompt(context_type)
 
 
+def build_health_channel_prompt(context_type: str | None = None) -> str:
+    """Health board — native Turtle, health context, no Spirit identity line."""
+    from health_room import load_health_picture
+    from mage import get_pd
+    from practitioner_context import practitioner_context_block
+
+    ctx = context_type or "health"
+    context_block = _build_context_resonance(ctx)
+    soul = load_character_file("soul.md")
+    conduct = load_character_file("conduct.md")
+    picture = load_health_picture(get_pd())
+    here = practitioner_context_block(get_pd())
+    parts: list[str] = []
+    if soul:
+        parts.append(soul)
+    if conduct:
+        parts.append(conduct)
+    if context_block:
+        parts.append(context_block)
+    if picture:
+        parts.append(picture)
+    if here:
+        parts.append(here)
+    if not parts:
+        parts.append(
+            "You are Turtle. This room holds a living picture: the best current "
+            "explanation of the data. Doctors decide treatment. They do not own "
+            "the model."
+        )
+    return "\n\n---\n\n".join(parts)
+
+
+def get_health_channel_prompt(context_type: str | None = None) -> str:
+    return build_health_channel_prompt(context_type)
+
+
 def get_thread_prompt(
     attunement: str,
     use_api: bool = True,
@@ -736,8 +853,14 @@ def get_thread_prompt(
     channel_id=None,
 ) -> str:
     """Build system prompt at the requested attunement level."""
-    if channel_id is not None and uses_craft_surface(channel_id):
-        return get_craft_channel_prompt(context_type or "craft")
+    if channel_id is not None:
+        from primitive_runtime import runtime_for
+
+        runtime = runtime_for(get_channel_primitive(channel_id))
+        if runtime and runtime.prompt_profile == "craft":
+            return get_craft_channel_prompt(context_type or "craft")
+        if runtime and runtime.prompt_profile == "health":
+            return get_health_channel_prompt(context_type or "health")
     if uses_native_turtle_prompt(channel_id):
         return get_native_eddy_prompt(context_type)
     context_block = _build_context_resonance(context_type) if context_type else ""

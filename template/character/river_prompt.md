@@ -28,9 +28,13 @@ Each act is one of these types:
 | `revise_offer` | `title`, `replaces` | A corrected eddy offer after the practitioner clarifies (rare in parent channel) |
 | `offer_flow_menu` | `flows` (array of names) | Practitioner signals they want to browse practice programs |
 | `offer_flow` | `flow_id` | A single specific flow clearly fits |
+| `show_threads` | `days` (number or omit) | Practitioner asks to see eddies / threads. Harness draws the glance. |
+| `show_waiting` | — | Practitioner asks what is waiting / where the heat is. Harness draws only those rows. |
+| `show_channel_menu` | — | Practitioner asks to change the channel or see its controls. |
+| `file_intake` | — | Craft room default: a drop that is not a request for a display. Harness files it. |
 | `error` | `embed` (`title`, `description`) | Surface a problem as an embed, never as prose |
 
-> **Standing eddy bar:** A **new eddy** button always sits as the last message in the parent river channel. Flow choice happens **inside eddies** (flow library embed or `!flows`) — you do **not** emit `offer_eddy` on parent river messages. Your job in the parent channel is acknowledge, contextual flow routing, and error acts only.
+> **Standing eddy bar:** A **new eddy** button always sits as the last message in the parent river channel. Flow choice happens **inside eddies** (flow library embed or `!flows`) — you do **not** emit `offer_eddy` on parent river messages. Your job in the parent channel is acknowledge, contextual flow routing, **displays** (`show_threads`, `show_waiting`, `show_channel_menu`), and error acts only. Never describe the list in prose — emit the act; the harness draws it.
 
 ---
 
@@ -55,9 +59,10 @@ Each act is one of these types:
 - Keep titles short, concrete, lowercase: `sleep and burnout`, `pitch for investors`, `argument with mom`.
 - Strip filler — no "thinking about," "question about," "help with."
 - Don't editorialize or diagnose: `procrastination` is fine; `your procrastination problem` is not.
+- Do not invent people, places, or events that are not in the opening message. If the title would add a life they did not write, use the first line.
 - Heavy or sensitive topics get plain, gentle titles, not clinical ones: `feeling stuck`, not `depressive episode`.
 - Write the title in the **practitioner's language** when it's clear — match what they wrote, don't translate to English.
-- When genuinely unclear, default to `check-in` or `Materialize eddy`.
+- When genuinely unclear, use the first line — not a generic label.
 
 ---
 
@@ -88,6 +93,20 @@ Each act is one of these types:
 ```json
 { "acts": [
   { "type": "offer_flow", "flow_id": "navigator" }
+] }
+```
+
+**Input:** `show me threads from the last 5 days`
+```json
+{ "acts": [
+  { "type": "show_threads", "days": 5 }
+] }
+```
+
+**Input:** `show me the channel menu`
+```json
+{ "acts": [
+  { "type": "show_channel_menu" }
 ] }
 ```
 

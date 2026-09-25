@@ -489,6 +489,42 @@ class TestPostEddyLifecycleFeedback(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["thread_name"], "what makes jokes work")
         self.assertIn("1 insights archived", kwargs["detail"])
 
+    async def test_cooled_does_not_post(self) -> None:
+        from sessions import post_eddy_lifecycle_feedback
+
+        with patch("sessions.post_lifecycle_act", new_callable=AsyncMock) as act:
+            await post_eddy_lifecycle_feedback(
+                1479428854513664030,
+                thread_name="parallel or later Wohngruppen practice",
+                mode="cooled",
+            )
+        act.assert_not_awaited()
+
+    async def test_dissolve_would_fail_the_quiet_check(self) -> None:
+        """Positive control: quiet is not 'nothing posted ever'."""
+        from sessions import post_eddy_lifecycle_feedback
+
+        with patch("sessions.post_lifecycle_act", new_callable=AsyncMock) as act:
+            await post_eddy_lifecycle_feedback(
+                1479428854513664030,
+                thread_name="deliberate close",
+                mode="dissolve",
+                entry_count=2,
+            )
+        act.assert_awaited_once()
+
+    async def test_capture_abort_still_posts(self) -> None:
+        from sessions import post_eddy_lifecycle_feedback
+
+        with patch("sessions.post_lifecycle_act", new_callable=AsyncMock) as act:
+            await post_eddy_lifecycle_feedback(
+                1479428854513664030,
+                thread_name="kept after failed capture",
+                mode="capture_aborted",
+            )
+        act.assert_awaited_once()
+        self.assertIn("dissolve aborted", act.await_args.kwargs["detail"])
+
     async def test_open_delegates_action_first(self) -> None:
         from sessions import post_eddy_opened_feedback
 
@@ -683,6 +719,38 @@ class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("permission drift" in c for c in result["changes"]))
         log.assert_awaited_once()
 
+    async def test_flags_declared_category_drift_without_a_move_event(self) -> None:
+        from discord_reconcile import handle_guild_channel_update
+
+        before = self._channel(name="quest")
+        after = self._channel(name="quest")
+        wrong = MagicMock()
+        wrong.name = "Family"
+        before.category = wrong
+        after.category = wrong
+        registry = {
+            "channels": {
+                "555": {
+                    "type": "shared-river",
+                    "mage": "team",
+                    "discord_category": "Quest",
+                }
+            }
+        }
+        with patch(
+            "runtime.adapters.structural.get_registry", return_value=registry
+        ), patch("helpers.log_activity", new_callable=AsyncMock) as log:
+            result = await handle_guild_channel_update(
+                before, after, discord_client=MagicMock()
+            )
+
+        self.assertTrue(result["channel_updated"])
+        self.assertIn(
+            "category drift: expected category `Quest`, found `Family`",
+            result["changes"],
+        )
+        log.assert_awaited_once()
+
 
 class TestCollectRegistryAuditIssues(unittest.TestCase):
     def test_dict_channel_entries_do_not_crash(self) -> None:
@@ -740,6 +808,69 @@ class TestCollectRegistryAuditIssues(unittest.TestCase):
         self.assertEqual(len(issues), 1)
         self.assertIn("\u2139\ufe0f", issues[0])
         self.assertIn("prune-orphans", issues[0])
+
+    def test_declared_category_is_audited_but_legacy_absence_is_allowed(self) -> None:
+        from runtime.adapters.structural import collect_registry_audit_issues
+
+        guild = MagicMock()
+        channel = MagicMock()
+        channel.id = 301
+        channel.name = "health"
+        channel.category = None
+        channel.guild = guild
+        channel.overwrites = {}
+        guild.get_channel.return_value = channel
+        guild.text_channels = [channel]
+        registry = {
+            "channels": {
+                "301": {
+                    "mage": "health",
+                    "type": "unknown",
+                    "discord_category": "Health",
+                }
+            }
+        }
+
+        issues = collect_registry_audit_issues(registry, guild)
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn("category drift", issues[0])
+        self.assertIn("expected category `Health`, found `none`", issues[0])
+
+
+class TestEnsureChannelCategory(unittest.IsolatedAsyncioTestCase):
+    async def test_legacy_entry_is_left_alone(self) -> None:
+        from runtime.adapters.structural import ensure_channel_category
+
+        channel = MagicMock()
+        channel.edit = AsyncMock()
+        changed = await ensure_channel_category(channel, {"type": "shared-river"})
+        self.assertFalse(changed)
+        channel.edit.assert_not_awaited()
+
+    async def test_explicit_category_is_repaired_without_permission_sync(self) -> None:
+        from runtime.adapters.structural import ensure_channel_category
+
+        category = MagicMock()
+        category.name = "Quest"
+        guild = MagicMock()
+        guild.categories = [category]
+        channel = MagicMock()
+        channel.category = None
+        channel.guild = guild
+        channel.edit = AsyncMock()
+
+        changed = await ensure_channel_category(
+            channel, {"discord_category": "Quest"}
+        )
+
+        self.assertTrue(changed)
+        channel.edit.assert_awaited_once_with(
+            category=category,
+            sync_permissions=False,
+            reason="repair declared channel-instance category",
+        )
+        guild.create_category.assert_not_called()
 
 
 class TestPruneOrphanedChannels(unittest.TestCase):

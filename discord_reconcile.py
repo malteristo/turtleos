@@ -22,6 +22,7 @@ from runtime.adapters.lifecycle import (
 )
 from runtime.adapters.structural import (
     _channel_binding_hint,
+    ensure_channel_category,
     expect_channel_registry_binding,
     reconcile_channel_create,
     reconcile_channel_delete,
@@ -32,6 +33,7 @@ from mage import is_registered_parent_channel
 # Re-export for tests and blessed-path hooks.
 __all__ = [
     "expect_channel_registry_binding",
+    "ensure_channel_category",
     "handle_thread_open",
     "handle_thread_archive_transition",
     "handle_thread_update",

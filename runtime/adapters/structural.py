@@ -119,6 +119,67 @@ def _permission_drift_issues(
     return issues
 
 
+def _category_drift_issue(
+    channel: discord.abc.GuildChannel,
+    entry: dict,
+) -> str | None:
+    """Return desired-category drift for channel instances that declare one."""
+    desired = entry.get("discord_category")
+    if desired is None:
+        return None
+    if (
+        not isinstance(desired, str)
+        or not desired.strip()
+        or len(desired) > 100
+        or any(ord(char) < 32 for char in desired)
+    ):
+        return "registry has an invalid desired category"
+    desired = desired.strip()
+    actual = getattr(getattr(channel, "category", None), "name", None)
+    if actual != desired:
+        return f"expected category `{desired}`, found `{actual or 'none'}`"
+    return None
+
+
+async def ensure_channel_category(
+    channel: discord.abc.GuildChannel,
+    entry: dict,
+) -> bool:
+    """Create/find and apply explicitly configured instance navigation."""
+    issue = _category_drift_issue(channel, entry)
+    if issue is None:
+        return False
+    desired = entry.get("discord_category")
+    if not isinstance(desired, str) or "invalid desired category" in issue:
+        raise ValueError(issue)
+    desired = desired.strip()
+    guild = getattr(channel, "guild", None)
+    if guild is None:
+        raise RuntimeError("channel has no guild")
+    categories = list(getattr(guild, "categories", []) or [])
+    category = next(
+        (item for item in categories if item.name.casefold() == desired.casefold()),
+        None,
+    )
+    if category is None:
+        category = await guild.create_category(
+            desired,
+            overwrites=getattr(channel, "overwrites", None) or {},
+            reason="declared channel-instance navigation",
+        )
+    elif category.name != desired:
+        await category.edit(
+            name=desired,
+            reason="repair declared channel-instance category name",
+        )
+    await channel.edit(
+        category=category,
+        sync_permissions=False,
+        reason="repair declared channel-instance category",
+    )
+    return True
+
+
 def collect_registry_audit_issues(registry: dict, guild) -> list[str]:
     """Build permission audit lines for `!admin audit` (registry channel entries are dicts)."""
     audit_issues: list[str] = []
@@ -147,6 +208,9 @@ def collect_registry_audit_issues(registry: dict, guild) -> list[str]:
                 f"\u274c Registry channel `{ch_id}` ({mage_key_val}) not found on server (not marked orphaned)"
             )
             continue
+        category_issue = _category_drift_issue(ch, entry)
+        if category_issue:
+            audit_issues.append(f"\u26a0\ufe0f `#{ch.name}` — category drift: {category_issue}")
         for issue in _permission_drift_issues(ch, entry, registry):
             audit_issues.append(f"\u26a0\ufe0f `#{ch.name}` — {issue}")
 
@@ -254,6 +318,9 @@ async def reconcile_channel_update(
     after_cat = getattr(after, "category_id", None)
     if before_cat != after_cat:
         changes.append("moved category")
+    category_issue = _category_drift_issue(after, entry)
+    if category_issue:
+        changes.append(f"category drift: {category_issue}")
 
     if _overwrite_snapshot(before) != _overwrite_snapshot(after):
         drift = _permission_drift_issues(after, entry, registry)

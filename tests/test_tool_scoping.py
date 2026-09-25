@@ -22,6 +22,7 @@ sys.modules.setdefault("discord.ext", MagicMock())
 sys.modules.setdefault("discord.ui", MagicMock())
 
 import tos_tools
+import mage
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -71,6 +72,38 @@ class ToolScopeTests(unittest.TestCase):
         declared = _tool_names(tos_tools.TOS_TOOLS)
         for name in tos_tools._TOOL_SCOPES:
             self.assertIn(name, declared, f"scoped tool {name} is not in TOS_TOOLS")
+
+    def test_sensitive_health_uses_corpus_tools_not_generic_file_browser(self) -> None:
+        saved = dict(mage._MAGE_REGISTRY)
+        try:
+            mage._MAGE_REGISTRY.clear()
+            mage._MAGE_REGISTRY.update(
+                {
+                    "spaces": {
+                        "health": {
+                            "practice_dir": "/tmp/health",
+                            "members": ["default", "partner"],
+                            "subject": "partner",
+                            "steward": "default",
+                            "memory": "isolated",
+                        }
+                    },
+                    "channels": {
+                        "77": {"primitive": "health", "mage": "health"}
+                    },
+                }
+            )
+            names = _tool_names(tos_tools.tools_for_channel(77))
+            self.assertIn("search_record_evidence", names)
+            self.assertIn("save_health_observation", names)
+            self.assertIn("recap_health_visit", names)
+            self.assertNotIn("search_practice_files", names)
+            self.assertNotIn("read_practice_file", names)
+            self.assertNotIn("run_turtleos_shell", names)
+            self.assertNotIn("exa_search", names)
+        finally:
+            mage._MAGE_REGISTRY.clear()
+            mage._MAGE_REGISTRY.update(saved)
 
     def test_every_tool_has_a_dispatch_case(self) -> None:
         """A schema with no dispatch is a tool that fails after being offered."""

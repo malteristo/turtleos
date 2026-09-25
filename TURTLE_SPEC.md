@@ -3,7 +3,7 @@
 > **Canonical version:** This file, in the tree you cloned, is law for that tree.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-08-30 (Practice channels — destination §3.1; install topology still §13.3)  
+**Version:** 2026-09-25 (§3.1 personal context management — MCP access point; 2026-09-07 resolved channel contracts + live team work §3.2.1; install topology still §13.3)
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -52,7 +52,7 @@ This rewrite supersedes the prior **"Law of the Persistent Spirit"** framing as 
 | **turtle practice** | Lowercase: the activity of practicing on turtleOS — using the river, eddies, and flows. |
 | **Practice root** | Local directory holding character files, flows, chronicle, state, and optional practice artifacts. |
 | **Attunement** | Identity and conduct layer on the platform: native (default), craft, or magic-attuned. |
-| **Sediment** | Cross-eddy curated memory. **Deferred** — design chapter, not vanilla v1 (§16). |
+| **Sediment** | Cross-eddy curated memory. **Shipped 2026-09-03** as topic memory (`memory_agent`): derived from the story layer, rebuildable, surfaced on heat and relevance (§6.4). Design: `docs/design/agent-as-memory.md`. |
 | **Chronicle** | Event log of structural actions (eddies opened, dissolved, checkpoints, etc.). Dual layer: surface + deep (§6). |
 | **Checkpoint** | Automatic or manual capture of session resonance — flow state and/or session notes — **without** clearing eddy history (§8.4). |
 | **Release** | Practitioner-initiated session close — checkpoint first, then clear history (§8.4). |
@@ -77,6 +77,8 @@ The narrative for early adopters: *practices you can keep, locally* — not clou
 
 turtleOS develops shared context with the practitioner over time — writing the context that tells their story while they live it (§6.5), and applying what it knows to help in the moment. The practitioner's story stays on their hardware. (Direction: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md).)
 
+turtleOS is also **personal context management**. A person accumulates and curates their context by practising with it, and exposes it to any AI agent they grant — deciding what, to whom, for how long, and seeing every access where their data lives. An agent needs no instructions beyond the connection: the server explains itself. (Access point: [docs/design/mcp-access-point.md](docs/design/mcp-access-point.md); self-description is tested, not asserted.)
+
 ### 3.2. Three Layers
 
 | Layer | What it is |
@@ -88,6 +90,110 @@ turtleOS develops shared context with the practitioner over time — writing the
 **One-line claim (2026-08-11):** *turtleOS is a practice root that's yours and readable, running on a shell you can verify.*
 
 Markdown is the **contract**; Python is the **engine**. Verifiability is the mechanism; relational honesty (you can see what the system knew) is the purpose. The portable `PRACTICE.md` path stays paused until this contract is drawn and its first instance is real (§13.2).
+
+### 3.2.1. Channel Primitive Contract
+
+A **channel primitive** is the complete binding of four concerns:
+
+1. **Channel** — solo/shared topology, members, roles, visibility and subject.
+2. **Turtle** — domain attunement, reasoning limits, memory reach and tools.
+3. **River** — parent ownership, visible operations, offers and job status.
+4. **Practice** — owned artifacts, capabilities, data policy, mutation authority,
+   provenance, retention and verification.
+
+The platform terms are distinct:
+
+- A **channel** is the durable audience and visibility boundary.
+- An **eddy** is a scoped conversation or activity inside a channel.
+- **River** owns parent-channel acts, intake status, offers and materialization;
+  it never holds dialogue.
+- **Turtle** owns dialogue and reasoning inside eddies.
+- A **practice preset** is one atomic, validated recipe for topology,
+  attunement, memory, capabilities, posture, data policy and authority.
+- A **channel instance** applies a preset to one parent channel, practice root,
+  member set, role assignment and optional subject. It MAY declare a desired
+  Discord category as instance navigation metadata. Category placement does not
+  change the preset, audience or authority, and drift MUST be visible to the
+  operator.
+
+The registry MUST name a practice preset. Its resolver MUST return one complete
+**resolved channel contract** from a parent channel or eddy identity and MUST
+grant no capabilities for an unknown or invalid declaration. Root identity
+alone MUST NOT decide capability or authority: more than one channel may share
+a practice root. Preset fields are not a free-form composition API; only
+explicitly allowed topology variants may differ. Legacy `river`,
+`hosted-river`, `shared-river`, and `craft` type rows MAY pass through a
+compatibility adapter while they migrate.
+
+Primitive development follows these laws:
+
+- A primitive first composes platform capabilities; it does not rebuild them
+  under domain names.
+- A requirement becomes core when another plausible primitive can reuse it.
+  Only irreducibly domain-specific policy remains in the extension.
+- Synergy occurs at capability seams — intake, retrieval, authority,
+  provenance, artifacts and acts — never by reading another practice's private
+  state.
+- Core owns mechanism and enforcement; the primitive declares policy and
+  experience; the practice root holds member-owned state.
+
+The shipped preset catalogue is:
+
+- `private` — solo general practice.
+- `shared` — generic shared/community practice.
+- `craft` — solo work practice with deterministic River intake.
+- `partnership` — a two-person shared relationship practice.
+- `health` — a subject-held health practice on an allowed solo or shared
+  topology.
+- `team` — shared work practice with attributed contributions, explicit
+  coordinator/member authority, and task, decision and artifact state; an
+  instance may be presented to practitioners as a **Quest channel**. The
+  personal `Quest` flow remains a separate practice move, not a channel type.
+
+`health` is the first complete sensitive thematic preset. It uses isolated
+memory, River-owned parent operations, Turtle dialogue in eddies,
+`sensitive_local` data policy, and the `source_intake`, `corpus_retrieval`,
+`governed_record`, and `appointment_prep` capabilities. It MUST name a
+**subject** (record owner) among its members. A shared instance MAY name a
+technical **steward**; a solo instance does not invent one. Membership grants
+access, not authority to author the subject's testimony. Invalid authority or
+memory declarations fail closed.
+
+Shared rooms read only their own practice root. Personal material crosses into
+a shared room only through an explicit member act. A member's private compass,
+memory or workspace MUST NOT be injected because that member is speaking.
+
+A `team` instance MUST make alignment legible without turning it into
+assignment. Its **shared horizon** is a broad, revisable direction and becomes
+current only when every active member confirms it. Each member owns their own
+**front**: a current sub-goal or exploration, its relation to the horizon, next
+move, dependencies and capacity. A coordinator tends the shared surface and
+process; coordinator status MUST NOT authorize confirming another member's
+front, commitment or testimony.
+
+Team state MUST distinguish proposals, confirmations, decisions, commitments,
+tasks, artifacts, contributions and intersections. Source events are
+append-only and attributed to member + eddy; current readable views MUST be
+rebuildable from them. Inferred goals or intersections remain candidates until
+the authority named by their scope confirms them. A team-wide horizon requires
+all active members; a member front requires that member; a scoped decision
+requires its affected members.
+
+A team activity MAY give each member a readable, member-owned eddy. Every
+member MAY inspect sibling eddies, but only the lane owner advances a member
+lane. This boundary MUST be enforced before model dialogue or state mutation,
+not entrusted to prompt prose. Lanes advance independently; the platform MAY
+offer bounded, attributed sibling developments as intersection candidates and
+MUST NOT copy a sibling transcript into another lane or wait for round-robin
+turns.
+
+An event-backed story or campaign layered on team lanes MUST persist the raw
+player/Turtle exchange before semantic reduction. Reducer failure MUST leave a
+retryable source event rather than lose the turn or invent state. Shared world
+and per-member character views are derived; another member's character state
+MUST NOT enter the current lane. Cross-lane effects are narrated in the
+activity when relevant and reconciled at natural boundaries without requiring
+synchronous participation.
 
 **Readability contract — first two lines:**
 
@@ -288,9 +394,9 @@ The River accumulates **events**, not conversation. The chronicle is how the sys
 
 **Principle:** The river runs deep; practitioners normally see the surface.
 
-### 6.4. Sediment (Direction Set, Implementation Deferred)
+### 6.4. Sediment (Shipped 2026-09-03 as topic memory)
 
-Cross-eddy memory remains **out of scope for vanilla v1** (§16); v1 eddies are self-contained via thread history. The direction is now set: sediment is the **story layer's long-term retrieval policy** — durable themes surfaced on relevance rather than always, never in the holistic default. Design: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md) + [docs/design/continuity-engine-and-substrate.md](docs/design/continuity-engine-and-substrate.md) §5.3 (CE Slice 3).
+Sediment is the **story layer's long-term retrieval policy** — durable themes surfaced on relevance rather than always, never in the holistic default. It is implemented as **topic memory**: a derived view (`memory/topics.{md,yaml}`) formed from every eddy note a root may read (§15.5), with a heat that decays by half-life, rebuilt from the notes alone whenever a newer note exists and nobody is talking. Every turn carries the room's hottest topics plus any cooled topic the message reaches for; a turn MAY look further with read-only tools. Two invariants, held by the memory eval: the memory is drawn on, never recited; and Turtle MUST NOT say it checked or searched unless a tool ran that turn. Design: [docs/design/agent-as-memory.md](docs/design/agent-as-memory.md); direction lineage: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md) + [docs/design/continuity-engine-and-substrate.md](docs/design/continuity-engine-and-substrate.md) §5.3 (CE Slice 3). *Superseded 2026-09-03: "remains out of scope for vanilla v1 … implementation deferred."*
 
 ### 6.5. Story Surfaces
 
@@ -463,7 +569,7 @@ Successful checkpoints append a **chronicle** line (`💾 checkpoint …`) — R
 
 **Release** runs checkpoint first, then clears in-memory dialogue history and confirms to the practitioner. **Never** auto-release on idle.
 
-**Regular eddies (no flow):** eddy notes at checkpoint thresholds. **Sediment** (cross-eddy curated memory) remains implementation-deferred; direction set in §6.4.
+**Regular eddies (no flow):** eddy notes at checkpoint thresholds. **Sediment** (cross-eddy curated memory) is formed from those notes by the memory agent (§6.4) — the checkpoint writes the note; it does not have to remember.
 
 **Magic-attuned:** `sessions/`, `proposals/`, and extended practice files remain expected; checkpoint law applies equally.
 
@@ -898,7 +1004,7 @@ Three **product families** govern Discord surfaces. Sovereignty (who owns the se
 | Type | Status |
 |------|--------|
 | `shared` | Pre-v1 legacy — migrate to `shared-river` |
-| Discord **Practice** category | Operational heuristic only (`runtime/adapters/structural.py`) — not product taxonomy |
+| Discord category | Optional channel-instance navigation metadata, audited for drift by `runtime/adapters/structural.py`; never product taxonomy or an authority source |
 
 **Parent-channel law (all river-family types):** River acts only — no Turtle prose panels. Turtle-talk `!` commands on the parent surface post **compact River acts**, not multi-field Turtle embeds (§5.5). Full command inventory remains available inside eddies.
 
@@ -941,6 +1047,8 @@ Command surface: `!admin invite` (primary; alias `!admin river-key`). Host inven
 Cross-practitioner content boundaries: pattern observations in operator proposals are allowed; quoting another practitioner's conversation is not.
 
 The operator MUST NOT surface hosted-river message content in the operator's river, proposals, or session notes. Hosted practitioners MUST NOT receive operator-style practice-readiness scoring on empty substrate — a fresh space is not "practice-ready," it is **new**.
+
+**Memory follows the same boundary, asymmetrically (2026-09-03).** A personal root's memory MAY include the shared spaces its practitioner is a member of; a shared space's memory is its own notes only; no root reads another personal root. Private material reaches a shared space only when a member brings it there (a link, a share — §15.6).
 
 Full seneschal, permission, and multi-server law from prior spec remains valid for operators; see implementation `ARCHITECTURE.md` and `docs/operations/hosted-river-boundaries.md`.
 
@@ -998,7 +1106,7 @@ A node MAY implement **Share eddy** — sender-initiated export of an eddy conve
 
 | Topic | Status |
 |-------|--------|
-| **Sediment** — cross-eddy memory governance | **Direction set** (§6.4, story layer); implementation = CE Slice 3 |
+| **Sediment** — cross-eddy memory governance | **Shipped** 2026-09-03 (§6.4, topic memory); verify: `tests/test_memory_agent.py`, `scripts/shake_memory.py --fixture`, operator's private scenario set |
 | **Semantic eddy routing** — merge into existing threads | v2+ |
 | **Standing system eddies** — vortex, boom thread | Not at install |
 | **Proprioception stack** | Retired from vanilla |
@@ -1259,5 +1367,6 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 | 2026-06-28 | §9.6 — Discord native UI reconciliation (policy C close, channel structural sync, shared lifecycle/structural adapters); practitioner doc `docs/ux/discord-native-ui.md` |
 | 2026-08-30 | §3.1 — practice channels: solo/shared primitives, install pair (private + community), roster sync as destination; §13.3 still one river. Destination: `docs/design/practice-channels.md` |
 | 2026-07-28 | §15.4 — host admin UX: `!admin invite`, `#river-<name>` for life, rivers/doctor; `onboard` + `*-dialogue` rename retired from product path |
+| 2026-09-07 | §3.2.1 — complete channel primitive contract (Channel + Turtle + River + Practice), fail-closed resolver, primitive development law, health as first complete thematic primitive |
 
 *End of TURTLE_SPEC*

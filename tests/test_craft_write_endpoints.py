@@ -55,7 +55,7 @@ class CraftWriteEndpointTests(unittest.IsolatedAsyncioTestCase):
     def _patches(self, *, craft=True):
         return (
             patch("mage.get_runtime_dir", return_value=str(self.runtime)),
-            patch("mage.uses_craft_surface", return_value=craft),
+            patch("mage.channel_has_capability", return_value=craft),
         )
 
     async def _call(self, handler, payload, *, craft=True, remote="127.0.0.1"):
@@ -267,11 +267,11 @@ class CraftWriteEndpointTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_craft_gate_is_actually_consulted(self) -> None:
         """Positive control. A gate that always said no would pass every test above."""
         with patch("mage.get_runtime_dir", return_value=str(self.runtime)):
-            with patch("mage.uses_craft_surface", return_value=True) as gate:
+            with patch("mage.channel_has_capability", return_value=True) as gate:
                 await intake_server._resolve_craft_thread(
                     _request(self.app, {}), THREAD
                 )
-        gate.assert_called_once_with(CRAFT_PARENT)
+        gate.assert_called_once_with(CRAFT_PARENT, "craft_readiness")
 
     def test_both_routes_are_registered(self) -> None:
         """A handler nothing routes to is a feature with no door."""

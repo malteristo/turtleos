@@ -32,6 +32,43 @@ async def daily_note_loop():
     await run_scheduled_daily_note()
 
 
+HEALTH_CHECKIN_TICK_MINUTES = 5
+
+
+@tasks.loop(minutes=HEALTH_CHECKIN_TICK_MINUTES)
+async def health_checkin_loop():
+    """Evening health check-ins, within one tick of their hour."""
+    from story_daily import run_scheduled_health_checkins
+
+    await run_scheduled_health_checkins()
+
+
+@tasks.loop(hours=1)
+async def memory_loop():
+    """Keep each root's topic memory current with its notes (memory_agent).
+
+    Rebuilds only stale roots, only when nobody has spoken for a while — the
+    model-formed rebuild holds the inference gate for minutes.
+    """
+    try:
+        from mage import memory_rooms
+        from memory_agent import maintain_room_memories
+
+        rebuilt = await maintain_room_memories(memory_rooms(), chat=reflection_chat)
+        if rebuilt:
+            print(f"Room memory rebuilt: {', '.join(rebuilt)}")
+    except Exception as exc:
+        print(f"memory_loop failed: {type(exc).__name__}: {exc}")
+
+
+async def reflection_chat(system: str, messages: list[dict]) -> str:
+    """The reflection model as a plain chat function — what memory formation is handed."""
+    from llm import chat_ollama
+    from state import REFLECTION_MODEL
+
+    return await chat_ollama(system, messages, model=REFLECTION_MODEL, num_ctx=32768, think=False)
+
+
 @tasks.loop(hours=3)
 async def interoception_loop():
     """Retired — pulse/interoception removed with magic-attuned Appendix A."""
@@ -165,7 +202,9 @@ async def health_canary_loop():
         "session_monitor": session_monitor.is_running(),
         "interoception": interoception_loop.is_running(),
         "daily_note": daily_note_loop.is_running(),
+        "health_checkin": health_checkin_loop.is_running(),
         "daily_reminders": daily_reminders_loop.is_running(),
+        "memory": memory_loop.is_running(),
     }
     dead_loops = [name for name, alive in loop_status.items() if not alive]
     checks["loops"] = len(dead_loops) == 0

@@ -3,7 +3,7 @@
 **Date:** 2026-08-30  
 **Status:** Sanctioned 2026-08-30 (brief QA gate). Clarification: Turtle answers in community from the first afternoon; a second person is seated there on join. Not built (community-at-install).  
 **Spec:** TURTLE_SPEC §13 (install) · §3.1 (the house the install is supposed to leave you in).  
-**Companions:** [practice-channels.md](practice-channels.md) (the two rooms, once you are in) · [onboarding.md](../ux/onboarding.md) (live first-success is still one river + an eddy) · [install-journey.md](../ux/install-journey.md) (June draft; names a CLI that does not exist — do not treat as live).  
+**Companions:** [practice-channels.md](practice-channels.md) (the two rooms, once you are in) · [member-onboarding.md](member-onboarding.md) (everyone after the administrator) · [onboarding.md](../ux/onboarding.md) (live first-success is still one river + an eddy) · [install-journey.md](../ux/install-journey.md) (June draft; names a CLI that does not exist — do not treat as live).  
 **Method:** experience verification — `desk/craft/synthetic_research_practice.md` · study-zero Phase B form in `desk/craft/plans/2026-08-28-experience-verification-study-zero.md`.
 
 This is the practitioner-visible *process*: from “I have heard of turtleOS” to “I am standing in the house and I have spoken.” The rooms themselves are [practice-channels.md](practice-channels.md). This file does not reopen that stack.
@@ -64,7 +64,7 @@ Sam:     (already in community. Riley did not add Sam.)
 | 1 | After the published steps, the operator can point at a private channel and a community channel without being taught a second pass. | A new install still has only one river, or community arrived through a later admin command. | Next vanilla install against the published path. |
 | 2 | The same afternoon, they can start a conversation in private **and** in community, and Turtle replies in both. Community may have no other people. | Turtle answers only in private, or community is a room you cannot talk in. | Same install; also the next one. |
 | 3 | They do not need a host command, an emoji, or a “now set up household” step to be a member in those two rooms. | First-success copy still sends them to `!admin invite` or `!admin space create` to finish install. | Re-read the published path after each install-doc change. |
-| 4 | When a second person joins the server, they are already in community. | An operator still has to add them to the shared room. | Next real join. Already live on the practice server (`99df73e`). |
+| 4 | When a second person joins the server, they are already in community. | An operator still has to add them to the shared room. | Next real join. Already live on the practice server. |
 
 Mechanism-blind: a different transport could still be scored on “two rooms, Turtle in both, no second ceremony, join seats them.”
 
@@ -79,9 +79,9 @@ Stop claiming install is finished if, after the published steps, the operator st
 ## Live today (do not contradict)
 
 - Published path: clone + agent skill (`docs/install/SKILL.md`) + Discord portal work a human must do. There is no `turtle install` CLI.
-- First success on that path: one river, `new eddy`, Turtle replies. [onboarding.md](../ux/onboarding.md) still says a second adult and a family room are *after* first success, and still names `!admin invite` for that adult (stale — join now admits).
+- First success on that path: one river, `new eddy`, Turtle replies. A second adult and a shared room are still *after* first success; join admits the adult. Community-at-install remains the other half of this dest.
 - Community is not created at install. This household's shared room is still `#family`, not renamed.
-- Join/leave roster is live (`99df73e`). That is not the install process.
+- Join/leave roster is live. That is not the install process.
 
 The June [install-journey.md](../ux/install-journey.md) is a feel-draft. Where it disagrees with this file, this file wins.
 

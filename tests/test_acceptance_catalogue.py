@@ -158,6 +158,50 @@ class CatalogueJoinTests(unittest.TestCase):
         )
 
 
+class C5ShakeJoinTests(unittest.TestCase):
+    """C5 must be run, not only mapped onto a prior architecture pass."""
+
+    def test_c5_modules_are_in_the_architecture_shake(self) -> None:
+        from scripts.shake_channel_architecture import C5_MODULES, CONTRACT_MODULES
+
+        missing = [name for name in C5_MODULES if name not in CONTRACT_MODULES]
+        self.assertEqual(
+            missing,
+            [],
+            "C5 is mapped in shake_report but these modules are not in "
+            f"shake_channel_architecture.CONTRACT_MODULES: {missing}",
+        )
+
+    def test_dropping_c5_modules_fails_this_join(self) -> None:
+        from scripts.shake_channel_architecture import C5_MODULES
+
+        planted = ["tests.test_roster_sync"]
+        missing = [name for name in C5_MODULES if name not in planted]
+        self.assertEqual(
+            missing,
+            list(C5_MODULES),
+            "positive control: a shake list without the C5 modules must be visible",
+        )
+
+    def test_category_control_passes_on_current_code(self) -> None:
+        from scripts.shake_channel_architecture import category_navigation_control
+
+        result = category_navigation_control()
+        self.assertTrue(result["ok"], result["detail"])
+
+    def test_category_control_fails_when_audit_is_silent(self) -> None:
+        from unittest.mock import patch
+
+        from scripts.shake_channel_architecture import category_navigation_control
+
+        with patch(
+            "runtime.adapters.structural.collect_registry_audit_issues",
+            return_value=[],
+        ):
+            result = category_navigation_control()
+        self.assertFalse(result["ok"], result["detail"])
+
+
 class UnverifiedInventoryTests(unittest.TestCase):
     def test_no_stale_entries(self) -> None:
         stale = sorted(set(UNVERIFIED) & (all_gated_ids() | mage_gate_ids()))

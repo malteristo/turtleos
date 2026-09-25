@@ -141,7 +141,9 @@ async def send_outgoing(
         if bot_client is not None:
             bot_client.add_view(view)
 
-    text = outgoing.text
+    from discord_plain import for_discord
+
+    text = for_discord(outgoing.text)
     if not incoming.can("buttons"):
         text = _fold_actions_into_text(text, outgoing.actions)
 

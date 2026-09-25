@@ -75,6 +75,26 @@ SHAKE_ARTIFACTS: dict[str, dict[str, Any]] = {
         "spirit_scenarios": ["T1", "T2"],
         "script": "scripts/shake_dates.py",
     },
+    "shake-continuity-latest.json": {
+        "label": "continuity judge (B-calibration)",
+        "spirit_scenarios": ["B1", "B2"],
+        "script": "scripts/shake_continuity.py",
+    },
+    "shake-health-record-latest.json": {
+        "label": "health channel primitive",
+        "spirit_scenarios": ["N1", "N2", "N3", "N4", "N5"],
+        "script": "scripts/shake_health_record.py",
+    },
+    "shake-channel-architecture-latest.json": {
+        "label": "resolved channel architecture",
+        "spirit_scenarios": ["C1", "C2", "C3", "C4", "C5"],
+        "script": "scripts/shake_channel_architecture.py",
+    },
+    "shake-team-work-latest.json": {
+        "label": "team work and asynchronous activities",
+        "spirit_scenarios": ["Q1", "Q2", "Q3", "Q4", "Q5"],
+        "script": "scripts/shake_team_work.py",
+    },
 }
 
 # Mage async dogfood — practice feel; not automated by shake scripts
@@ -87,6 +107,8 @@ MAGE_UX_SCENARIOS: dict[str, str] = {
     "D3": "Contextual River offer useful vs noise",
     "R3": "Thread rename + Turtle join feels right",
     "S1": "Share eddy sender + Continue UX",
+    "N6": "Record-owner upload → review → conversation feels ordinary",
+    "Q6": "Two asynchronous member lanes still feel like one shared adventure",
 }
 
 # Default post-deploy Spirit suite (offline); live adds --live on Mini
@@ -109,6 +131,10 @@ DEFAULT_OFFLINE_SUITE = [
     "scripts/shake_home_plans.py",
     "scripts/shake_artifacts.py",
     "scripts/shake_dates.py",
+    "scripts/shake_continuity.py",
+    "scripts/shake_health_record.py",
+    "scripts/shake_channel_architecture.py",
+    "scripts/shake_team_work.py",
     "scripts/shake_hosted_river.py",
     "scripts/shake_share_eddy.py",
 ]
@@ -121,6 +147,13 @@ SUITE_EXEMPT: dict[str, str] = {
         "not a check — a live helper that spawns a real eddy in the real river, "
         "called by shake_flow.py --live. It was added to the suite on 2026-08-06 "
         "and put two blank threads in the operator's river before anyone noticed."
+    ),
+    "scripts/shake_memory.py": (
+        "a live-model replay against real practice roots: minutes of local "
+        "inference per scenario and, with --build, a write under the room's root. "
+        "Run by hand at a quiet window from the private scenario set "
+        "(desk/turtle_eval/memory/ in the operator's workshop); --fixture is its "
+        "synthetic positive control."
     ),
 }
 

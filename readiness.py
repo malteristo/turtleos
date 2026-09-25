@@ -94,6 +94,87 @@ def assess_space_substrate(pd=None, *, space_key: str | None = None) -> dict:
     return result
 
 
+def assess_health_primitive(pd) -> dict:
+    """Capability readiness for the sensitive-local health primitive."""
+    result = assess_space_substrate(pd, space_key="health")
+    from practice_sources import processor_readiness
+
+    processor = processor_readiness()
+    status = "ready" if processor["health_ocr"] else "impaired"
+    detail = (
+        "local PDF/text extraction + deu/eng OCR"
+        if processor["health_ocr"]
+        else "missing " + ", ".join(processor["missing"])
+    )
+    result["dimensions"].append(
+        {"name": "Health source processing", "status": status, "detail": detail}
+    )
+    root = Path(pd)
+    writable_parent = root if root.exists() else root.parent
+    writable = writable_parent.exists() and os.access(writable_parent, os.W_OK)
+    result["dimensions"].append(
+        {
+            "name": "Health record locality",
+            "status": "ready" if writable else "impaired",
+            "detail": "private local root writable" if writable else "private local root unavailable",
+        }
+    )
+    impaired = [row for row in result["dimensions"] if row["status"] == "impaired"]
+    result["highest_leverage"] = impaired[0] if impaired else None
+    result["summary"] = "\n".join(
+        f"{'🟢' if row['status'] == 'ready' else '🔴'} **{row['name']}:** {row['detail']}"
+        for row in result["dimensions"]
+    )
+    return result
+
+
+def assess_team_primitive(pd, primitive=None) -> dict:
+    """Readiness for shared work: governed state must be rebuildable."""
+    result = assess_space_substrate(pd, space_key="team")
+    try:
+        from team_state import rebuild_views
+
+        state = rebuild_views(pd)
+        state_ready = True
+        detail = (
+            f"rebuildable board · {state.get('event_count', 0)} attributed event(s)"
+        )
+    except Exception as exc:
+        state_ready = False
+        detail = f"team state unavailable: {type(exc).__name__}"
+    result["dimensions"].append(
+        {
+            "name": "Team state",
+            "status": "ready" if state_ready else "impaired",
+            "detail": detail,
+        }
+    )
+    authority_ready = bool(
+        primitive
+        and primitive.coordinator
+        and primitive.coordinator in primitive.members
+        and len(primitive.members) >= 2
+    )
+    result["dimensions"].append(
+        {
+            "name": "Team authority",
+            "status": "ready" if authority_ready else "impaired",
+            "detail": (
+                f"{len(primitive.members)} members · coordinator {primitive.coordinator}"
+                if authority_ready
+                else "valid coordinator and at least two members required"
+            ),
+        }
+    )
+    impaired = [row for row in result["dimensions"] if row["status"] == "impaired"]
+    result["highest_leverage"] = impaired[0] if impaired else None
+    result["summary"] = "\n".join(
+        f"{'🟢' if row['status'] == 'ready' else '🔴'} **{row['name']}:** {row['detail']}"
+        for row in result["dimensions"]
+    )
+    return result
+
+
 def assess_readiness(pd=None) -> dict:
     """Full 8-dimension practice-readiness assessment.
 
@@ -104,13 +185,28 @@ def assess_readiness(pd=None) -> dict:
     Practitioners on hosted rivers and shared-river spaces get honest substrate checks —
     not operator-style scoring.
     """
-    from mage import get_mage_key, get_mage_type, get_registry
+    from mage import (
+        get_current_channel_primitive,
+        get_mage_key,
+        get_mage_type,
+        get_registry,
+        primitive_for_practice_dir,
+    )
+    from primitive_runtime import runtime_for
 
     pd = pd or _resolve_default_pd()
     if get_mage_type() == "practitioner":
         return assess_practitioner_substrate(pd)
 
     mage_key = get_mage_key()
+    primitive = get_current_channel_primitive() or primitive_for_practice_dir(pd)
+    primitive_runtime = runtime_for(primitive)
+    if primitive_runtime and primitive_runtime.readiness_profile == "team":
+        return assess_team_primitive(pd, primitive)
+    if primitive_runtime and primitive_runtime.readiness_profile == "health":
+        return assess_health_primitive(pd)
+    if primitive_runtime and primitive_runtime.readiness_profile == "space":
+        return assess_space_substrate(pd, space_key=mage_key)
     if mage_key and mage_key in get_registry().get("spaces", {}):
         return assess_space_substrate(pd, space_key=mage_key)
 

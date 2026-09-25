@@ -21,14 +21,16 @@ def is_craft_intake_channel(message) -> bool:
     Threads under craft are Craft Turtle dialogue (digest / moves), not intake
     registration. Intake stays the parent drop-zone for forwards and friction.
     """
-    from mage import uses_craft_surface
+    from mage import get_channel_primitive
+    from primitive_runtime import runtime_for
 
     if getattr(message.author, "bot", False):
         return False
     channel = message.channel
     if getattr(channel, "parent_id", None) is not None:
         return False
-    return uses_craft_surface(channel.id)
+    runtime = runtime_for(get_channel_primitive(channel.id))
+    return bool(runtime and runtime.parent_handler == "craft_intake")
 
 
 def _buffer_key(message) -> tuple[int, int]:

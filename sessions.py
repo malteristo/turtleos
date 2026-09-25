@@ -281,9 +281,10 @@ async def _maybe_offer_craft_readiness(
     suggestion into a missing eddy note.
     """
     try:
-        from mage import get_runtime_dir, uses_craft_surface
+        from mage import get_channel_primitive, get_runtime_dir
 
-        if not uses_craft_surface(parent_channel_id or channel_id):
+        primitive = get_channel_primitive(parent_channel_id or channel_id)
+        if primitive is None or not primitive.has("craft_readiness"):
             return
 
         from core.craft_readiness import READY, ACTED, propose, state_of
@@ -321,15 +322,15 @@ async def _maybe_offer_craft_readiness(
             print(f"Craft readiness: thread {channel_id} not resolvable — proposal recorded only")
             return
 
-        from craft_ready_ui import offer_ready_confirm
-
-        await offer_ready_confirm(
-            channel,
-            proposal.target_condition,
-            proposal.evidence,
-            runtime_dir=runtime,
+        # Decided 2026-09-15: announce the harvest, do not offer a button.
+        # Promotion still waits on a later sitting — no auto-confirm.
+        evidence = (proposal.evidence or "").strip()
+        extra = f"\n{evidence}" if evidence else ""
+        await channel.send(
+            f"Harvested — ready condition: **{proposal.target_condition}**.{extra}\n"
+            "Recorded for the next craft sitting. No button to press."
         )
-        print(f"Craft readiness offered for {channel_id}: {proposal.target_condition}")
+        print(f"Craft readiness announced for {channel_id}: {proposal.target_condition}")
     except Exception as e:
         print(f"Craft readiness check failed for {channel_id}: {type(e).__name__}: {e}")
 
@@ -347,7 +348,9 @@ async def checkpoint_session(
     if channel_id in active_sessions and mark_paused:
         active_sessions[channel_id]["closed"] = True
 
-    set_practice_context_for_channel(parent_channel_id or channel_id)
+    set_practice_context_for_channel(
+        parent_channel_id or channel_id, require_registered=True
+    )
     # Snapshot the live history list: exchanges arriving during the long
     # reflection await must neither shift the transcript the note sees nor
     # be claimed as covered by this checkpoint's anchor.
@@ -586,11 +589,15 @@ async def maybe_reflect(channel, history: list[dict]):
             model=REFLECTION_MODEL,
             num_ctx=4096,
         )
-        if reflection and len(reflection.strip()) > 20:
-            clean = reflection.strip()
-            if len(clean) > 600:
-                clean = clean[:600].rsplit(".", 1)[0] + "."
-            await channel.send(f"*reflects*\n{clean}", silent=True)
+        clean = (reflection or "").strip()
+        if clean == story_notes._NO_RESPONSE_SENTINEL or len(clean) <= 20:
+            # The sentinel is 24 chars — a length floor alone posted
+            # "*reflects*\n(no response generated)" (2026-08-15).
+            print(f"Reflection loop empty for {channel_id}")
+            return
+        if len(clean) > 600:
+            clean = clean[:600].rsplit(".", 1)[0] + "."
+        await channel.send(f"*reflects*\n{clean}", silent=True)
     except Exception as e:
         print(f"Reflection loop failed for {channel_id}: {type(e).__name__}: {e}")
 
@@ -739,7 +746,14 @@ async def post_eddy_lifecycle_feedback(
     entry_count: int = 0,
     jump_url: str | None = None,
 ) -> None:
-    """Post river feedback when an eddy closes."""
+    """Post river feedback when an eddy closes.
+
+    Routine auto-archive (``mode=="cooled"``) stays quiet. That mode is
+    only used by ``cool_eddy_from_auto_archive``. Open, dissolve,
+    capture-abort, light archive, and prepared-ready still post.
+    """
+    if mode == "cooled":
+        return
     if mode == "light_archive":
         detail = "archived (nothing captured)"
     elif mode == "cooled":

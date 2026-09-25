@@ -125,6 +125,27 @@ def format_dereferenced_message(source_message, *, label: str) -> str:
     return block
 
 
+def fetching_client():
+    """The logged-in client of *this* process.
+
+    Craft intake runs in the River process. Until 2026-09-21 this module reached
+    for Turtle's `state.client` unconditionally, which in River is constructed
+    and never logged in — every dereference died on `_MissingSentinel.is_set`
+    and the intake file carried the traceback instead of the source. The
+    WRONG-CLIENT detector said so 18 times; nothing read it. Same shape as
+    `home_plan_ui.resolve_pin_client`, decided by `state.owning_process()`.
+    """
+    from state import owning_process
+
+    if owning_process() == "river":
+        from river_state import river_client
+
+        return river_client
+    from state import client
+
+    return client
+
+
 async def fetch_discord_message_context(
     refs: list[tuple[int | None, int, int]],
     *,
@@ -132,7 +153,6 @@ async def fetch_discord_message_context(
     limit: int = 3,
 ) -> tuple[str, int]:
     from discord_ref_read import fetch_discord_message_context as _fetch
-    from state import client
 
     normalized = [(g or 0, c, m) for g, c, m in refs]
-    return await _fetch(client, normalized, label=label, limit=limit)
+    return await _fetch(fetching_client(), normalized, label=label, limit=limit)

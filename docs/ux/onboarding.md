@@ -27,13 +27,13 @@ Depth (intentions, plans, checkpoints) is available on demand — Turtle attunes
 4. **River** in the main channel — structural acts only, not a chatbot  
 5. A **flow library** installed under your practice root — optional programs you load inside an eddy when you want them  
 
-No cloud API key is required for the default path. Your hardware picks the best local models it can run during install.
+No cloud API key is required for the default path. Standard is `gemma4:31b` on about 32 GB RAM. Lighter is `gemma4:12b` on about 16 GB.
 
 ---
 
 ## Onboarding embed (generic — target copy)
 
-Use this shape for first-run river embed, install skill success message, and hosted-river welcome. **English is the default** for the current friends-and-family cohort; locale variants in `template/practitioner/` are for a later localization pass. **Longer and generic** — flows are a short optional section at the end, not the headline.
+Member join first-run is `template/practitioner/first_run_en.md` — one action, talk before taught. Do not replace it with the embed below. Use the embed shape for the hosted-guest welcome and as target copy for the installer's own river. **English is the default** for the current friends-and-family cohort; locale variants in `template/practitioner/` are for a later localization pass.
 
 ---
 
@@ -99,8 +99,6 @@ The destination is a private river and a community river at install ([practice-c
 | 7 | They open an eddy in that river; Turtle replies **to them** |
 | 8 | A shared room exists: today `!admin space create family --members @you @them --context family --policy members_only` |
 | 9 | A message in that room is shared, not delivered into one private river |
-
-`!admin invite` is only if you want a claim room before they arrive.
 
 **Not a pass:** a guest or unclaimed Discord session standing in for a member. **Not a fail:** children under Discord’s age floor where you live (16 in Germany) staying off the server.
 
