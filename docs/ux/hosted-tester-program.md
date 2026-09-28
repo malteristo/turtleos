@@ -73,7 +73,7 @@ Use this during a **phone/video walkthrough** (hosted river #2 — the second pr
 
 | Handoff | What must work | Failure mode |
 |---------|----------------|--------------|
-| **Discord visibility** | Guest sees `#river-<name>` after joining | Empty server — “no channels could be loaded” |
+| **Discord visibility** | Guest sees `#home-<name>` after joining | Empty server — “no channels could be loaded” |
 | **Runtime visibility** | Turtle bot knows the new hosted channel | Eddy renames but Turtle never replies |
 
 ### Before the call
@@ -89,8 +89,8 @@ Use this during a **phone/video walkthrough** (hosted river #2 — the second pr
 
 | Step | Pass criterion | If it fails |
 |------|----------------|-------------|
-| Guest sees claim room | Sees `#river-<name>` in channel list (or opens via deep link) | **Already a member:** use `invite --member` or grant perms + deep link (a third practitioner, 2026-07-25). **New join:** retry channel invite. Do **not** “Sync Now” on Practice category. |
-| Key ceremony | Guest drops emoji → river stays `#river-<name>`, permissions lock | Wrong key → re-read pinned claim copy. Channel name does **not** change to `*-dialogue`. |
+| Guest sees claim room | Sees `#home-<name>` in channel list (or opens via deep link) | **Already a member:** use `invite --member` or grant perms + deep link (a third practitioner, 2026-07-25). **New join:** retry channel invite. Do **not** “Sync Now” on Practice category. |
+| Key ceremony | Guest drops emoji → channel stays `#home-<name>`, permissions lock | Wrong key → re-read pinned claim copy. Channel name does **not** change to `*-dialogue`. |
 | First eddy | `new eddy` → guest sends message → thread title changes, Turtle added, Turtle replies | If silent: check `First eddy handoff` / `Turtle inbound` in `~/turtleos/logs/discord.log`. Post-`7c23593`: registry hot-reload — no restart after claim. |
 | Handoff | Guest understands River ≠ chatbot; knows to open more eddies async | Point at pinned onboarding embed |
 

@@ -121,6 +121,14 @@ _SPECS: tuple[OfferSpec, ...] = (
         labels={"en": "Yes — that's the target"},
         description="Optional — confirm this eddy is ready to become work.",
     ),
+    OfferSpec(
+        # Counted: the press is the owner's consent to expose their context to
+        # an AI client, so an offer nobody took is information the operator
+        # should see without seeing anything else.
+        kind="mcp_connect",
+        labels={"en": "Connect", "de": "Verbinden"},
+        description="Optional — connect an AI client to your own context.",
+    ),
 )
 
 REGISTRY: Mapping[str, OfferSpec] = {spec.kind: spec for spec in _SPECS}

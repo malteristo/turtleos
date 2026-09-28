@@ -4,7 +4,7 @@ Distill space-specific answers here as dogfood surfaces gaps. Until expanded, th
 
 ## Privacy firewall
 
-- Private rivers stay private. Nothing from someone's personal channel appears here automatically.
+- Home and private channels stay private. Nothing from someone's own channel appears here automatically.
 - Being in this shared channel does not expose your private eddies to other members.
 
 ## Sharing into this space
@@ -21,4 +21,4 @@ Distill space-specific answers here as dogfood surfaces gaps. Until expanded, th
 
 ## Re-share outward
 
-- Sharing from a shared eddy to someone's private river posts a transparency note in this parent channel.
+- Sharing from a shared eddy to someone's home channel posts a transparency note in this parent channel.

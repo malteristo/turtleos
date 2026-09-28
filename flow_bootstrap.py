@@ -277,7 +277,7 @@ async def deliver_flow_bootstrap(
         print(f"Flow bootstrap context_type persist failed: {exc}")
 
     fake_message = SimpleNamespace(channel=channel)
-    from discord_bot import _build_native_runtime_env
+    from dialogue_runtime import build_native_runtime_env as _build_native_runtime_env
 
     system_prompt = _build_native_runtime_env(fake_message, cfg) + get_native_eddy_prompt(flow_id)
     history_excerpt = format_history_excerpt(get_history(thread_id)) if lens else ""

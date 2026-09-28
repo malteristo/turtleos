@@ -111,6 +111,7 @@ async def cmd_thread(message, args):
     thread_configs[thread.id] = {
         "model": model_id,
         "use_api": use_api,
+        "model_source": "explicit" if model_match else "default",
         "attunement": attunement,
         "model_label": model_str,
         "eddy_type": eddy_type,
@@ -807,7 +808,7 @@ class ControlPanelView(discord.ui.View):
         max_values=1,
         options=[
             discord.SelectOption(
-                label="claude", description="Flagship API (claude-sonnet-4-6)", value="claude", default=True
+                label="claude", description="Flagship API (claude-sonnet-5)", value="claude", default=True
             ),
             discord.SelectOption(label="qwen", description="Local 9b, free", value="qwen"),
             discord.SelectOption(label="qwen-4b", description="Local 4b, fast", value="qwen-4b"),

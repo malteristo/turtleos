@@ -54,7 +54,7 @@ import import_graph  # noqa: E402
 # (Discord humans ≡ members). That is a new production edge, not a rename.
 # member_first_run is a leaf and is not in the cycle. Raise only to the
 # measured dest-day size; do not raise again for first-run copy.
-LARGEST_RUNTIME_CYCLE = 54
+LARGEST_RUNTIME_CYCLE = 50
 HUB_FAN_IN = 64
 HUB_MODULE = "mage"
 

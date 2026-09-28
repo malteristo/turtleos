@@ -19,12 +19,12 @@ SERVER_INFO = {"name": "turtleos", "version": "0.1"}
 INTRO = (
     "turtleOS holds personal context that its owner accumulates and curates by "
     "practising with it: conversation notes from their rooms and, where they are "
-    "the subject, a health picture. The owner granted this connection; treat what "
+    "the subject, a health picture and the documents behind it. The owner granted this connection; treat what "
     "you read as theirs, use it for what they are asking you now, and do not "
     "repeat it elsewhere without them."
 )
 TOOL_USE = {
-    "search": "`search(query, source?)` finds notes and health-picture passages; it returns refs.",
+    "search": "`search(query, source?)` finds notes, health-picture and document passages; it returns refs.",
     "read": "`read(ref)` opens a ref from search or a resource URI.",
 }
 
@@ -123,6 +123,15 @@ class Session:
                         "description": "One conversation note; ids come from the room's notes list.",
                     }
                 )
+            if "read_document" in self.grant.operations:
+                templates.append(
+                    {
+                        "uriTemplate": "turtleos://documents/{source}/{id}",
+                        "name": "document",
+                        "mimeType": "text/markdown",
+                        "description": "One stored document's extracted text, page by page; ids come from the source's documents list.",
+                    }
+                )
             return {"resourceTemplates": templates}
         if method == "resources/read":
             uri = str(params.get("uri") or "")
@@ -171,7 +180,7 @@ class Session:
     def _resource_ops(self) -> list[str]:
         return [
             o
-            for o in ("capabilities", "brief", "list_notes", "read_health_picture")
+            for o in ("capabilities", "brief", "list_notes", "read_health_picture", "list_documents")
             if o in self.grant.operations
         ]
 
@@ -179,7 +188,7 @@ class Session:
         names = []
         if "search" in self.grant.operations:
             names.append("search")
-        if {"read_note", "read_health_picture"} & set(self.grant.operations):
+        if {"read_note", "read_health_picture", "read_document"} & set(self.grant.operations):
             names.append("read")
         return names
 
@@ -199,6 +208,9 @@ class Session:
             if "read_health_picture" in ops and s.kind == "subject":
                 out.append(_res(f"turtleos://health/{s.id}/picture", f"{s.id} health picture", "text/markdown",
                                 "The owner's current health picture, as turtleOS holds it."))
+            if "list_documents" in ops and content.list_documents(s):
+                out.append(_res(f"turtleos://documents/{s.id}", f"{s.id} documents", "application/json",
+                                f"Documents stored in {s.id} (letters, reports), newest first; open one with read."))
         return out
 
     def _read_uri(self, uri: str) -> tuple[str, str]:
@@ -212,6 +224,7 @@ class Session:
                 self.sources,
                 expires=self.grant.expires,
                 refused_since_brief=self.grant.refused_since_brief,
+                documents="list_documents" in self.grant.operations,
             )
             self.store.update(self.grant.id, refused_since_brief=0)
             return text, "text/markdown"
@@ -237,6 +250,19 @@ class Session:
                 raise Refusal(NOT_FOUND, "not found")
             self._audit("read_health_picture", [s])
             return text, "text/markdown"
+        if len(parts) == 2 and parts[0] == "documents":
+            s = self._source(parts[1])
+            self._require("list_documents", [s])
+            self._audit("list_documents", [s])
+            return json.dumps(content.list_documents(s), indent=2, ensure_ascii=False), "application/json"
+        if len(parts) == 3 and parts[0] == "documents":
+            s = self._source(parts[1])
+            self._require("read_document", [s])
+            text = content.read_document(s, parts[2])
+            if text is None:
+                raise Refusal(NOT_FOUND, "not found")
+            self._audit("read_document", [s])
+            return text, "text/markdown"
         raise Refusal(NOT_FOUND, "not found")
 
     def _capabilities(self) -> dict:
@@ -259,7 +285,11 @@ class Session:
             wanted = args.get("source")
             sources = [self._source(str(wanted))] if wanted else self.sources
             self._require("search", sources)
-            hits = content.search(sources, str(args.get("query") or ""))
+            hits = content.search(
+                sources,
+                str(args.get("query") or ""),
+                documents="read_document" in self.grant.operations,
+            )
             self._audit("search", sources)
             return _text(json.dumps(hits, indent=2, ensure_ascii=False))
         ref = str(args.get("ref") or "")
@@ -276,7 +306,7 @@ class Session:
 TOOLS = {
     "search": {
         "name": "search",
-        "description": "Search this connection's conversation notes and health picture. Returns refs to read.",
+        "description": "Search this connection's conversation notes, health picture and documents. Returns refs to read.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -300,7 +330,7 @@ TOOLS = {
 
 TOOL_OPERATIONS = {
     "search": ("search",),
-    "read": ("read_note", "read_health_picture", "list_notes", "brief", "capabilities"),
+    "read": ("read_note", "read_health_picture", "list_notes", "list_documents", "read_document", "brief", "capabilities"),
 }
 
 

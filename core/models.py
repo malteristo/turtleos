@@ -19,7 +19,7 @@ Env vars:
   RIVER_MODEL, TURTLE_MODEL — primary two-stack knobs
   DIALOGUE_MODEL — magic-attuned main channel + legacy ``local`` alias target;
                    defaults to TURTLE_MODEL when unset
-  CRAFT_MODEL — craft-turtle eddy dialogue (default claude-sonnet-4-6)
+  CRAFT_MODEL — craft-turtle eddy dialogue (default claude-sonnet-5)
   TRIAGE_MODEL, REFLECTION_MODEL, EDIT_DELEGATE_MODEL — Qwen background stack
 """
 
@@ -44,7 +44,7 @@ TURTLE_MODEL = _env("TURTLE_MODEL", "gemma4:31b")
 # Install Lighter path — ~16 GB RAM. Not a runtime default.
 LIGHTER_TURTLE_MODEL = "gemma4:12b"
 DIALOGUE_MODEL = _env("DIALOGUE_MODEL", TURTLE_MODEL)
-CRAFT_MODEL = _env("CRAFT_MODEL", "claude-sonnet-4-6")
+CRAFT_MODEL = _env("CRAFT_MODEL", "claude-sonnet-5")
 RIVER_MODEL = _env("RIVER_MODEL", "qwen3.5:4b")
 TRIAGE_MODEL = _env("TRIAGE_MODEL", "qwen3.5:0.8b")
 REFLECTION_MODEL = _env("REFLECTION_MODEL", "qwen3.5:27b")
@@ -54,7 +54,9 @@ EDIT_DELEGATE_MODEL = _env("EDIT_DELEGATE_MODEL", "qwen3.5:4b")
 KNOWN_MODELS: dict[str, str | None] = {
     "local": None,
     # API opt-in
-    "claude": "claude-sonnet-4-6",
+    "claude": "claude-sonnet-5",
+    "sonnet": "claude-sonnet-5",
+    "opus": "claude-opus-5-5",
     "gemini": "gemini-2.5-flash",
     "gemini-flash": "gemini-2.5-flash",
     "gemini-pro": "gemini-2.5-pro",

@@ -162,7 +162,7 @@ class AliasResolutionTests(unittest.TestCase):
     def test_no_client_degrades_to_registry_only(self) -> None:
         """Offline / cold cache must not raise — it just maps less."""
         registry = {
-            "mages": {"fares": {"address": "fares", "discord_id": "11"}},
+            "mages": {"robin": {"address": "robin", "discord_id": "11"}},
             "spaces": {},
             "channels": {},
         }
@@ -171,7 +171,7 @@ class AliasResolutionTests(unittest.TestCase):
             patch.dict(sys.modules, {"state": MagicMock(client=None)}),
         ):
             names = mage.member_address_map()
-        self.assertEqual(names.get("fares"), "fares")
+        self.assertEqual(names.get("robin"), "robin")
 
 
 class MemberResolutionTests(unittest.TestCase):

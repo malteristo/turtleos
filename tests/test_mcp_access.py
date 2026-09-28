@@ -56,8 +56,8 @@ class Fixture:
         self.roots = roots
         self.registry = {
             "mages": {
-                "alice": {"practice_dir": str(roots["alice"])},
-                "bob": {"practice_dir": str(roots["bob"])},
+                "alice": {"practice_dir": str(roots["alice"]), "admin": True, "discord_id": "111"},
+                "bob": {"practice_dir": str(roots["bob"]), "discord_id": "222", "locale": "de"},
             },
             "spaces": {
                 "health": {"subject": "alice", "practice_dir": str(roots["alice_health"])},
@@ -176,6 +176,73 @@ class OperatorHasNoContentPathTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             mcp_grant.plan("alice", "reader", ["bob"], self.f.registry)
         self.assertEqual(mcp_grant.plan("alice", "reader", [], self.f.registry), ["alice", "health"])
+
+
+DOC = "CANARY-DOC-5e0c"
+DOC_ID = "a1b2c3d4e5f60718"
+
+
+def _store_document(root: Path, doc_id: str, text: str, filename: str = "letter.pdf") -> None:
+    (root / "documents" / "manifests").mkdir(parents=True, exist_ok=True)
+    (root / "documents" / "manifests" / f"{doc_id}.json").write_text(
+        json.dumps({"source_id": doc_id, "filename": filename, "received_at": "2026-09-01T08:00:00+00:00", "status": "Ready"})
+    )
+    pages = root / "documents" / "extracts" / doc_id
+    pages.mkdir(parents=True, exist_ok=True)
+    (pages / "page-0001.txt").write_text(f"Befund {text}")
+
+
+class DocumentTests(unittest.TestCase):
+    def setUp(self):
+        self.f = Fixture()
+        _store_document(self.f.roots["alice_health"], DOC_ID, DOC)
+        _store_document(self.f.roots["bob_health"], DOC_ID, OTHER)
+        g, _ = self.f.grant()
+        self.s = self.f.session(g)
+
+    def tearDown(self):
+        self.f.close()
+
+    def _search(self, session, q):
+        r = call(session, "tools/call", {"name": "search", "arguments": {"query": q}})
+        return json.loads(r["result"]["content"][0]["text"])
+
+    def test_positive_control_own_document_is_listed_read_and_found(self):
+        rows = json.loads(read(self.s, "turtleos://documents/health")["result"]["contents"][0]["text"])
+        self.assertEqual([r["id"] for r in rows], [DOC_ID])
+        text = read(self.s, f"turtleos://documents/health/{DOC_ID}")["result"]["contents"][0]["text"]
+        self.assertIn(DOC, text)
+        self.assertIn(f"turtleos://documents/health/{DOC_ID}", [h["ref"] for h in self._search(self.s, DOC)])
+
+    def test_foreign_document_answers_exactly_like_nonexistent(self):
+        foreign = read(self.s, f"turtleos://documents/health-bob/{DOC_ID}")["error"]
+        missing = read(self.s, f"turtleos://documents/nosuch/{DOC_ID}")["error"]
+        self.assertEqual(foreign, missing)
+        self.assertEqual(self._search(self.s, OTHER), [])
+
+    def test_document_id_cannot_escape_its_folder(self):
+        from mcp_access import content
+
+        health = next(s for s in self.s.sources if s.id == "health")
+        for did in ("../../../bob_health/documents/manifests/" + DOC_ID, "..", ".hidden", ""):
+            self.assertIn("error", read(self.s, f"turtleos://documents/health/{did}"), did)
+            self.assertIsNone(content.read_document(health, did), did)
+            self.assertEqual(content._extract_pages(health, did), [], did)
+        self.assertIn(DOC, content.read_document(health, DOC_ID))
+
+    def test_grant_made_before_documents_existed_does_not_reach_them(self):
+        original = operations.PROFILES["reader"]
+        operations.PROFILES["reader"] = tuple(o for o in original if o not in ("list_documents", "read_document"))
+        try:
+            old, _ = self.f.grant()
+        finally:
+            operations.PROFILES["reader"] = original
+        s = self.f.session(old)
+        self.assertEqual(self._search(s, DOC), [])
+        self.assertEqual(read(s, f"turtleos://documents/health/{DOC_ID}")["error"]["code"], FORBIDDEN)
+        self.assertNotIn("documents", read(s, "turtleos://brief")["result"]["contents"][0]["text"])
+        self.assertTrue(self._search(self.s, DOC))
+        self.assertIn("documents: 1", read(self.s, "turtleos://brief")["result"]["contents"][0]["text"])
 
 
 class SnapshotTests(unittest.TestCase):
@@ -299,6 +366,69 @@ class HttpTests(unittest.IsolatedAsyncioTestCase):
         body = body or {"jsonrpc": "2.0", "id": 1, "method": "ping"}
         return await self.client.post("/mcp", json=body, headers=headers)
 
+    async def _pickup(self, login="bob@example.com", addr="203.0.113.8", tool=True, **extra):
+        h = dict(extra)
+        if tool:
+            h["X-Turtleos-Client"] = "connect-tool"
+        if login:
+            h["Tailscale-User-Login"] = login
+        if addr:
+            h["X-Forwarded-For"] = addr
+        return await self.client.post("/connect", headers=h)
+
+    def _bob_ready(self):
+        from mcp_access import offers
+
+        self.f.registry["mages"]["bob"]["tailscale_login"] = "Bob@example.com"
+        o = offers.create(self.f.roots["bob"], owner="bob", principal="laptop", sources=["bob", "health-bob"],
+                          profile="reader", url="https://host:8443/mcp")
+        return offers, o
+
+    async def test_pickup_hands_the_key_to_the_owners_identity_bound_to_that_device(self):
+        offers, o = self._bob_ready()
+        self.assertEqual((await self._pickup()).status, 404)
+        offers.mark_ready(self.f.roots["bob"], o.id)
+        r = await self._pickup()
+        self.assertEqual(r.status, 200)
+        self.assertEqual(r.headers.get("Cache-Control"), "no-store")
+        body = await r.json()
+        token = body["server"]["headers"]["Authorization"][7:]
+        grant = self.f.store.find_by_token(token)
+        self.assertEqual((grant.owner, grant.bound_login, grant.bound_addr), ("bob", "bob@example.com", "203.0.113.8"))
+        self.assertEqual(body["server"]["url"], "https://host:8443/mcp")
+        self.assertEqual((await self._pickup()).status, 404)
+        ok = await self.client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+                                    headers={"Authorization": f"Bearer {token}", "Tailscale-User-Login": "bob@example.com",
+                                             "X-Forwarded-For": "203.0.113.8"})
+        self.assertEqual(ok.status, 200)
+        moved = await self.client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+                                       headers={"Authorization": f"Bearer {token}", "Tailscale-User-Login": "bob@example.com",
+                                                "X-Forwarded-For": "203.0.113.99"})
+        self.assertEqual(moved.status, 403)
+
+    async def test_a_hand_made_request_gets_no_key_and_spends_nothing(self):
+        offers, o = self._bob_ready()
+        offers.mark_ready(self.f.roots["bob"], o.id)
+        r = await self._pickup(tool=False)
+        self.assertEqual(r.status, 400)
+        self.assertNotIn("Bearer", await r.text())
+        self.assertEqual(self.f.store.all()[1:], [])
+        self.assertEqual((await self._pickup()).status, 200)
+
+    async def test_pickup_refuses_other_identities_alike(self):
+        offers, o = self._bob_ready()
+        offers.mark_ready(self.f.roots["bob"], o.id)
+        self.assertEqual((await self._pickup(login=None)).status, 403)
+        self.assertEqual((await self._pickup(Origin="https://evil.example")).status, 403)
+        other = await self._pickup(login="alice@example.com")
+        stranger = await self._pickup(login="nobody@example.com")
+        self.assertEqual((other.status, await other.text()), (stranger.status, await stranger.text()))
+        self.assertEqual(other.status, 409)
+        self.f.registry["mages"]["alice"]["tailscale_login"] = "alice@example.com"
+        self.assertEqual((await self._pickup(login="alice@example.com")).status, 404)
+        self.assertEqual(self.f.store.all()[1:], [])
+        self.assertEqual((await self._pickup()).status, 200)
+
     async def test_first_identity_binds_and_another_is_refused(self):
         self.assertEqual((await self._post(self._h())).status, 200)
         self.assertEqual((await self._post(self._h())).status, 200)
@@ -393,6 +523,181 @@ class SelfDescriptionTests(unittest.TestCase):
         finally:
             operations.OPERATIONS["search"] = original
         self.assertNotIn("cannot write", text)
+
+
+class OwnerConsentTests(unittest.TestCase):
+    """Another member's credential never passes through the operator."""
+
+    def setUp(self):
+        from mcp_access import offers
+
+        self.offers = offers
+        self.f = Fixture()
+        self.root = self.f.roots["bob"]
+        self.offer = offers.create(self.root, owner="bob", principal="laptop", sources=["bob", "health-bob"],
+                                   profile="reader", url="https://host:8443/mcp")
+
+    def tearDown(self):
+        self.f.close()
+
+    def test_an_offer_is_not_a_grant(self):
+        self.assertEqual(self.f.store.all(), [])
+        self.assertEqual([o.id for o in self.offers.to_post(self.root)], [self.offer.id])
+
+    def test_press_opens_a_window_and_creates_nothing(self):
+        offer = self.offers.mark_ready(self.root, self.offer.id)
+        self.assertTrue(offer.pickup_open())
+        self.assertEqual(self.f.store.all(), [])
+        self.assertEqual([o.id for o in self.offers.posted_pending(self.root)], [])
+
+    def test_pickup_creates_the_grant_once_and_stores_no_key(self):
+        with self.assertRaises(self.offers.OfferError):
+            self.offers.pickup(self.root, self.f.store)
+        self.offers.mark_ready(self.root, self.offer.id)
+        offer, grant, token = self.offers.pickup(self.root, self.f.store)
+        self.assertEqual((grant.owner, grant.sources), ("bob", ["bob", "health-bob"]))
+        self.assertEqual(self.f.store.find_by_token(token).id, grant.id)
+        self.assertEqual(offer.grant_expires, grant.expires)
+        for p in list(self.root.rglob("*")) + list(self.f.state.rglob("*")):
+            if p.is_file():
+                self.assertNotIn(token, p.read_text(errors="ignore"), p)
+        with self.assertRaises(self.offers.OfferError):
+            self.offers.pickup(self.root, self.f.store)
+        with self.assertRaises(self.offers.OfferError):
+            self.offers.mark_ready(self.root, self.offer.id)
+        self.assertEqual(len(self.f.store.all()), 1)
+
+    def test_lapsed_window_cannot_be_picked_up_and_a_new_press_reopens_it(self):
+        self.offers.mark_ready(self.root, self.offer.id)
+        path = self.root / self.offers.OFFERS_REL
+        raw = json.loads(path.read_text())
+        raw[self.offer.id]["ready_until"] = "2000-01-01T00:00:00+00:00"
+        path.write_text(json.dumps(raw))
+        with self.assertRaises(self.offers.OfferError):
+            self.offers.pickup(self.root, self.f.store)
+        self.offers.mark_ready(self.root, self.offer.id)
+        self.offers.pickup(self.root, self.f.store)
+
+    def test_expired_offer_cannot_be_pressed(self):
+        path = self.root / self.offers.OFFERS_REL
+        raw = json.loads(path.read_text())
+        raw[self.offer.id]["expires"] = "2000-01-01T00:00:00+00:00"
+        path.write_text(json.dumps(raw))
+        with self.assertRaises(self.offers.OfferError):
+            self.offers.mark_ready(self.root, self.offer.id)
+        self.assertEqual(self.offers.to_post(self.root), [])
+
+    def test_operator_cannot_create_a_credential_for_someone_else(self):
+        import mcp_grant
+
+        with self.assertRaises(SystemExit):
+            mcp_grant.require_self("bob", self.f.registry)
+        mcp_grant.require_self("alice", self.f.registry)
+
+    def test_only_the_owner_can_press(self):
+        import mcp_connect_ui as ui
+
+        self.assertTrue(ui.presser_is_owner(self.f.registry, "bob", 222))
+        self.assertFalse(ui.presser_is_owner(self.f.registry, "bob", 111))
+        self.assertFalse(ui.presser_is_owner({"mages": {"bob": {}}}, "bob", ""))
+
+    def test_offer_text_describes_reach_and_names_the_spirit_sentence(self):
+        import mcp_connect_ui as ui
+
+        text = ui.compose_offer_text(self.offer, "de")
+        self.assertIn("health-bob", text)
+        self.assertIn("Verbinden", text)
+        sentence = ui.spirit_sentence(self.offer, "de")
+        self.assertEqual(sentence, "Verbinde mich mit turtleOS: https://host:8443 — mit scripts/turtleos_connect.py")
+        self.assertIn("In Cursor öffnen", ui.compose_ready_text(self.offer, "de"))
+
+    def test_open_in_cursor_link_carries_exactly_the_sentence(self):
+        from urllib.parse import unquote
+
+        import mcp_connect_ui as ui
+
+        for locale in ("en", "de"):
+            sentence = ui.spirit_sentence(self.offer, locale)
+            url = ui.cursor_prompt_url(sentence)
+            self.assertTrue(url.startswith("https://cursor.com/link/prompt?text="))
+            self.assertNotIn("+", url)
+            self.assertNotIn(" ", url)
+            self.assertEqual(unquote(url.split("text=", 1)[1]), sentence)
+            button = ui.ready_view(self.offer, locale).children[0]
+            self.assertEqual(button.url, url)
+
+    def test_no_channel_text_can_carry_a_key(self):
+        import inspect
+
+        import mcp_connect_ui as ui
+
+        for locale in ("en", "de"):
+            for key, text in ui._TEXT[locale].items():
+                self.assertNotIn("Bearer", text, key)
+                self.assertNotIn("```", text, key)
+        self.assertNotIn("server_entry", inspect.getsource(ui))
+        self.assertNotIn("pickup(", inspect.getsource(ui))
+
+    def test_linking_keeps_the_registry_as_written_and_reads_back(self):
+        import mcp_grant
+        from mcp_access.registry import load_registry, member_for_login
+
+        path = Path(self.f.tmp.name) / "reg.yaml"
+        original = (
+            "# hand-kept\nmages:\n  alice:\n    discord_id: '111'  # her\n"
+            "  bob:\n    discord_id: '222'\n    tailscale_login: bob@example.com\nspaces: {}\n"
+        )
+        path.write_text(original)
+        mcp_grant.link_login(path, "alice", "alice@example.com")
+        text = path.read_text()
+        self.assertIn("# hand-kept", text)
+        self.assertIn("discord_id: '111'  # her", text)
+        self.assertEqual(member_for_login(load_registry(path), "alice@example.com"), "alice")
+        self.assertEqual(text.replace("    tailscale_login: alice@example.com\n", ""), original)
+        for member, login in (("alice", "other@example.com"), ("carol", "carol@example.com"),
+                              ("alice", "bob@example.com"), ("alice", "not a login")):
+            with self.assertRaises(SystemExit, msg=(member, login)):
+                mcp_grant.link_login(path, member, login)
+        self.assertEqual(member_for_login(load_registry(path), "alice@example.com"), "alice")
+
+    def test_offer_to_an_unlinked_owner_is_refused_with_the_fix(self):
+        import argparse
+
+        import mcp_grant
+
+        reg = Path(self.f.tmp.name) / "reg2.yaml"
+        reg.write_text("mages:\n  bob:\n    practice_dir: " + str(self.root) + "\n")
+        old = os.environ.get("MAGE_REGISTRY")
+        os.environ["MAGE_REGISTRY"] = str(reg)
+        try:
+            args = argparse.Namespace(owner="bob", principal="laptop", profile="reader", source=None,
+                                      url="https://host:8443/mcp", yes=False, tailscale_login=None)
+            with self.assertRaises(SystemExit) as cm:
+                mcp_grant.cmd_offer(args, self.f.store)
+            self.assertIn("--tailscale-login", str(cm.exception))
+            args.tailscale_login = "bob@example.com"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(mcp_grant.cmd_offer(args, self.f.store), 0)
+            self.assertNotIn("tailscale_login", reg.read_text())
+        finally:
+            if old is None:
+                os.environ.pop("MAGE_REGISTRY", None)
+            else:
+                os.environ["MAGE_REGISTRY"] = old
+
+    def test_offer_goes_to_the_owners_own_river(self):
+        from mcp_access.registry import river_channel_id
+
+        reg = {"channels": {"10": {"mage": "alice", "type": "river"},
+                            "20": {"mage": "bob", "type": "health"},
+                            "30": {"mage": "bob", "type": "river"}}}
+        self.assertEqual(river_channel_id("bob", reg), 30)
+        self.assertIsNone(river_channel_id("carol", reg))
+
+    def test_connect_offer_is_counted(self):
+        from runtime.offers import counted_kinds
+
+        self.assertIn("mcp_connect", counted_kinds())
 
 
 class ListenerAndPublishTests(unittest.TestCase):

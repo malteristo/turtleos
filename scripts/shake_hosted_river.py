@@ -169,7 +169,7 @@ def check_keys() -> list[str]:
         errors.append("emoji key not recognized")
     if _normalize_mage_key("Anna Marie") != "anna_marie":
         errors.append("mage key normalize failed")
-    if hosted_river_channel_name("anna_marie") != "river-anna-marie":
+    if hosted_river_channel_name("anna_marie") != "home-anna-marie":
         errors.append("hosted river channel name law failed")
     try:
         name, key, locale, member = parse_invite_args(
@@ -179,7 +179,7 @@ def check_keys() -> list[str]:
             errors.append("parse_invite_args unexpected result")
     except Exception as exc:
         errors.append(f"parse_invite_args: {exc}")
-    if "Claim your river" not in load_claim_room_markdown("en"):
+    if "Claim your home channel" not in load_claim_room_markdown("en"):
         errors.append("claim room en template empty")
     return errors
 

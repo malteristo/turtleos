@@ -14,14 +14,17 @@ import os
 
 from aiohttp import web
 
+from mcp_access import offers
 from mcp_access.grants import ACTIVE, GrantStore
 from mcp_access.protocol import INVALID_REQUEST, Session, _error
-from mcp_access.registry import load_registry, resolve_sources
+from mcp_access.registry import load_registry, member_for_login, private_root, resolve_sources
 
 LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
 DEFAULT_PORT = 3141
 LOGIN_HEADER = "Tailscale-User-Login"
 ADDR_HEADER = "X-Forwarded-For"
+CLIENT_HEADER = "X-Turtleos-Client"
+CONNECT_TOOL = "connect-tool"
 
 
 class NotLoopback(ValueError):
@@ -80,6 +83,45 @@ def build_app(store: GrantStore | None = None, registry_loader=load_registry) ->
             return web.Response(status=202)
         return web.json_response(reply)
 
+    async def connect_post(request: web.Request) -> web.Response:
+        """Pickup: the owner's own client collects the credential inside the press window.
+
+        Identity comes only from ``tailscale serve``; there is no bypass switch here.
+        A caller learns only about its own login: not linked (409), or linked
+        with no open window (404). Nothing distinguishes other members.
+        """
+        if request.headers.get("Origin"):
+            return web.Response(status=403, text="origin not allowed")
+        login = request.headers.get(LOGIN_HEADER, "").strip()
+        addr = request.headers.get(ADDR_HEADER, "").strip()
+        if not login or not addr:
+            return web.Response(status=403, text="tailnet identity required")
+        # Not a secret: it keeps a hand-made request (curl, a helpful agent) from
+        # printing the key into a chat. Checked before the window is spent.
+        if request.headers.get(CLIENT_HEADER, "").strip() != CONNECT_TOOL:
+            return web.Response(status=400, text="use the connect tool (scripts/turtleos_connect.py); nothing was spent")
+        registry = registry_loader()
+        member = member_for_login(registry, login)
+        if member is None:
+            return web.Response(status=409, text="this Tailscale account is not linked to a turtleOS member")
+        root = private_root(member, registry)
+        nothing = web.Response(status=404, text="nothing to pick up")
+        if root is None or not root.is_dir():
+            return nothing
+        try:
+            offer, grant, token = offers.pickup(root, store)
+        except offers.OfferError:
+            return nothing
+        store.update(grant.id, bound_login=login, bound_addr=addr)
+        body = {
+            "name": "turtleos",
+            "server": offers.server_entry(offer.url, token),
+            "reaches": offer.sources,
+            "expires": grant.expires,
+        }
+        del token
+        return web.json_response(body, headers={"Cache-Control": "no-store"})
+
     async def mcp_other(_request: web.Request) -> web.Response:
         return web.Response(status=405, headers={"Allow": "POST"})
 
@@ -90,6 +132,7 @@ def build_app(store: GrantStore | None = None, registry_loader=load_registry) ->
     app.router.add_post("/mcp", mcp_post)
     app.router.add_get("/mcp", mcp_other)
     app.router.add_delete("/mcp", mcp_other)
+    app.router.add_post("/connect", connect_post)
     app.router.add_get("/health", health)
     return app
 

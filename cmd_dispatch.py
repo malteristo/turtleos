@@ -23,7 +23,7 @@ COMMAND_ACT_FALLBACK = {
     "flows": "Flow menu opened.",
     "flow": "Flow loaded or flow menu opened.",
     "day": "Daily note refreshed from today's eddy notes.",
-    "pin": "Message pinned in river channel.",
+    "pin": "Message pinned in this channel.",
     "readiness": "Practice-readiness act posted.",
     "artifacts": "Practice artifact shelves displayed.",
     "export": "Practice artifact exported as .md attachment.",
@@ -32,6 +32,7 @@ COMMAND_ACT_FALLBACK = {
     "search": "Practice artifact search results displayed.",
     "date": "Date kept in this practice root's dates registry.",
     "dates": "Upcoming dates listed for this practice root.",
+    "model": "This room's model shown, or the owner's pick recorded.",
 }
 
 _PRACTITIONER_COMMANDS = {
@@ -57,6 +58,7 @@ _PRACTITIONER_COMMANDS = {
     "search",
     "date",
     "dates",
+    "model",
 }
 
 CONTEXTUAL_ACTION_TIMEOUT = 3600

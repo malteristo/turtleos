@@ -3,7 +3,7 @@
 > **Canonical version:** This file, in the tree you cloned, is law for that tree.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-09-25 (§3.1 personal context management — MCP access point; 2026-09-07 resolved channel contracts + live team work §3.2.1; install topology still §13.3)
+**Version:** 2026-09-27 (§13.3 home channels; §3.1 personal context management — MCP access point; 2026-09-07 resolved channel contracts + live team work §3.2.1; install topology still §13.3)
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -73,7 +73,7 @@ This rewrite supersedes the prior **"Law of the Persistent Spirit"** framing as 
 
 The narrative for early adopters: *practices you can keep, locally* — not cloud chat with extra steps, not a Magic installation requirement.
 
-**Current topology (§13.3) still ships one river at install; shared rooms are optional (§15).** Join on the practice server now admits (private river + seat in an existing shared room); leave departs. Community is still not created at install. Do not write a new clone as if it already has the two-room house. Destination: [docs/design/practice-channels.md](docs/design/practice-channels.md).
+**Current topology (§13.3) still ships one home channel at install; shared rooms are optional (§15).** Join on the practice server now admits (home channel + seat in an existing shared room); leave departs. Community is still not created at install. Do not write a new clone as if it already has the two-room house. Destination: [docs/design/practice-channels.md](docs/design/practice-channels.md).
 
 turtleOS develops shared context with the practitioner over time — writing the context that tells their story while they live it (§6.5), and applying what it knows to help in the moment. The practitioner's story stays on their hardware. (Direction: [docs/design/story-layer-vision.md](docs/design/story-layer-vision.md).)
 
@@ -957,9 +957,13 @@ A zero-install sibling entry via `PRACTICE.md` (markdown practice with any AI) i
 
 ### 13.3. Discord Topology (Vanilla v1)
 
+**Vocabulary (2026-09-27).** Practitioner-facing words: a member's **home channel** is their primary private channel, one per member, created at join; a **private channel** is any further room a member opens for themselves; a **shared channel** has more than one member and is a commons — the **atrium** is the one every member shares; an **eddy** is a conversation inside a channel. **River** names the agent only. Registry type ids (`river`, `hosted-river`, `shared-river`) and module names keep the old word: internal, never shown, decided not to rename.
+
+**Destination (not built):** Turtle in a home channel knows which channels the member belongs to (names only) and reads one only when the member brings it — a link, or a request. Today it reads a channel only when the member pastes its link.
+
 | Element | v1 |
 |---------|-----|
-| River channel | One per practitioner — the main practice surface |
+| Home channel | One per practitioner — their primary private channel, `#home-<name>` |
 | Eddies | Threads spawned on demand |
 | Standing system threads | None at install |
 | Shared/family channels | Optional — multi-practitioner (§15). **Target:** community at install; see [practice-channels.md](docs/design/practice-channels.md) |
@@ -987,7 +991,7 @@ Deliverables: `character/soul.md`, `character/conduct.md`, `character/river_prom
 
 ## 15. Multi-Practitioner (Optional)
 
-turtleOS MAY host multiple practitioners via `mage_registry.yaml` — each with isolated practice root and river channel. Sovereign setup (own server) is recommended; hosted setup (trusted server) is permitted with explicit sovereignty tradeoff.
+turtleOS MAY host multiple practitioners via `mage_registry.yaml` — each with isolated practice root and home channel. Sovereign setup (own server) is recommended; hosted setup (trusted server) is permitted with explicit sovereignty tradeoff.
 
 ### 15.1 Channel families (v1 taxonomy)
 
@@ -1033,8 +1037,8 @@ Legacy binds MAY grandfather existing onboarding; new guests use the invite-to-c
 An operator MAY provision a hosted river for a guest:
 
 1. Guest chooses an emoji out of band; operator registers it as the **river key** (practice token, not authentication).
-2. Operator creates an **unclaimed-river** claim room named **`#river-<name>`** (private: operator + bots; invitee via channel invite and/or explicit member grant when already on the server).
-3. Guest drops the emoji in the claim room → platform binds `discord_id`, locks permissions, posts onboarding, deploys eddy bar. The channel **MUST remain `#river-<name>`** (no rename to `*-dialogue`).
+2. Operator creates an **unclaimed-river** claim room named **`#home-<name>`** (private: operator + bots; invitee via channel invite and/or explicit member grant when already on the server).
+3. Guest drops the emoji in the claim room → platform binds `discord_id`, locks permissions, posts onboarding, deploys eddy bar. The channel is named **`#home-<name>`** and the platform MUST NOT rename it afterwards (no rename to `*-dialogue`).
 
 Wrong keys MUST receive a clear rejection. Already-claimed rivers MUST NOT accept a second bind.
 
@@ -1368,5 +1372,6 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 | 2026-08-30 | §3.1 — practice channels: solo/shared primitives, install pair (private + community), roster sync as destination; §13.3 still one river. Destination: `docs/design/practice-channels.md` |
 | 2026-07-28 | §15.4 — host admin UX: `!admin invite`, `#river-<name>` for life, rivers/doctor; `onboard` + `*-dialogue` rename retired from product path |
 | 2026-09-07 | §3.2.1 — complete channel primitive contract (Channel + Turtle + River + Practice), fail-closed resolver, primitive development law, health as first complete thematic primitive |
+| 2026-09-27 | §13.3 / §15.4 — home channels: a member's primary private channel is `#home-<name>`; River names the agent only; registry type ids unchanged ([proposal](autoresearch/proposals/2026-09-27-home-channels.md)) |
 
 *End of TURTLE_SPEC*

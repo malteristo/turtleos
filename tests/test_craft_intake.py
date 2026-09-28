@@ -39,8 +39,8 @@ class CraftIntakeTests(unittest.TestCase):
         comment.author = forward.author
         comment.message_snapshots = []
 
-        with patch("discord_bot._visible_message_content") as mock_visible, patch(
-            "discord_bot._extract_forwarded_context", side_effect=["forwarded turtle reply", ""]
+        with patch("dialogue_message.visible_message_content") as mock_visible, patch(
+            "dialogue_message.extract_forwarded_context", side_effect=["forwarded turtle reply", ""]
         ):
             mock_visible.side_effect = [
                 ("", "forwarded turtle reply"),

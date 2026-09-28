@@ -675,6 +675,52 @@ class TestHandleGuildChannelUpdate(unittest.IsolatedAsyncioTestCase):
         log.assert_awaited_once()
         self.assertIn("renamed", log.await_args.args[0])
 
+    async def test_a_rename_already_recorded_by_sync_names_posts_nothing(self) -> None:
+        # 2026-09-27: `!admin rivers sync-names --confirm` renamed four home
+        # channels and each rename then posted a ⚠️ "run space sync to repair" —
+        # this process judged the event against a registry River had already
+        # rewritten. Read the file first; a recorded rename is not drift.
+        from discord_reconcile import handle_guild_channel_update
+
+        before = self._channel(name="river-sam")
+        after = self._channel(name="home-sam")
+        registry = {
+            "channels": {"555": {"type": "hosted-river", "mage": "sam",
+                                 "name": "home-sam", "discord_name": "home-sam"}},
+            "mages": {"sam": {"discord_id": "42"}},
+        }
+        with patch("mage.maybe_reload_mage_registry") as reload, patch(
+            "runtime.adapters.structural.get_registry", return_value=registry
+        ), patch("river_keys.save_registry") as save, patch(
+            "helpers.log_activity", new_callable=AsyncMock
+        ) as log:
+            result = await handle_guild_channel_update(before, after, discord_client=MagicMock())
+
+        reload.assert_called_once()
+        self.assertTrue(result["channel_updated"])
+        save.assert_not_called()
+        log.assert_not_awaited()
+
+    async def test_a_hand_rename_is_recorded_without_asking_for_repair(self) -> None:
+        from discord_reconcile import handle_guild_channel_update
+
+        before = self._channel(name="river")
+        after = self._channel(name="home-kermit")
+        registry = {
+            "channels": {"555": {"type": "river", "mage": "kermit", "name": "river"}},
+            "mages": {"kermit": {"discord_id": "42"}},
+        }
+        with patch("mage.maybe_reload_mage_registry"), patch(
+            "runtime.adapters.structural.get_registry", return_value=registry
+        ), patch("river_keys.save_registry"), patch(
+            "helpers.log_activity", new_callable=AsyncMock
+        ) as log:
+            await handle_guild_channel_update(before, after, discord_client=MagicMock())
+
+        text = log.await_args.args[0]
+        self.assertIn("recorded", text)
+        self.assertNotIn("repair", text)
+
     async def test_flags_permission_drift(self) -> None:
         from discord_reconcile import handle_guild_channel_update
 

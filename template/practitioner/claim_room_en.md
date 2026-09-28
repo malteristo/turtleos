@@ -1,4 +1,4 @@
-# Claim your river
+# Claim your home channel
 
 Send your key here as **one emoji message** — nothing else. Use the emoji the host gave you.
 

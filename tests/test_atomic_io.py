@@ -153,10 +153,10 @@ class TestRefactoredCallers(unittest.TestCase):
             # thread_registry binds get_runtime_dir at import time, so the
             # patch must target the thread_registry namespace.
             with patch("thread_registry.get_runtime_dir", return_value=tmp):
-                tr._persist_registry({"threads": {"1": {"name": "before"}}})
+                tr._persist_registry({"threads": {"1": {"name": "before"}}}, tr._registry_path())
                 with patch("core.atomic_io.os.replace", side_effect=OSError("simulated crash")):
                     with self.assertRaises(OSError):
-                        tr._persist_registry({"threads": {"1": {"name": "after"}}})
+                        tr._persist_registry({"threads": {"1": {"name": "after"}}}, tr._registry_path())
                 import yaml
 
                 reg_path = Path(tmp) / "thread-state" / "registry.yaml"

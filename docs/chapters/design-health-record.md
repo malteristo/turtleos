@@ -22,6 +22,11 @@ role on this one. Membership is not ownership. Every instance is design
 data for the primitive: unused options, blocked dests, and forked type
 strings feed the next change. Clinical content never leaves its root.
 
+The owner picks the channel's dialogue model (`!model`); support cannot. The
+default is the house's local model. On a cloud pick the board, extracted
+document text and the conversation are read by the provider — the picker says
+so. Uploads are still extracted in the house and never sent to a model as files.
+
 Capabilities are primitive options, not per-subject features. Evening
 check-in is one: `record/checkin.json` `enabled: true` turns it on for
 that instance only. Missing or false stays quiet. `mode` defaults to

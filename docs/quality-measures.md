@@ -155,6 +155,7 @@ the first cut: `docs/chapters/design-layer-boundaries.md`.
 | 2026-09-07 | 109 | 4 | 10 | 59398 | 30232 | 0.51 | 1721 | 51 | 2 | 241 |
 | 2026-09-13 | 112 | 4 | 10 | 61994 | 31969 | 0.52 | 1804 | 51 | 2 | 241 |
 | 2026-09-16 | 117 | 4 | 10 | 63206 | 33280 | 0.53 | 1896 | 51 | 2 | 241 |
+| 2026-09-28 | 126 | 5 | 11 | 69632 | 37492 | 0.54 | 2159 | 53 | 2 | 241 |
 
 The 2026-08-15 row is the first tests-collected number this table can defend.
 Until that morning `_test_count` read the digit out of pytest's summary line and
@@ -235,6 +236,8 @@ Append-only. One row per defect, dated by the commit that introduced it.
 | 2026-09-13 | Continuity claim (adaptive attunement, ambient River, navigable twine) had no eddy-open record | CE era / named today | months | declaration with no mechanism |
 | 2026-09-21 | Health rules said "call `recap_health_visit` so it sticks"; the local-model path offered a health room no tool at all. Ten evening prompts, one spoken recap, zero writes | 2026-09-17 `ee8b7c5` | 4 days | the catalog was tested, not the path the room runs |
 | 2026-09-21 | Craft intake dereference died on `_MissingSentinel.is_set` in River; the WRONG-CLIENT detector said so 18 times in `river.log` and the nightly log-watch had no class for it and dropped untimestamped stderr lines at the window cut | 2026-09-16 | 5 days | a detector the reader cannot see |
+| 2026-09-28 | Same class, other path: `craft_intake` imported helpers via `discord_bot`, so River built Turtle's client; `log_watch` marked `wrong_client:constructed` new on 09-27 in a report nobody read | 2026-09-27 (first seen) | 1 day | a detector the reader cannot see — delivered now by River's nightly triage |
+| 2026-09-28 | One thread-registry cache for every root: each root's file held every room's threads, and eddy prompts carried other members' titles | long-standing | months | per-process cache of per-root state |
 
 Two classes account for seven of nine. That is the finding this document was
 created to keep in view.

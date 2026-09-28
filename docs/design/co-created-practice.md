@@ -40,6 +40,10 @@ What the researcher observes is what the member asks for and how it feels when i
 | Returned | member's river | status `doing` → `done` with one plain sentence about what changed; the member confirms or says it is not it yet |
 | Fulfilled without the wizard | Turtle, directly | a wish Turtle can enable itself (a setting, an existing capability, a flow it already has) is marked `self` and never crosses |
 
+### 3.1 Beside the atrium
+
+The [atrium](atrium.md) runs shared rooms in the open. It does not replace this path. A wish about a member's own channel crosses as above — words only, to the researcher — unless the member chooses to bring it to the atrium themselves. A wish about a shared room is atrium work: it is spoken where the room's other members can see it and take part.
+
 ## 4. The measure
 
 **Wishes fulfilled without the researcher ÷ wishes spoken**, per member, rolling 90 days. The approach succeeds when this rises. It is the out-of-the-loop measure the method exists for.

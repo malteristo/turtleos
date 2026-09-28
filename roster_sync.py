@@ -19,6 +19,7 @@ import discord
 
 from river_keys import (
     _claimed_overwrites,
+    HOME_CATEGORY,
     _normalize_mage_key,
     hosted_river_channel_name,
     save_registry,
@@ -59,7 +60,7 @@ def is_live_mage(mage: Any) -> bool:
     """
     if not isinstance(mage, dict):
         return False
-    if mage.get("departed") or mage.get("archived"):
+    if mage.get("departed") or mage.get("archived") or mage.get("offboarded"):
         return False
     if mage.get("roster") is False:
         return False
@@ -73,6 +74,37 @@ def live_mages(registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if is_live_mage(mage):
             out[str(key)] = mage
     return out
+
+
+def offboarded_ids(registry: dict[str, Any]) -> set[str]:
+    """Discord ids the house decided not to admit — no join path re-admits them."""
+    return {
+        str(m.get("discord_id") or "").strip()
+        for m in (registry.get("mages") or {}).values()
+        if isinstance(m, dict) and m.get("offboarded")
+    }
+
+
+def apply_offboard_registry(registry: dict[str, Any], mage_key: str, *, at: str | None = None) -> list[str]:
+    """Reduce a member to a marker: their Discord id and when. Returns their channel ids.
+
+    Unlike a departure this keeps nothing to restore — the row, channel rows and
+    seats go. The id stays so a join (or the missed-joins chore) does not
+    re-admit someone the house decided to remove; readmission is an admin act.
+    """
+    mages = registry.get("mages") or {}
+    mage = mages.get(mage_key)
+    if not isinstance(mage, dict):
+        raise KeyError(mage_key)
+    mages[mage_key] = {"discord_id": str(mage.get("discord_id") or ""), "offboarded": at or _now()}
+    channels = registry.get("channels") or {}
+    gone = [cid for cid, e in channels.items() if isinstance(e, dict) and e.get("mage") == mage_key]
+    for cid in gone:
+        del channels[cid]
+    for space in (registry.get("spaces") or {}).values():
+        if isinstance(space, dict) and mage_key in (space.get("members") or []):
+            space["members"] = [m for m in space["members"] if m != mage_key]
+    return [str(c) for c in gone]
 
 
 def live_registered_ids(registry: dict[str, Any]) -> set[str]:
@@ -152,7 +184,7 @@ def find_departed_mage(registry: dict[str, Any], discord_id: str | int) -> str |
     for key, mage in (registry.get("mages") or {}).items():
         if not isinstance(mage, dict):
             continue
-        if not mage.get("departed"):
+        if not mage.get("departed") or mage.get("offboarded"):
             continue
         if str(mage.get("discord_id") or "").strip() == aid:
             return str(key)
@@ -179,7 +211,7 @@ def compute_roster_drift(
         if community and key not in members:
             missing_seats.append(key)
     return RosterDrift(
-        on_discord_not_registered=tuple(sorted(humans - registered)),
+        on_discord_not_registered=tuple(sorted(humans - registered - offboarded_ids(registry))),
         registered_not_on_discord=tuple(sorted(registered - humans)),
         missing_private=tuple(sorted(missing_private)),
         community_space=community,
@@ -214,11 +246,11 @@ def format_roster_doctor_lines(drift: RosterDrift) -> list[str]:
     if drift.missing_private:
         shown = ", ".join(f"`{k}`" for k in drift.missing_private[:8])
         lines.append(
-            f"⚠️ {len(drift.missing_private)} member(s) missing a private river: {shown}"
+            f"⚠️ {len(drift.missing_private)} member(s) missing a home channel: {shown}"
         )
     if drift.community_space is None:
         lines.append(
-            "ℹ️ No community shared-room — join opens a private river only. "
+            "ℹ️ No community shared-room — join opens a home channel only. "
             "A shared space (`community`, or any live shared-river) is the house seat."
         )
     elif drift.community_missing_seats:
@@ -290,8 +322,8 @@ def apply_admit_registry(
         "type": "hosted-river",
         "name": river_name,
         "discord_name": river_name,
-        "discord_category": "Practice",
-        "description": f"Private practice river for {display_name}",
+        "discord_category": HOME_CATEGORY,
+        "description": f"Home channel for {display_name}",
     }
     seat_in_community(registry, mage_key)
 
@@ -398,7 +430,7 @@ async def _restore_private_visibility(
     try:
         await channel.edit(
             overwrites=_claimed_overwrites(guild, member),
-            topic=f"Private practice river for {member.display_name}",
+            topic=f"Home channel for {member.display_name}",
         )
     except discord.HTTPException as exc:
         print(f"roster_sync: restore private visibility failed: {exc}")
@@ -428,7 +460,7 @@ async def _hide_private_river(
     try:
         await channel.edit(**edit_kwargs)
     except discord.HTTPException as exc:
-        print(f"roster_sync: hide private river failed: {exc}")
+        print(f"roster_sync: hide home channel failed: {exc}")
 
 
 async def _post_join_first_run(channel) -> object | None:
@@ -458,6 +490,9 @@ async def admit_on_join(member: discord.Member) -> str | None:
     if not is_practice_guild(guild, registry):
         return None
 
+    if str(member.id) in offboarded_ids(registry):
+        return "Offboarded earlier — not admitted. Readmitting is an admin decision."
+
     existing = mage_key_for_live_id(registry, member.id)
     if existing:
         seated = seat_in_community(registry, existing)
@@ -482,12 +517,12 @@ async def admit_on_join(member: discord.Member) -> str | None:
     mage_key = unique_mage_key(display_name, registry, discord_id=member.id)
     seed_practitioner_workshop(mage_key)
 
-    category = discord.utils.get(getattr(guild, "categories", []) or [], name="Practice")
+    category = discord.utils.get(getattr(guild, "categories", []) or [], name=HOME_CATEGORY)
     river_name = hosted_river_channel_name(mage_key)
     create_kwargs: dict[str, Any] = {
         "name": river_name,
         "overwrites": _claimed_overwrites(guild, member),
-        "topic": f"Private practice river for {display_name}",
+        "topic": f"Home channel for {display_name}",
     }
     if category:
         create_kwargs["category"] = category
@@ -495,7 +530,7 @@ async def admit_on_join(member: discord.Member) -> str | None:
     try:
         channel = await guild.create_text_channel(**create_kwargs)
     except discord.HTTPException as exc:
-        print(f"roster_sync: create private river failed for {display_name}: {exc}")
+        print(f"roster_sync: create home channel failed for {display_name}: {exc}")
         raise
 
     expect_channel_registry_binding(channel.id)
@@ -520,6 +555,43 @@ async def admit_on_join(member: discord.Member) -> str | None:
     return f"Opened `#{river_name}` (no community shared-room yet)."
 
 
+MISSED_JOIN_LIMIT = 3
+
+
+async def admit_missed_joins(guild: Any) -> list[str]:
+    """Admit people who joined while the bots were down, as ``on_member_join`` would.
+
+    More than ``MISSED_JOIN_LIMIT`` at once is not a missed join — it is a member
+    cache or registry that is wrong — so that case is reported and nothing opens.
+    """
+    from mage import get_registry, maybe_reload_mage_registry
+    from river_keys import try_auto_admit_on_member_join
+
+    maybe_reload_mage_registry()
+    registry = get_registry()
+    if not is_practice_guild(guild, registry):
+        return []
+    humans = [m for m in getattr(guild, "members", []) or [] if not getattr(m, "bot", False)]
+    if len(humans) <= 1:
+        return []
+    registered = live_registered_ids(registry)
+    skip = registered | offboarded_ids(registry)
+    missed = [m for m in humans if str(m.id) not in skip]
+    if not missed:
+        return []
+    if len(missed) > MISSED_JOIN_LIMIT:
+        return [
+            f"\u26a0\ufe0f {len(missed)} people on Discord are not in turtleOS — more than a missed "
+            "join, so nothing was opened. `!admin doctor` shows who."
+        ]
+    lines = []
+    for member in missed:
+        admitted = await try_auto_admit_on_member_join(member) or await admit_on_join(member)
+        name = getattr(member, "display_name", None) or member.name
+        lines.append(f"Joined while I was away: **{name}**. {admitted or 'Not admitted — see logs.'}")
+    return lines
+
+
 async def depart_on_leave(member: discord.Member) -> str | None:
     """Tear down membership. None = not this house, or nobody to remove."""
     if getattr(member, "bot", False):
@@ -538,4 +610,4 @@ async def depart_on_leave(member: discord.Member) -> str | None:
     await _hide_private_river(guild, registry, key)
     apply_depart_registry(registry, key)
     save_registry(registry)
-    return f"Departed `{key}` — private river archived, community seat removed."
+    return f"Departed `{key}` — home channel archived, community seat removed."

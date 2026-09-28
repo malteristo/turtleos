@@ -15,6 +15,7 @@ bot.err
 logs/
 canary_state.json
 canary_triage_fallback_state.json
+house/
 river_state.md
 consul/bot.err
 consul/bot.log

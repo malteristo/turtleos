@@ -45,7 +45,8 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
         joined = " ".join(paths)
         self.assertIn("read", joined)
 
-    async def test_allows_tier1_artifact(self) -> None:
+    async def test_unset_token_refuses_tier1(self) -> None:
+        """Positive control: an empty token used to return 200. That was the open door."""
         with tempfile.TemporaryDirectory() as tmp:
             sessions = os.path.join(tmp, "sessions")
             os.makedirs(sessions)
@@ -59,20 +60,24 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
             ), patch("artifact_viewer.get_runtime_dir", return_value=tmp), patch(
                 "artifact_viewer.get_mage_type", return_value="practitioner"
             ):
-                resp = await intake_server.handle_artifact_read(request)
-            self.assertEqual(resp.status, 200)
-            body = resp.body if isinstance(resp.body, (bytes, bytearray)) else resp.text
-            if isinstance(body, str):
-                body = body.encode()
-            self.assertIn(b"# hi", body)
+                with self.assertRaises(web.HTTPForbidden) as ctx:
+                    await intake_server.handle_artifact_read(request)
+            self.assertEqual(ctx.exception.text, "Artifact read token required")
+
+    async def test_wrong_token_is_forbidden(self) -> None:
+        request = _read_request("sessions/note.md", token="secret-tokex")
+        with patch("state.ARTIFACT_READ_TOKEN", "secret-token"):
+            with self.assertRaises(web.HTTPForbidden) as ctx:
+                await intake_server.handle_artifact_read(request)
+        self.assertEqual(ctx.exception.text, "Artifact read token required")
 
     async def test_denies_proposals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "proposals"))
             with open(os.path.join(tmp, "proposals", "secret.md"), "w") as fh:
                 fh.write("nope")
-            request = _read_request("proposals/secret.md")
-            with patch("state.ARTIFACT_READ_TOKEN", ""), patch(
+            request = _read_request("proposals/secret.md", token="secret-token")
+            with patch("state.ARTIFACT_READ_TOKEN", "secret-token"), patch(
                 "mage.set_practice_context_for_mage_key", return_value=True
             ), patch("mage.get_mage_type", return_value="practitioner"), patch(
                 "artifact_viewer.get_pd", return_value=tmp
@@ -107,6 +112,25 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
             ):
                 resp = await intake_server.handle_artifact_read(request)
             self.assertEqual(resp.status, 200)
+
+
+class TestArtifactTokenCompare(unittest.TestCase):
+    def test_missing_secret_refuses_even_a_blank_query(self) -> None:
+        self.assertFalse(intake_server.artifact_read_authorized("", ""))
+
+    def test_match_and_mismatch(self) -> None:
+        self.assertTrue(intake_server.artifact_read_authorized("secret-token", "secret-token"))
+        self.assertFalse(intake_server.artifact_read_authorized("secret-tokex", "secret-token"))
+        self.assertFalse(intake_server.artifact_read_authorized("", "secret-token"))
+
+    def test_handler_cannot_skip_the_check(self) -> None:
+        import inspect
+
+        src = inspect.getsource(intake_server.handle_artifact_read)
+        self.assertIn("artifact_read_authorized", src)
+        self.assertNotIn("if ARTIFACT_READ_TOKEN", src)
+        compare = inspect.getsource(intake_server.artifact_read_authorized)
+        self.assertIn("compare_digest", compare)
 
 
 if __name__ == "__main__":

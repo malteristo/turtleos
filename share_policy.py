@@ -102,7 +102,7 @@ def share_dissolve_denial_message(cfg: dict[str, Any]) -> str:
         )
     return (
         f"Only **{sharer}** can dissolve this shared eddy by default — they shared into **{space_label}** "
-        f"without being a **{space_label}** member (they may open it from the notify in their own river). "
+        f"without being a **{space_label}** member (they may open it from the notify in their home channel). "
         "Space members can dissolve when the sharer is not in this space."
     )
 
@@ -156,7 +156,7 @@ def shared_eddy_context_lines(
     else:
         lines.append(
             f"- **Sharer visibility:** **{sharer}** is **not** a **{space_label}** member — they "
-            "were not auto-added. They learn of conversation via a notify act in **their own river** "
+            "were not auto-added. They learn of conversation via a notify act in **their home channel** "
             "when a space member first replies; they do not watch this channel by default."
         )
 

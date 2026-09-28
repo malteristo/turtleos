@@ -85,7 +85,7 @@ Category moves and permission drift are logged. When a channel instance declares
 `discord_category`, `!admin space sync` repairs its placement without changing
 channel permissions; `!admin audit` reports remaining drift.
 `!admin rivers sync-names` repairs hosted-river names. Hosted rivers SHOULD stay
-`#river-<name>`.
+`#home-<name>`.
 
 ### Delete channel
 

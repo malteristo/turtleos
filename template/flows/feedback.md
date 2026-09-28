@@ -5,7 +5,7 @@ reads: [state/notes/feedback-last.md]
 writes: [state/notes/feedback-last.md]
 think_aloud: auto
 model: default
-entry_contract: A short structured note — what you were doing, what worked, what didn't — saved for the person who runs your river.
+entry_contract: A short structured note — what you were doing, what worked, what didn't — saved for the person who runs the house.
 intake:
   skippable: true
   path: state/notes/feedback-intake.md

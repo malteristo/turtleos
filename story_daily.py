@@ -473,6 +473,7 @@ async def _run_scheduled_health_checkins() -> int:
     """One notifying prompt per enabled health instance after its hour."""
     from helpers import deliver_channel_text
     from health_checkin import (
+        MODE_STATE,
         already_logged,
         checkin_content,
         due_now,
@@ -481,6 +482,7 @@ async def _run_scheduled_health_checkins() -> int:
         posted_message_id,
         send_then_mark,
     )
+    from health_checkin_ui import state_checkin_view
 
     now = local_now()
     today = now.date()
@@ -499,8 +501,12 @@ async def _run_scheduled_health_checkins() -> int:
         if notify_kwargs(content)["silent"] is not False:
             raise RuntimeError("check-in send would suppress notifications")
 
-        async def _deliver(body: str, channel_id=target["channel_id"]) -> str | None:
-            return await deliver_channel_text(channel_id, body, silent=False)
+        view = None
+        if config.mode == MODE_STATE:
+            view = state_checkin_view(locale=config.locale, has_draft=bool(draft))
+
+        async def _deliver(body: str, channel_id=target["channel_id"], view=view) -> str | None:
+            return await deliver_channel_text(channel_id, body, silent=False, view=view)
 
         if await send_then_mark(root, today, content, _deliver, draft=draft):
             posted += 1

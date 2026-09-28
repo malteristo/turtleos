@@ -84,7 +84,8 @@ class LedgerAgreementTests(unittest.TestCase):
         """Deriving the list must not silently drop a row from the report.
 
         Six historical kinds plus `themes_keep` and `link_read`, counted
-        2026-08-14, plus `eddy_ready`, counted 2026-08-16. A kind leaving this
+        2026-08-14, plus `eddy_ready`, counted 2026-08-16, plus `mcp_connect`,
+        counted 2026-09-25. A kind leaving this
         list means a report row vanishing, which is the failure mode that hid an
         eight-day silence.
         """
@@ -96,6 +97,7 @@ class LedgerAgreementTests(unittest.TestCase):
                 "eddy_ready",
                 "home_plan",
                 "link_read",
+                "mcp_connect",
                 "save",
                 "themes_keep",
                 "turtle_checkpoint",

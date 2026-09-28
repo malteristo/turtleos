@@ -1,4 +1,4 @@
-# Deinen Fluss beanspruchen
+# Deinen Home-Kanal übernehmen
 
 Sende hier **ein Emoji** — sonst nichts. Das Emoji, das dir der Host gegeben hat.
 

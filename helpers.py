@@ -74,7 +74,7 @@ async def deliver_channel_embed(channel_or_id, embed, *, silent: bool = True) ->
     await target.send(embed=embed, silent=silent)
 
 
-async def deliver_channel_text(channel_or_id, content: str, *, silent: bool = False) -> int | None:
+async def deliver_channel_text(channel_or_id, content: str, *, silent: bool = False, view=None) -> int | None:
     """Send message content via the correct bot identity (River bot in split mode).
 
     Mentions only notify when they sit in content and ``silent`` is false.
@@ -97,7 +97,7 @@ async def deliver_channel_text(channel_or_id, content: str, *, silent: bool = Fa
             try:
                 await ephemeral.login(token)
                 ch = await ephemeral.fetch_channel(channel_id)
-                sent = await ch.send(content=content, silent=silent)
+                sent = await ch.send(content=content, silent=silent, view=view)
                 return getattr(sent, "id", None)
             finally:
                 await ephemeral.close()
@@ -105,7 +105,7 @@ async def deliver_channel_text(channel_or_id, content: str, *, silent: bool = Fa
     target = channel_or_id if not isinstance(channel_or_id, int) else state.client.get_channel(channel_id)
     if target is None:
         target = await state.client.fetch_channel(channel_id)
-    sent = await target.send(content=content, silent=silent)
+    sent = await target.send(content=content, silent=silent, view=view)
     return getattr(sent, "id", None)
 
 

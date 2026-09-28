@@ -53,7 +53,10 @@ def merge_craft_messages(messages) -> dict:
 
     for msg in messages:
         message_ids.append(msg.id)
-        from discord_bot import _extract_forwarded_context, _visible_message_content
+        from dialogue_message import (
+            extract_forwarded_context as _extract_forwarded_context,
+            visible_message_content as _visible_message_content,
+        )
 
         visible, forwarded = _visible_message_content(msg)
         user_text = (msg.content or "").strip()
@@ -110,7 +113,7 @@ async def _gather_origin_thread_context(
     history_limit: int = 15,
 ) -> dict:
     """Deref forward source and scan origin thread/eddy for URLs, triggers, and errors."""
-    from discord_bot import _format_dereferenced_message
+    from dialogue_message import format_dereferenced_message as _format_dereferenced_message
 
     out: dict = {
         "origin_channel_id": channel_id,
@@ -184,12 +187,30 @@ async def _gather_origin_thread_context(
     return out
 
 
+async def _readable_refs(refs, primary, client):
+    """Refs the intake may read on the author's behalf, and how many were refused."""
+    from discord_ref_read import pull_refusal
+
+    kept, refused = [], 0
+    for ref in refs:
+        try:
+            source = await client.fetch_channel(ref[1])
+        except Exception:
+            refused += 1
+            continue
+        if await pull_refusal(source, primary.channel, getattr(primary.author, "id", None)):
+            refused += 1
+            continue
+        kept.append(ref)
+    return kept, refused
+
+
 async def gather_craft_evidence(messages, client) -> dict:
     """Collect deterministic context from turtleOS / Discord for an intake."""
-    from discord_bot import (
-        _extract_discord_message_refs,
-        _fetch_discord_message_context,
-        _forward_source_ref,
+    from dialogue_message import (
+        extract_discord_message_refs as _extract_discord_message_refs,
+        fetch_discord_message_context as _fetch_discord_message_context,
+        forward_source_ref as _forward_source_ref,
     )
 
     merged = merge_craft_messages(messages)
@@ -215,9 +236,14 @@ async def gather_craft_evidence(messages, client) -> dict:
     source_attachments: list[str] = []
     origin_contexts: list[dict] = []
 
+    deref_refs, refused = await _readable_refs(deref_refs, primary, client)
+    if refused:
+        visibility.append(f"{refused} linked source(s) not read — the poster can't see them")
+
     if deref_refs:
         dereferenced_context, dereferenced_count = await _fetch_discord_message_context(
-            deref_refs, label="Source message"
+            deref_refs, label="Source message",
+            destination=primary.channel, user_id=getattr(primary.author, "id", None),
         )
         for guild_id, channel_id, message_id in deref_refs[:3]:
             origin = await _gather_origin_thread_context(client, channel_id, message_id)

@@ -10,7 +10,7 @@ from typing import Any
 
 import discord
 
-from river_keys import hosted_river_channel_name, save_registry
+from river_keys import HOME_CATEGORY, hosted_river_channel_name, save_registry
 
 
 @dataclass
@@ -24,6 +24,7 @@ class RiverRow:
     claimed: bool
     practice_dir: str | None
     name_drift: bool
+    category_drift: bool = False
 
 
 @dataclass
@@ -39,25 +40,42 @@ class SyncAction:
 
 def iter_river_rows(registry: dict[str, Any]) -> list[RiverRow]:
     mages = registry.get("mages") or {}
+    channels = registry.get("channels") or {}
+    # An operator-made `river` room is a home channel when it is the only own
+    # channel its member has; a second one is a further private channel and
+    # must not be renamed to the same #home-<name>.
+    own_counts: dict[str, int] = {}
+    for entry in channels.values():
+        if (
+            isinstance(entry, dict)
+            and entry.get("type") in ("river", "hosted-river")
+            and not entry.get("archived")
+        ):
+            key = str(entry.get("mage") or "")
+            own_counts[key] = own_counts.get(key, 0) + 1
     rows: list[RiverRow] = []
-    for channel_id, entry in (registry.get("channels") or {}).items():
+    for channel_id, entry in channels.items():
         if not isinstance(entry, dict):
             continue
         ch_type = entry.get("type")
-        if ch_type not in ("hosted-river", "unclaimed-river"):
-            continue
         mage_key = str(entry.get("mage") or "")
         if not mage_key:
+            continue
+        if ch_type == "river":
+            if entry.get("archived") or own_counts.get(mage_key, 0) != 1:
+                continue
+        elif ch_type not in ("hosted-river", "unclaimed-river"):
             continue
         desired = hosted_river_channel_name(mage_key)
         discord_name = entry.get("discord_name") or entry.get("name")
         registry_name = entry.get("name")
         mage = mages.get(mage_key) or {}
-        claimed = bool(mage.get("discord_id")) and ch_type == "hosted-river"
+        claimed = bool(mage.get("discord_id")) and ch_type in ("river", "hosted-river")
         drift = (
             (str(discord_name).lower() != desired.lower() if discord_name else True)
             or (str(registry_name).lower() != desired.lower() if registry_name else True)
         )
+        category_drift = not entry.get("archived") and entry.get("discord_category") != HOME_CATEGORY
         rows.append(
             RiverRow(
                 channel_id=str(channel_id),
@@ -69,6 +87,7 @@ def iter_river_rows(registry: dict[str, Any]) -> list[RiverRow]:
                 claimed=claimed,
                 practice_dir=mage.get("practice_dir") or entry.get("practice_dir"),
                 name_drift=drift,
+                category_drift=category_drift,
             )
         )
     rows.sort(key=lambda r: (0 if r.ch_type == "unclaimed-river" else 1, r.mage_key))
@@ -77,8 +96,8 @@ def iter_river_rows(registry: dict[str, Any]) -> list[RiverRow]:
 
 def format_rivers_list(rows: list[RiverRow]) -> str:
     if not rows:
-        return "**Rivers:** none registered (hosted / unclaimed)."
-    lines = ["**Rivers** (hosted + unclaimed)"]
+        return "**Home channels:** none registered (and no open claim rooms)."
+    lines = ["**Home channels** (and open claim rooms)"]
     for row in rows:
         status = "unclaimed" if row.ch_type == "unclaimed-river" else ("claimed" if row.claimed else "hosted")
         shown = row.discord_name or row.registry_name or "?"
@@ -95,12 +114,11 @@ def plan_sync_names(
     registry: dict[str, Any],
     guild: discord.Guild | None,
 ) -> list[SyncAction]:
-    """Plan idempotent sync of Discord + registry names to ``river-<mage>``."""
+    """Plan idempotent sync of Discord + registry names to ``home-<mage>``."""
     actions: list[SyncAction] = []
     for row in iter_river_rows(registry):
-        if row.ch_type != "hosted-river":
-            # Unclaimed rooms should already be river-*; still allow registry cleanup.
-            if not row.name_drift:
+        if row.ch_type == "unclaimed-river":
+            if not row.name_drift and not row.category_drift:
                 continue
         live_name: str | None = None
         if guild is not None:
@@ -115,6 +133,7 @@ def plan_sync_names(
         needs_registry = (
             (row.registry_name or "").lower() != row.desired_name.lower()
             or (row.discord_name or "").lower() != row.desired_name.lower()
+            or row.category_drift
         )
         if not needs_discord and not needs_registry:
             continue
@@ -124,7 +143,8 @@ def plan_sync_names(
         if needs_discord:
             note.append(f"rename Discord `#{current}` → `#{row.desired_name}`")
         if needs_registry:
-            note.append("clean registry name/discord_name")
+            note.append("clean registry name/discord_name" if not row.category_drift
+                        else f"registry name + category → `{HOME_CATEGORY}`")
         actions.append(
             SyncAction(
                 channel_id=row.channel_id,
@@ -141,9 +161,9 @@ def plan_sync_names(
 
 def format_sync_preview(actions: list[SyncAction]) -> str:
     if not actions:
-        return "**Rivers sync-names:** all hosted/unclaimed river names already coherent."
+        return "**Rivers sync-names:** all home channel names already coherent."
     lines = [
-        f"**Rivers sync-names (dry-run):** {len(actions)} change(s)",
+        f"**Home channel names (dry-run):** {len(actions)} change(s)",
         "Re-run with `--confirm` to apply.",
         "",
     ]
@@ -172,7 +192,7 @@ async def apply_sync_names(
                     ch = await guild.fetch_channel(int(act.channel_id))
                 await ch.edit(
                     name=act.desired_name,
-                    reason="Admin rivers sync-names — #river-<name> law",
+                    reason="Admin rivers sync-names — #home-<name> law",
                 )
                 results.append(f"- `{act.mage_key}`: renamed Discord → `#{act.desired_name}`")
             except (discord.HTTPException, discord.NotFound, TypeError, ValueError) as exc:
@@ -181,6 +201,8 @@ async def apply_sync_names(
         if act.registry_cleanup or act.discord_rename:
             entry["name"] = act.desired_name
             entry["discord_name"] = act.desired_name
+            if not entry.get("archived"):
+                entry["discord_category"] = HOME_CATEGORY
             if not act.discord_rename:
                 results.append(f"- `{act.mage_key}`: registry name/discord_name → `{act.desired_name}`")
     save_registry(registry)
@@ -265,11 +287,11 @@ def admin_help_default() -> str:
     return (
         "**Host commands** — invite people, run spaces, keep healthy.\n"
         "\n"
-        "**People & rivers**\n"
-        "- `!admin invite <name> <emoji> [en|de] [--member @member|id|username]` — give someone their river\n"
-        "- `!admin rivers` — list hosted / unclaimed rivers\n"
+        "**People & home channels**\n"
+        "- `!admin invite <name> <emoji> [en|de] [--member @member|id|username]` — give someone their home channel\n"
+        "- `!admin rivers` — list home channels and open claim rooms\n"
         "- `!admin rivers admit <name> <@member|id|username>` — open an existing claim room for a member\n"
-        "- `!admin rivers sync-names [--confirm]` — align Discord + registry to `#river-<name>`\n"
+        "- `!admin rivers sync-names [--confirm]` — align Discord + registry to `#home-<name>`\n"
         "\n"
         "**Spaces**\n"
         "- `!admin space` — shared rooms (create / list / close / hide / sync)\n"

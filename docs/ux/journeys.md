@@ -97,9 +97,9 @@ Operator provisions with `!admin invite <name> <emoji> [en|de] [--member @member
 - **Already on server:** use `--member` (or grant perms) and send the **channel deep link**.
 
 ```
-Guest opens link → #river-<name> claim room (pinned instructions)
+Guest opens link → #home-<name> claim room (pinned instructions)
   → sends river key emoji as single message
-  → bind + permissions lock (channel stays #river-<name>)
+  → bind + permissions lock (channel stays #home-<name>)
   → onboarding embed
   → eddy bar at bottom
 Guest opens eddy from bar → first message → Turtle added → second message → Turtle reply

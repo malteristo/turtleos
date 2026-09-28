@@ -14,6 +14,7 @@ turtleOS, under this operator's intention, is a **family care and operations sys
 - **Members, not users.** Even the administrator is a member with special rights.
 - **Co-Creation Law.** Non-operator members are voluntary co-creators, never test subjects. Expressed needs are design input on their terms; non-participation is a valid design answer; features *about* a member require that member's voice, not only their data.
 - **Metric.** Practical value within family matters; quality of conscious experience with loved ones. Not engagement, not usage frequency, not mood scores.
+- **Community care and operations (2026-09-26).** The household is the first community on the platform, not its boundary. Shared rooms are built and tended together from the [atrium](atrium.md); each member develops their own private channel as they like. The metric above stays primary: community begins as the people already on the server, and widening it is a later, earned step.
 
 Requirements are mined from the **family shared river** (and private rivers when freely offered). The operator's private practice workshop may hold an audit / needs registry; this file is the product stance the public repo can carry.
 

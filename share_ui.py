@@ -640,7 +640,7 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
         space_label = transparency_space_key.replace("_", " ").title()
         body = (
             f"**Practitioners**\n{', '.join(t.address for t in targets[:6]) if targets else '(none)'}\n\n"
-            f"Re-share from this **{space_label}** eddy to a practitioner's private river. "
+            f"Re-share from this **{space_label}** eddy to a practitioner's home channel. "
             f"A transparency act will post in **{space_label}** when you confirm."
         )
     embed = discord.Embed(

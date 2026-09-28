@@ -238,7 +238,7 @@ async def deliver_practitioner_share(
 
     mention = f"<@{target.discord_id}>"
     msg = await ch.send(
-        f"{mention} — tap **Continue** when you are ready to pick this up in your river.",
+        f"{mention} — tap **Continue** when you are ready to pick this up in your home channel.",
         embed=embed,
         view=view,
         allowed_mentions=discord.AllowedMentions(users=True),

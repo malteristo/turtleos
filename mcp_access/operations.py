@@ -21,6 +21,8 @@ OPERATIONS: dict[str, Operation] = {
         Operation("read_note", content=True),
         Operation("read_health_picture", content=True),
         Operation("search", content=True),
+        Operation("list_documents", content=True),
+        Operation("read_document", content=True),
         Operation("host_status", content=False),
     )
 }
@@ -33,6 +35,8 @@ PROFILES: dict[str, tuple[str, ...]] = {
         "read_note",
         "read_health_picture",
         "search",
+        "list_documents",
+        "read_document",
     ),
     "operator-health": ("capabilities", "host_status"),
 }

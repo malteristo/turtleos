@@ -64,6 +64,19 @@ def owned_sources(member: str, registry: dict) -> list[Source]:
     return out
 
 
+def river_channel_id(member: str, registry: dict) -> int | None:
+    """The member's personal river — where their consent is asked."""
+    for ch_id, entry in (registry.get("channels") or {}).items():
+        if not isinstance(entry, dict) or entry.get("archived") or entry.get("orphaned"):
+            continue
+        if entry.get("mage") == member and entry.get("type") in ("river", "hosted-river"):
+            try:
+                return int(ch_id)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def resolve_sources(member: str, ids: list[str], registry: dict) -> list[Source]:
     """The grant's sources, re-checked against ownership on every call.
 
@@ -72,3 +85,21 @@ def resolve_sources(member: str, ids: list[str], registry: dict) -> list[Source]
     """
     owned = {s.id: s for s in owned_sources(member, registry)}
     return [owned[i] for i in ids if i in owned]
+
+
+def private_root(member: str, registry: dict) -> Path | None:
+    for s in owned_sources(member, registry):
+        if s.kind == KIND_PRIVATE:
+            return s.root
+    return None
+
+
+def member_for_login(registry: dict, login: str) -> str | None:
+    """The member whose registry entry names this tailnet login. Exact match, case-insensitive."""
+    wanted = (login or "").strip().casefold()
+    if not wanted:
+        return None
+    for name, entry in (registry.get("mages") or {}).items():
+        if str((entry or {}).get("tailscale_login") or "").strip().casefold() == wanted:
+            return name
+    return None

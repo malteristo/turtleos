@@ -97,7 +97,7 @@ class FetchingClientIsProcessCorrectTests(unittest.TestCase):
 
         seen = {}
 
-        async def fake_fetch(client, refs, *, label, limit):
+        async def fake_fetch(client, refs, *, label, limit, destination, user_id):
             seen["client"] = client
             seen["refs"] = refs
             return "", 0
@@ -108,7 +108,8 @@ class FetchingClientIsProcessCorrectTests(unittest.TestCase):
             patch("discord_ref_read.fetch_discord_message_context", new=fake_fetch),
         ):
             asyncio.run(
-                dialogue_message.fetch_discord_message_context([(None, 5, 6)], label="x")
+                dialogue_message.fetch_discord_message_context(
+                    [(None, 5, 6)], label="x", destination=None, user_id=1)
             )
         self.assertIs(seen["client"], marker)
         self.assertEqual(seen["refs"], [(0, 5, 6)])

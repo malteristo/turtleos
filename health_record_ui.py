@@ -225,42 +225,27 @@ async def maybe_capture_checkin(
     return True
 
 
-async def _capture_state_reply(
-    message,
-    primitive,
+def apply_state_capture(
     *,
     root: str,
+    primitive,
     actor: str,
     today,
     locale: str,
-    text: str,
-) -> bool:
-    from health_checkin import (
-        already_logged,
-        classify_state_capture,
-        mark_logged,
-        posted_draft,
-        posted_message_id,
-        state_ack,
-    )
+    capture,
+    draft: str | None,
+) -> str | None:
+    """Write one check-in answer. Returns the ack, or None when nothing was stored.
+
+    Typed replies and the buttons both come through here, so a tap stores the
+    same record as the sentence it replaces.
+    """
+    from health_checkin import mark_logged, state_ack
     from health_record import save_observation
 
-    prompt_id = posted_message_id(root, today)
-    ref = getattr(getattr(message, "reference", None), "message_id", None)
-    draft = posted_draft(root, today)
-    capture = classify_state_capture(
-        text,
-        in_parent=True,
-        already_logged=already_logged(root, today),
-        references_prompt=bool(prompt_id and ref and str(ref) == str(prompt_id)),
-        has_draft=bool(draft),
-    )
-    if capture is None:
-        return False
     if capture.kind == "skip":
         mark_logged(root, today)
-        await message.channel.send("Heute ausgesetzt." if locale == "de" else "Skipped today.")
-        return True
+        return "Heute ausgesetzt." if locale == "de" else "Skipped today."
     if capture.kind == "confirm":
         saved = draft
         verdict = "confirmed"
@@ -274,7 +259,7 @@ async def _capture_state_reply(
         verdict = None
         turtle_draft = None
     if not saved:
-        return False
+        return None
     result = save_observation(
         root,
         primitive=primitive,
@@ -284,7 +269,50 @@ async def _capture_state_reply(
         turtle_draft=turtle_draft,
     )
     if result.get("decision") != "applied":
-        return False
+        return None
     mark_logged(root, today)
-    await message.channel.send(state_ack(capture.kind, locale=locale))
+    return state_ack(capture.kind, locale=locale)
+
+
+async def _capture_state_reply(
+    message,
+    primitive,
+    *,
+    root: str,
+    actor: str,
+    today,
+    locale: str,
+    text: str,
+) -> bool:
+    from health_checkin import (
+        already_logged,
+        classify_state_capture,
+        posted_draft,
+        posted_message_id,
+    )
+
+    prompt_id = posted_message_id(root, today)
+    ref = getattr(getattr(message, "reference", None), "message_id", None)
+    draft = posted_draft(root, today)
+    capture = classify_state_capture(
+        text,
+        in_parent=True,
+        already_logged=already_logged(root, today),
+        references_prompt=bool(prompt_id and ref and str(ref) == str(prompt_id)),
+        has_draft=bool(draft),
+    )
+    if capture is None:
+        return False
+    ack = apply_state_capture(
+        root=root,
+        primitive=primitive,
+        actor=actor,
+        today=today,
+        locale=locale,
+        capture=capture,
+        draft=draft,
+    )
+    if ack is None:
+        return False
+    await message.channel.send(ack)
     return True

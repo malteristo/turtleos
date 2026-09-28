@@ -72,9 +72,12 @@ def _normalize_mage_key(name: str) -> str:
     return clean or "guest"
 
 
+HOME_CATEGORY = "Home"
+
+
 def hosted_river_channel_name(mage_key: str) -> str:
-    """Discord channel name for a hosted/unclaimed river — stable for life (#river-<name>)."""
-    return f"river-{mage_key.replace('_', '-')}"[:100]
+    """Discord name of a member's home channel — stable for life (#home-<name>)."""
+    return f"home-{mage_key.replace('_', '-')}"[:100]
 
 
 def registry_file() -> Path:
@@ -85,17 +88,56 @@ def registry_file() -> Path:
 
 
 def save_registry(registry: dict) -> None:
+    """Write the registry, keeping any change the other bot made since this one loaded it.
+
+    Both bots hold a copy and save it whole; without the merge, a save from the older
+    copy wrote the other's change away silently (issues/048).
+    """
+    import fcntl
+
     import yaml
+
+    from mage import registry_as_loaded, reload_mage_registry
+    from registry_merge import merge
 
     path = registry_file()
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".yaml.tmp")
-    with open(tmp, "w", encoding="utf-8") as fh:
-        yaml.dump(registry, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
-    tmp.replace(path)
-    from mage import reload_mage_registry
+    with open(path.with_suffix(".yaml.lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        base, loaded_mtime = registry_as_loaded()
+        try:
+            on_disk_mtime = os.path.getmtime(path)
+        except OSError:
+            on_disk_mtime = None
+        if on_disk_mtime is not None and on_disk_mtime != loaded_mtime:
+            with open(path, encoding="utf-8") as fh:
+                theirs = yaml.safe_load(fh) or {}
+            registry = merge(base, registry, theirs)
+        tmp = path.with_suffix(".yaml.tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            yaml.dump(registry, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        tmp.replace(path)
+        reload_mage_registry()
 
-    reload_mage_registry()
+
+def update_registry(mutate) -> bool:
+    """Read the registry file fresh, apply ``mutate(registry) -> bool``, save if it changed.
+
+    Both bots write this file. Saving a copy loaded earlier writes the other
+    bot's changes away (issues/048); new writers go through here.
+    """
+    import yaml
+
+    path = registry_file()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            registry = yaml.safe_load(fh) or {}
+    except FileNotFoundError:
+        registry = {}
+    if not mutate(registry):
+        return False
+    save_registry(registry)
+    return True
 
 
 def load_claim_room_markdown(locale: str) -> str:
@@ -116,7 +158,7 @@ def _claim_room_embed(body: str, *, locale: str) -> discord.Embed:
 
     title, description = _parse_onboarding_markdown(body)
     if not title:
-        title = "Deinen Fluss beanspruchen" if locale == "de" else "Claim your river"
+        title = "Deinen Home-Kanal übernehmen" if locale == "de" else "Claim your home channel"
     color = discord.Color.from_rgb(120, 180, 200)
     return discord.Embed(title=title, description=description, color=color)
 
@@ -250,10 +292,10 @@ async def complete_river_claim(
 
     save_registry(registry)
 
-    # Keep #river-<name> for life — permissions/topic update only.
+    # Keep #home-<name> for life — permissions/topic update only.
     edit_kwargs = {
         "overwrites": _claimed_overwrites(channel.guild, message.author),
-        "topic": f"Private practice river for {display_name}",
+        "topic": f"Home channel for {display_name}",
     }
     current_name = (getattr(channel, "name", None) or "").lower()
     if current_name != river_name.lower():
@@ -267,9 +309,9 @@ async def complete_river_claim(
     if locale not in ("de", "en"):
         locale = "en"
     ack = (
-        f"**Gebunden.** Willkommen, {display_name}. Dies ist jetzt dein privater Fluss (`#{river_name}`)."
+        f"**Gebunden.** Willkommen, {display_name}. Das ist jetzt dein Home-Kanal (`#{river_name}`)."
         if locale == "de"
-        else f"**Bound.** Welcome, {display_name}. This is now your private river (`#{river_name}`)."
+        else f"**Bound.** Welcome, {display_name}. This is now your home channel (`#{river_name}`)."
     )
     try:
         await channel.send(ack, silent=True)
@@ -339,9 +381,9 @@ async def try_river_key_claim(message: discord.Message, client) -> bool:
         try:
             locale = (mage.get("locale") or "en").strip().lower()
             hint = (
-                "Sende deinen Fluss-Schlüssel als **ein einzelnes Emoji**."
+                "Sende deinen Schlüssel als **ein einzelnes Emoji**."
                 if locale == "de"
-                else "Send your river key as **a single emoji message**."
+                else "Send your key as **a single emoji message**."
             )
             await message.channel.send(hint, silent=True)
         except discord.HTTPException:
@@ -457,6 +499,12 @@ async def try_auto_admit_on_member_join(member: discord.Member) -> str | None:
     from mage import get_registry
 
     registry = get_registry()
+    offboarded = {
+        str(m.get("discord_id") or "") for m in (registry.get("mages") or {}).values()
+        if isinstance(m, dict) and m.get("offboarded")
+    }
+    if str(member.id) in offboarded:
+        return None
     tracked: list[tuple[str, dict]] = []
     for cid, entry in (registry.get("channels") or {}).items():
         if not isinstance(entry, dict) or entry.get("type") != "unclaimed-river":
@@ -572,14 +620,14 @@ async def provision_unclaimed_river(
         "river_key": river_key,
     }
 
-    category = discord.utils.get(guild.categories, name="Practice")
+    category = discord.utils.get(guild.categories, name=HOME_CATEGORY)
     channel_name = hosted_river_channel_name(mage_key)
     overwrites = _guild_bot_overwrites(guild)
 
     create_kwargs = {
         "name": channel_name,
         "overwrites": overwrites,
-        "topic": f"Claim room for {display_name} — drop river key to open private river",
+        "topic": f"Claim room for {display_name} — send your key emoji to open your home channel",
     }
     if category:
         create_kwargs["category"] = category
@@ -607,7 +655,7 @@ async def provision_unclaimed_river(
         "river_key": river_key,
         "name": channel_name,
         "discord_name": channel_name,
-        "discord_category": "Practice",
+        "discord_category": HOME_CATEGORY,
         "invite_code": invite.code,
         "invite_uses": int(invite.uses or 0),
         "default_context": None,

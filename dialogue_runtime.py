@@ -105,7 +105,10 @@ def build_runtime_env(message, cfg):
             lines.append("")
             lines.append("## Current Thread Card")
             lines.append(thread_card)
-        related = get_related_thread_awareness(thread_name, current_thread_id=channel.id)
+        related = get_related_thread_awareness(
+            thread_name, current_thread_id=channel.id,
+            parent_channel_id=getattr(channel, "parent_id", None),
+        )
         if related:
             lines.append("")
             lines.append(related)
@@ -158,7 +161,7 @@ def build_native_runtime_env(message, cfg, history: list[dict] | None = None):
 
     lines = [
         "## Eddy Context",
-        f"- **River channel:** #{channel_name}",
+        f"- **Channel:** #{channel_name}",
     ]
     if thread_name:
         lines.append(f"- **Eddy:** {thread_name}")

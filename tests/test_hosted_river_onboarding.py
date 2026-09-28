@@ -41,7 +41,7 @@ class HostedRiverOnboardingTests(unittest.TestCase):
             mock_pd.return_value = tmp
             mock_locale.return_value = "en"
             text = load_onboarding_markdown(999)
-            self.assertIn("your river", text.lower())
+            self.assertIn("your home channel", text.lower())
 
 
 if __name__ == "__main__":

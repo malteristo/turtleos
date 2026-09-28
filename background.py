@@ -230,6 +230,12 @@ async def health_canary_loop():
     # 5. Discord connection healthy?
     checks["discord"] = _state.client.is_ready() and not _state.client.is_closed()
 
+    # 6. River's heartbeat beating? (River runs in its own process; this is
+    # the only place its loop is watched.)
+    from river_heartbeat import heartbeat_is_fresh
+
+    checks["river_heartbeat"] = heartbeat_is_fresh()
+
     # Evaluate results
     now = datetime.now()
     alerts = []
@@ -305,4 +311,7 @@ def _canary_detail(check_name, dead_loops, freshness_result=None):
         return "File read/write test failed — filesystem may be read-only or full"
     elif check_name == "discord":
         return "Discord connection unhealthy — bot may need restart"
+    elif check_name == "river_heartbeat":
+        return ("River's heartbeat stopped — house chores (Discord sync, eddy bars, "
+                "connection offers) are not running; `house/river_heartbeat.json` shows the last beat")
     return f"{check_name} check failed"

@@ -150,9 +150,13 @@ async def fetch_discord_message_context(
     refs: list[tuple[int | None, int, int]],
     *,
     label: str,
+    destination,
+    user_id: int | None,
     limit: int = 3,
 ) -> tuple[str, int]:
     from discord_ref_read import fetch_discord_message_context as _fetch
 
     normalized = [(g or 0, c, m) for g, c, m in refs]
-    return await _fetch(fetching_client(), normalized, label=label, limit=limit)
+    return await _fetch(
+        fetching_client(), normalized, label=label, limit=limit,
+        destination=destination, user_id=user_id)

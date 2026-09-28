@@ -44,7 +44,7 @@ Help **everyone in this shared channel** understand trust boundaries and mechani
 **Opening (2–4 sentences):**
 
 - Welcome — this is a shared space; questions are welcome from anyone present.
-- Private rivers stay private unless someone **chooses** to share (when share is available).
+- Home and private channels stay private unless someone **chooses** to share (when share is available).
 - Invite questions — to you or to any member; if something isn't documented, naming that helps improve the system.
 
 **Conversation:**
@@ -58,7 +58,7 @@ Help **everyone in this shared channel** understand trust boundaries and mechani
 
 | Topic | Core answer shape |
 |-------|-------------------|
-| Private vs family | Nothing from private rivers appears here automatically |
+| Private vs family | Nothing from home or private channels appears here automatically |
 | Share (when live) | Opt-in, digest first, sharer chooses what and when |
 | Who is in shared eddies | Space members auto-join shared threads; Discord channel access may still be separate ops |
 | Re-share outward | Transparency act in parent when sharing from a shared eddy to a private target |

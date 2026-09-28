@@ -170,8 +170,30 @@ async def _emit(on_event, kind: str, **payload) -> None:
         print(f"Turn event listener failed ({kind}): {type(exc).__name__}: {exc}")
 
 
+USAGE_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
+def _add_usage(total: dict | None, response) -> None:
+    if total is None:
+        return
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return
+    for field in USAGE_FIELDS:
+        value = getattr(usage, field, None)
+        if isinstance(value, int):
+            total[field] = total.get(field, 0) + value
+    total["calls"] = total.get("calls", 0) + 1
+
+
 async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=False,
-                                     tos_tools=None, execute_tool=None, on_event=None):
+                                     tos_tools=None, execute_tool=None, on_event=None,
+                                     usage=None):
     """Chat with Anthropic API, optionally with tOS tool use.
 
     Args:
@@ -181,6 +203,12 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
             wrote before calling tools, payload ``text``) and ``"tool"`` (payload
             ``name``, ``args``, ``result``), as they happen. The step card in
             ``dialogue_turn`` listens; the log line does not depend on it.
+        usage: optional dict, filled with token counts summed over every round
+            (``USAGE_FIELDS`` plus ``calls``). Filled as rounds complete, so a
+            turn that fails mid-loop still reports what it spent.
+
+    The system prompt carries a cache breakpoint: every tool round resends it,
+    and a cached re-read bills at a fraction of fresh input.
     """
     import anthropic as _anthropic
     aclient = _anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
@@ -194,7 +222,12 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
                 "input_schema": tool["function"]["parameters"],
             })
 
-    kwargs = dict(model=model, max_tokens=4096, system=system_prompt, messages=list(messages))
+    system = (
+        [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+        if system_prompt
+        else system_prompt
+    )
+    kwargs = dict(model=model, max_tokens=4096, system=system, messages=list(messages))
     if anthropic_tools:
         kwargs["tools"] = anthropic_tools
 
@@ -211,6 +244,7 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
     prose_parts: list[str] = []
     for round_num in range(MAX_TOOL_ROUNDS):
         response = await aclient.messages.create(**kwargs)
+        _add_usage(usage, response)
 
         text_parts = []
         tool_uses = []

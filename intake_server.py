@@ -12,6 +12,7 @@ Flow:
 """
 
 import asyncio
+import hmac
 import os
 import re
 import json
@@ -485,6 +486,24 @@ async def handle_health(request):
     return web.json_response({"status": "ok", "service": "turtleos-intake"})
 
 
+def artifact_read_authorized(provided: str, expected: str) -> bool:
+    """Refuse when the token is missing. Compare without stopping at the first difference.
+
+    The secret stays in the query string on purpose (2026-09-25). Phone Open and
+    links already posted in Discord use ``?t=``. A different carrier is a later
+    slice; this one only closes the open-if-unset path and the short-circuit compare.
+    """
+    if not expected:
+        return False
+    try:
+        return hmac.compare_digest(
+            (provided or "").encode("utf-8"),
+            expected.encode("utf-8"),
+        )
+    except Exception:
+        return False
+
+
 async def handle_artifact_read(request):
     """Read-only allowlisted practice artifact (TURTLE_SPEC §11.4 / §11.5)."""
     from urllib.parse import unquote
@@ -494,10 +513,9 @@ async def handle_artifact_read(request):
     from practice_io import read_safe
     from state import ARTIFACT_READ_TOKEN
 
-    if ARTIFACT_READ_TOKEN:
-        token = request.rel_url.query.get("t", "")
-        if token != ARTIFACT_READ_TOKEN:
-            raise web.HTTPForbidden(text="Artifact read token required")
+    token = request.rel_url.query.get("t", "")
+    if not artifact_read_authorized(token, ARTIFACT_READ_TOKEN):
+        raise web.HTTPForbidden(text="Artifact read token required")
 
     path_mage = request.match_info.get("mage_key", "")
     rel_path = unquote(request.match_info.get("path", "")).lstrip("/")

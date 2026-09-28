@@ -88,6 +88,9 @@ from state import (
     dialogue_histories,
     thread_configs,
 )
+import cloud_fallback
+from core.model_profiles import awareness_block
+from room_models import owner_line, resolve_room_model
 from thread_registry import register_thread, update_thread_activity
 from tos_tools import (
     build_tool_report,
@@ -483,6 +486,7 @@ async def handle_dialogue(message, *, reply: bool = True):
                 await maybe_refine_thread_name_from_fetch(message.channel, fetch_results)
 
     dereferenced_context = ""
+    ref_inject_max = 6000
     dereferenced_count = 0
     ref_text = message.content or ""
     if forwarded_snapshot_is_partial(message):
@@ -493,12 +497,28 @@ async def handle_dialogue(message, *, reply: bool = True):
 
             ref_text = f"{permalink_for(g or 0, c, m)}\n{ref_text}"
     if ref_text.strip():
-        from discord_ref_read import extract_all_discord_refs, fetch_all_discord_refs_with_status
+        from discord_ref_read import (
+            FRONTIER_BUDGET, LOCAL_BUDGET, extract_all_discord_refs,
+            fetch_all_discord_refs_with_status,
+        )
+        from mage import get_channel_primitive
+        from primitive_runtime import runtime_for
+        from room_models import room_reads_on_cloud
 
         if extract_all_discord_refs(ref_text):
-            _ref_results, dereferenced_context = await fetch_all_discord_refs_with_status(
-                message.channel, state.client, ref_text
+            room_runtime = runtime_for(get_channel_primitive(parent_ch_id))
+            is_craft = bool(room_runtime and room_runtime.prompt_profile == "craft")
+            room_default = CRAFT_MODEL if is_craft else TURTLE_MODEL
+            ref_budget = (
+                FRONTIER_BUDGET
+                if room_reads_on_cloud(parent_ch_id, thread_configs.get(channel_id), room_default)
+                else LOCAL_BUDGET
             )
+            _ref_results, dereferenced_context = await fetch_all_discord_refs_with_status(
+                message.channel, state.client, ref_text,
+                user_id=getattr(message.author, "id", None), budget=ref_budget,
+            )
+            ref_inject_max = ref_budget.inject_max
             dereferenced_count = sum(1 for r in _ref_results if r.ok)
             if dereferenced_context:
                 thread_reads = sum(1 for r in _ref_results if r.ok and r.scope == "thread")
@@ -525,7 +545,7 @@ async def handle_dialogue(message, *, reply: bool = True):
     if url_content:
         user_entry += f"\n\n[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
     if dereferenced_context:
-        user_entry += f"\n\n{dereferenced_context[:6000]}"
+        user_entry += f"\n\n{dereferenced_context[:ref_inject_max + 2000]}"
     history.append({"role": "user", "content": user_entry})
     if len(history) > MAX_DIALOGUE_HISTORY:
         history.pop(0)
@@ -693,33 +713,21 @@ async def continue_dialogue_turn(
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
             ctx = get_channel_default_context(message.channel.parent_id)
         system_prompt = get_native_eddy_prompt(ctx)
-        thread_use_api = False
-        thread_model = (cfg or {}).get("model") or TURTLE_MODEL
+        thread_model, thread_use_api, _ = resolve_room_model(parent_ch_id, cfg, TURTLE_MODEL)
     elif prompt_profile == "craft":
-        from llm import resolve_model
-
         ctx = (cfg or {}).get("context_type") if cfg else None
         if not ctx:
             ctx = get_channel_default_context(parent_ch_id) or "craft"
         system_prompt = get_craft_channel_prompt(ctx)
-        # Craft defaults to frontier (CRAFT_MODEL). Upgrade legacy local-stamped
-        # configs from before craft used an API model.
-        if cfg and cfg.get("model") and cfg.get("use_api"):
-            thread_use_api = bool(cfg["use_api"])
-            thread_model = cfg["model"]
-        elif cfg and cfg.get("model") and str(cfg["model"]).startswith(
-            ("claude-", "gemini-")
-        ):
-            thread_model, thread_use_api = resolve_model(cfg["model"])
-        else:
-            thread_model, thread_use_api = resolve_model(CRAFT_MODEL)
+        thread_model, thread_use_api, _ = resolve_room_model(parent_ch_id, cfg, CRAFT_MODEL)
     elif prompt_profile == "health":
         ctx = (cfg or {}).get("context_type") if cfg else None
         if not ctx:
             ctx = get_channel_default_context(parent_ch_id) or "health"
         system_prompt = get_health_channel_prompt(ctx)
-        thread_use_api = USE_API
-        thread_model = DIALOGUE_MODEL
+        thread_model, thread_use_api, source = resolve_room_model(parent_ch_id, cfg, DIALOGUE_MODEL)
+        if source == "default":
+            thread_model, thread_use_api = DIALOGUE_MODEL, USE_API
     elif cfg:
         ctx = cfg.get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
@@ -754,6 +762,7 @@ async def continue_dialogue_turn(
             triage_hint += " (keep it light and brief)"
         runtime_env = runtime_env.rstrip() + "\n" + triage_hint + "\n\n"
         system_prompt = runtime_env + system_prompt
+    system_prompt = awareness_block(thread_model) + owner_line(parent_ch_id, get_registry()) + system_prompt
 
     # Named inject slots for the turn packet (TURTLE_SPEC §3.2). Empty until
     # each block is composed; persist after the model call so tools are known.
@@ -866,6 +875,76 @@ async def continue_dialogue_turn(
         card_full = False  # unknown room → the shared-room shape
     progress = _StepCard(message.channel, steps, thread_model, turn_started, full=card_full)
 
+    turn_usage: dict = {}
+    cloud_prose: list[str] = []
+    cloud_tools: list[str] = []
+    cloud_answered = False
+    fallback_notice_line = ""
+    hold = cloud_fallback.read_hold() if thread_use_api else None
+    cloud_held = bool(hold) and not cloud_fallback.should_try_cloud(hold)
+    if hold and not cloud_held:
+        cloud_fallback.mark_tried(hold)
+    practitioner_text = str(getattr(message, "content", "") or "")
+    parent_channel = getattr(message.channel, "parent", None)
+    room_label = (
+        getattr(parent_channel, "name", None)
+        or getattr(message.channel, "name", None)
+        or str(channel_id)
+    )
+    eddy_label = getattr(message.channel, "name", None) if parent_channel is not None else None
+
+    async def _capture(kind, payload):
+        if kind == "prose":
+            cloud_prose.append(str(payload.get("text", "")))
+        elif kind == "tool":
+            cloud_tools.append(str(payload.get("name", "tool")))
+        await progress.on_event(kind, payload)
+
+    async def _cloud_turn():
+        nonlocal cloud_answered
+        if cloud_held:
+            raise cloud_fallback.CloudHeld(hold)
+        result = await chat_anthropic_with_model(
+            system_prompt, messages_for_llm, thread_model, use_tools=True,
+            tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
+            on_event=_capture, usage=turn_usage)
+        cloud_answered = True
+        return result
+
+    async def _cloud_fallback_reply(exc: BaseException) -> tuple[str, str]:
+        held = isinstance(exc, cloud_fallback.CloudHeld)
+        kind = cloud_fallback.classify(exc)
+        current = hold if held else cloud_fallback.note_failure(kind, thread_model, exc)
+        parked = False
+        try:
+            path = cloud_fallback.park(
+                get_pd(), channel_id=channel_id, room=room_label,
+                author=getattr(message.author, "display_name", "") or "",
+                message_text=practitioner_text, cloud_model=thread_model, kind=kind,
+                partial_prose=cloud_prose, tools_run=cloud_tools, held_turn=held)
+            parked = True
+            print(f"Cloud fallback ({kind}) parked [{channel_id}]: {path}")
+        except Exception as park_exc:
+            print(f"Cloud fallback park failed: {type(park_exc).__name__}: {park_exc}")
+        local_model = TURTLE_MODEL
+        if held:
+            local_system = awareness_block(local_model, fallback_from=thread_model) + system_prompt
+            local_messages = messages_for_llm
+        else:
+            local_system = cloud_fallback.parking_prompt(
+                local_model, thread_model, kind, practitioner_text, cloud_prose, cloud_tools)
+            local_messages = list(messages_for_llm)[-6:]
+        try:
+            text = await chat_ollama(local_system, local_messages, model=local_model,
+                                     num_ctx=32768, think=False)
+        except Exception as local_exc:
+            print(f"Cloud fallback local call failed: {type(local_exc).__name__}: {local_exc}")
+            text = ""
+        notice = cloud_fallback.fallback_notice(
+            thread_model, local_model, kind, parked=parked,
+            since=(current or {}).get("since"))
+        return text, notice
+
     async with message.channel.typing():
         with act_offer_turn_context(channel_id, message.id):
             progress.start()
@@ -906,10 +985,7 @@ async def continue_dialogue_turn(
                         if not extraction.startswith("[Attachment processing failed"):
                             attachment_extracted = True
                     if thread_use_api:
-                        reply, tools_executed = await chat_anthropic_with_model(
-                            system_prompt, messages_for_llm, thread_model, use_tools=True,
-                            tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
-                            on_event=progress.on_event)
+                        reply, tools_executed = await _cloud_turn()
                         tool_report = build_tool_report(tools_executed)
                     else:
                         reply, tools_executed = await chat_ollama_with_tools(
@@ -918,10 +994,7 @@ async def continue_dialogue_turn(
                             on_event=progress.on_event)
                         tool_report = build_tool_report(tools_executed)
                 elif thread_use_api:
-                    reply, tools_executed = await chat_anthropic_with_model(
-                        system_prompt, messages_for_llm, thread_model, use_tools=True,
-                        tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
-                        on_event=progress.on_event)
+                    reply, tools_executed = await _cloud_turn()
                     tool_report = build_tool_report(tools_executed)
                 else:
                     # Direct commands are handled before dialogue. The full
@@ -956,9 +1029,12 @@ async def continue_dialogue_turn(
                 # was posted into the conversation. Retry the model that is
                 # already resident instead, once, and never put a traceback
                 # in front of a practitioner.
-                print(f"Dialogue error ({thread_model}): {type(e).__name__}: {e}")
+                if not isinstance(e, cloud_fallback.CloudHeld):
+                    print(f"Dialogue error ({thread_model}): {type(e).__name__}: {e}")
                 reply = ""
-                if not thread_use_api and not is_gemini:
+                if thread_use_api and not is_gemini:
+                    reply, fallback_notice_line = await _cloud_fallback_reply(e)
+                elif not is_gemini:
                     try:
                         reply = await chat_ollama(
                             system_prompt, list(history), model=thread_model,
@@ -974,6 +1050,26 @@ async def continue_dialogue_turn(
                     print(f"Dialogue gave up [{channel_id}] — held reply posted")
             finally:
                 await progress.settle(tools_executed)
+
+    if cloud_answered:
+        if hold:
+            cloud_fallback.clear_hold()
+            print(f"Cloud hold cleared ({thread_model} answered)")
+        try:
+            waiting = cloud_fallback.parked_for(get_pd(), channel_id)
+            if waiting:
+                fallback_notice_line = cloud_fallback.return_notice(thread_model, waiting)
+                cloud_fallback.mark_surfaced(waiting)
+        except Exception as exc:
+            print(f"Parked-item check failed: {type(exc).__name__}: {exc}")
+    turn_cost = None
+    if turn_usage.get("calls"):
+        try:
+            turn_cost = cloud_fallback.record_usage(
+                channel_id=channel_id, room=room_label, eddy=eddy_label,
+                model=thread_model, usage=turn_usage)
+        except Exception as exc:
+            print(f"Usage record failed: {type(exc).__name__}: {exc}")
 
     # Persist the inject this turn used. Not current.yaml — that file already
     # exists from CE's debounce write. The packet is the named blocks that
@@ -1095,6 +1191,8 @@ async def continue_dialogue_turn(
     source_trace = build_source_trace(source_flags)
     if source_trace and not native_eddy:
         reply = f"{reply}\n\n-# {source_trace}"
+    if fallback_notice_line:
+        reply = f"{fallback_notice_line}\n{reply}"
     history.append({"role": "assistant", "content": reply})
     for chunk in split_message(reply):
         await message.reply(chunk, mention_author=False)
@@ -1125,10 +1223,20 @@ async def continue_dialogue_turn(
                 )
         except Exception as exc:
             print(f"Health proposal UI failed: {type(exc).__name__}: {exc}")
-    print(render_log(
+    log_line = render_log(
         message.channel.name, steps, time.monotonic() - turn_started, thread_model,
         len(reply), tool_names(tools_executed),
-    ))
+    )
+    if turn_usage.get("calls"):
+        log_line += (
+            f" · tokens in={turn_usage.get('input_tokens', 0)}"
+            f" cached={turn_usage.get('cache_read_input_tokens', 0)}"
+            f" out={turn_usage.get('output_tokens', 0)}"
+            f" · usd={turn_cost if turn_cost is not None else 'unpriced'}"
+        )
+    if fallback_notice_line.startswith("-# ⚠️"):
+        log_line += " · FALLBACK local"
+    print(log_line)
 
     # Super-ego: think aloud after sustained conversation
     asyncio.ensure_future(maybe_reflect(message.channel, history))

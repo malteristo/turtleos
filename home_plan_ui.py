@@ -129,7 +129,7 @@ class HomePlanPinView(discord.ui.View):
         eddy_id = plan.get("home_eddy_id")
         await interaction.response.send_message(
             f"Open the home eddy for **{plan.get('title')}** "
-            f"(thread id `{eddy_id}`) from your river pin tray.",
+            f"(thread id `{eddy_id}`) from your channel's pin tray.",
             ephemeral=True,
         )
 
@@ -302,7 +302,7 @@ class HomePlanOfferView(discord.ui.View):
             pass
         await interaction.response.edit_message(
             content=(
-                f"Pinned **{plan.get('title')}** on your river — "
+                f"Pinned **{plan.get('title')}** in your channel — "
                 "Continue anytime from the pin tray."
             ),
             view=None,
@@ -491,7 +491,7 @@ async def offer_home_plan(
     )
     content = (
         f"Keep **{plan_title}** as a working plan? "
-        "Pins a card on your river — Continue opens this home eddy."
+        "Pins a card in your channel — Continue opens this home eddy."
     )
     dc = resolve_pin_client(message=message, discord_client=discord_client)
     ref = message if message is not None else None

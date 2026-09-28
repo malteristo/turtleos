@@ -320,7 +320,7 @@ def _river_help_body() -> str:
         "**River:** `new eddy` + more (bar) · `!pin` · `!dissolve`",
         "**Eddies:** `!checkpoint` · `!release` · `!flows` · `!share` · `!help` (full list)",
         "**Browse:** more → artifacts · `!artifacts` · `!read` / `!ls` / `!search`",
-        f"Models: River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}`",
+        f"Models: River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}` · `!model` — this channel's model",
     ]
     if mage_type != "practitioner":
         lines.insert(3, "**Operator:** `!diagnose` · `!admin …`")
@@ -477,7 +477,7 @@ async def cmd_flows(message, args):
         return
 
     if not is_practice_channel(message):
-        await message.reply("Use `!flows` in your practice river or an eddy.", mention_author=False)
+        await message.reply("Use `!flows` in your channel or an eddy.", mention_author=False)
         return
 
     await message.reply(
@@ -498,7 +498,7 @@ async def cmd_pin(message, args):
         return
     if not is_practice_channel(message):
         await message.reply(
-            "Use `!pin` in a practice eddy (working plan) or your river (message pin).",
+            "Use `!pin` in a practice eddy (working plan) or your channel (message pin).",
             mention_author=False,
         )
         return
@@ -554,7 +554,7 @@ async def _cmd_pin_home_eddy(message, args):
     parent_id = getattr(thread, "parent_id", None)
     if not parent_id:
         await message.reply(
-            "Cannot find the practice river for this eddy.", mention_author=False
+            "Cannot find the channel this eddy belongs to.", mention_author=False
         )
         return
 
@@ -636,7 +636,7 @@ async def _cmd_pin_home_eddy(message, args):
         return
 
     await message.reply(
-        f"Pinned **{plan.get('title')}** on your river — "
+        f"Pinned **{plan.get('title')}** in your channel — "
         "Continue anytime from the pin tray. Open shows the file.",
         mention_author=False,
     )
@@ -1322,7 +1322,7 @@ async def cmd_admin(message, args):
             await message.reply(
                 f"**Admitted** **{target.display_name}** to `#{channel.name}` (`{key}`).\n"
                 f"Deep link: {deep_link}\n"
-                f"They send their river-key emoji there to claim.",
+                f"They send their key emoji there to claim.",
                 mention_author=False,
             )
             await log_activity(
@@ -1552,6 +1552,17 @@ async def cmd_admin(message, args):
         await message.reply(f"Unknown admin command: `{subcmd}`. Try `!admin` for help.", mention_author=False)
 
 
+async def _cmd_model(message, args):
+    from core.models import CRAFT_MODEL, TURTLE_MODEL as LOCAL_MODEL
+    from mage import get_registry, resolve_dialogue_channel_id, uses_craft_surface
+    from room_models import cmd_model
+
+    parent_id = resolve_dialogue_channel_id(message)
+    default = CRAFT_MODEL if uses_craft_surface(parent_id) else LOCAL_MODEL
+    return await cmd_model(
+        message, args, parent_id=parent_id, registry=get_registry(), default=default)
+
+
 DIRECT_COMMANDS = {
     "status": lambda msg, args: cmd_status(msg),
     "artifacts": lambda msg, args: cmd_artifacts(msg, args),
@@ -1588,4 +1599,5 @@ DIRECT_COMMANDS = {
     "share": lambda msg, args: cmd_share(msg, args),
     "date": lambda msg, args: _cmd_date(msg, args),
     "dates": lambda msg, args: _cmd_dates(msg, args),
+    "model": lambda msg, args: _cmd_model(msg, args),
 }

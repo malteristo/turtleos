@@ -19,12 +19,48 @@ DISCORD_THREAD_ONLY_LINK_RE = re.compile(
 
 DISCORD_REF_INJECT_LABEL = "Read Discord message"
 DISCORD_THREAD_REF_LABEL = "Read Discord thread"
+DISCORD_CHANNEL_REF_LABEL = "Read Discord channel"
 MAX_REFS_PER_MESSAGE = 3
 DIALOGUE_INJECT_MAX = 6000
 THREAD_HISTORY_MAX_MESSAGES = 40
 THREAD_LINE_MAX = 600
 THREAD_INLINE_MAX = PROMPT_INLINE_MAX
 THREAD_SUMMARY_INPUT_MAX = 24000
+
+
+@dataclass(frozen=True)
+class ReadBudget:
+    """How much of a linked place is read, by the model that will read it."""
+
+    thread_messages: int
+    inline_max: int
+    inject_max: int
+    summarize: bool
+    channel_days: int
+    channel_eddies: int
+    eddy_messages: int
+    channel_top: int
+
+
+LOCAL_BUDGET = ReadBudget(
+    thread_messages=THREAD_HISTORY_MAX_MESSAGES, inline_max=THREAD_INLINE_MAX,
+    inject_max=DIALOGUE_INJECT_MAX, summarize=True,
+    channel_days=7, channel_eddies=6, eddy_messages=15, channel_top=20,
+)
+# A frontier model reads the thread itself; a local pre-summary would put the
+# weaker model's reading between the practitioner and the one she chose.
+FRONTIER_BUDGET = ReadBudget(
+    thread_messages=200, inline_max=40000, inject_max=40000, summarize=False,
+    channel_days=7, channel_eddies=12, eddy_messages=60, channel_top=40,
+)
+
+UNSEEN = "unseen"
+UNKNOWN = "unknown"
+_REFUSAL_TEXT = {
+    UNSEEN: "not read — the person who shared this link can't see where it points",
+    UNKNOWN: "not read — couldn't confirm who can see it",
+}
+WIDENED_NOTE = "some people in this room can't see where this link points — they can now read what it says"
 
 
 @dataclass
@@ -39,11 +75,13 @@ class DiscordRefResult:
     permalink: str = ""
     error: str | None = None
     attempts: list[str] = field(default_factory=list)
-    scope: str = "message"  # message | thread
+    scope: str = "message"  # message | thread | channel
     message_count: int = 1
     thread_name: str | None = None
     summarized: bool = False
     raw_char_count: int = 0
+    refused: str | None = None
+    widened: bool = False
 
 
 def extract_discord_message_refs(text: str) -> list[tuple[int, int, int]]:
@@ -129,6 +167,145 @@ async def _collect_thread_lines(thread, *, limit: int = THREAD_HISTORY_MAX_MESSA
         if line:
             lines.append(line)
     return lines
+
+
+async def _collect_recent_lines(channel, *, limit: int, after=None) -> list[str]:
+    msgs = [m async for m in channel.history(limit=limit, after=after, oldest_first=False)]
+    return [line for line in (_message_line(m) for m in reversed(msgs)) if line]
+
+
+def _room_of(channel):
+    """The channel whose membership governs a place: a thread's parent, else itself."""
+    if _is_thread_channel(channel):
+        return getattr(channel, "parent", None)
+    return channel
+
+
+async def _member(guild, user_id: int):
+    member = guild.get_member(user_id)
+    if member is None:
+        try:
+            member = await guild.fetch_member(user_id)
+        except Exception:
+            return None
+    return member
+
+
+async def _can_read(place, member) -> bool:
+    perms = place.permissions_for(member)
+    if not (perms.view_channel and perms.read_message_history):
+        return False
+    if getattr(place, "type", None) == discord.ChannelType.private_thread:
+        if getattr(place, "owner_id", None) == member.id:
+            return True
+        try:
+            await place.fetch_member(member.id)
+        except Exception:
+            return False
+    return True
+
+
+async def pull_refusal(source, destination, user_id: int | None) -> str | None:
+    """Why a linked place may not be read on this person's behalf, or None if it may.
+
+    Discord lets the bot read every room; that is not what decides. The person
+    who pasted the link must be able to see the source themselves. Beyond that,
+    a shared room is a commons: what a member brings where is their judgement,
+    not Turtle's (the operator, 2026-09-27) — ``pull_widens`` tells them when a
+    room they bring it into is wider than the source, and nothing refuses it.
+    Anything that cannot be established refuses.
+    """
+    if user_id is None:
+        return UNKNOWN
+    guild = getattr(source, "guild", None)
+    if guild is None:
+        return UNKNOWN
+    puller = await _member(guild, int(user_id))
+    if puller is None or not await _can_read(source, puller):
+        return UNSEEN
+    return None
+
+
+async def pull_widens(source, destination) -> bool:
+    """True when someone who can read ``destination`` cannot read ``source``."""
+    guild = getattr(source, "guild", None)
+    dest_room = _room_of(destination)
+    if guild is None or dest_room is None or getattr(dest_room, "guild", None) is None:
+        return False
+    for member in guild.members:
+        if getattr(member, "bot", False) or not dest_room.permissions_for(member).view_channel:
+            continue
+        if not await _can_read(source, member):
+            return True
+    return False
+
+
+def _last_active(thread):
+    last_id = getattr(thread, "last_message_id", None)
+    if last_id:
+        return discord.utils.snowflake_time(last_id)
+    return getattr(thread, "created_at", None)
+
+
+async def _recent_eddies(channel, since, limit: int) -> list:
+    seen: dict[int, object] = {}
+    for thread in list(getattr(channel, "threads", []) or []):
+        seen[thread.id] = thread
+    try:
+        async for thread in channel.archived_threads(limit=50):
+            seen.setdefault(thread.id, thread)
+    except (discord.HTTPException, AttributeError):
+        pass
+    fresh = [
+        t for t in seen.values()
+        if getattr(t, "type", None) != discord.ChannelType.private_thread
+        and (_last_active(t) or since) >= since
+    ]
+    fresh.sort(key=lambda t: _last_active(t), reverse=True)
+    return fresh[:limit]
+
+
+async def read_channel_activity(channel, guild_id: int, budget: "ReadBudget") -> DiscordRefResult:
+    """A whole channel's recent activity: its own messages and its recent eddies."""
+    from datetime import datetime, timedelta, timezone
+
+    since = datetime.now(timezone.utc) - timedelta(days=budget.channel_days)
+    link = permalink_for(guild_id, channel.id)
+    sections: list[str] = []
+    all_lines: list[str] = []
+    top = await _collect_recent_lines(channel, limit=budget.channel_top, after=since)
+    if top:
+        sections.append("## In the channel\n" + "\n\n".join(top))
+        all_lines += top
+    eddies = await _recent_eddies(channel, since, budget.channel_eddies)
+    for eddy in eddies:
+        lines = await _collect_recent_lines(eddy, limit=budget.eddy_messages)
+        if lines:
+            sections.append(f"## Eddy: {eddy.name} ({len(lines)} messages)\n" + "\n\n".join(lines))
+            all_lines += [f"[{eddy.name}] {line}" for line in lines]
+    if not sections:
+        raise ValueError(f"no activity in the last {budget.channel_days} days")
+    header = (
+        f"[{DISCORD_CHANNEL_REF_LABEL}] {link}\n"
+        f"channel: #{channel.name} — recent activity since {since.date().isoformat()} "
+        f"({len(eddies)} eddies)"
+    )
+    block = header + "\n\n" + "\n\n".join(sections)
+    raw_len = len(block)
+    summarized = False
+    if raw_len > budget.inline_max and budget.summarize:
+        try:
+            summary = await summarize_thread_lines(all_lines, f"#{channel.name}")
+            block = f"{header}\nsummary ({len(all_lines)} messages on Discord):\n{summary.strip()}"
+            summarized = True
+        except Exception as exc:
+            print(f"Discord channel summary failed: {type(exc).__name__}: {exc}")
+    return DiscordRefResult(
+        guild_id=guild_id, channel_id=channel.id, message_id=0, ok=True,
+        content=block, char_count=len(block), permalink=link, scope="channel",
+        message_count=len(all_lines), thread_name=channel.name,
+        summarized=summarized, raw_char_count=raw_len,
+    )
 
 
 def format_dereferenced_message(source_message, *, label: str) -> str:
@@ -235,6 +412,7 @@ async def build_thread_result(
     permalink: str,
     anchor_message_id: int | None = None,
     author: str | None = None,
+    budget: ReadBudget = LOCAL_BUDGET,
 ) -> DiscordRefResult:
     raw_block = format_thread_context_block(
         thread_name=thread_name,
@@ -245,7 +423,7 @@ async def build_thread_result(
     raw_len = len(raw_block)
     summarized = False
     block = raw_block
-    if raw_len > THREAD_INLINE_MAX:
+    if raw_len > budget.inline_max and budget.summarize:
         try:
             summary = await summarize_thread_lines(lines, thread_name)
             block = format_thread_summary_block(
@@ -277,6 +455,8 @@ async def build_thread_result(
 
 
 def _inject_label(result: DiscordRefResult) -> str:
+    if result.scope == "channel":
+        return DISCORD_CHANNEL_REF_LABEL
     return DISCORD_THREAD_REF_LABEL if result.scope == "thread" else DISCORD_REF_INJECT_LABEL
 
 
@@ -286,13 +466,18 @@ async def fetch_one_discord_thread(
     thread_id: int,
     *,
     anchor_message_id: int | None = None,
+    budget: ReadBudget = LOCAL_BUDGET,
+    channel=None,
 ) -> DiscordRefResult:
     link = permalink_for(guild_id, thread_id, anchor_message_id)
     try:
-        channel = await client.fetch_channel(thread_id)
+        if channel is None:
+            channel = await client.fetch_channel(thread_id)
         if not _is_thread_channel(channel):
+            if isinstance(channel, discord.TextChannel):
+                return await read_channel_activity(channel, guild_id, budget)
             raise ValueError(f"channel {thread_id} is not a thread")
-        lines = await _collect_thread_lines(channel)
+        lines = await _collect_thread_lines(channel, limit=budget.thread_messages)
         if not lines:
             raise ValueError("thread has no readable messages")
         return await build_thread_result(
@@ -303,6 +488,7 @@ async def fetch_one_discord_thread(
             lines=lines,
             permalink=link,
             anchor_message_id=anchor_message_id,
+            budget=budget,
         )
     except Exception as exc:
         return DiscordRefResult(
@@ -324,17 +510,20 @@ async def fetch_one_discord_ref(
     message_id: int,
     *,
     label: str = DISCORD_REF_INJECT_LABEL,
+    budget: ReadBudget = LOCAL_BUDGET,
+    channel=None,
 ) -> DiscordRefResult:
     link = permalink_for(guild_id, channel_id, message_id)
     try:
-        channel = await client.fetch_channel(channel_id)
+        if channel is None:
+            channel = await client.fetch_channel(channel_id)
         source_message = await channel.fetch_message(message_id)
         thread = channel if _is_thread_channel(channel) else None
         if thread is None and _is_thread_channel(getattr(source_message, "channel", None)):
             thread = source_message.channel
 
         if thread is not None:
-            lines = await _collect_thread_lines(thread)
+            lines = await _collect_thread_lines(thread, limit=budget.thread_messages)
             if len(lines) > 1:
                 return await build_thread_result(
                     guild_id=guild_id,
@@ -345,6 +534,7 @@ async def fetch_one_discord_ref(
                     permalink=link,
                     anchor_message_id=message_id,
                     author=_author_label(source_message),
+                    budget=budget,
                 )
 
         block = format_dereferenced_message(source_message, label=label)
@@ -377,31 +567,46 @@ async def fetch_discord_message_context(
     client,
     refs: list[tuple[int, int, int]],
     *,
+    destination,
+    user_id: int | None,
     label: str = DISCORD_REF_INJECT_LABEL,
     limit: int = MAX_REFS_PER_MESSAGE,
 ) -> tuple[str, int]:
-    """Fetch refs without timeline embed — craft intake and legacy callers."""
+    """Fetch refs without timeline embed — craft intake. Same pull guard as dialogue."""
     results = []
     for guild_id, channel_id, message_id in refs[:limit]:
         results.append(
-            await fetch_one_discord_ref(
-                client, guild_id, channel_id, message_id, label=label
+            await _fetch_one_target(
+                client, guild_id, channel_id, message_id, label=label,
+                destination=destination, user_id=user_id,
             )
         )
     return format_discord_refs_for_dialogue(results), sum(1 for r in results if r.ok)
 
 
-def format_discord_ref_for_dialogue(result: DiscordRefResult) -> str:
+def format_discord_ref_for_dialogue(
+    result: DiscordRefResult, *, inject_max: int = DIALOGUE_INJECT_MAX
+) -> str:
     header = f"[{_inject_label(result)}] {result.permalink}"
+    if result.refused:
+        return (
+            f"{header}\n[{_REFUSAL_TEXT[result.refused]}. Say so plainly; "
+            f"do not guess at what it contains.]"
+        )
+    if result.ok and result.widened:
+        header += (
+            f"\n[{WIDENED_NOTE}. The member chose to bring it here; that is theirs to judge. "
+            f"Don't lecture — just be aware of who is reading.]"
+        )
     if result.ok and result.content:
-        excerpt = result.content[:DIALOGUE_INJECT_MAX]
-        if len(result.content) > DIALOGUE_INJECT_MAX:
+        excerpt = result.content[:inject_max]
+        if len(result.content) > inject_max:
             body = (
                 f"{excerpt}\n\n"
-                f"[Note: truncated to {DIALOGUE_INJECT_MAX:,} chars for this turn; "
+                f"[Note: truncated to {inject_max:,} chars for this turn; "
                 f"full extract was {result.char_count:,} chars"
             )
-            if result.scope == "thread":
+            if result.scope in ("thread", "channel"):
                 body += f" from {result.message_count} messages"
             body += ".]"
         else:
@@ -415,10 +620,14 @@ def format_discord_ref_for_dialogue(result: DiscordRefResult) -> str:
     )
 
 
-def format_discord_refs_for_dialogue(results: list[DiscordRefResult]) -> str:
+def format_discord_refs_for_dialogue(
+    results: list[DiscordRefResult], *, inject_max: int = DIALOGUE_INJECT_MAX
+) -> str:
     if not results:
         return ""
-    return "\n\n---\n\n".join(format_discord_ref_for_dialogue(r) for r in results)
+    return "\n\n---\n\n".join(
+        format_discord_ref_for_dialogue(r, inject_max=inject_max) for r in results
+    )
 
 
 async def post_discord_ref_status(
@@ -444,8 +653,14 @@ async def post_discord_ref_status(
 
 
 def _status_embed_single(result: DiscordRefResult) -> discord.Embed:
+    if result.refused:
+        return discord.Embed(
+            title="💬 Link not read",
+            description=_REFUSAL_TEXT[result.refused].capitalize() + ".",
+            color=_COLOR_FAIL,
+        )
     if result.ok:
-        if result.scope == "thread":
+        if result.scope in ("thread", "channel"):
             if result.summarized:
                 lines = [
                     f"**{result.message_count} messages** · summarized · "
@@ -458,7 +673,7 @@ def _status_embed_single(result: DiscordRefResult) -> discord.Embed:
                     f"**{result.message_count} messages** · **{result.char_count:,} chars** in context",
                     "_This is what Turtle read — not Discord's link preview._",
                 ]
-            title = "💬 Read Discord thread"
+            title = "💬 Read Discord channel" if result.scope == "channel" else "💬 Read Discord thread"
         else:
             lines = [
                 f"**{result.char_count:,} chars** from **{result.author or 'unknown'}**",
@@ -467,6 +682,8 @@ def _status_embed_single(result: DiscordRefResult) -> discord.Embed:
             title = "💬 Read Discord message"
         if result.thread_name:
             lines.insert(0, f"**#{result.thread_name}**")
+        if result.widened:
+            lines.append(f"-# Heads-up: {WIDENED_NOTE}.")
         return discord.Embed(title=title, description="\n".join(lines), color=_COLOR_OK)
     err = (result.error or "unknown")[:900]
     return discord.Embed(
@@ -484,20 +701,24 @@ def _status_embed_multi(results: list[DiscordRefResult]) -> discord.Embed:
     ok = sum(1 for r in results if r.ok)
     lines = []
     for result in results:
-        if result.ok:
-            if result.scope == "thread":
+        if result.refused:
+            lines.append(f"✗ `{result.permalink}` · {_REFUSAL_TEXT[result.refused]}")
+        elif result.ok:
+            if result.scope in ("thread", "channel"):
                 suffix = " · summarized" if result.summarized else ""
                 lines.append(
-                    f"✓ **{result.thread_name or 'thread'}** · "
+                    f"✓{' ↗' if result.widened else ''} **{result.thread_name or 'thread'}** · "
                     f"{result.message_count} msgs{suffix} · {result.char_count:,} chars"
                 )
             else:
                 lines.append(
-                    f"✓ **{result.author or 'message'}** · {result.char_count:,} chars · "
+                    f"✓{' ↗' if result.widened else ''} **{result.author or 'message'}** · {result.char_count:,} chars · "
                     f"`…/{result.message_id}`"
                 )
         else:
             lines.append(f"✗ `{result.permalink}` · read failed")
+    if any(r.ok and r.widened for r in results):
+        lines.append(f"-# Heads-up: for a link marked ↗, {WIDENED_NOTE}.")
     color = _COLOR_OK if ok == len(results) else (_COLOR_FAIL if ok == 0 else _COLOR_READING)
     return discord.Embed(
         title=f"💬 Read {ok}/{len(results)} Discord link(s)",
@@ -526,12 +747,41 @@ async def _fetch_one_target(
     message_id: int | None,
     *,
     label: str,
+    destination=None,
+    user_id: int | None = None,
+    budget: ReadBudget = LOCAL_BUDGET,
 ) -> DiscordRefResult:
+    link = permalink_for(guild_id, channel_id, message_id)
+    try:
+        source = await client.fetch_channel(channel_id)
+    except Exception as exc:
+        return DiscordRefResult(
+            guild_id=guild_id, channel_id=channel_id, message_id=message_id or 0,
+            ok=False, permalink=link, error=f"{type(exc).__name__}: {exc}",
+            attempts=[f"fetch_channel: {type(exc).__name__}"],
+            scope="message" if message_id else "thread",
+        )
+    refusal = await pull_refusal(source, destination, user_id)
+    if refusal:
+        print(f"Discord ref refused ({refusal}): channel {channel_id} for user {user_id}")
+        return DiscordRefResult(
+            guild_id=guild_id, channel_id=channel_id, message_id=message_id or 0,
+            ok=False, permalink=link, error=refusal, refused=refusal,
+            scope="message" if message_id else "thread",
+        )
     if message_id is None:
-        return await fetch_one_discord_thread(client, guild_id, channel_id)
-    return await fetch_one_discord_ref(
-        client, guild_id, channel_id, message_id, label=label
-    )
+        result = await fetch_one_discord_thread(
+            client, guild_id, channel_id, budget=budget, channel=source)
+    else:
+        result = await fetch_one_discord_ref(
+            client, guild_id, channel_id, message_id, label=label, budget=budget, channel=source
+        )
+    if result.ok and destination is not None:
+        try:
+            result.widened = await pull_widens(source, destination)
+        except Exception as exc:
+            print(f"Discord ref widen check failed: {type(exc).__name__}: {exc}")
+    return result
 
 
 async def fetch_discord_refs_with_status(
@@ -539,11 +789,14 @@ async def fetch_discord_refs_with_status(
     client,
     refs: list[tuple[int, int, int]],
     *,
+    user_id: int | None,
     label: str = DISCORD_REF_INJECT_LABEL,
+    budget: ReadBudget = LOCAL_BUDGET,
 ) -> tuple[list[DiscordRefResult], str]:
     """Visible Reading→Read embed + dialogue inject block (message permalinks)."""
     targets = [(g, c, m) for g, c, m in refs]
-    return await _fetch_targets_with_status(channel, client, targets, label=label)
+    return await _fetch_targets_with_status(
+        channel, client, targets, label=label, user_id=user_id, budget=budget)
 
 
 async def fetch_all_discord_refs_with_status(
@@ -551,11 +804,14 @@ async def fetch_all_discord_refs_with_status(
     client,
     text: str,
     *,
+    user_id: int | None,
     label: str = DISCORD_REF_INJECT_LABEL,
+    budget: ReadBudget = LOCAL_BUDGET,
 ) -> tuple[list[DiscordRefResult], str]:
-    """Message + thread-only permalinks from practitioner text."""
+    """Message, thread and channel permalinks from practitioner text, read on their behalf."""
     targets = extract_all_discord_refs(text)[:MAX_REFS_PER_MESSAGE]
-    return await _fetch_targets_with_status(channel, client, targets, label=label)
+    return await _fetch_targets_with_status(
+        channel, client, targets, label=label, user_id=user_id, budget=budget)
 
 
 async def _fetch_targets_with_status(
@@ -564,6 +820,8 @@ async def _fetch_targets_with_status(
     targets: list[tuple[int, int, int | None]],
     *,
     label: str,
+    user_id: int | None,
+    budget: ReadBudget,
 ) -> tuple[list[DiscordRefResult], str]:
     if not targets:
         return [], ""
@@ -572,7 +830,9 @@ async def _fetch_targets_with_status(
     async with channel.typing():
         for guild_id, ch_id, msg_id in targets:
             results.append(
-                await _fetch_one_target(client, guild_id, ch_id, msg_id, label=label)
+                await _fetch_one_target(
+                    client, guild_id, ch_id, msg_id, label=label,
+                    destination=channel, user_id=user_id, budget=budget)
             )
         await edit_discord_ref_status(status_msg, results)
-    return results, format_discord_refs_for_dialogue(results)
+    return results, format_discord_refs_for_dialogue(results, inject_max=budget.inject_max)

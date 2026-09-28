@@ -5,6 +5,7 @@ for multi-mage practice directory routing.
 """
 
 import contextvars
+import copy
 import json
 import os
 from pathlib import Path
@@ -63,13 +64,24 @@ def _load_mage_registry():
 
 _MAGE_REGISTRY = _load_mage_registry()
 _registry_mtime = _registry_file_mtime()
+_registry_base = copy.deepcopy(_MAGE_REGISTRY)
 
 
 def reload_mage_registry():
     """Reload the mage registry from disk."""
-    global _MAGE_REGISTRY, _registry_mtime
+    global _MAGE_REGISTRY, _registry_mtime, _registry_base
     _MAGE_REGISTRY = _load_mage_registry()
     _registry_mtime = _registry_file_mtime()
+    _registry_base = copy.deepcopy(_MAGE_REGISTRY)
+
+
+def registry_as_loaded() -> tuple[dict, float | None]:
+    """The registry as this process last read it, and the file's mtime then.
+
+    Callers change ``get_registry()`` in place, so this copy is the only record of
+    what the file held before them — the base a save merges against (issues/048).
+    """
+    return _registry_base, _registry_mtime
 
 
 def maybe_reload_mage_registry() -> bool:

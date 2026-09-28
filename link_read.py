@@ -493,7 +493,7 @@ async def post_link_offer(
 
         record_for_channel(thread_id, kind="link_read", event="accepted")
         try:
-            from discord_bot import run_link_read_followup
+            from dialogue_turn import run_link_read_followup
 
             await run_link_read_followup(
                 interaction,

@@ -155,7 +155,7 @@ class RosterDriftTests(unittest.TestCase):
         self.assertEqual(registry["mages"]["sam"]["relation"], "kin")
         self.assertEqual(registry["channels"]["300"]["type"], "hosted-river")
         self.assertEqual(
-            registry["channels"]["300"]["discord_category"], "Practice"
+            registry["channels"]["300"]["discord_category"], "Home"
         )
         self.assertNotIn("sam", registry["spaces"]["family"]["members"])
         drift = compute_roster_drift(registry, human_ids=["1", "42"])
@@ -247,7 +247,7 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         guild.channels = []
         channel = MagicMock()
         channel.id = 300
-        channel.name = "river-sam"
+        channel.name = "home-sam"
         posted = MagicMock(id=7, pin=AsyncMock())
         channel.send = AsyncMock(return_value=posted)
         guild.create_text_channel = AsyncMock(return_value=channel)
@@ -281,7 +281,7 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         from member_first_run import first_run_text
 
         self.assertIsNotNone(summary)
-        self.assertIn("river-sam", summary or "")
+        self.assertIn("home-sam", summary or "")
         self.assertIn("community", summary or "")
         self.assertNotIn("invite", (summary or "").lower())
         self.assertNotIn("family", (summary or "").lower())
@@ -396,6 +396,88 @@ class RosterAdmitDepartTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Already a member", summary or "")
         member.guild.create_text_channel.assert_not_called()
         save.assert_not_called()
+
+
+class MissedJoinTests(unittest.IsolatedAsyncioTestCase):
+    def _guild(self, member_ids):
+        guild = MagicMock()
+        guild.channels = [MagicMock(id=100)]
+        guild.members = [MagicMock(bot=False, id=i, display_name=f"m{i}") for i in member_ids]
+        guild.members[0].name = "m"
+        return guild
+
+    async def _run(self, guild, registry):
+        from roster_sync import admit_missed_joins
+
+        with patch("mage.get_registry", return_value=registry), patch(
+            "mage.maybe_reload_mage_registry"
+        ), patch(
+            "river_keys.try_auto_admit_on_member_join", new_callable=AsyncMock, return_value=None
+        ), patch("roster_sync.admit_on_join", new_callable=AsyncMock, return_value="Opened `#home-x`.") as admit:
+            lines = await admit_missed_joins(guild)
+        return lines, admit
+
+    async def test_someone_who_joined_while_down_is_admitted(self) -> None:
+        lines, admit = await self._run(self._guild([1, 42]), _registry_with_house())
+        admit.assert_awaited_once()
+        self.assertEqual(admit.await_args.args[0].id, 42)
+        self.assertIn("Opened", lines[0])
+
+    async def test_everyone_known_means_nothing_happens(self) -> None:
+        lines, admit = await self._run(self._guild([1]), _registry_with_house())
+        admit.assert_not_awaited()
+        self.assertEqual(lines, [])
+
+    async def test_many_unknown_at_once_is_reported_not_admitted(self) -> None:
+        lines, admit = await self._run(self._guild([1, 2, 3, 4, 5]), _registry_with_house())
+        admit.assert_not_awaited()
+        self.assertIn("nothing was opened", lines[0])
+
+
+class OffboardTests(unittest.IsolatedAsyncioTestCase):
+    def _offboarded(self) -> dict:
+        from roster_sync import apply_offboard_registry
+
+        registry = _registry_with_community()
+        registry["mages"]["robin"] = {"discord_id": "42", "practice_dir": "~/workshops/robin"}
+        registry["channels"]["300"] = {"mage": "robin", "type": "hosted-river"}
+        registry["spaces"]["community"]["members"].append("robin")
+        gone = apply_offboard_registry(registry, "robin", at="2026-09-28")
+        self.assertEqual(gone, ["300"])
+        return registry
+
+    def test_offboarding_keeps_only_the_marker(self) -> None:
+        registry = self._offboarded()
+        self.assertEqual(registry["mages"]["robin"], {"discord_id": "42", "offboarded": "2026-09-28"})
+        self.assertNotIn("300", registry["channels"])
+        self.assertNotIn("robin", registry["spaces"]["community"]["members"])
+
+    def test_offboarded_still_on_discord_is_not_drift(self) -> None:
+        drift = compute_roster_drift(self._offboarded(), human_ids=["1", "42"])
+        self.assertEqual(drift.on_discord_not_registered, ())
+        self.assertNotIn("robin", drift.missing_private)
+
+    async def test_a_join_does_not_readmit(self) -> None:
+        registry = self._offboarded()
+        member = RosterAdmitDepartTests._member(self, member_id=42, name="robin")
+        member.guild.get_channel.side_effect = lambda cid: MagicMock() if cid == 100 else None
+        with patch("mage.get_registry", return_value=registry), patch("roster_sync.save_registry"):
+            summary = await admit_on_join(member)
+        self.assertIn("Offboarded", summary or "")
+        member.guild.create_text_channel.assert_not_awaited()
+
+    async def test_missed_joins_skip_them(self) -> None:
+        from roster_sync import admit_missed_joins
+
+        registry = self._offboarded()
+        guild = MagicMock()
+        guild.channels = [MagicMock(id=100)]
+        guild.members = [MagicMock(bot=False, id=1), MagicMock(bot=False, id=42)]
+        with patch("mage.get_registry", return_value=registry), patch("mage.maybe_reload_mage_registry"), patch(
+            "roster_sync.admit_on_join", new_callable=AsyncMock
+        ) as admit:
+            self.assertEqual(await admit_missed_joins(guild), [])
+        admit.assert_not_awaited()
 
 
 class RosterHookWiringTests(unittest.TestCase):

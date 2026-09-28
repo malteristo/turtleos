@@ -258,7 +258,7 @@ def build_preview_embed(draft: dict[str, Any], target: ShareTarget | SpaceShareT
         body = (
             f"Share **“{label}”** with **{target.address}**?\n\n"
             f"{digest}\n\n"
-            "They get this digest in their river and can open a **received eddy** when ready. "
+            "They get this digest in their home channel and can open a **received eddy** when ready. "
             "Your original eddy stays unchanged."
         )
         if draft.get("transparency_space_key"):

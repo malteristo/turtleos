@@ -79,6 +79,7 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 | `!help` | `cmd_help` | — | Profile-aware inventory (this doc) |
 | `!status` | `cmd_status` | Ops | No |
 | `!readiness` | `cmd_readiness` | Ops (hosted substrate check) | No |
+| `!model` | `room_models.cmd_model` | §8.1, [own-channel-model](design/own-channel-model.md) | No — shows this room's model; `!model sonnet` / `opus` / `local` picks it — in your own channels (and your health channel, as its owner), and in any shared room you are a member of (the room is told who changed it) |
 
 **Idle checkpoint:** 15 min quiet → automatic checkpoint; does **not** release (§8.4, Law of Checkpoint Before Sweep).
 
@@ -94,6 +95,8 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 |------|---------|------|---------|
 | Read for dialogue | URL in eddy chat (auto / **Read article**) | §9.5 | `link_read.py` — silent extract for the turn; **no** `link-resonance/` write |
 | Distill for library | `!fetch <url>` or **Save to library** button (River, post-Turtle) | §9.5 | `cmd_fetch` → `link-resonance/` under practice root |
+
+**Discord links** (message, eddy, or whole channel) are read on the poster's behalf: only what they can see; a heads-up when it lands in a room where some people couldn't see it; frontier-model rooms read more before summarising ([own-channel-model](design/own-channel-model.md)).
 
 **Harness split:** dropping a URL in chat does **not** require `!fetch` before Turtle can discuss — link-read grounds the reply. River may offer **Save to library** once per URL when the link is not yet cached; typed `!fetch` remains the power-practitioner path.
 

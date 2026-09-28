@@ -50,6 +50,12 @@ So, working here:
   that your check *can* fail: the offer ledger's guard confirmed the test suite
   wrote nothing and never confirmed a real offer wrote something, so a fix that
   cut the real write path passed for eight days.
+- **Fix on the way; file what is bigger.** You will meet defects while doing
+ something else — nothing here was built with much planning, so expect it. A
+ small one: fix it in the same change or a sibling commit, with its test, and name
+ it in your report. One larger than the task at hand that should be done anyway:
+ write it into `issues/` the moment you meet it (`docs/development.md` § Backlog
+ conventions) — never leave it only in chat or a summary.
 - **Report findings, don't only fix them.** `docs/learnings.md` is read by the next
   agent and it is why this session was faster than the last one. Append the class,
   not just the case.

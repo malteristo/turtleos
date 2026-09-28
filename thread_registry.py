@@ -16,8 +16,10 @@ import yaml
 from core.atomic_io import atomic_write_text
 from mage import get_runtime_dir
 
-_REGISTRY_CACHE: dict | None = None
-_LAST_PERSIST_MONO: float = 0.0
+# One cache per root. A single cache for every root wrote each room's threads into
+# every other root's file on save, and fed them into other rooms' prompts (2026-09-28).
+_REGISTRY_CACHE: dict[Path, dict] = {}
+_LAST_PERSIST_MONO: dict[Path, float] = {}
 _SAVE_DEBOUNCE_S = 2.0
 
 
@@ -30,27 +32,24 @@ def _default_registry() -> dict:
 
 
 def load_registry() -> dict:
-    global _REGISTRY_CACHE
-    if _REGISTRY_CACHE is not None:
-        return _REGISTRY_CACHE
     path = _registry_path()
-    if not path.exists():
-        _REGISTRY_CACHE = _default_registry()
-        return _REGISTRY_CACHE
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        if "threads" not in data:
-            data["threads"] = {}
-        _REGISTRY_CACHE = data
-        return _REGISTRY_CACHE
-    except Exception as e:
-        print(f"Registry load failed: {e}")
-        _REGISTRY_CACHE = _default_registry()
-        return _REGISTRY_CACHE
+    cached = _REGISTRY_CACHE.get(path)
+    if cached is not None:
+        return cached
+    data = _default_registry()
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            data.setdefault("threads", {})
+        except Exception as e:
+            print(f"Registry load failed: {e}")
+            data = _default_registry()
+    _REGISTRY_CACHE[path] = data
+    return data
 
 
-def _persist_registry(registry: dict) -> None:
+def _persist_registry(registry: dict, path: Path) -> None:
     payload = yaml.dump(
         registry,
         default_flow_style=False,
@@ -58,47 +57,44 @@ def _persist_registry(registry: dict) -> None:
         allow_unicode=True,
     )
     try:
-        atomic_write_text(_registry_path(), payload)
+        atomic_write_text(path, payload)
     except Exception as e:
         print(f"Registry save failed: {e}")
         raise
 
 
 def save_registry(registry: dict, *, force: bool = False) -> None:
-    global _REGISTRY_CACHE, _LAST_PERSIST_MONO
+    path = _registry_path()
     registry["last_updated"] = datetime.now(timezone.utc).isoformat()
-    _REGISTRY_CACHE = registry
+    _REGISTRY_CACHE[path] = registry
     now = time.monotonic()
-    if force or (now - _LAST_PERSIST_MONO) >= _SAVE_DEBOUNCE_S:
+    if force or (now - _LAST_PERSIST_MONO.get(path, 0.0)) >= _SAVE_DEBOUNCE_S:
         try:
-            _persist_registry(registry)
-            _LAST_PERSIST_MONO = now
+            _persist_registry(registry, path)
+            _LAST_PERSIST_MONO[path] = now
         except Exception:
             if not force:
                 return
             try:
-                _persist_registry(registry)
-                _LAST_PERSIST_MONO = time.monotonic()
+                _persist_registry(registry, path)
+                _LAST_PERSIST_MONO[path] = time.monotonic()
             except Exception as retry_exc:
                 print(f"Registry save retry failed: {retry_exc}")
 
 
 def flush_registry() -> None:
-    """Persist cached registry immediately (debounce flush / shutdown)."""
-    global _LAST_PERSIST_MONO
-    if _REGISTRY_CACHE is None:
-        return
-    try:
-        _persist_registry(_REGISTRY_CACHE)
-        _LAST_PERSIST_MONO = time.monotonic()
-    except Exception as e:
-        print(f"Registry flush failed: {e}")
+    """Persist every cached root immediately (debounce flush / shutdown)."""
+    for path, registry in list(_REGISTRY_CACHE.items()):
+        try:
+            _persist_registry(registry, path)
+            _LAST_PERSIST_MONO[path] = time.monotonic()
+        except Exception as e:
+            print(f"Registry flush failed: {e}")
 
 
 def clear_registry_cache_for_tests() -> None:
-    global _REGISTRY_CACHE, _LAST_PERSIST_MONO
-    _REGISTRY_CACHE = None
-    _LAST_PERSIST_MONO = 0.0
+    _REGISTRY_CACHE.clear()
+    _LAST_PERSIST_MONO.clear()
 
 
 def register_thread(thread_id: int, name: str, parent_channel: str = "",
@@ -381,10 +377,28 @@ def _topic_tokens(text: str) -> set[str]:
     }
 
 
-def get_related_thread_awareness(thread_name: str, current_thread_id: int | str | None = None, limit: int = 5) -> str:
-    """Return related registry entries for the current topic, including stale predecessors."""
+def _in_room(info: dict, parent_channel_id: int | str | None) -> bool:
+    """Only threads recorded under this room's channel id. No id recorded → not shown.
+
+    The registry has held every room's threads (one cache for all roots), and a
+    title is a member's own words: on 2026-09-28 one member's private eddy titles
+    were found in prompts built for another member's room. Fail closed.
+    """
+    if parent_channel_id is None:
+        return False
+    return str(info.get("parent_channel_id") or "") == str(parent_channel_id)
+
+
+def get_related_thread_awareness(
+    thread_name: str,
+    current_thread_id: int | str | None = None,
+    limit: int = 5,
+    *,
+    parent_channel_id: int | str | None = None,
+) -> str:
+    """Return related registry entries from the same room, including stale predecessors."""
     tokens = _topic_tokens(thread_name)
-    if not tokens:
+    if not tokens or parent_channel_id is None:
         return ""
 
     registry = load_registry()
@@ -393,6 +407,8 @@ def get_related_thread_awareness(thread_name: str, current_thread_id: int | str 
     current = str(current_thread_id) if current_thread_id is not None else None
     for tid, info in registry.get("threads", {}).items():
         if tid == current or info.get("harvest_status") == "dissolved":
+            continue
+        if not _in_room(info, parent_channel_id):
             continue
         other_tokens = _topic_tokens(info.get("name", ""))
         score = len(tokens & other_tokens)
@@ -412,10 +428,12 @@ def get_related_thread_awareness(thread_name: str, current_thread_id: int | str 
     return "\n".join(lines)
 
 
-def build_live_thread_summary(limit: int = 12) -> str:
-    """Registry-backed thread summary for prompt injection."""
+def build_live_thread_summary(limit: int = 12, *, parent_channel_id: int | str | None = None) -> str:
+    """Registry-backed thread summary of one room, for prompt injection."""
+    if parent_channel_id is None:
+        return ""
     registry = load_registry()
-    threads = registry.get("threads", {})
+    threads = {t: i for t, i in registry.get("threads", {}).items() if _in_room(i, parent_channel_id)}
     if not threads:
         return "**Active threads:** none in registry"
 

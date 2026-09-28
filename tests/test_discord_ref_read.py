@@ -1,6 +1,6 @@
 import sys
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 discord = sys.modules["discord"]
@@ -215,9 +215,10 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
         client = MagicMock()
         client.fetch_channel = AsyncMock(return_value=ch)
 
-        results, block = await fetch_discord_refs_with_status(
-            channel, client, [(1, 2, 3)]
-        )
+        with patch("discord_ref_read.pull_refusal", new=AsyncMock(return_value=None)):
+            results, block = await fetch_discord_refs_with_status(
+                channel, client, [(1, 2, 3)], user_id=7
+            )
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].ok)
         self.assertEqual(results[0].scope, "message")
@@ -289,11 +290,16 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
         client = MagicMock()
         client.fetch_channel = AsyncMock(return_value=thread)
 
-        with patch("discord_ref_read.THREAD_INLINE_MAX", 500), patch(
+        from dataclasses import replace
+
+        from discord_ref_read import LOCAL_BUDGET
+
+        with patch(
             "discord_ref_read.summarize_thread_lines",
             new=AsyncMock(return_value="They debated bootstrap vs modal; bootstrap won."),
         ):
-            result = await fetch_one_discord_thread(client, 1, 55)
+            result = await fetch_one_discord_thread(
+                client, 1, 55, budget=replace(LOCAL_BUDGET, inline_max=500))
 
         self.assertTrue(result.ok)
         self.assertTrue(result.summarized)
@@ -305,7 +311,11 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
 
         lines = ["Kermit: " + ("y" * 300)] * 5
-        with patch("discord_ref_read.THREAD_INLINE_MAX", 100), patch(
+        from dataclasses import replace
+
+        from discord_ref_read import LOCAL_BUDGET
+
+        with patch(
             "discord_ref_read.summarize_thread_lines",
             new=AsyncMock(side_effect=RuntimeError("ollama down")),
         ):
@@ -316,6 +326,7 @@ class DiscordRefFetchTests(unittest.IsolatedAsyncioTestCase):
                 thread_name="planning",
                 lines=lines,
                 permalink="https://discord.com/channels/1/2/3",
+                budget=replace(LOCAL_BUDGET, inline_max=100),
             )
 
         self.assertTrue(result.ok)

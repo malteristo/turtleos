@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import datetime, timezone
@@ -71,12 +72,88 @@ def read_health_picture(source: Source) -> str | None:
     return path.read_text(encoding="utf-8")
 
 
-def search(sources: list[Source], query: str, limit: int = 20) -> list[dict]:
+def _extract_pages(source: Source, doc_id: str) -> list[Path]:
+    if not _NOTE_ID.match(doc_id or ""):
+        return []
+    base = (source.root / "documents" / "extracts").resolve()
+    folder = (base / doc_id).resolve()
+    if folder.parent != base or not folder.is_dir():
+        return []
+    return sorted(p for p in folder.glob("page-*.txt") if p.resolve().parent == folder)
+
+
+def _manifest(source: Source, doc_id: str) -> dict | None:
+    if not _NOTE_ID.match(doc_id or ""):
+        return None
+    base = (source.root / "documents" / "manifests").resolve()
+    path = (base / f"{doc_id}.json").resolve()
+    if path.parent != base or not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def list_documents(source: Source) -> list[dict]:
+    """One row per stored document: id, filename, received, pages of extracted text. Newest first."""
+    d = source.root / "documents" / "manifests"
+    if not d.is_dir():
+        return []
+    rows = []
+    for path in d.glob("*.json"):
+        m = _manifest(source, path.stem)
+        if m is None:
+            continue
+        rows.append(
+            {
+                "id": path.stem,
+                "filename": m.get("filename"),
+                "received": m.get("received_at"),
+                "pages": len(_extract_pages(source, path.stem)),
+            }
+        )
+    rows.sort(key=lambda r: r["received"] or "", reverse=True)
+    return rows
+
+
+def read_document(source: Source, doc_id: str) -> str | None:
+    m = _manifest(source, doc_id)
+    if m is None:
+        return None
+    pages = _extract_pages(source, doc_id)
+    lines = [f"# {m.get('filename') or doc_id}", ""]
+    lines.append(f"Received {str(m.get('received_at') or 'unknown')[:10]}. Text was extracted on the host and may contain recognition errors; the original is the authority.")
+    if not pages:
+        lines += ["", f"No extracted text for this document (status: {m.get('status') or 'unknown'})."]
+    for p in pages:
+        lines += ["", f"## Page {int(p.stem.removeprefix('page-'))}", "", p.read_text(encoding="utf-8").strip()]
+    return "\n".join(lines)
+
+
+def search(
+    sources: list[Source], query: str, limit: int = 20, *, documents: bool = False
+) -> list[dict]:
     needle = (query or "").strip().lower()
     if not needle:
         return []
     hits: list[dict] = []
     for source in sources:
+        if documents:
+            for row in list_documents(source):
+                for p in _extract_pages(source, row["id"]):
+                    text = p.read_text(encoding="utf-8")
+                    i = text.lower().find(needle)
+                    if i >= 0:
+                        hits.append(
+                            {
+                                "ref": f"turtleos://documents/{source.id}/{row['id']}",
+                                "title": row["filename"],
+                                "last": row["received"],
+                                "snippet": _snippet(text, i, len(needle)),
+                            }
+                        )
+                        break
         for row in list_notes(source):
             text = read_note(source, row["id"]) or ""
             i = text.lower().find(needle)
@@ -117,7 +194,9 @@ def _mtime(path: Path) -> str | None:
         return None
 
 
-def brief(sources: list[Source], *, expires: str, refused_since_brief: int) -> str:
+def brief(
+    sources: list[Source], *, expires: str, refused_since_brief: int, documents: bool = False
+) -> str:
     """The system's own account of what this connection reaches. Honest when broken."""
     lines = ["# turtleOS brief", ""]
     if not sources:
@@ -139,6 +218,10 @@ def brief(sources: list[Source], *, expires: str, refused_since_brief: int) -> s
         if source.kind == KIND_SUBJECT:
             has_picture = (source.root / HEALTH_PICTURE).is_file()
             lines.append(f"- health picture: {'present' if has_picture else 'none yet'}")
+        if documents:
+            docs = list_documents(source)
+            if docs:
+                lines.append(f"- documents: {len(docs)} (list: turtleos://documents/{source.id})")
         lines.append("")
     lines.append("## Integrity")
     lines.append(f"- this grant expires: {expires}")

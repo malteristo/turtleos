@@ -1,7 +1,7 @@
 """turtleOS system prompt builders — identity + practice state assembly."""
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 
 from mage import (
     get_pd,
@@ -22,11 +22,9 @@ from state import (
     MAX_BRIGHT_CHARS, MAX_INTENTION_LINES,
     MAX_LOCAL_BRIGHT_CHARS, MAX_LOCAL_INTENTION_LINES,
     KNOWN_MODELS, ATTUNEMENT_LEVELS, EDIT_DELEGATE_MODEL,
-    thread_configs, EDDY_TYPES, EDDY_DEFAULT,
-    threads_flagged_for_release, THREAD_CONTEXTS,
+    THREAD_CONTEXTS,
 )
 from core.capabilities import build_capability_summary
-from thread_registry import build_live_thread_summary
 
 
 PRACTICE_ARCHITECTURE = """## Practice Root (Platform)
@@ -101,33 +99,6 @@ def _platform_practice_snapshot() -> dict:
     }
 
 
-# ─── Thread Summary ──────────────────────────────────────────────
-
-def build_thread_summary():
-    """Build a summary of active threads for the orchestrator prompt."""
-    live_summary = build_live_thread_summary()
-    if live_summary:
-        return live_summary
-    if not thread_configs:
-        return "**Active threads:** none"
-    lines = ["**Active threads:**"]
-    for tid, cfg in thread_configs.items():
-        ch = state.client.get_channel(tid)
-        name = ch.name if ch else f"(id:{tid})"
-        age = datetime.now(timezone.utc) - cfg["created"]
-        if age.total_seconds() >= 86400:
-            age_str = f"{int(age.total_seconds() / 86400)}d"
-        elif age.total_seconds() >= 3600:
-            age_str = f"{int(age.total_seconds() / 3600)}h"
-        else:
-            age_str = f"{int(age.total_seconds() / 60)}m"
-        eddy_type = cfg.get("eddy_type", EDDY_DEFAULT)
-        eddy_emoji = EDDY_TYPES.get(eddy_type, {}).get("emoji", "")
-        flagged = " ⚠️FLAGGED" if tid in threads_flagged_for_release else ""
-        lines.append(f"- {eddy_emoji} **{name}** — `{cfg['model_label']}` / `{cfg['attunement']}` ({age_str}){flagged}")
-    return "\n".join(lines)
-
-
 # ─── Full System Prompt ──────────────────────────────────────────
 
 def build_system_prompt():
@@ -199,9 +170,6 @@ def build_discord_prompt(*, include_identity: bool = True):
     # Mirror — Turtle's observations about this person
     mirror_text = read_safe(os.path.join(get_pd(), "mirror.md")) or ""
 
-    # Context loop: what Turtle last posted to the river
-    river_state = read_safe(os.path.expanduser("~/turtleos/river_state.md")) or ""
-
     # Session continuity — load the most recent session note's "thread for next time"
     last_session_thread = ""
     sdir = os.path.join(get_pd(), "sessions")
@@ -218,7 +186,6 @@ def build_discord_prompt(*, include_identity: bool = True):
                 if last_session_thread:
                     break
 
-    thread_summary = build_thread_summary()
     capability_summary = build_capability_summary()
 
     env_block = ""  # Runtime env injected by _build_runtime_env in handle_dialogue
@@ -346,9 +313,6 @@ Your role:
 
 ### Recent Sessions
 {snap['recent_sessions_text'] or '(none yet)'}
-
-### What I've Posted to the River
-{river_state if river_state.strip() else "(nothing recently)"}
 """
         return mode_block
 
@@ -382,10 +346,6 @@ Native v1 river is **acts-only** (standing bar: **new eddy** only). Flows load i
 2. **Route to existing eddies** when a thread already fits.
 3. **Legacy spawn:** `!thread "topic" [flags]` when the bar path doesn't fit.
 4. **Cross-pollination (legacy):** `!absorb` / `!forget` for main-channel synthesis.
-
-{thread_summary}
-
-**Reflex:** before recommending `!thread`, check active threads.
 
 {capability_summary}
 
@@ -463,9 +423,6 @@ Do NOT echo tool results or file links — operations embed handles that. Acknow
 
 ### Recent Sessions
 {snap['recent_sessions_text'] or '(none yet)'}
-
-### What I've Posted to the River
-{river_state if river_state.strip() else "(nothing recently)"}
 """
 
 
@@ -738,7 +695,7 @@ You are **Craft Turtle** — Turtle in builder mode, resident of turtleOS, on a 
 
 You are not Spirit. Spirit on Forge is the same work on a different substrate: they integrate architecture and commit; you diagnose, prepare bounded findings, and hand off.
 
-**Your domain is his craft — the work he makes and offers.** That is turtleOS and Magic. It is equally the workshops he facilitates and the research services he is beginning to offer. Craft is not a synonym for this codebase. What craft excludes is unchanged: ordinary life practice belongs in the river, not here.
+**Your domain is his craft — the work he makes and offers.** That is turtleOS and Magic. It is equally the workshops he facilitates and the research services he is beginning to offer. Craft is not a synonym for this codebase. What craft excludes is unchanged: ordinary life practice belongs in his home channel, not here.
 
 **Two modes. Read which one arrived.**
 

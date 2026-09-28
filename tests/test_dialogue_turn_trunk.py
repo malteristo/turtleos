@@ -27,6 +27,7 @@ what the practitioner would see.
 from __future__ import annotations
 
 import asyncio
+import json
 import contextlib
 import importlib
 import subprocess
@@ -178,8 +179,11 @@ def _turn_env(
         ),
     ]
     with contextlib.ExitStack() as stack:
+        house = stack.enter_context(tempfile.TemporaryDirectory())
+        stack.enter_context(patch.dict("os.environ", {"TURTLEOS_HOUSE_DIR": house}))
         for p in patches:
             stack.enter_context(p)
+        calls["house"] = house
         yield sent, calls
 
 
@@ -260,23 +264,109 @@ class ContinueDialogueTurnTests(unittest.TestCase):
         msg = _message()
         boom = RuntimeError("overloaded_error: upstream capacity")
         with _turn_env(raises=boom) as (sent, _):
-            _run_turn(msg, [], sent=sent)
+            with patch.object(dialogue_turn, "chat_ollama", new=AsyncMock(side_effect=RuntimeError("local down"))):
+                _run_turn(msg, [], sent=sent)
 
-        self.assertEqual(sent, [dialogue_turn.TURN_UNAVAILABLE_REPLY])
+        self.assertTrue(sent[0].endswith(dialogue_turn.TURN_UNAVAILABLE_REPLY))
         # The specific failure this guards: an exception string in front of a
         # practitioner mid-conversation. Assert on the leak, not just the reply.
         self.assertNotIn("overloaded_error", sent[0])
         self.assertNotIn("RuntimeError", sent[0])
 
-    def test_an_api_failure_does_not_fall_back_to_the_local_model(self) -> None:
+    def test_an_api_failure_falls_back_locally_and_says_so(self) -> None:
+        # Superseded 2026-09-26: the old rule refused a local fallback because it
+        # "says nothing about the swap". The swap is now named by code on the
+        # reply itself, so the objection is met rather than avoided.
         msg = _message()
         with _turn_env(raises=RuntimeError("api down")) as (sent, calls):
             _run_turn(msg, [], sent=sent)
 
-        # The retry exists for a resident local model. Retrying a *frontier*
-        # failure on Qwen answers the practitioner in a different voice with a
-        # different competence and says nothing about the swap.
-        self.assertEqual(calls["ollama"], [])
+        self.assertEqual(calls["ollama"], [dialogue_turn.TURTLE_MODEL])
+        self.assertTrue(sent[0].startswith("-# ⚠️"))
+        self.assertIn("This reply is from", sent[0])
+        self.assertIn("local fallback", sent[0])
+        # A transient failure does not hold the house.
+        self.assertFalse(Path(calls["house"], "cloud_hold.json").exists())
+
+
+class CloudFallbackTests(unittest.TestCase):
+    """Credit runs out mid-conversation: notice, parked words, hold, return."""
+
+    CREDIT = RuntimeError(
+        "Error code: 400 - Your credit balance is too low to access the Anthropic API."
+    )
+
+    def test_credit_out_parks_the_words_holds_the_house_and_says_so(self) -> None:
+        with tempfile.TemporaryDirectory() as pd:
+            msg = _message(content="add the revoke check after the new grant")
+            with _turn_env(raises=self.CREDIT, practice_dir=pd) as (sent, calls):
+                _run_turn(msg, [], sent=sent)
+                hold = json.loads(Path(calls["house"], "cloud_hold.json").read_text())
+
+            self.assertEqual(hold["kind"], "funds")
+            self.assertIn("credit balance is out", sent[0])
+            self.assertIn("parked", sent[0])
+            parked = list(Path(pd, "state", "parked").glob("*.md"))
+            self.assertEqual(len(parked), 1)
+            self.assertIn("add the revoke check after the new grant", parked[0].read_text())
+
+    def test_while_held_the_cloud_is_not_called_and_the_room_still_answers(self) -> None:
+        with tempfile.TemporaryDirectory() as pd:
+            cloud_calls: list = []
+
+            async def counting_api(system_prompt, messages, model, **kwargs):
+                cloud_calls.append(model)
+                raise self.CREDIT
+
+            with _turn_env(practice_dir=pd) as (sent, calls):
+                with patch.object(dialogue_turn, "chat_anthropic_with_model", new=counting_api):
+                    _run_turn(_message(content="first"), [], sent=sent)
+                    _run_turn(_message(content="second"), [], sent=sent)
+
+            self.assertEqual(len(cloud_calls), 1)
+            self.assertEqual(len(sent), 2)
+            self.assertTrue(sent[1].startswith("-# ⚠️"))
+            self.assertIn("since", sent[1])
+
+    def test_the_cloud_returning_clears_the_hold_and_names_what_waits(self) -> None:
+        with tempfile.TemporaryDirectory() as pd:
+            with _turn_env(raises=self.CREDIT, practice_dir=pd) as (sent, calls):
+                _run_turn(_message(content="the thing in the air"), [], sent=sent)
+            house = calls["house"]
+            with _turn_env(reply_text="welcome back", practice_dir=pd) as (sent2, calls2):
+                with (
+                    patch.dict("os.environ", {"TURTLEOS_HOUSE_DIR": house}),
+                    patch.object(dialogue_turn.cloud_fallback, "CLOUD_RETRY_SECONDS", 0),
+                ):
+                    _run_turn(_message(), [], sent=sent2)
+                    _run_turn(_message(), [], sent=sent2)
+
+            self.assertIn("✅ Back on", sent2[0])
+            self.assertIn("1 parked item", sent2[0])
+            self.assertIn("the thing in the air", sent2[0])
+            self.assertFalse(Path(house, "cloud_hold.json").exists())
+            # Said once, not on every later turn.
+            self.assertEqual(sent2[1], "welcome back")
+
+    def test_a_healthy_cloud_turn_parks_nothing_and_adds_no_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as pd:
+            with _turn_env(reply_text="an answer", practice_dir=pd) as (sent, calls):
+                _run_turn(_message(), [], sent=sent)
+            self.assertEqual(sent, ["an answer"])
+            self.assertFalse(Path(pd, "state", "parked").exists())
+
+    def test_the_prompt_names_the_model_actually_answering(self) -> None:
+        seen: dict = {}
+
+        async def capture(system_prompt, messages, model, **kwargs):
+            seen["prompt"] = system_prompt
+            return "ok", []
+
+        with _turn_env() as (sent, _):
+            with patch.object(dialogue_turn, "chat_anthropic_with_model", new=capture):
+                _run_turn(_message(), [], sent=sent)
+        self.assertIn("## The model answering now", seen["prompt"])
+        self.assertIn("claude-test", seen["prompt"])
 
     def test_tools_are_scoped_by_the_parent_channel_not_the_thread(self) -> None:
         # The thread-blind lookup class (three instances on 2026-08-14, one of
@@ -503,6 +593,82 @@ class ContinueDialogueTurnTests(unittest.TestCase):
 
         self.assertEqual(sent, ["local fallback"])
         loop.assert_not_awaited()
+
+    def test_the_owners_pick_answers_in_an_eddy_of_her_channel(self) -> None:
+        # Positive control: test_local_path_stays_plain_when_no_memory_is_built
+        # is the same native eddy with no pick, answered locally.
+        import room_models
+
+        seen: dict = {}
+
+        async def capture(system_prompt, messages, model, **kwargs):
+            seen["model"], seen["prompt"] = model, system_prompt
+            return "frontier answer", []
+
+        registry = {
+            "mages": {"sam": {"discord_id": "11"}},
+            "channels": {"100": {"type": "hosted-river", "mage": "sam"}},
+        }
+        msg = _message(thread=True, channel_id=777)
+        with _turn_env() as (sent, calls):
+            with (
+                patch("mage.get_registry", return_value=registry),
+                patch("room_models._use_api", side_effect=lambda m: m.startswith("claude-")),
+                patch.object(dialogue_turn, "get_native_eddy_prompt", return_value="NATIVE"),
+                patch.object(dialogue_turn, "chat_anthropic_with_model", new=capture),
+            ):
+                room_models.set_pick(100, 11, "opus", registry)
+                _run_turn(msg, [], sent=sent, native_eddy=True)
+
+        self.assertEqual(seen["model"], "claude-opus-5-5")
+        self.assertIn("!model", seen["prompt"])
+        self.assertEqual(calls["ollama"], [])
+        self.assertEqual(sent[-1], "frontier answer")
+
+    def test_a_health_owners_pick_answers_in_her_health_channel(self) -> None:
+        # Health turns used the house dialogue model whatever the owner picked.
+        # Positive control: test_health_parent_uses_health_prompt_not_system.
+        import room_models
+
+        seen: dict = {}
+
+        async def capture(system_prompt, messages, model, **kwargs):
+            seen["model"] = model
+            return "an answer", []
+
+        registry = {
+            "mages": {"sam": {"discord_id": "11"}},
+            "channels": {"100": {"type": "health", "primitive": "health", "mage": "sam",
+                                 "subject": "sam", "base": "solo"}},
+        }
+        msg = _message()
+        with _turn_env() as (sent, calls):
+            with (
+                patch("mage.get_registry", return_value=registry),
+                patch("mage.get_channel_primitive", return_value=primitive_definition("health")),
+                patch("room_models._use_api", side_effect=lambda m: m.startswith("claude-")),
+                patch.object(dialogue_turn, "get_health_channel_prompt", return_value="H"),
+                patch.object(dialogue_turn, "chat_anthropic_with_model", new=capture),
+            ):
+                room_models.set_pick(100, 11, "sonnet", registry)
+                _run_turn(msg, [], sent=sent)
+
+        self.assertEqual(seen.get("model"), "claude-sonnet-5")
+        self.assertEqual(calls["ollama"], [])
+
+    def test_the_usage_ledger_names_the_room_not_the_eddy_title(self) -> None:
+        # 2026-09-27: rows carried the eddy's title as "room", so the monthly
+        # report could not total a room — every eddy was its own line.
+        async def metered(system_prompt, messages, model, **kwargs):
+            kwargs["usage"].update(calls=1, input_tokens=10, output_tokens=5)
+            return "ok", []
+
+        with _turn_env() as (sent, calls):
+            with patch.object(dialogue_turn, "chat_anthropic_with_model", new=metered):
+                _run_turn(_message(thread=True, channel_id=777), [], sent=sent)
+            rows = [json.loads(line) for line in Path(calls["house"], "usage.jsonl").open()]
+
+        self.assertEqual((rows[0]["room"], rows[0]["eddy"]), ("craft-turtle", "an eddy"))
 
     def test_repeated_paragraphs_are_removed_before_sending(self) -> None:
         msg = _message()

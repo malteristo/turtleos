@@ -75,6 +75,8 @@ Stop claiming the install pair if, after someone is already on the server, an op
 
 A **coach studio** is a private river for a house-bot identity (`roster: false` on the mage row). It is not a member seat. Doctor must stay clean when the studio exists. Spirit uses it for live testing only; collaboration with Craft Turtle stays in the craft channel. Community remains observe-first. Provision: `scripts/provision_spirit_studio.py`.
 
+**Community is the atrium (2026-09-26).** Supersedes "community remains observe-first": the community channel is where the house is run in the open — shared rooms are created and changed there, and a member's private channel is mentioned there only by its owner. Destination: [atrium.md](atrium.md). Nothing of it is built; the live `#community` had no eddies when this was written.
+
 ---
 
 ## Out of scope this destination

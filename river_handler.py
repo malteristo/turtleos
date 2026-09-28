@@ -33,7 +33,7 @@ RIVER_PROMPT_FALLBACK = """You classify river messages into structured acts only
 Output a single JSON object: {"acts": [...]} — no prose, no markdown fences.
 A standing eddy bar at the channel bottom handles materialize — parent river messages get acknowledge/flow acts only.
 Act types: acknowledge, offer_flow_menu, offer_flow, error.
-Do NOT emit offer_eddy in the parent river channel.
+Do NOT emit offer_eddy in the parent channel.
 """
 
 
@@ -192,7 +192,7 @@ async def _materialize_from_bar(
     """Delete bar, spawn eddy (Discord thread embed), repost bar at bottom."""
     channel = interaction.channel
     if not channel:
-        await interaction.followup.send("Could not find river channel.", ephemeral=True)
+        await interaction.followup.send("Could not find this channel.", ephemeral=True)
         return
     client = interaction.client
     try:

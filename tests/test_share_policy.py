@@ -99,7 +99,7 @@ class SharedEddyContextTests(unittest.TestCase):
             lines = shared_eddy_context_lines(cfg, speaker_display="Partner")
         joined = "\n".join(lines)
         self.assertIn("is **not** a **Family** member", joined)
-        self.assertIn("their own river", joined)
+        self.assertIn("their home channel", joined)
 
 
 class MentionGateTests(unittest.TestCase):

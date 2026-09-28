@@ -30,19 +30,19 @@ class RiverKeyTests(unittest.TestCase):
         self.assertEqual(_normalize_mage_key("Anna-Marie"), "anna_marie")
 
     def test_hosted_river_channel_name(self) -> None:
-        self.assertEqual(hosted_river_channel_name("fares"), "river-fares")
-        self.assertEqual(hosted_river_channel_name("anna_marie"), "river-anna-marie")
+        self.assertEqual(hosted_river_channel_name("robin"), "home-robin")
+        self.assertEqual(hosted_river_channel_name("anna_marie"), "home-anna-marie")
 
     def test_parse_invite_args_with_member(self) -> None:
-        name, key, locale, member = parse_invite_args(["fares", "👽", "en", "--member", "216.guest"])
-        self.assertEqual(name, "fares")
+        name, key, locale, member = parse_invite_args(["robin", "👽", "en", "--member", "216.guest"])
+        self.assertEqual(name, "robin")
         self.assertEqual(key, "👽")
         self.assertEqual(locale, "en")
         self.assertEqual(member, "216.guest")
 
     def test_parse_invite_args_member_mid_tokens(self) -> None:
-        name, key, locale, member = parse_invite_args(["--member", "99", "fares", "🌿"])
-        self.assertEqual(name, "fares")
+        name, key, locale, member = parse_invite_args(["--member", "99", "robin", "🌿"])
+        self.assertEqual(name, "robin")
         self.assertEqual(key, "🌿")
         self.assertEqual(locale, "en")
         self.assertEqual(member, "99")
@@ -51,11 +51,11 @@ class RiverKeyTests(unittest.TestCase):
         registry = {
             "channels": {
                 "1": {"type": "unclaimed-river", "mage": "brother", "invite_code": "abc"},
-                "2": {"type": "hosted-river", "mage": "fares"},
+                "2": {"type": "hosted-river", "mage": "robin"},
             }
         }
         self.assertEqual(find_unclaimed_channel_id("brother", registry), "1")
-        self.assertIsNone(find_unclaimed_channel_id("fares", registry))
+        self.assertIsNone(find_unclaimed_channel_id("robin", registry))
         self.assertEqual(list_unclaimed_river_hints(registry), ["brother"])
 
     def test_is_unclaimed_river(self) -> None:
@@ -72,7 +72,7 @@ class RiverKeyTests(unittest.TestCase):
 
     def test_load_claim_room_en(self) -> None:
         text = load_claim_room_markdown("en")
-        self.assertIn("Claim your river", text)
+        self.assertIn("Claim your home channel", text)
 
 
 if __name__ == "__main__":

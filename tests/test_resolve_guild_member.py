@@ -18,7 +18,7 @@ class ResolveGuildMemberTests(unittest.IsolatedAsyncioTestCase):
         member = MagicMock(spec=discord.Member)
         member.id = 42
         member.name = "216.guest"
-        member.display_name = "فارس"
+        member.display_name = "روبن"
         guild = MagicMock()
         guild.members = [member]
         guild.get_member = MagicMock(return_value=None)

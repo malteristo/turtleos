@@ -2,11 +2,11 @@
 
 **Status:** Deferred — not used for current English-first cohort. Retained for a future localization pass.
 
-Das ist **dein Fluss** — deine private Fläche auf Kermits Server. Alles, was du hier schreibst, bleibt **deins**. Nichts aus diesem Kanal wird in den Familienkanal oder anderswo geteilt.
+Das ist **dein Home-Kanal** — deine private Fläche auf Kermits Server. Alles, was du hier schreibst, bleibt **deins**. Nichts aus diesem Kanal wird in den Familienkanal oder anderswo geteilt.
 
 ## So funktioniert es
 
-**Im Fluss** spricht Turtle nicht mit dir in Sätzen — du siehst kurze Bestätigungen und manchmal Buttons. Schreib einfach, was dich beschäftigt; der Fluss nimmt es auf.
+**Im Kanal selbst** spricht Turtle nicht mit dir in Sätzen — River antwortet mit kurzen Bestätigungen und manchmal Buttons. Schreib einfach, was dich beschäftigt; es wird aufgenommen.
 
 **Unten im Kanal** siehst du **`new eddy`** — damit öffnest du einen **Wirbel** (ein Thread). Schreib eine Nachricht. Turtle antwortet. Das ist der Alltag: Chat öffnen, reden, später im Sidebar wieder einsteigen.
 

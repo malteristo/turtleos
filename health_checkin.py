@@ -241,6 +241,20 @@ def already_logged(practice_dir: str | Path, day: date) -> bool:
     return day.isoformat() in _state(practice_dir)["logged"]
 
 
+def open_checkin_for_message(practice_dir: str | Path, message_id) -> date | None:
+    """The day whose posted check-in is this message and is still unanswered."""
+    state = _state(practice_dir)
+    logged = state["logged"]
+    for day, mid in state["posted"].items():
+        if str(mid) != str(message_id) or day in logged:
+            continue
+        try:
+            return date.fromisoformat(day)
+        except ValueError:
+            continue
+    return None
+
+
 def posted_draft(practice_dir: str | Path, day: date) -> str | None:
     value = _state(practice_dir)["drafts"].get(day.isoformat())
     text = str(value or "").strip()

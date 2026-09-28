@@ -43,6 +43,7 @@ import discord
 from mage import (
     get_attunement_profile,
     get_actor_key,
+    get_registry,
     get_current_channel_primitive,
     get_pd,
     get_runtime_dir,
@@ -112,9 +113,23 @@ async def on_ready():
                 print(f"Lifecycle bars restored: {restored}")
             except Exception as exc:
                 print(f"River startup setup failed: {exc}")
+            try:
+                from mcp_access.registry import load_registry
+                from mcp_connect_ui import rehydrate_connect_views
+
+                print(f"MCP connect offers restored: {rehydrate_connect_views(river_client, load_registry)}")
+            except Exception as exc:
+                print(f"MCP connect rehydrate failed: {type(exc).__name__}: {exc}")
+            try:
+                from health_checkin_ui import register_state_checkin_view
+
+                register_state_checkin_view(river_client, get_registry)
+                print("State check-in buttons registered")
+            except Exception as exc:
+                print(f"State check-in buttons failed: {type(exc).__name__}: {exc}")
 
         asyncio.create_task(_setup_native_river())
-        asyncio.create_task(_river_bar_safety_sweep_loop())
+        _start_heartbeat_once()
         try:
             from mage import sync_shared_river_channel_access
 
@@ -129,18 +144,141 @@ async def on_ready():
             print(f"River thread rejoin failed: {exc}")
 
 
-async def _river_bar_safety_sweep_loop() -> None:
-    """Periodic floor reconcile — orphan killer when event-driven debounce misses."""
-    from river_handler import sweep_river_bar_floors
+_heartbeat_task: asyncio.Task | None = None
 
-    while True:
-        await asyncio.sleep(180)
-        if get_attunement_profile() != "native":
-            continue
-        try:
-            await sweep_river_bar_floors(river_client)
-        except Exception as exc:
-            print(f"River bar safety sweep failed: {exc}")
+
+def _start_heartbeat_once() -> None:
+    """on_ready fires again on every reconnect; one heartbeat, not one per reconnect."""
+    global _heartbeat_task
+    if _heartbeat_task is not None and not _heartbeat_task.done():
+        return
+    from helpers import log_activity
+    from river_heartbeat import run_forever
+
+    async def report(summary: str) -> None:
+        from state import CHANNELS
+
+        ch_id = CHANNELS.get("dialogue")
+        channel = river_client.get_channel(int(ch_id)) if ch_id else None
+        if channel is None:
+            print(f"River heartbeat report (no ops channel): {summary}")
+            return
+        await log_activity(summary, "\U0001f493", channel=channel)
+
+    _heartbeat_task = asyncio.create_task(run_forever(river_client, _house_chores(), report))
+
+
+def _house_chores():
+    """River's periodic chores. Each changes the registry only toward what Discord
+    shows, re-applies access the registry grants, or does what an event handler
+    would have done had the bot been up (missed joins). Renames and departs stay
+    explicit admin acts and are only reported (house check)."""
+    from river_heartbeat import Chore, live_channels, record_discord_state, report_if_changed
+
+    async def connection_offers(client):
+        from mcp_access.registry import load_registry
+        from mcp_connect_ui import announce_pickups, post_pending_offers
+
+        posted = await post_pending_offers(client, load_registry)
+        announced = await announce_pickups(client, load_registry)
+        if posted or announced:
+            print(f"MCP connect offers posted: {posted}; pickups announced: {announced}")
+
+    async def eddy_bars(client):
+        from river_handler import sweep_river_bar_floors
+
+        if get_attunement_profile() == "native":
+            await sweep_river_bar_floors(client)
+
+    async def discord_names(client):
+        from admin_experience import iter_river_rows
+        from river_keys import update_registry
+
+        live = live_channels(client)
+        if not live:
+            return None
+        changes: list[str] = []
+
+        def mutate(registry: dict) -> bool:
+            homes = {r.channel_id for r in iter_river_rows(registry) if r.ch_type != "unclaimed-river"}
+            changes.extend(record_discord_state(registry, live, homes))
+            return bool(changes)
+
+        update_registry(mutate)
+        return ("Recorded what Discord shows — " + "; ".join(changes)) if changes else None
+
+    async def shared_access(client):
+        from mage import sync_shared_river_channel_access
+
+        await sync_shared_river_channel_access(client)
+
+    async def house_check(client):
+        from admin_experience import collect_doctor_findings
+        from mage import maybe_reload_mage_registry
+
+        guilds = getattr(client, "guilds", []) or []
+        if not guilds:
+            return None
+        maybe_reload_mage_registry()
+        lines = [
+            line for line in collect_doctor_findings(get_registry(), guilds[0])
+            if line.startswith("\u26a0")
+        ]
+        return report_if_changed(lines)
+
+    async def cloud_credit(client):
+        import anthropic
+
+        from cloud_fallback import probe_hold
+        from state import ANTHROPIC_API_KEY
+
+        async def ask(model: str) -> None:
+            aclient = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            await aclient.messages.create(
+                model=model, max_tokens=1, messages=[{"role": "user", "content": "."}]
+            )
+
+        return await probe_hold(ask)
+
+    async def missed_joins(client):
+        from roster_sync import admit_missed_joins
+
+        guilds = getattr(client, "guilds", []) or []
+        lines = await admit_missed_joins(guilds[0]) if guilds else []
+        return "\n".join(lines) or None
+
+    async def error_triage(client):
+        from pathlib import Path
+
+        from error_triage import run_nightly
+        from llm import chat_ollama_json
+        from state import REFLECTION_MODEL
+
+        async def ask(prompt: str) -> str:
+            return await chat_ollama_json(prompt, model=REFLECTION_MODEL, num_ctx=8192, timeout_s=600)
+
+        root = Path(__file__).resolve().parent
+        return await run_nightly(
+            root / "logs", root / "issues", ask, report_json=root / "test-runs" / "ops-report-latest.json"
+        )
+
+    async def eddy_membership(client):
+        if get_attunement_profile() == "native":
+            await _rejoin_practice_threads(client)
+
+    return [
+        Chore("connection_offers", 60, connection_offers),
+        Chore("eddy_bars", 180, eddy_bars),
+        Chore("discord_names", 10 * 60, discord_names),
+        # on_ready already ran these two; the first beat must not repeat them
+        # (a doubled rejoin pass hit Discord's rate limit on 09-27).
+        Chore("shared_access", 30 * 60, shared_access, first_after=30 * 60),
+        Chore("eddy_membership", 30 * 60, eddy_membership, first_after=30 * 60),
+        Chore("house_check", 6 * 3600, house_check),
+        Chore("cloud_credit", 60, cloud_credit),
+        Chore("missed_joins", 15 * 60, missed_joins, first_after=2 * 60),
+        Chore("error_triage", 30 * 60, error_triage),
+    ]
 
 
 async def _ensure_turtle_in_eddy(thread: discord.Thread) -> None:

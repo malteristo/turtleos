@@ -1,10 +1,10 @@
 # Welcome to your channel
 
-This is **your river** — your private practice surface on the operator's server. What you write here stays **yours**. Nothing from this channel is shared to family channels or anywhere else.
+This is **your home channel** — your private practice space on the operator's server. What you write here stays **yours**. Nothing from this channel is shared to family channels or anywhere else.
 
 ## How it works
 
-**In the river**, Turtle does not chat in full sentences — you see short acknowledgements and sometimes buttons. Write what is on your mind; the river takes it in.
+**In the channel itself**, Turtle does not chat in full sentences — River, the house's quiet hand, answers with short acknowledgements and sometimes buttons. Write what is on your mind; it is taken in.
 
 **At the bottom of the channel** you will see **`new eddy`** — click it to open a thread. Send a message. Turtle joins and replies. That is your daily loop: open a chat, talk, come back anytime from the sidebar.
 

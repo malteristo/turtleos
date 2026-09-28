@@ -92,7 +92,7 @@ from tos_tools import TOS_TOOLS, execute_tos_tool, build_tool_report
 from triage import triage_message, prewarm_triage
 
 from prompts import (
-    get_system_prompt, get_thread_prompt, build_thread_summary,
+    get_system_prompt, get_thread_prompt,
 )
 
 from readiness import startup_readiness_check
@@ -601,6 +601,12 @@ async def on_ready():
             await ensure_river_eddy_bar(client)
         except Exception as exc:
             print(f"Eddy door setup failed: {exc}")
+        try:
+            from health_checkin_ui import register_state_checkin_view
+
+            register_state_checkin_view(client, get_registry)
+        except Exception as exc:
+            print(f"State check-in buttons failed: {exc}")
 
     print("on_ready complete")
 

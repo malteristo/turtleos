@@ -52,10 +52,10 @@ def _channel_binding_hint(channel: discord.abc.GuildChannel) -> str:
     hints: list[str] = []
     if _is_practice_channel(channel):
         hints.append("Practice category — consider `!admin space create` or `!admin invite`")
-    if name.startswith("river-"):
-        hints.append("`river-*` name — hosted river via `!admin invite` (claim room or bound)")
+    if name.startswith(("home-", "river-")):
+        hints.append("`home-*` name — a member's home channel via `!admin invite` (claim room or bound)")
     elif name.endswith("-dialogue"):
-        hints.append("legacy `*-dialogue` name — prefer `#river-<name>`; use `!admin rivers sync-names`")
+        hints.append("legacy `*-dialogue` name — prefer `#home-<name>`; use `!admin rivers sync-names`")
     elif "play" in name or name.endswith("-play"):
         hints.append("play sandbox — `!admin space create <key>`")
     if not hints:
@@ -87,7 +87,7 @@ def _permission_drift_issues(
             issues.append("@everyone can view (expected private practice channel)")
 
     mage_key = entry.get("mage")
-    if ch_type == "hosted-river" and mage_key:
+    if ch_type in ("river", "hosted-river") and mage_key:
         mage = registry.get("mages", {}).get(mage_key, {})
         raw = mage.get("discord_id")
         if raw:
@@ -297,6 +297,13 @@ async def reconcile_channel_update(
         return {"skipped": "channel_type", "channel_id": after.id}
 
     ch_id_str = str(after.id)
+    # The other bot may have written the registry since this process loaded it
+    # (sync-names runs in River; this event lands in both). Read the file first,
+    # or a rename it already recorded looks like drift — and the save below
+    # would write the stale copy back over it.
+    from mage import maybe_reload_mage_registry
+
+    maybe_reload_mage_registry()
     registry = get_registry()
     entry = registry.get("channels", {}).get(ch_id_str)
     if not isinstance(entry, dict):
@@ -332,6 +339,18 @@ async def reconcile_channel_update(
 
     from helpers import log_activity
 
+    if changes == [f"renamed `{before_name}` → `#{after_name}`"]:
+        # A rename is recorded above; nothing is left to repair.
+        if str(entry.get("name") or "").lower() != str(after_name).lower():
+            try:
+                await log_activity(
+                    f"Channel `#{before_name}` renamed to `#{after_name}` (`{ch_id_str}`) — recorded.",
+                    "\u270f\ufe0f",
+                )
+            except Exception as exc:
+                print(f"log_activity for channel rename failed: {exc}")
+        return {"channel_updated": True, "channel_id": after.id, "renamed": renamed, "changes": changes}
+
     mage_key = entry.get("mage", "?")
     ch_type = entry.get("type", "unknown")
     detail = "; ".join(changes)
@@ -355,9 +374,10 @@ async def reconcile_channel_update(
 
 async def reconcile_channel_delete(channel: discord.abc.GuildChannel, *, discord_client) -> dict[str, Any]:
     """S2: native channel/category delete → orphan registry entry + ops notice."""
-    from mage import reload_mage_registry
+    from mage import maybe_reload_mage_registry, reload_mage_registry
     from space_provisioning import mark_channel_orphaned
 
+    maybe_reload_mage_registry()
     ch_id_str = str(channel.id)
     registry = get_registry()
     entry = registry.get("channels", {}).get(ch_id_str)
