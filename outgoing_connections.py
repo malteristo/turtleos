@@ -88,6 +88,8 @@ _SKIP_DIRS = {
     "__pycache__",
     "node_modules",
     "tests",
+    # Scratch copy of the public subset. Kept between publishes. Not a second door.
+    ".publish-worktree",
 }
 
 

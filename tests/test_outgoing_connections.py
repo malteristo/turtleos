@@ -128,6 +128,17 @@ class OfferSiteTests(unittest.TestCase):
     def test_this_tree_has_one_offer_site(self) -> None:
         self.assertEqual(offer_sites(REPO), [])
 
+    def test_the_publish_scratch_copy_is_not_an_offer_site(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "outgoing_connections.py").write_text("# door\n", encoding="utf-8")
+            scratch = root / ".publish-worktree"
+            scratch.mkdir()
+            (scratch / "outgoing_connections.py").write_text(
+                f'name = "{TOOL_NAME}"\n', encoding="utf-8"
+            )
+            self.assertEqual(offer_sites(root), [])
+
 
 class DoorTests(unittest.TestCase):
     def setUp(self) -> None:

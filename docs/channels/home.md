@@ -24,7 +24,7 @@ This channel walked the identity question above, and that question is answered. 
 
 **What is on your mind?**
 
-This channel's walk of that question starts in the craft channel, then the room that was boom, then home. A home channel that did not have that earlier room starts in home. The walk has not started.
+This channel's walk of that question starts in the craft channel, then the room that was boom, then home. A home channel that did not have that earlier room starts in home. Opened in the home channel on 2026-10-31. The reading is not written yet.
 
 The key is rewritten, not appended. A key that is not rewritten becomes a story of a practice that has already moved.
 
