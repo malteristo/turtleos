@@ -171,20 +171,24 @@ class Discord:
         return list(reversed(out))
 
 
-def build_history(messages: list[dict], turtle_bot_id: str) -> list[dict]:
+def build_history(messages: list[dict], turtle_bot_id: str, river_bot_id: str | None = None) -> list[dict]:
     """Discord messages → the in-memory history shape.
 
     Mirrors ``helpers.load_thread_history`` deliberately: same ``[name]:``
     prefix on member turns (the witness layer parses authorship back out of it —
     INT-040), same skip of the thread-open marker, same attachment note. Only
-    Turtle's own messages become ``assistant``; River's embeds and the eddy bar
-    are furniture, not conversation.
+    Turtle's own messages become ``assistant``. River's posts are kept, named
+    as River. A bar with no words, and any other bot, stays out.
     """
     history: list[dict] = []
     for msg in messages:
         author = msg.get("author") or {}
-        content = (msg.get("content") or "").strip()
+        content = (msg.get("content") or "").replace("\u200b", "").strip()
         if author.get("bot"):
+            if river_bot_id and str(author.get("id")) == str(river_bot_id):
+                if content and not content.startswith("🧵"):
+                    history.append({"role": "user", "content": f"[River]: {content}"})
+                continue
             if str(author.get("id")) != str(turtle_bot_id):
                 continue
             if not content or content.startswith("🧵"):
@@ -353,9 +357,11 @@ async def main(argv: list[str] | None = None) -> int:
         title = t.get("name") or "eddy"
         try:
             msgs = api.messages(tid, window)
-            history = build_history(msgs, turtle_bot_id)
+            history = build_history(
+                msgs, turtle_bot_id, river_bot_id=os.environ.get("RIVER_BOT_USER_ID") or None
+            )
             if len(history) < args.min_messages:
-                # message_count includes River's furniture; the conversation
+                # message_count includes the wordless bar; the conversation
                 # itself can be shorter than the thread.
                 empty += 1
                 print(f"  [{idx}/{len(candidates)}] skip (thin after filtering): {title[:50]}")

@@ -468,6 +468,10 @@ def _offer_from_turtle_intent(intent) -> ContextualOffer | None:
         return _offer(kind="turtle_checkpoint", command="!checkpoint")
     if intent.action == "save" and intent.url:
         return _offer(kind="turtle_save", command=f"!fetch {intent.url}")
+    if intent.action == "keep":
+        return _offer(kind="turtle_keep", command="!keep")
+    if intent.action == "ignore":
+        return _offer(kind="turtle_ignore", command="!ignore")
     return None
 
 
@@ -490,6 +494,37 @@ async def _post_contextual_offer(channel, offer: ContextualOffer) -> bool:
         return False
     _log_contextual_posted(channel, offer.kind)
     return True
+
+
+async def _offer_keep_date_from_intent(channel, intent, practitioner_message_id: int) -> bool:
+    """Turtle read a date in the practitioner's words; River draws the confirm.
+
+    The button echoes weekday and month, which is what catches a misread date, so it
+    stays even though Turtle did the reading. Nothing is kept until it is pressed.
+    """
+    from datetime import date as _date
+
+    from dates import DateCommitment, locale_for_practice_dir, offer_date_keep
+    from mage import get_pd
+
+    try:
+        source = await channel.fetch_message(practitioner_message_id)
+    except Exception as exc:
+        _log_contextual_skip(channel, "turtle_intent", f"date_source_missing:{type(exc).__name__}")
+        return False
+    pd = get_pd()
+    commitment = DateCommitment(
+        when=_date.fromisoformat(intent.when),
+        title=intent.title,
+        recurrence=intent.recurrence,
+        birth_year=intent.birth_year,
+    )
+    offered = await offer_date_keep(
+        source, commitment, practice_dir=pd, locale=locale_for_practice_dir(pd)
+    )
+    if offered:
+        _log_contextual_posted(channel, "date_keep")
+    return offered
 
 
 async def maybe_offer_turtle_intent_after_turn(
@@ -529,6 +564,8 @@ async def maybe_offer_turtle_intent_after_turn(
     if not intent:
         _log_contextual_skip(channel, "turtle_intent", "no_pending_offer")
         return False
+    if intent.action == "keep_date":
+        return await _offer_keep_date_from_intent(channel, intent, practitioner_message_id)
     offer = _offer_from_turtle_intent(intent)
     if not offer:
         _log_contextual_skip(channel, "turtle_intent", "unmapped_or_invalid")

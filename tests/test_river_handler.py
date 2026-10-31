@@ -210,25 +210,5 @@ class HandleRiverMessageTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(glance.await_args.kwargs.get("toward"), "later")
 
 
-class ParentRiverGlanceCopyTests(unittest.TestCase):
-    def test_empty_river_says_it_is_not_a_conversation(self) -> None:
-        from river_handler import compose_parent_river_glance_text
-
-        text = compose_parent_river_glance_text([])
-        self.assertIn("isn't a conversation", text)
-        self.assertIn("...", text)
-
-    def test_live_eddies_name_one_next(self) -> None:
-        from river_handler import compose_parent_river_glance_text
-
-        text = compose_parent_river_glance_text(
-            ["alpha", "beta"], toward="craft", latest="beta"
-        )
-        self.assertIn("**alpha**", text)
-        self.assertIn("**beta**", text)
-        self.assertIn("craft", text)
-        self.assertIn("continue **beta**", text)
-
-
 if __name__ == "__main__":
     unittest.main()

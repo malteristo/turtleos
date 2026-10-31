@@ -189,11 +189,16 @@ async def _materialize_from_bar(
     *,
     flow_id: str | None = None,
 ) -> None:
-    """Delete bar, spawn eddy (Discord thread embed), repost bar at bottom."""
+    """Delete bar, spawn eddy (Discord thread embed), repost bar at bottom.
+
+    In a magic room, Summon always opens a new session. Other unreleased
+    spirits are named in the greeting. They do not stop the summon.
+    """
     channel = interaction.channel
     if not channel:
         await interaction.followup.send("Could not find this channel.", ephemeral=True)
         return
+    company = await _workshop_company(channel)
     client = interaction.client
     try:
         await interaction.message.delete()
@@ -207,7 +212,7 @@ async def _materialize_from_bar(
         print(f"Eddy bar spawn failed: {type(exc).__name__}: {exc}")
         await reconcile_river_bar_floor(channel, client)
         await interaction.followup.send(
-            "Could not open eddy — try again or use `!thread`.",
+            "Could not open eddy — try again.",
             ephemeral=True,
         )
         return
@@ -216,6 +221,354 @@ async def _materialize_from_bar(
         await interaction.followup.send("Could not open eddy.", ephemeral=True)
         return
     await reconcile_river_bar_floor(channel, client)
+    await _greet_summon(thread, channel, interaction.user, company=company)
+
+
+def _owner_checkout(channel_id):
+    """The owner's workshop checkout, when they have one.
+
+    A home room does not grant the workshop. The checkout is the person's.
+    Another member, with none, gets None, and their session stays in the channel.
+    """
+    from pathlib import Path
+
+    from mage import get_registry
+    from room_connections import owner_of
+    from workshop_tools import checkout_for
+
+    try:
+        registry = get_registry()
+    except Exception:
+        return None
+    owner = owner_of(registry, channel_id) if registry else None
+    if not owner:
+        return None
+    root = checkout_for(registry, owner)
+    return root if isinstance(root, Path) else None
+
+
+async def _open_home_session(interaction: discord.Interaction) -> None:
+    """A piece of work in this home channel. Not a summon.
+
+    The owner's session can work on the platform when they have a workshop.
+    Another member's session stays in the channel.
+    """
+    channel = interaction.channel
+    if channel is None or not offers_session(getattr(channel, "id", None)):
+        await interaction.followup.send("A session starts from home.", ephemeral=True)
+        return
+    client = interaction.client
+    try:
+        await interaction.message.delete()
+    except discord.HTTPException as exc:
+        print(f"Session bar delete failed: {exc}")
+    try:
+        thread = await _spawn_eddy_from_anchor(channel, initiator=interaction.user)
+    except Exception as exc:
+        print(f"Session open failed: {type(exc).__name__}: {exc}")
+        await reconcile_river_bar_floor(channel, client)
+        await interaction.followup.send("Could not open the session.", ephemeral=True)
+        return
+    if not thread:
+        await reconcile_river_bar_floor(channel, client)
+        await interaction.followup.send("Could not open the session.", ephemeral=True)
+        return
+    root = _owner_checkout(channel.id)
+    if root is not None:
+        try:
+            from boom_takeup import mark_platform_session
+            from mage import get_runtime_dir
+
+            mark_platform_session(get_runtime_dir(), thread.id)
+        except Exception as exc:
+            print(f"Platform session mark failed: {type(exc).__name__}: {exc}")
+        await _name_session(thread, channel, root)
+        await thread.send(HOME_SESSION_PLATFORM)
+    else:
+        try:
+            from eddy_spawn import pop_awaiting_title
+            from thread_registry import update_thread_name
+
+            await thread.edit(name="session")
+            update_thread_name(thread.id, "session")
+            pop_awaiting_title(thread.id, channel.id)
+        except Exception as exc:
+            print(f"Session naming failed: {type(exc).__name__}: {exc}")
+        await thread.send(HOME_SESSION)
+    await reconcile_river_bar_floor(channel, client)
+
+
+async def _active_parent_threads(channel) -> list:
+    """Threads of this channel the guild currently has open."""
+    guild = getattr(channel, "guild", None)
+    if guild is None:
+        return list(getattr(channel, "threads", []) or [])
+    try:
+        return list(await guild.active_threads())
+    except Exception as exc:
+        print(f"Summon active threads failed: {type(exc).__name__}: {exc}")
+        return list(getattr(channel, "threads", []) or [])
+
+
+async def _workshop_company(channel) -> str:
+    """Names of unreleased spirits in this room. Empty when the room has no workshop.
+
+    This never refuses a summon. The caller opens the session either way.
+    """
+    from mage import channel_has_capability, get_pd, set_practice_context_for_channel
+
+    if not channel_has_capability(channel.id, "workshop"):
+        return ""
+    set_practice_context_for_channel(channel.id)
+    from magic_session import pick_session
+    from session_record import is_released
+
+    practice = get_pd()
+    rows = []
+    for thread in await _active_parent_threads(channel):
+        if getattr(thread, "parent_id", None) != channel.id:
+            continue
+        rows.append({
+            "id": thread.id,
+            "name": getattr(thread, "name", "") or str(thread.id),
+            "archived": bool(getattr(thread, "archived", False)),
+            "released": is_released(practice, thread.id),
+        })
+    return pick_session(rows)["text"]
+
+
+async def _greet_summon(thread, channel, user, company: str = "") -> None:
+    """In a room with a workshop, the new thread opens on the pair, naming the release."""
+    from mage import channel_has_capability
+
+    if not channel_has_capability(channel.id, "workshop"):
+        return
+    try:
+        from eddy_spawn import river_add_spirit_to_eddy, river_add_turtle_to_eddy
+        from mage import get_pd
+        from magic_prompt import greeting
+        from magic_session import BRIEFING, apply_stand, briefing_digest
+        from session_record import append_event
+        from workshop_tools import room_checkout
+
+        try:
+            await river_add_turtle_to_eddy(thread)
+            await river_add_spirit_to_eddy(thread)
+        except Exception as exc:
+            print(f"Summon join failed: {type(exc).__name__}: {exc}")
+        root = room_checkout(channel.id, getattr(user, "id", None))
+        stood = apply_stand(root) if root is not None else ""
+        note = "\n".join(part for part in (company, stood) if part)
+        text = greeting(root, stand=note)
+        await thread.send(text)
+    except Exception as exc:
+        print(f"Summon greeting failed: {type(exc).__name__}: {exc}")
+        return
+    try:
+        digest = briefing_digest(root / BRIEFING) if root is not None else "missing"
+        append_event(get_pd(), thread.id, kind="greeting", actor="river", text=text, briefing=digest)
+    except Exception as exc:
+        print(f"Summon greeting record failed: {type(exc).__name__}: {exc}")
+    await _name_session(thread, channel, root)
+
+
+async def _name_session(thread, channel, root) -> None:
+    """A session in a workshop room is named at Summon and never retitled from its first words.
+
+    `...` and `.` are River gestures that return before the title step, so a session that opens
+    with either stayed "new eddy" for good. The name is the number, the release and the day.
+    """
+    if root is None:
+        return
+    try:
+        from commands import thread_configs
+        from eddy_spawn import pop_awaiting_title
+        from magic_prompt import session_name
+        from thread_registry import load_registry, update_thread_name
+
+        name = session_name(root, load_registry().get("threads") or {}, channel.id, thread.id)
+        await thread.edit(name=name[:100])
+        update_thread_name(thread.id, name)
+        pop_awaiting_title(thread.id, channel.id)
+        cfg = thread_configs.setdefault(thread.id, {})
+        cfg["topic"] = name
+        cfg["awaiting_title"] = False
+        cfg["blank_eddy"] = False
+    except Exception as exc:
+        print(f"Session naming failed: {type(exc).__name__}: {exc}")
+
+
+async def open_drop_thread(anchor, *, title: str, kind: str, preface: str = "") -> bool:
+    """Open the eddy on his message and ask the room's voice to answer it.
+
+    False when Discord would not open the thread. The caller says so.
+    """
+    from eddy_spawn import (
+        patch_pending_native_eddy,
+        pop_awaiting_title,
+        river_add_spirit_to_eddy,
+        river_add_turtle_to_eddy,
+        spawn_river_eddy,
+    )
+    from first_eddy_handoff import write_first_eddy_handoff
+    from mage import get_runtime_dir
+    from parent_intake import SESSION_OPENED
+    from thread_registry import update_thread_name
+
+    thread = await spawn_river_eddy(anchor)
+    if thread is None:
+        return False
+    parent_id = anchor.channel.id
+    named = False
+    if kind == "session":
+        from workshop_tools import room_checkout
+
+        author = getattr(anchor, "author", None)
+        root = room_checkout(parent_id, getattr(author, "id", None))
+        if root is not None:
+            await _name_session(thread, anchor.channel, root)
+            named = True
+    if not named:
+        await thread.edit(name=title[:100])
+        update_thread_name(thread.id, title)
+        pop_awaiting_title(thread.id, parent_id)
+    try:
+        from commands import thread_configs
+
+        cfg = thread_configs.get(thread.id)
+        if isinstance(cfg, dict):
+            cfg["awaiting_title"] = False
+            cfg["blank_eddy"] = False
+            cfg["topic"] = title
+    except Exception:
+        pass
+    patch_pending_native_eddy(
+        thread.id,
+        parent_id,
+        {"awaiting_title": False, "blank_eddy": False, "topic": title},
+    )
+    if preface:
+        await thread.send(preface[:1800])
+    if kind == "session":
+        await thread.send(SESSION_OPENED)
+    await river_add_turtle_to_eddy(thread)
+    if kind == "session":
+        await river_add_spirit_to_eddy(thread)
+    write_first_eddy_handoff(
+        thread.id, parent_id, anchor.id, runtime_dir=get_runtime_dir()
+    )
+    if kind == "boom":
+        from boom_takeup import post_takeup_button
+
+        try:
+            await post_takeup_button(thread)
+        except Exception as exc:
+            print(f"Take this up button failed: {type(exc).__name__}: {exc}")
+    return True
+
+
+async def open_taken_up(interaction) -> None:
+    """The press of Take this up. Bound into the button so the button stays a leaf."""
+    import boom_takeup
+    from channel_primitives import resolve_primitive
+    from mage import get_pd, get_registry, get_runtime_dir, set_practice_context_for_channel
+    from pathlib import Path
+    from room_connections import owner_of
+
+    thread = interaction.channel
+    parent = getattr(thread, "parent", None)
+    if parent is None:
+        await interaction.followup.send("This button belongs on a Boom eddy.", ephemeral=True)
+        return
+    registry = get_registry()
+    primitive = resolve_primitive(registry, parent.id)
+    if primitive is None or primitive.name != "craft":
+        await interaction.followup.send("This button belongs on a Boom eddy.", ephemeral=True)
+        return
+    client = interaction.client
+    runtime_dir = get_runtime_dir()
+    set_practice_context_for_channel(parent.id)
+    try:
+        practice = Path(get_pd())
+    except Exception:
+        practice = None
+    existing = boom_takeup.load_session(runtime_dir, thread.id)
+    if existing is not None:
+        session = await boom_takeup._fetch(client, existing)
+        released = False
+        if practice is not None and session is not None:
+            from session_record import is_released
+
+            released = is_released(practice, existing)
+        if boom_takeup.still_open(
+            found=session is not None,
+            archived=bool(getattr(session, "archived", False)),
+            released=released,
+        ):
+            await thread.send(boom_takeup.eddy_line(boom_takeup._url(session), already=True))
+            return
+    owner = owner_of(registry, parent.id)
+    home_id = boom_takeup.home_channel_id(registry, owner) if owner else None
+    if not home_id:
+        await thread.send(boom_takeup.COULD_NOT)
+        return
+    home = await boom_takeup._fetch(client, int(home_id))
+    if home is None:
+        await thread.send(boom_takeup.COULD_NOT)
+        return
+    river = getattr(client, "user", None)
+    words, reply, note = await boom_takeup.gather_packet(
+        thread,
+        river_id=getattr(river, "id", None),
+        practice_dir=practice,
+    )
+    opened = await _open_taken_session(
+        home,
+        text=boom_takeup.carry_text(words=words, reply=reply, note=note),
+        user_id=getattr(interaction.user, "id", None),
+        runtime_dir=runtime_dir,
+    )
+    if opened is None:
+        await thread.send(boom_takeup.COULD_NOT)
+        return
+    boom_takeup.save_session(runtime_dir, thread.id, opened.id)
+    await thread.send(boom_takeup.eddy_line(boom_takeup._url(opened), already=False))
+
+
+async def _open_taken_session(home, *, text: str, user_id: int | None, runtime_dir: str):
+    from eddy_spawn import river_add_spirit_to_eddy, river_add_turtle_to_eddy, spawn_river_eddy
+    from first_eddy_handoff import write_first_eddy_handoff
+
+    anchor = await home.send(text)
+    thread = await spawn_river_eddy(anchor, initiator_id=user_id)
+    if thread is None:
+        return None
+    root = _owner_checkout(home.id)
+    if root is not None:
+        from boom_takeup import mark_platform_session
+
+        mark_platform_session(runtime_dir, thread.id)
+        await _name_session(thread, home, root)
+    else:
+        try:
+            from eddy_spawn import pop_awaiting_title
+            from thread_registry import update_thread_name
+
+            await thread.edit(name="session")
+            update_thread_name(thread.id, "session")
+            pop_awaiting_title(thread.id, home.id)
+        except Exception as exc:
+            print(f"Session naming failed: {type(exc).__name__}: {exc}")
+    await river_add_turtle_to_eddy(thread)
+    await river_add_spirit_to_eddy(thread)
+    write_first_eddy_handoff(thread.id, home.id, anchor.id, runtime_dir=runtime_dir)
+    return thread
+
+
+def install_takeup() -> None:
+    from boom_takeup import bind_house
+
+    bind_house(open_taken_up)
 
 
 def _river_bar_custom_ids(channel_id: int) -> tuple[str, str]:
@@ -245,21 +598,55 @@ def message_looks_like_river_bar(message, channel_id: int) -> bool:
     return False
 
 
+HOME_SESSION = "This is a session. A piece of work, in this channel."
+HOME_SESSION_PLATFORM = "This is a session. It can work on turtleOS, and the workshop keeps it."
+
+
+def offers_session(channel_id: int) -> bool:
+    """A home feed can start a piece of work. Every other room cannot."""
+    from mage import get_channel_primitive
+
+    primitive = get_channel_primitive(channel_id)
+    return bool(primitive and primitive.name == "private")
+
+
+def _bar_face(channel_id: int) -> tuple[str, bool, str]:
+    """(label, is_primary, emoji) of the standing button: Summon where a workshop is, else new eddy."""
+    from mage import channel_has_capability
+
+    if channel_has_capability(channel_id, "workshop"):
+        return "Summon", True, "✨"
+    return "new eddy", False, "🌀"
+
+
 class RiverEddyBarView(discord.ui.View):
-    """Standing bottom bar — launch pad: new eddy + more (artifacts · help)."""
+    """Standing bottom bar — launch pad: new eddy + more (commands, the ones this channel keeps, mcp, model)."""
 
     def __init__(self, channel_id: int):
         super().__init__(timeout=None)
         self._channel_id = channel_id
         new_id, more_id = _river_bar_custom_ids(channel_id)
+        label, primary, emoji = _bar_face(channel_id)
         new_btn = discord.ui.Button(
-            label="new eddy",
+            label=label,
             custom_id=new_id,
-            style=discord.ButtonStyle.secondary,
-            emoji="🌀",
+            style=discord.ButtonStyle.primary if primary else discord.ButtonStyle.secondary,
+            emoji=emoji,
         )
         new_btn.callback = self._on_new_eddy
         self.add_item(new_btn)
+
+        if offers_session(channel_id):
+            session_btn = discord.ui.Button(
+                label="session",
+                custom_id=f"river:bar:session:{channel_id}",
+                style=discord.ButtonStyle.secondary,
+            )
+            session_btn.callback = self._on_session
+            self.add_item(session_btn)
+
+        from bar_menu import menu_options, pins
+        from cloud_fallback import house_dir
 
         more = discord.ui.Select(
             placeholder="more…",
@@ -267,18 +654,8 @@ class RiverEddyBarView(discord.ui.View):
             min_values=1,
             max_values=1,
             options=[
-                discord.SelectOption(
-                    label="artifacts",
-                    value="artifacts",
-                    emoji="📂",
-                    description="Browse recent practice artifacts",
-                ),
-                discord.SelectOption(
-                    label="help",
-                    value="help",
-                    emoji="❓",
-                    description="Command summary (only you see this)",
-                ),
+                discord.SelectOption(label=label, value=value, description=description)
+                for value, label, description in menu_options(pins(house_dir(), channel_id))
             ],
         )
         more.callback = self._on_more
@@ -288,30 +665,46 @@ class RiverEddyBarView(discord.ui.View):
         await interaction.response.defer()
         await _materialize_from_bar(interaction)
 
+    async def _on_session(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await _open_home_session(interaction)
+
     async def _on_more(self, interaction: discord.Interaction):
         if interaction.channel.id != self._channel_id:
             await interaction.response.send_message("Wrong channel.", ephemeral=True)
             return
         values = (interaction.data or {}).get("values") or []
         choice = values[0] if values else ""
-        if choice == "help":
-            from commands import _river_help_body
+        if choice == "commands":
+            from mage import get_mage_type
+            from room_models import open_commands_private
 
-            body = _river_help_body()
-            await interaction.response.send_message(
-                f"📋 **Commands**\n{body}",
-                ephemeral=True,
-            )
+            await open_commands_private(interaction, operator=get_mage_type() != "practitioner")
             return
-        if choice == "artifacts":
-            from bar_anchor import hold_river_bar
+        from bar_menu import pins
+        from cloud_fallback import house_dir
+
+        if choice in pins(house_dir(), self._channel_id):
             from eddy_lifecycle_bar import _run_river_act_command
 
-            hold_river_bar(self._channel_id)
             await interaction.response.defer()
-            await _run_river_act_command(interaction, "artifacts", [])
+            await _run_river_act_command(interaction, choice, [])
             return
-        await interaction.response.send_message("Unknown option.", ephemeral=True)
+        if choice == "mcp":
+            from outgoing_connect_ui import open_list
+
+            await open_list(interaction)
+            return
+        if choice == "model":
+            from core.models import conversation_model
+            from room_models import open_private
+
+            await open_private(interaction, default=conversation_model())
+            return
+        # A bar posted before this menu changed may still offer a choice that is gone.
+        await interaction.response.send_message(
+            "That menu has changed. Open it again to see what is there now.", ephemeral=True
+        )
 
 
 class RiverEddyView(discord.ui.View):
@@ -345,7 +738,7 @@ class RiverEddyView(discord.ui.View):
         except Exception as exc:
             print(f"River eddy button failed: {type(exc).__name__}: {exc}")
             await interaction.followup.send(
-                "Could not materialize eddy — try again or use `!thread`.",
+                "Could not materialize eddy — try again.",
                 ephemeral=True,
             )
             return
@@ -438,7 +831,7 @@ class ChannelMenuView(discord.ui.View):
 
     def _callback_for(self, key: str):
         async def callback(interaction: discord.Interaction):
-            if key == "new_eddy":
+            if key in ("new_eddy", "summon"):
                 await interaction.response.defer()
                 await _materialize_from_bar(interaction)
                 return
@@ -460,45 +853,10 @@ class ChannelMenuView(discord.ui.View):
 
 
 async def _reply_thread_display(message: discord.Message, *, days: int | None) -> None:
-    """Same collector as !threads; spoken window is a filter, not a new list."""
-    from cmd_threads import collect_five_state_thread_records
-    from eddy_five_state import group_lines_by_five_state
-    from river_display import (
-        BUTTON_ROW,
-        compose_thread_glance_body,
-        filter_records_by_days,
-        thread_button_specs,
-        threads_title,
-    )
-    from state import EMBED_COLORS
-    from thread_registry import load_registry
+    """The same card as `!eddy`; a spoken window is a filter, not a new list."""
+    from cmd_threads import post_eddies
 
-    source = message.channel
-    if isinstance(source, discord.Thread):
-        source = source.parent
-    now = datetime.now(timezone.utc)
-    records = collect_five_state_thread_records(
-        list(getattr(source, "threads", None) or []),
-        load_registry().get("threads", {}),
-        parent_name=getattr(source, "name", None),
-        parent_id=getattr(source, "id", None),
-        show_all=False,
-        now=now,
-    )
-    records = filter_records_by_days(records, days)
-    grouped = group_lines_by_five_state([(row["state"], row["line"]) for row in records])
-    embed = discord.Embed(
-        title=threads_title(grouped, days),
-        description=compose_thread_glance_body(records) or None,
-        color=EMBED_COLORS["help"],
-    )
-    live = [row for row in records if row.get("state") == "live"]
-    guild_id = getattr(getattr(message, "guild", None), "id", None)
-    specs = thread_button_specs(live, guild_id=guild_id)
-    view = ThreadDisplayView(specs) if specs else None
-    if len(live) > BUTTON_ROW:
-        embed.set_footer(text="Same order as the sidebar")
-    await message.reply(embed=embed, view=view, mention_author=False)
+    await post_eddies(message, days=days)
 
 
 async def _reply_waiting_display(message: discord.Message) -> None:
@@ -791,6 +1149,19 @@ async def post_river_eddy_bar(channel, client) -> discord.Message | None:
     return msg
 
 
+async def refresh_river_bar(client, channel_id) -> None:
+    """Redraw the standing bar after its menu changed.
+
+    A posted menu cannot change its options, so the bar is replaced by a new one at the
+    bottom, as `reconcile_river_bar_floor` would. A channel with no bar gets none made.
+    """
+    if str(channel_id) not in _load_eddy_bar_state():
+        return
+    channel = client.get_channel(int(channel_id)) or await client.fetch_channel(int(channel_id))
+    await _delete_river_bar_orphans(channel, channel.id)
+    await post_river_eddy_bar(channel, client)
+
+
 async def _delete_river_bar_orphans(channel, channel_id: int) -> int:
     """Delete standing-bar messages in recent history. Returns count deleted."""
     deleted = 0
@@ -940,39 +1311,11 @@ def _river_client_for_channel(channel):
     return channel.guild._state._get_client() if channel.guild else None
 
 
-def compose_parent_river_glance_text(
-    thread_names: list[str],
-    *,
-    toward: str = "",
-    latest: str = "",
-) -> str:
-    """What's live on this river, and one next — or that it is not a conversation."""
-    if not thread_names:
-        return (
-            "This channel isn't a conversation. "
-            "Open an eddy, or type `...` inside one."
-        )
-    live = ", ".join(f"**{n}**" for n in thread_names[:5])
-    aimed = f" Aimed at **{toward}**." if toward else ""
-    nxt = latest or thread_names[0]
-    return f"Live here: {live}.{aimed} Next: continue **{nxt}**, or open a new eddy."
+async def post_parent_river_glance(channel, *, toward: str = "", user_id=None) -> None:
+    """Parent `...` — the same card as `!live`: where am I, here."""
+    from cmd_threads import post_channel_glance
 
-
-async def post_parent_river_glance(channel, *, toward: str = "") -> None:
-    """Parent `...` — glance, do not swallow."""
-    names: list[str] = []
-    latest = ""
-    try:
-        threads = list(getattr(channel, "threads", None) or [])
-        named = [t for t in threads if getattr(t, "name", None)]
-        named.sort(key=lambda t: int(getattr(t, "id", 0) or 0), reverse=True)
-        names = [str(t.name) for t in named]
-        if named:
-            latest = str(named[0].name)
-    except Exception as exc:
-        print(f"Parent river glance threads: {type(exc).__name__}: {exc}")
-    text = compose_parent_river_glance_text(names, toward=toward, latest=latest)
-    await channel.send(text)
+    await post_channel_glance(channel, toward=toward, user_id=user_id)
 
 
 async def handle_river_message(message: discord.Message) -> None:
@@ -989,7 +1332,9 @@ async def handle_river_message(message: discord.Message) -> None:
 
     if is_ellipsis_glance(content):
         await post_parent_river_glance(
-            message.channel, toward=glance_toward(content)
+            message.channel,
+            toward=glance_toward(content),
+            user_id=getattr(getattr(message, "author", None), "id", None),
         )
         return
     if is_go_breath(content) or content in {"..", "go", "continue", "next"}:
@@ -1004,6 +1349,21 @@ async def handle_river_message(message: discord.Message) -> None:
 
     craft = is_craft_intake_channel(message)
     display = parse_display_request(content)
+    channel_id = getattr(message.channel, "id", None)
+    if isinstance(channel_id, int) and not display and not craft:
+        from mage import get_channel_primitive
+        from parent_intake import drop_kind, eddy_title
+
+        primitive = get_channel_primitive(channel_id)
+        if drop_kind(getattr(primitive, "name", None), display=False) == "session":
+            opened = await open_drop_thread(
+                message,
+                title=eddy_title(content),
+                kind="session",
+            )
+            if not opened:
+                await message.channel.send("Could not open the session.")
+            return
     if display:
         acts = [display]
     elif craft:
@@ -1018,3 +1378,6 @@ async def handle_river_message(message: discord.Message) -> None:
         from bar_anchor import schedule_river_bar_reconcile
 
         schedule_river_bar_reconcile(message.channel, bar_client)
+
+
+install_takeup()

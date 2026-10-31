@@ -83,6 +83,16 @@ _SPECS: tuple[OfferSpec, ...] = (
         description="Optional — **checkpoint** this thread when you are ready.",
     ),
     OfferSpec(
+        kind="turtle_keep",
+        labels={"en": "Keep this eddy"},
+        description="Optional — **keep this eddy**, so closing it does not clear it.",
+    ),
+    OfferSpec(
+        kind="turtle_ignore",
+        labels={"en": "Don't remember this"},
+        description="Optional — **leave no trace** of this eddy in memory.",
+    ),
+    OfferSpec(
         kind="home_plan",
         labels={"en": "Keep as working plan"},
     ),

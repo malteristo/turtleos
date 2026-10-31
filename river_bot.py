@@ -44,6 +44,8 @@ from mage import (
     get_attunement_profile,
     get_actor_key,
     get_registry,
+    get_channel_primitive,
+    resolve_dialogue_channel_id,
     get_current_channel_primitive,
     get_pd,
     get_runtime_dir,
@@ -61,6 +63,11 @@ from hosted_river_onboarding import ensure_hosted_river_onboarding
 from river_keys import try_river_key_claim
 from river_state import river_bot_token, river_client
 from state import SPIRIT_BOT_ID, get_channel_lock
+from spirit_voice import bind as bind_spirit_voice
+
+bind_spirit_voice(
+    lambda message: getattr(get_channel_primitive(resolve_dialogue_channel_id(message)), "name", None)
+)
 
 
 def _ensure_single_instance() -> None:
@@ -86,12 +93,70 @@ def _accept_message_author(message: discord.Message) -> bool:
         return False
     if message.author.bot and message.author.id != SPIRIT_BOT_ID:
         return False
+    from spirit_voice import is_own_voice
+
+    if is_own_voice(message):
+        return False  # a magic room's own reply (spirit_voice)
     return True
 
 
 @river_client.event
 async def on_ready():
     reload_mage_registry()
+    try:
+        from delegate_setup_ui import register_delegate_views
+
+        register_delegate_views(river_client, get_registry)
+    except Exception as exc:
+        print(f"Delegate key view failed: {exc}")
+    try:
+        from boom_takeup import arm_takeup
+
+        arm_takeup(river_client)
+    except Exception as exc:
+        print(f"Take this up button failed: {exc}")
+    try:
+        from dialogue_turn import open_trace_calls
+        from trace_calls import arm_calls, bind_open
+
+        bind_open(open_trace_calls)
+        arm_calls(river_client)
+        from cloud_stocked import arm_stocked, bind_resume
+        from dialogue_turn import resume_stocked
+
+        bind_resume(resume_stocked)
+        arm_stocked(river_client)
+    except Exception as exc:
+        print(f"Calls button failed: {exc}")
+    try:
+        from room_models import arm_model_menu
+
+        from river_handler import refresh_river_bar
+
+        arm_model_menu(river_client, get_registry, resolve_dialogue_channel_id, refresh_river_bar)
+    except Exception as exc:
+        print(f"Model menu failed: {exc}")
+    try:
+        from backlog_feed_ui import arm_feed
+        from eddy_spawn import spawn_blank_river_eddy
+        from share_targets import practice_dir_for_mage
+
+        arm_feed(river_client, get_registry, practice_dir_for_mage, spawn_eddy=spawn_blank_river_eddy)
+    except Exception as exc:
+        print(f"Backlog feed failed: {exc}")
+    try:
+        # Armed here, not in the native setup below: that setup awaits several things
+        # before it would reach this, and a door that was never bound answers every
+        # check with "nobody is signed in" (`outgoing_connections.shell`).
+        from mage import get_current_channel_id, list_registered_runtime_dirs
+        from outgoing_connect_ui import register_outgoing_views
+        from outgoing_connections import Shell
+
+        register_outgoing_views(
+            river_client, Shell(get_registry, get_actor_key, get_runtime_dir, list_registered_runtime_dirs, get_current_channel_id)
+        )
+    except Exception as exc:
+        print(f"Outgoing connections view failed: {exc}")
     user = river_client.user
     name = user.name if user else "?"
     print(f"River online: {name}#{getattr(user, 'discriminator', '0')}")
@@ -107,8 +172,13 @@ async def on_ready():
                 from eddy_flow_library import retire_standing_flow_library_bars
 
                 await retire_standing_flow_library_bars(river_client)
-                from eddy_lifecycle_bar import rehydrate_lifecycle_bar_views
+                from eddy_lifecycle_bar import (
+                    rehydrate_lifecycle_bar_views,
+                    withdraw_operator_lifecycle_bars,
+                )
 
+                hidden = await withdraw_operator_lifecycle_bars(river_client)
+                print(f"Lifecycle bars hidden: {hidden}")
                 restored = rehydrate_lifecycle_bar_views(river_client)
                 print(f"Lifecycle bars restored: {restored}")
             except Exception as exc:
@@ -120,6 +190,13 @@ async def on_ready():
                 print(f"MCP connect offers restored: {rehydrate_connect_views(river_client, load_registry)}")
             except Exception as exc:
                 print(f"MCP connect rehydrate failed: {type(exc).__name__}: {exc}")
+            try:
+                from mcp_access.registry import load_registry
+                from mcp_reveal_ui import restore_reveal_cards
+
+                print(f"MCP reveal cards restored: {await restore_reveal_cards(river_client, load_registry)}")
+            except Exception as exc:
+                print(f"MCP reveal rehydrate failed: {type(exc).__name__}: {exc}")
             try:
                 from health_checkin_ui import register_state_checkin_view
 
@@ -266,7 +343,30 @@ def _house_chores():
         if get_attunement_profile() == "native":
             await _rejoin_practice_threads(client)
 
+    async def outgoing_health(client):
+        import asyncio
+
+        from outgoing_connections import tend_outgoing
+
+        return await asyncio.to_thread(tend_outgoing)
+
+    async def mcp_receipts(client):
+        from mcp_access.registry import load_registry
+        from mcp_receipt_post import post_pending
+
+        n = await post_pending(client, load_registry)
+        if n:
+            print(f"MCP receipts posted: {n}")
+        return None
+
+    async def craft_feed(client):
+        from backlog_feed_ui import feed_chore
+
+        return await feed_chore(client)
+
     return [
+        Chore("outgoing_health", 60, outgoing_health),
+        Chore("mcp_receipts", 30, mcp_receipts),
         Chore("connection_offers", 60, connection_offers),
         Chore("eddy_bars", 180, eddy_bars),
         Chore("discord_names", 10 * 60, discord_names),
@@ -278,15 +378,26 @@ def _house_chores():
         Chore("cloud_credit", 60, cloud_credit),
         Chore("missed_joins", 15 * 60, missed_joins, first_after=2 * 60),
         Chore("error_triage", 30 * 60, error_triage),
+        # A row with no pitch gets one. The channel opts in with `push: true`.
+        Chore("craft_feed", 10 * 60, craft_feed, first_after=2 * 60),
     ]
 
 
 async def _ensure_turtle_in_eddy(thread: discord.Thread) -> None:
-    """Re-add Turtle when membership dropped — cheap no-op if already present."""
+    """Re-add Turtle when membership dropped — cheap no-op if already present.
+
+    In a magic room, Spirit is added too. Turtle's process runs the turn;
+    Spirit is the account that posts the reply.
+    """
     try:
-        from eddy_spawn import river_add_turtle_to_eddy
+        from eddy_spawn import river_add_spirit_to_eddy, river_add_turtle_to_eddy
+        from mage import get_channel_primitive
 
         await river_add_turtle_to_eddy(thread)
+        parent = getattr(thread, "parent_id", None)
+        primitive = get_channel_primitive(parent) if isinstance(parent, int) else None
+        if getattr(primitive, "name", None) == "magic":
+            await river_add_spirit_to_eddy(thread)
     except Exception as exc:
         print(f"River ensure Turtle in eddy failed: {type(exc).__name__}: {exc}")
 
@@ -388,6 +499,10 @@ async def on_message(message: discord.Message):
 
         if is_ellipsis_glance(message.content):
             await _ensure_turtle_in_eddy(message.channel)
+            from magic_prompt import spirit_owns_the_pair
+
+            if spirit_owns_the_pair(getattr(get_channel_primitive(parent_id), "name", None)):
+                return  # Spirit arrives; this is not Turtle's Memory glance
             try:
                 await post_ellipsis_glance(message.channel, river_client)
             except Exception as exc:
@@ -396,9 +511,13 @@ async def on_message(message: discord.Message):
             return
 
         if is_go_breath(message.content):
+            await _ensure_turtle_in_eddy(message.channel)
+            from magic_prompt import spirit_owns_the_pair
+
+            if spirit_owns_the_pair(getattr(get_channel_primitive(parent_id), "name", None)):
+                return  # Spirit goes on; no Checkpoint / Share bar
             from eddy_lifecycle_bar import touch_eddy_lifecycle_bar
 
-            await _ensure_turtle_in_eddy(message.channel)
             await touch_eddy_lifecycle_bar(message, from_practitioner=True)
             return
         from eddy_spawn import is_awaiting_title, is_awaiting_flow_intake

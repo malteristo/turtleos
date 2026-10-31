@@ -6,7 +6,6 @@ in the parent channel, seeded with the content. The vortex
 is the front door — drop content, get a focused conversation.
 
 Also supports:
-  !new [topic]  — explicit command from main channel
   Auto-detect   — URL/long-text messages in main channel get a button
 """
 
@@ -613,7 +612,7 @@ async def spawn_eddy_in_channel(channel, content: str, topic: str | None = None,
 
 
 async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standard"):
-    """Create a thread from a message (used by !new and button spawn).
+    """Create a thread from a message (used by the bar and button spawns).
 
     Returns the created thread, or None on failure.
     """
@@ -658,7 +657,7 @@ async def spawn_eddy(message, topic: str | None = None, eddy_type: str = "standa
     await post_thread_opening(
         thread,
         topic,
-        origin=f"{getattr(message.channel, 'name', 'the parent channel')} via `!new` / eddy spawn",
+        origin=f"{getattr(message.channel, 'name', 'the parent channel')} via eddy spawn",
         source_text=text,
     )
 
@@ -1020,12 +1019,57 @@ async def river_add_turtle_to_eddy(thread) -> bool:
     try:
         await thread.add_user(discord.Object(id=turtle_id))
         print(f"River added Turtle to {thread.name!r} (id: {thread.id})")
+        _record_magic_join(thread, "Turtle")
         return True
     except discord.HTTPException as exc:
         # Already a member — fine
         if getattr(exc, "code", None) in (30083, 50025):
             return True
         print(f"River add turtle failed: {type(exc).__name__}: {exc}")
+        return False
+
+
+def _record_magic_join(thread, who: str) -> None:
+    """The system line, kept in the session. Only a magic room has a session file."""
+    try:
+        parent = getattr(thread, "parent_id", None)
+        if not isinstance(parent, int):
+            return
+        from mage import get_channel_primitive, get_pd
+
+        primitive = get_channel_primitive(parent)
+        if getattr(primitive, "name", None) != "magic":
+            return
+        from session_record import append_event
+
+        append_event(get_pd(), thread.id, kind="join", actor="river", text=f"River added {who}")
+    except Exception as exc:
+        print(f"Magic join record failed: {type(exc).__name__}: {exc}")
+
+
+async def river_add_spirit_to_eddy(thread) -> bool:
+    """River adds Spirit, the account that posts the reply.
+
+    Turtle stays in the thread because Turtle's process runs the turn.
+    Spirit can post without this line; the line is so the thread shows the voice.
+    """
+    from state import SPIRIT_BOT_ID
+
+    try:
+        await thread.fetch_member(SPIRIT_BOT_ID)
+        return True
+    except discord.HTTPException:
+        pass
+
+    try:
+        await thread.add_user(discord.Object(id=SPIRIT_BOT_ID))
+        print(f"River added Spirit to {thread.name!r} (id: {thread.id})")
+        _record_magic_join(thread, "Spirit")
+        return True
+    except discord.HTTPException as exc:
+        if getattr(exc, "code", None) in (30083, 50025):
+            return True
+        print(f"River add spirit failed: {type(exc).__name__}: {exc}")
         return False
 
 
@@ -1235,6 +1279,23 @@ async def prepare_flow_eddy_entry(
     await start_flow_bootstrap(thread, flow_id, parent_id, bot_client, lens=lens)
 
 
+def workshop_room_model(parent_id) -> tuple[str, bool, str] | None:
+    """(model, use_api, label) a magic room's threads record, or None for any other room.
+
+    The turn resolves its own model (`magic_prompt.turn_prompt_and_model`); this keeps the thread's
+    stored record from saying the house's local default for a room that speaks as Spirit on Sonnet 5.5.
+    """
+    from mage import channel_has_capability
+
+    if not channel_has_capability(parent_id, "workshop"):
+        return None
+    from llm import resolve_model
+    from magic_prompt import MAGIC_MODEL
+
+    model, use_api = resolve_model(MAGIC_MODEL)
+    return model, use_api, "sonnet-5.5"
+
+
 async def spawn_river_eddy(
     message,
     topic: str | None = None,
@@ -1269,6 +1330,10 @@ async def spawn_river_eddy(
     else:
         model_id, use_api = resolve_model("local")
         attunement = "semi"
+    model_label = "local"
+    room_model = workshop_room_model(parent_id)
+    if room_model:
+        model_id, use_api, model_label = room_model
     eddy_archive = EDDY_TYPES.get(eddy_type, {}).get("archive_minutes", 10080)
     split_bot = river_bot_enabled()
 
@@ -1287,7 +1352,7 @@ async def spawn_river_eddy(
         "model": model_id,
         "use_api": use_api,
         "attunement": attunement,
-        "model_label": "local",
+        "model_label": model_label,
         "eddy_type": eddy_type,
         "context_type": flow_id,
         "topic": thread_name,
@@ -1342,7 +1407,7 @@ async def spawn_river_eddy(
         thread_name,
         parent_channel=message.channel.name if hasattr(message.channel, "name") else "river",
         parent_channel_id=parent_id,
-        model="local",
+        model=model_label,
         attunement=attunement,
         eddy_type=eddy_type,
     )
@@ -1391,16 +1456,11 @@ async def spawn_blank_river_eddy(
 
     bot_client = _materialize_client_for_channel(channel)
     channel_att = get_effective_attunement(channel.id)
-    if channel_att == "native":
+    if channel_att in ("native", "craft"):
+        # Craft speaks on the house model until someone picks in the channel.
         model_id = TURTLE_MODEL
         use_api = False
         model_label = "local"
-    elif channel_att == "craft":
-        from llm import resolve_model
-        from state import CRAFT_MODEL
-
-        model_id, use_api = resolve_model(CRAFT_MODEL)
-        model_label = "api" if use_api else model_id
     else:
         from llm import resolve_model
 
@@ -1757,7 +1817,7 @@ async def handle_eddy_spawn_interaction(interaction: discord.Interaction):
     parts = custom_id.split(":")
     if len(parts) < 4:
         await interaction.response.send_message(
-            "Button data missing. Use `!new` instead.", ephemeral=True
+            "Button data missing. Press **new eddy** again.", ephemeral=True
         )
         return
 

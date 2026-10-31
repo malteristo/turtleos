@@ -121,6 +121,17 @@ class TestArtifactAllowlist(unittest.TestCase):
                 os.path.join(self.pd, "story/eddies/2-morning-walk.md"),
             )
 
+    def test_an_old_eddy_slug_opens_the_renamed_note(self) -> None:
+        os.makedirs(os.path.join(self.pd, "story", "eddies"), exist_ok=True)
+        renamed = os.path.join(self.pd, "story", "eddies", "7-sparks-as-intentions.md")
+        with open(renamed, "w", encoding="utf-8") as fh:
+            fh.write("the sparks eddy kept its title\n")
+        with patch("artifact_viewer.get_pd", return_value=self.pd), patch(
+            "artifact_viewer.get_mage_type", return_value="practitioner"
+        ):
+            opened = av.resolve_artifact_path("story/eddies/7-new-eddy.md")
+            self.assertEqual(opened, renamed)
+
     def test_story_shelf_title(self) -> None:
         self.assertEqual(av.shelf_title_for_path("story/eddies/2-x.md"), "Story")
 
@@ -156,7 +167,8 @@ class TestArtifactAllowlist(unittest.TestCase):
 
     def test_checkpoint_hint(self) -> None:
         hint = av.checkpoint_artifact_hint(session_note="2026-06-29.md", flow_write=None)
-        self.assertIn("!artifacts sessions", hint or "")
+        self.assertIn("Sessions", hint or "")
+        self.assertNotIn("!artifacts", hint or "")
 
 
 class TestSearchFormatting(unittest.TestCase):
@@ -170,7 +182,7 @@ class TestSearchFormatting(unittest.TestCase):
         ):
             text = av.format_search_results(hits, "match")
         self.assertIn("snippet", text.lower())
-        self.assertIn("!read sessions/a.md", text)
+        self.assertNotIn("`!read", text)
         self.assertIn("http://127.0.0.1:8080/kermit/sessions/a.md", text)
         self.assertNotIn("# Title\n\nsome matching", text)
 

@@ -7,7 +7,7 @@ When shared modules change, restarting Turtle alone leaves stale River code (and
 
 ## The deploy waits for quiet
 
-`restart.sh` runs `scripts/deploy_guard.py` first and **refuses while a conversation is live** (default: any turn in the last 10 minutes, or an eddy write in flight).
+`restart.sh` runs `scripts/deploy_guard.py` first and **refuses while a conversation is live**: a turn whose process is still running, an eddy write in flight, or the minute after the last turn. That minute is the safe gap. A restart takes about fifteen seconds, and a message in that gap is never seen. Talking during the gap holds the restart until that turn finishes, then the minute starts again.
 
 This is not caution. A restart is not a pause — the bot identifies fresh, Discord does not replay what it missed, and nothing backfills practitioner messages at boot. A message sent in the ~15s window is never seen and never answered, and only the sender knows it happened.
 

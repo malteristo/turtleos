@@ -148,7 +148,7 @@ Provision the kin space; `!members` act; relation-scoped topic invitations. Land
 - Children as members (tracked in the topics chapter)
 - Relational proxy / speaking about an absent member
 - Per-member deny lists inside a relation
-- Multiple administrators in practice (the schema allows it; nothing is built for it)
+- Multiple administrators in practice — destination [tending-the-house.md](tending-the-house.md) (2026-09-28). Many members may tend; one Discord user owns the server; acts of power are visible to every member. Nothing built. `admin: true` still also grants eyes on every claimed home (`river_keys._claimed_overwrites`); splitting that grant from the right to tend is the gap this destination closes.
 - Spec amendment — after slice 1 dogfood, per grill-first
 
 ---

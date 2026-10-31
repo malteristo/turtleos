@@ -67,6 +67,36 @@ class ProbeHoldTests(unittest.TestCase):
         self.assertIsNone(asyncio.run(cf.probe_hold(ask)))
         self.assertEqual(called, [])
 
+    def test_a_press_tries_inside_the_interval_and_lifts_the_hold(self):
+        self._hold(time.time())
+        called = []
+
+        async def ask(model):
+            called.append(model)
+
+        self.assertTrue(asyncio.run(cf.try_now(ask)))
+        self.assertEqual(called, ["claude-sonnet-4-6"])
+        self.assertIsNone(cf.read_hold())
+
+    def test_a_press_that_is_still_out_keeps_the_hold_and_posts_nothing(self):
+        self._hold(time.time())
+
+        async def broke(model):
+            raise RuntimeError("Your credit balance is too low")
+
+        self.assertFalse(asyncio.run(cf.try_now(broke)))
+        self.assertEqual(cf.read_hold()["kind"], "funds")
+
+    def test_the_parked_words_are_kept_whole(self):
+        words = "the thing in the air " + ("word " * 40)
+        with tempfile.TemporaryDirectory() as pd:
+            path = cf.park(
+                pd, channel_id=9, room="magic", author="Kermit",
+                message_text=words.strip(), cloud_model="claude-sonnet-4-6", kind="funds",
+            )
+            self.assertEqual(cf.asked(path), words.strip())
+            self.assertLess(len(cf.first_ask(path)), len(words.strip()))
+
 
 if __name__ == "__main__":
     unittest.main()

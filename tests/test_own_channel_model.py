@@ -153,61 +153,30 @@ class OwnerPickTests(_RoomEnv):
 
 
 class CommandTests(_RoomEnv):
-    def _message(self, author, channel_id):
-        msg = MagicMock()
-        msg.author.id = author
-        msg.reply = AsyncMock()
-        return msg, channel_id
+    """The words and wiring that do not draw anything. What `!model` shows is tests/test_model_card.py."""
 
-    async def _run(self, author, channel_id, args, name="Someone"):
-        msg, ch = self._message(author, channel_id)
-        msg.author.display_name = name
-        msg.channel.parent = None
-        await room_models.cmd_model(
-            msg, args, parent_id=ch, registry=REGISTRY, default="gemma4:31b")
-        return msg.reply.await_args.args[0]
+    def test_sonnet_5_5_leaves_the_menu_when_the_request_drops_between_tools(self):
+        from core import models as core_models
 
-    def test_pick_confirms_and_names_the_provider_leg(self):
-        import asyncio
+        with patch.object(core_models, "anthropic_request_extras", return_value={}):
+            words = [word for word, _ in room_models.menu_rows(anthropic=True, gemini=False)]
+        self.assertNotIn("sonnet-5.5", words)
+        self.assertIn("sonnet", words)
 
-        text = asyncio.run(self._run(SAM, 100, ["sonnet"]))
-        self.assertIn("Claude Sonnet 5", text)
-        self.assertIn("provider's servers", text)
-        self.assertEqual(room_models.pick_for(100), "claude-sonnet-5")
+    def test_both_bots_arm_the_model_menu(self):
+        # Turtle and River are separate processes; the one that posts the menu must answer it.
+        from pathlib import Path
 
-    def test_bare_command_lists_the_choices(self):
-        import asyncio
+        root = Path(__file__).resolve().parents[1]
+        river = (root / "river_bot.py").read_text(encoding="utf-8")
+        turtle = (root / "discord_bot.py").read_text(encoding="utf-8")
+        self.assertIn("arm_model_menu(river_client, get_registry, resolve_dialogue_channel_id, refresh_river_bar)", river)
+        self.assertIn("arm_model_menu(client, get_registry, resolve_dialogue_channel_id)", turtle)
 
-        text = asyncio.run(self._run(SAM, 100, []))
-        for word in ("!model sonnet", "!model opus", "!model local"):
-            self.assertIn(word, text)
-
-    def test_any_member_changes_a_shared_room_and_the_room_is_told_who(self):
-        import asyncio
-
-        text = asyncio.run(self._run(ALEX, 300, ["opus"], name="Alex"))
-        self.assertIn("**Alex** set this room to", text)
-        self.assertIn("community account pays", text)
-        self.assertEqual(room_models.pick_for(300), "claude-opus-5-5")
-        self.assertEqual(room_models.read_picks()["300"]["set_by"], "alex")
-
-    def test_nobody_picks_for_a_shared_room_they_are_not_in(self):
-        import asyncio
-
-        text = asyncio.run(self._run(SAM, 300, ["opus"]))
-        self.assertIn("Only members of this room", text)
-        self.assertIsNone(room_models.pick_for(300))
-
-    def test_a_change_made_in_an_eddy_is_also_said_in_the_room(self):
-        import asyncio
-
-        msg, _ = self._message(ROBIN, 300)
-        msg.author.display_name = "Robin"
-        msg.channel.parent = MagicMock(id=300, send=AsyncMock())
-        asyncio.run(room_models.cmd_model(
-            msg, ["sonnet"], parent_id=300, registry=REGISTRY, default="gemma4:31b"))
-        msg.channel.parent.send.assert_awaited_once()
-        self.assertIn("**Robin** set this room to", msg.channel.parent.send.await_args.args[0])
+    def test_sonnet_still_means_sonnet_5_and_sonnet_5_5_is_its_own_word(self):
+        self.assertEqual(room_models.choice_model("sonnet"), "claude-sonnet-5")
+        self.assertEqual(
+            room_models.set_pick(100, SAM, "sonnet-5.5", REGISTRY), "claude-sonnet-5-5")
 
     def test_a_solo_craft_room_is_its_members_to_pick(self):
         self.assertEqual(room_models.set_pick(620, SAM, "opus", REGISTRY), "claude-opus-5-5")
@@ -217,17 +186,6 @@ class CommandTests(_RoomEnv):
     def test_shared_room_prompt_says_members_choose(self):
         self.assertIn("members' choice", room_models.owner_line(300, REGISTRY))
         self.assertEqual(room_models.owner_line(400, REGISTRY), "")
-
-    def test_health_picker_says_what_the_provider_would_read(self):
-        import asyncio
-
-        listing = asyncio.run(self._run(SAM, 600, []))
-        self.assertIn("health board", listing)
-        self.assertIn("Uploads are still read in the house", listing)
-        confirm = asyncio.run(self._run(SAM, 600, ["sonnet"]))
-        self.assertIn("health board", confirm)
-        plain = asyncio.run(self._run(SAM, 100, []))
-        self.assertNotIn("health board", plain)
 
 
 # ── pull guard ──────────────────────────────────────────────────

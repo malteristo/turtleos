@@ -3,7 +3,7 @@
 > **Canonical version:** This file, in the tree you cloned, is law for that tree.  
 > The Magic practice bundle links here; it does not mirror this document.
 
-**Version:** 2026-09-27 (§13.3 home channels; §3.1 personal context management — MCP access point; 2026-09-07 resolved channel contracts + live team work §3.2.1; install topology still §13.3)
+**Version:** 2026-10-31 (§3.2.1 channel practice lives with the channel; home spec `docs/channels/home.md`. 2026-09-27 §13.3 home channels; §3.1 personal context management — MCP access point; 2026-09-07 resolved channel contracts + live team work §3.2.1; install topology still §13.3)
 **Status:** Active — governs vanilla turtleOS and attunement contracts
 
 ---
@@ -137,6 +137,8 @@ Primitive development follows these laws:
 - Core owns mechanism and enforcement; the primitive declares policy and
   experience; the practice root holds member-owned state.
 
+**Channel specs are not this document.** What a channel is for is that channel's architecture, specified with the channel and published with it. A channel key is part of that architecture. The question a key is walked with belongs to the channel and may differ from one channel to the next. The platform binds the channel, fails closed on an unknown preset, and does not supply the question. Home: [docs/channels/home.md](docs/channels/home.md). The catalogue below is the enforceable preset list. The practice those presets are for is the channel spec. Health's authority rules and the team lane rules stay here until those channels have specs of their own, because the runtime fails closed on them. That is deferred, not forgotten.
+
 The shipped preset catalogue is:
 
 - `private` — solo general practice.
@@ -268,7 +270,7 @@ Metaphor: the sea in *Moana*, the casita in *Encanto* — intelligence expressed
 [ 🌀 new eddy ]  [ more ▾ ]
 ```
 
-**more** exposes secondary acts (`artifacts`, `help`) without competing with materialize. Help from **more** is ephemeral. This satisfies **always offer eddy** globally (§17). Practitioners materialize blank eddies by click — not from river prose. **Flow choice is in-eddy** (§5.6), not on the standing bar.
+**more** opens the house's own surfaces (`mcp`, `model`) without competing with materialize. Each answers privately, only to the person who chose it (amended 2026-10-14; it held `artifacts` and `help`, which went unused, and `!` now lists what can be typed). This satisfies **always offer eddy** globally (§17). Practitioners materialize blank eddies by click — not from river prose. **Flow choice is in-eddy** (§5.6), not on the standing bar.
 
 **Per-message act bundle** (parent channel only — not inside eddies):
 
@@ -405,7 +407,7 @@ The platform's narrative artifact family — prose the practitioner **reads**, w
 | Surface | Written at | Reads from |
 |---------|-----------|------------|
 | **Eddy note** | Checkpoint (§8.4) | The eddy + its relation to the practitioner's alive threads and intentions (same practice root only; never other eddies' transcripts; no forced relations — when nothing alive connects, the note says what the eddy held and stops) |
-| **Daily note** | End of day (scheduled after `DAILY_NOTE_HOUR`, default 22:00 practice-local; morning catch-up before noon for yesterday if missed; manual `!day` force-refresh) | Eddy notes for the calendar day, optional recent daily notes for continuity, optional alive one-liner; one reflection-class LLM call. Written to `story/daily/YYYY-MM-DD.md`. **River visibility:** after a fresh synthesis (`created=True`), post inline preview + **Open note** on the river (same artifact-presenter family as checkpoint eddy notes). Idle-only days with zero eddy entries: no write, no post |
+| **Daily note** | End of day (scheduled after `DAILY_NOTE_HOUR`, default 22:00 practice-local; morning catch-up before noon for yesterday if missed) | Eddy notes for the calendar day, optional recent daily notes for continuity, optional alive one-liner; one reflection-class LLM call. Written to `story/daily/YYYY-MM-DD.md`. **River visibility:** after a fresh synthesis (`created=True`), post inline preview + **Open note** on the river (same artifact-presenter family as checkpoint eddy notes). Idle-only days with zero eddy entries: no write, no post |
 | **Period notes** (week / month / year) | Period close | The scale below, in context of recent periods — never raw transcripts |
 | **Thread arcs** | Thread confirm/update (CE Slice 2) | Confirmed active threads, as readable narrative |
 
@@ -555,13 +557,13 @@ Practitioners leave sessions without announcing closure. The platform MUST captu
 | Target | Threshold | Notes |
 |--------|-----------|-------|
 | Flow `writes` paths (e.g. `state/notes/navigator-last.md`) | ≥2 exchanges | Mechanical tail capture; flow resolved from thread registry `context_type`, thread config, thread name, or flow signals |
-| **Eddy note** (story surface, §6.5) | ≥4 exchanges | **The** reflection artifact at checkpoint — absorbs the former session-note reflection (one reflection-class LLM call per checkpoint). What the eddy held + relation to alive threads/intentions. Reflection cooldown applies to **idle** triggers only; a manual `!checkpoint` bypasses the cooldown, weights the note toward exchanges since the last checkpoint, and is marked `trigger: manual`. Written to story surfaces under the practice root via the transaction-safe write path |
+| **Eddy note** (story surface, §6.5) | one exchange (one message and one reply) | **The** reflection artifact at checkpoint. Names what the eddy contributed and its sparks (each starts `open`; `!spark developed` or `!spark drop` is the act). Written by the room's dialogue model, with recent notes from other eddies in the prompt — not by the reflection model. One LLM call per checkpoint. Relation to alive threads stays. Reflection cooldown applies to **idle** triggers only; a manual `!checkpoint` bypasses the cooldown, weights the note toward exchanges since the last checkpoint, and is marked `trigger: manual`. Written to story surfaces under the practice root via the transaction-safe write path |
 | Session-day file (`sessions/YYYY-MM-DD.md`) | — | **Retired** (shipped 2026-07-15, Act Two): was transitional mechanical assembly from eddy-note entry bodies. Replaced by daily note (`story/daily/`, §6.5). Existing `sessions/` files remain historical Tier-1 corpus; new checkpoints do not append |
 | Practice extraction | Per attunement | Practitioner notes/profile extraction as implemented. **Checkpoint-time proposal extraction retired** (2026-07-15, dyad-sanctioned): it lived inside the removed legacy reflection prompt and keeping it would violate the one-reflection-call law. Autonomous proposal generation returns as a dedicated mechanism decoupled from checkpoint (backlogged) |
 
 **Capture duty:** idle checkpoints carry the duty — practitioners are never required to capture manually. A manual checkpoint is a significance signal the pipeline honors (cooldown bypass + recency weighting), never a duty. A deliberate `!checkpoint` MUST NOT be silently declined by cooldown.
 
-**Checkpoint visibility:** the practitioner SHOULD see the eddy note at checkpoint via the artifact-viewer pattern — inline preview (expandable) + browser link (mobile path) — so they can verify the capture covered what moved them to checkpoint.
+**Checkpoint visibility:** an idle checkpoint posts a link to the note and does not paste a preview into the eddy. A manual `!checkpoint` or `!release` shows that link, keeps the inline preview, and offers an action that opens the note.
 
 Idle checkpoint marks the session **paused** so the monitor does not re-fire; the next practitioner message reopens it. Manual `!checkpoint` does **not** pause — the practitioner continues.
 
@@ -618,7 +620,7 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 | Mode | Trigger | Output | Cache |
 |------|---------|--------|-------|
 | **Read for dialogue** | URL in eddy chat (auto or opt-in) | Extract injected into turn context | No `link-resonance/` write |
-| **Distill for library** | `!fetch <url>` | Distilled summary embed | Yes — `link-resonance/` |
+| **Distill for library** | **Save to library** offer button after Turtle replies (the typed `!fetch` is retired, 2026-10-14) | Distilled summary embed | Yes — `link-resonance/` |
 
 **Auto-read (URL-primary):** External URL only; ≤120 characters of non-URL commentary; or explicit read/summarize cues.
 
@@ -636,7 +638,7 @@ Practitioners expect modern-agent behavior: drop a URL, Turtle reads it and resp
 
 **Implementation:** `link_read.py`, `content_fetch.py`, `discord_ref_read.py`, `discord_bot.handle_dialogue`.
 
-**Split-bot harness (§5.8):** Auto-read and incidental Read/Skip run in the **Turtle process** before the informed reply. **Save to library** (`!fetch` button or typed command) runs in the **River process** after Turtle replies — optional persistence, not a dialogue prerequisite. River polls thread history for Turtle prose when scheduling save offers; skip reasons (cached in `link-resonance/`, already offered, recent `!fetch` act) MUST be logged distinctly for operator debug.
+**Split-bot harness (§5.8):** Auto-read and incidental Read/Skip run in the **Turtle process** before the informed reply. **Save to library** (an offer button; the typed `!fetch` is retired, see the 2026-10-14 row) runs in the **River process** after Turtle replies — optional persistence, not a dialogue prerequisite. River polls thread history for Turtle prose when scheduling save offers; skip reasons (cached in `link-resonance/`, already offered, recent `!fetch` act) MUST be logged distinctly for operator debug.
 
 ### 9.6. Discord Native UI Reconciliation
 
@@ -775,7 +777,7 @@ Practitioners accumulate **practice artifacts** (sessions, flow notes, archives)
 - **Shelves, not paths.** The viewer presents named collections (Sessions, Notes, Archives, Saved links). It MUST NOT expose raw directory trees, runtime paths, or other practitioners' roots.
 - **Write through Turtle.** View, browse, search, and export are viewer operations. Mutation of sovereignty artifacts remains through eddy dialogue and governed flow writes (§11.3) — not direct markdown editing in v1.
 - **Layer-aware discoverability.** Layer 1 (casual eddy) practitioners MAY never open the viewer. Layer 2 (flow) practitioners benefit from checkpoints and session artifacts. The viewer MUST NOT spam proactive offers; contextual hints after checkpoint/release are permitted (v1.1).
-- **Same allowlist everywhere.** `!read`, `!ls`, `!search`, optional read-only web (§11.4), and `!artifacts` MUST enforce the same path policy. **Shipped 2026-06-29:** browse commands narrowed to this allowlist; `!artifacts` is the product entry point.
+- **Same allowlist everywhere.** Turtle's file tools, the Open, Browse and Download buttons, and optional read-only web (§11.4) MUST enforce the same path policy. **Shipped 2026-06-29:** browse commands narrowed to this allowlist. **2026-10-14:** the typed `!read`, `!ls`, `!search`, `!artifacts` and `!export` are retired (typing one answers once); Turtle's tools and the buttons are the way in.
 - **Chat holds conversation; browser holds corpus.** The eddy timeline is for dialogue and pointers. Persisted Tier-1 artifacts open in the Discord in-app browser (or read-only web) — not as full-body markdown dumps in chat. See §11.5.5.
 - **Home binding for working plans.** A Notes-shelf artifact MAY have one **home eddy** discovered via a river pin card (§5.3). `!artifacts` remains corpus browse; the pin is the door, not a second filesystem. Attunement on home-eddy turns injects the plan file (truncated) — not full Discord history.
 
@@ -957,7 +959,7 @@ A zero-install sibling entry via `PRACTICE.md` (markdown practice with any AI) i
 
 ### 13.3. Discord Topology (Vanilla v1)
 
-**Vocabulary (2026-09-27).** Practitioner-facing words: a member's **home channel** is their primary private channel, one per member, created at join; a **private channel** is any further room a member opens for themselves; a **shared channel** has more than one member and is a commons — the **atrium** is the one every member shares; an **eddy** is a conversation inside a channel. **River** names the agent only. Registry type ids (`river`, `hosted-river`, `shared-river`) and module names keep the old word: internal, never shown, decided not to rename.
+**Vocabulary (2026-09-27).** Practitioner-facing words: a member's **home channel** is their primary private channel, one per member, created at join; a **private channel** is any further room a member opens for themselves; a **shared channel** has more than one member and is a commons — the **atrium** is the one every member shares; an **eddy** is a conversation inside a channel. **River** names the agent only. Registry type ids (`river`, `hosted-river`, `shared-river`) and module names keep the old word: internal, never shown, decided not to rename. What the home channel is for is the home channel spec, not this section: [docs/channels/home.md](docs/channels/home.md).
 
 **Destination (not built):** Turtle in a home channel knows which channels the member belongs to (names only) and reads one only when the member brings it — a link, or a request. Today it reads a channel only when the member pastes its link.
 
@@ -1373,5 +1375,8 @@ For consciousness-extension framing at the dyad level, see Magic workshop lore (
 | 2026-07-28 | §15.4 — host admin UX: `!admin invite`, `#river-<name>` for life, rivers/doctor; `onboard` + `*-dialogue` rename retired from product path |
 | 2026-09-07 | §3.2.1 — complete channel primitive contract (Channel + Turtle + River + Practice), fail-closed resolver, primitive development law, health as first complete thematic primitive |
 | 2026-09-27 | §13.3 / §15.4 — home channels: a member's primary private channel is `#home-<name>`; River names the agent only; registry type ids unchanged ([proposal](autoresearch/proposals/2026-09-27-home-channels.md)) |
+| 2026-10-14 | §5.5 / §9.5 / §15 — a `!` command is for what the system does not do natively. A pasted link is always read (first three per message; no commentary-length rule), and saving it is an offer button; the typed `!fetch` and `!date` are retired and answer once with where they went. A date said in words is read by Turtle (`offer_river_act` `keep_date`), confirmed on River's button, and the kept dates are in every turn. The channel bar's menu holds `commands`, the commands the channel keeps (`!eddy`, `!live`, `!dates`, `!status`, `!readiness`), `mcp` and `model` ([design](docs/design/curated-surfaces-v1.md)) || 2026-10-14 | §11.5 / §15.6 — the typed browse commands (`!artifacts`, `!export`, `!read`, `!ls`, `!search`), `!keep`, `!ignore` and `!share` are retired as typed commands: Turtle's file tools, Open/Browse/Download buttons, Turtle's `keep`/`ignore` offers and the share button under `...` replace them. A share to a person no longer tells the sender whether it was read. Ten more commands retired earlier the same day (`!focus`, `!day`, `!thread`, `!new`, `!panel`, `!thread-type`, `!eddy-check`, `!absorb`, `!absorbed`, `!forget`). See `docs/design/curated-surfaces-v1.md` |
+| 2026-10-14 | §8.4 — typed `!checkpoint` retired (the button under `...`, Turtle's offer and the 15-minute idle checkpoint remain; a deliberate press is still a significance signal that bypasses the cooldown). `!status` and `!context` become operator commands |
+| 2026-10-31 | §3.2.1 / §13.3 — what a channel is for, including its key and the question that key is walked with, is the channel's spec. The platform binds the channel and does not supply the question. Home is [docs/channels/home.md](docs/channels/home.md). Preset enforcement stays in this spec until a channel has its own. |
 
 *End of TURTLE_SPEC*

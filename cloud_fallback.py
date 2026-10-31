@@ -126,6 +126,53 @@ def mark_tried(hold: dict) -> None:
     _hold_path().write_text(json.dumps(hold, indent=2) + "\n", encoding="utf-8")
 
 
+STOCKED_ID = "cloud:stocked"
+STOCKED_LABEL = "All stocked up"
+
+
+def offers_stocked(kind: str) -> bool:
+    """The button is how they say the credit is back. A key refusal is not that."""
+    return kind == FUNDS
+
+
+def stocked_components() -> list:
+    """The button on the notice. Style 3 is green: this is the way back on."""
+    return [{
+        "type": 1,
+        "components": [{
+            "type": 2,
+            "style": 3,
+            "label": STOCKED_LABEL,
+            "custom_id": STOCKED_ID,
+        }],
+    }]
+
+
+async def try_now(ask) -> bool:
+    """Try the cloud at once. The retry interval does not apply.
+
+    The press is the person saying the credit is back. True when there is no
+    hold, or the cloud answers. False when it is still refused. A refusal
+    keeps the hold. Nothing here is posted into the room.
+    """
+    hold = read_hold()
+    if not hold:
+        return True
+    model = str(hold.get("model") or "")
+    if not model.startswith("claude"):
+        return False
+    try:
+        await ask(model)
+    except Exception as exc:
+        if classify(exc) in HOLDING_KINDS:
+            note_failure(classify(exc), model, exc)
+        else:
+            mark_tried(hold)
+        return False
+    clear_hold()
+    return True
+
+
 async def probe_hold(ask) -> str | None:
     """While the house is on hold, try the cloud once per retry interval with ``ask(model)``.
 
@@ -231,10 +278,14 @@ def mark_surfaced(paths: list[Path]) -> None:
         path.write_text(_STATUS.sub("status: surfaced", text, count=1), encoding="utf-8")
 
 
-def first_ask(path: Path, limit: int = 120) -> str:
+def asked(path: Path) -> str:
+    """The practitioner's words, whole, as they were parked."""
     text = path.read_text(encoding="utf-8")
-    body = text.split("## What was asked", 1)[-1].strip().split("\n## ", 1)[0].strip()
-    body = re.sub(r"\s+", " ", body)
+    return text.split("## What was asked", 1)[-1].strip().split("\n## ", 1)[0].strip()
+
+
+def first_ask(path: Path, limit: int = 120) -> str:
+    body = re.sub(r"\s+", " ", asked(path))
     return body if len(body) <= limit else body[:limit].rsplit(" ", 1)[0] + " …"
 
 
@@ -247,7 +298,9 @@ def fallback_notice(cloud_model: str, local_model: str, kind: str, *, parked: bo
     if since:
         head += f" (since {_local_hhmm(since)})"
     head += f". This reply is from {label_for(local_model)}."
-    if parked:
+    if parked and kind == FUNDS:
+        head += " What you asked is parked. All stocked up continues it on the cloud."
+    elif parked:
         head += " What you asked is parked and will be picked up when the cloud model is back."
     return head
 

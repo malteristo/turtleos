@@ -529,7 +529,10 @@ async def materialize_received_eddy(
         "share_creator": bundle.get("sharer_id"),
         "sharer_key": bundle.get("sharer_key"),
         "share_recipient_id": bundle.get("recipient_discord_id"),
-        "share_notify_pending": True,
+        # Sharing with a person is like leaving them a note: the sender is not told
+        # whether it was read or answered (his words, 2026-10-14). A shared room's
+        # eddy (`materialize_space_shared_eddy`) still tells the sharer once.
+        "share_notify_pending": False,
         "created": datetime.now(timezone.utc),
         "native_vanilla": True,
         "presence_posted": False,

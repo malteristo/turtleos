@@ -16,7 +16,7 @@ from artifact_presenter import (
 )
 from helpers import clear_history, get_history, reload_history
 from mage import get_mage_name, get_pd, is_practice_channel
-from practice_io import count_items, read_safe
+from practice_io import count_items, eddy_note_link, note_entry_title, read_safe
 from state import MIN_EXCHANGES_FOR_CHECKPOINT, MIN_EXCHANGES_FOR_REFLECTION, active_sessions
 
 
@@ -116,7 +116,8 @@ async def cmd_checkpoint(message):
 
     lines: list[str] = []
     if note_rel:
-        lines.append(f"**Eddy note:** `{note_rel}`")
+        title = note_entry_title(result.eddy_note.entry_text) if result.eddy_note else ""
+        lines.append(f"**Eddy note:** {eddy_note_link(note_rel, title=title)}")
     if result.flow_writes:
         lines.append(f"**Flow:** `{result.flow_writes[0]}`")
     if result.session_note:
@@ -196,7 +197,8 @@ async def cmd_release(message):
     if result.proposal:
         lines.insert(0, f"**Proposal:** `proposals/{result.proposal}`")
     if note_rel:
-        lines.insert(0, f"**Eddy note:** `{note_rel}`")
+        title = note_entry_title(result.eddy_note.entry_text) if result.eddy_note else ""
+        lines.insert(0, f"**Eddy note:** {eddy_note_link(note_rel, title=title)}")
     if not result.captured_anything:
         lines.insert(0, "No new resonance captured this release.")
     embed.description = "\n".join(lines) + f"\n\nRest well, {get_mage_name()}."
@@ -396,13 +398,46 @@ async def cmd_dissolve(message, args):
     await message.reply(embed=embed, mention_author=False)
 
 
+async def cmd_spark(message, args):
+    """Develop or drop a spark named in this eddy's note. `!spark drop <id>`."""
+    words = args if isinstance(args, list) else str(args or "").split()
+    verb = words[0].lower() if words else ""
+    spark_id = words[1] if len(words) > 1 else ""
+    status = {"drop": "dropped", "dropped": "dropped", "develop": "developed", "developed": "developed"}.get(verb)
+    if status is None or not spark_id:
+        await message.reply(
+            "Say `!spark drop <id>` or `!spark developed <id>`. "
+            "The id is on the spark in the note.",
+            mention_author=False,
+        )
+        return
+    from eddy_sparks import SparkActError, apply_spark_act
+    from core.atomic_io import atomic_write_text
+    from story_notes import EDDIES_SUBDIR
+
+    practice = Path(get_pd())
+    matches = sorted((practice / EDDIES_SUBDIR).glob(f"{message.channel.id}-*.md"))
+    if not matches:
+        await message.reply("This eddy has no note yet.", mention_author=False)
+        return
+    path = matches[0]
+    try:
+        updated = apply_spark_act(path.read_text(encoding="utf-8"), spark_id, status)
+    except SparkActError as exc:
+        await message.reply(str(exc), mention_author=False)
+        return
+    atomic_write_text(path, updated)
+    word = "Developed" if status == "developed" else "Dropped"
+    await message.reply(f"{word} `{spark_id}`.", mention_author=False)
+
+
 async def cmd_keep(message, args):
     """Mark eddy continuity: keep — memory retained on deliberate close."""
     if not isinstance(message.channel, discord.Thread):
-        await message.reply("Use `!keep` inside an eddy thread.", mention_author=False)
+        await message.reply("Keeping works inside an eddy.", mention_author=False)
         return
     if not is_practice_channel(message):
-        await message.reply("Use `!keep` in your practice eddies.", mention_author=False)
+        await message.reply("Keeping works in your own eddies.", mention_author=False)
         return
 
     from thread_registry import CONTINUITY_KEEP, update_thread_continuity
@@ -418,10 +453,10 @@ async def cmd_keep(message, args):
 async def cmd_ignore(message, args):
     """Mark eddy continuity: ignore — purge on confirm, no trace kept."""
     if not isinstance(message.channel, discord.Thread):
-        await message.reply("Use `!ignore` inside an eddy thread.", mention_author=False)
+        await message.reply("Leaving something out of memory works inside an eddy.", mention_author=False)
         return
     if not is_practice_channel(message):
-        await message.reply("Use `!ignore` in your practice eddies.", mention_author=False)
+        await message.reply("Leaving something out of memory works in your own eddies.", mention_author=False)
         return
 
     from state import pending_ignore_confirm
@@ -432,7 +467,7 @@ async def cmd_ignore(message, args):
     if args and args[0] in ("--confirm", "confirm"):
         if not pending_ignore_confirm.pop(key, False):
             await message.reply(
-                "No pending ignore. Run `!ignore` first.",
+                "Nothing to confirm. Tell me to leave this eddy out of memory first.",
                 mention_author=False,
             )
             return
@@ -451,42 +486,11 @@ async def cmd_ignore(message, args):
         return
 
     pending_ignore_confirm[key] = True
-    await message.reply(
-        "This eddy will leave **no trace** in Turtle memory. "
-        "Confirm with `!ignore confirm`.",
-        mention_author=False,
+    from cmd_dispatch import send_with_actions
+
+    # Nothing is removed until this second press: the first only asks.
+    await send_with_actions(
+        message.channel,
+        "This eddy will leave **no trace** in Turtle memory. Nothing is removed until you confirm.",
+        [("Leave no trace", "!ignore confirm")],
     )
-
-
-async def cmd_day(message):
-    """Manual refresh of today's daily note (issue 040)."""
-    from helpers import local_now
-    from story_daily import DailyNoteError, build_daily_note_surface, write_daily_note
-
-    today = local_now().date()
-    try:
-        result = await write_daily_note(today, force=True)
-    except DailyNoteError:
-        await message.reply(
-            "Couldn't refresh today's daily note — synthesis didn't produce "
-            "usable text. Try again later.",
-            mention_author=False,
-        )
-        return
-
-    if result.note_path is None:
-        await message.reply(
-            "No eddy notes for today yet — nothing to synthesize.",
-            mention_author=False,
-        )
-        return
-
-    surface = build_daily_note_surface(today, result)
-    if surface is None:
-        await message.reply(
-            f"Daily note refreshed for {today.isoformat()} — previous version replaced.",
-            mention_author=False,
-        )
-        return
-
-    await reply_artifact_surface(message, surface)

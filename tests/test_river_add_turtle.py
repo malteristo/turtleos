@@ -49,6 +49,40 @@ class RiverAddTurtleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ok)
         thread.add_user.assert_awaited_once()
 
+    async def test_a_magic_room_records_the_spirit_join_and_a_present_spirit_is_quiet(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from eddy_spawn import river_add_spirit_to_eddy
+
+        practice = Path(tempfile.mkdtemp())
+        primitive = MagicMock()
+        primitive.name = "magic"
+
+        fresh = MagicMock()
+        fresh.id = 123
+        fresh.parent_id = 1
+        fresh.name = "5"
+        fresh.fetch_member = AsyncMock(side_effect=discord.HTTPException())
+        fresh.add_user = AsyncMock()
+
+        present = MagicMock()
+        present.id = 124
+        present.parent_id = 1
+        present.fetch_member = AsyncMock(return_value=MagicMock())
+        present.add_user = AsyncMock()
+
+        with patch("mage.get_channel_primitive", return_value=primitive), patch(
+            "mage.get_pd", return_value=str(practice)
+        ):
+            self.assertTrue(await river_add_spirit_to_eddy(fresh))
+            self.assertTrue(await river_add_spirit_to_eddy(present))
+
+        recorded = (practice / "state/sessions/123.jsonl").read_text(encoding="utf-8")
+        self.assertIn("River added Spirit", recorded)
+        self.assertFalse((practice / "state/sessions/124.jsonl").exists())
+        present.add_user.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

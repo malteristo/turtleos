@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from mcp_access.registry import KIND_SUBJECT, Source
+from mcp_access import workshop
+from mcp_access.registry import KIND_SUBJECT, KIND_WORKSHOP, Source
 from story_entries import entry_from_front, parse_eddy_file_entries
 
 _NOTE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$")
@@ -61,6 +62,16 @@ def read_note(source: Source, note_id: str) -> str | None:
     if path.parent != base or not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def latest_title(text: str) -> str:
+    """The title of the newest entry. The body is not returned."""
+    last = ""
+    for front, body in parse_eddy_file_entries(text):
+        entry = entry_from_front(front, body, Path("note.md"), _tz())
+        if entry is not None and entry.title:
+            last = str(entry.title)
+    return last
 
 
 def read_health_picture(source: Source) -> str | None:
@@ -117,6 +128,13 @@ def list_documents(source: Source) -> list[dict]:
     return rows
 
 
+def document_filename(source: Source, doc_id: str) -> str:
+    manifest = _manifest(source, doc_id)
+    if not manifest:
+        return ""
+    return str(manifest.get("filename") or "")
+
+
 def read_document(source: Source, doc_id: str) -> str | None:
     m = _manifest(source, doc_id)
     if m is None:
@@ -139,6 +157,8 @@ def search(
         return []
     hits: list[dict] = []
     for source in sources:
+        if source.kind == KIND_WORKSHOP:
+            continue  # a workshop is searched by mcp_access.workshop, with its release
         if documents:
             for row in list_documents(source):
                 for p in _extract_pages(source, row["id"]):
@@ -194,14 +214,39 @@ def _mtime(path: Path) -> str | None:
         return None
 
 
+def _workshop_brief(source: Source) -> list[str]:
+    lines = [f"## {source.id} — workshop (the practice repository)"]
+    release = workshop.head(source)
+    if release is None:
+        lines.append("- **unavailable:** this workshop's repository is missing or unreadable on the host.")
+        lines.append("")
+        return lines
+    lines.append(f"- release: {release.line()}")
+    lines.append(f"- bootstrap: {workshop.refs(source, 'bootstrap')}")
+    why = workshop.bootstrap_missing(source, release)
+    if why:
+        lines.append(f"- **bootstrap cannot be served:** {why}.")
+    lines.append("")
+    return lines
+
+
 def brief(
-    sources: list[Source], *, expires: str, refused_since_brief: int, documents: bool = False
+    sources: list[Source],
+    *,
+    expires: str,
+    refused_since_brief: int,
+    documents: bool = False,
+    workshop_ops: bool = False,
 ) -> str:
     """The system's own account of what this connection reaches. Honest when broken."""
     lines = ["# turtleOS brief", ""]
     if not sources:
         lines.append("This connection reaches no sources.")
     for source in sources:
+        if source.kind == KIND_WORKSHOP:
+            if workshop_ops:
+                lines.extend(_workshop_brief(source))
+            continue
         label = "health (you are the subject)" if source.kind == KIND_SUBJECT else "private room"
         lines.append(f"## {source.id} — {label}")
         if not available(source):

@@ -43,6 +43,7 @@ def _registry() -> dict:
             },
             "6": {"primitive": "health", "mage": "health"},
             "7": {"primitive": "team", "mage": "team"},
+            "8": {"primitive": "magic", "mage": "operator"},
         },
     }
 
@@ -55,6 +56,7 @@ EXPECTED = {
     "health-solo": ("solo", "river", "health", "isolated", False, "sensitive_local"),
     "health-shared": ("shared", "river", "health", "isolated", False, "sensitive_local"),
     "team": ("shared", "river", "native", "own_root", True, "shared_local"),
+    "magic": ("solo", "river", "magic", "personal_without_shared", True, "operator_local"),
 }
 
 
@@ -69,6 +71,7 @@ class ChannelConformanceMatrixTests(unittest.TestCase):
             "5": "health-solo",
             "6": "health-shared",
             "7": "team",
+            "8": "magic",
         }
         for channel_id, label in labels.items():
             with self.subTest(preset=label):

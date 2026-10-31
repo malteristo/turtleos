@@ -19,11 +19,12 @@
 [ 🌀 new eddy ]  [ more ▾ ]   ← always last message
 ```
 
-**more** (select on the bar): `artifacts` · `help`.
+**more** (select on the bar): `mcp` · `model`, each answered privately in one step (2026-10-14; it held `artifacts` · `help`). `!` lists what can be typed.
 
 - **new eddy** — materialize blank eddy (unchanged).
-- **artifacts** — public Recent browse as today; reconcile is **held** until the browse sequence ends.
-- **help** — ephemeral Commands card (no timeline litter).
+- **mcp** — the asker's connections, a private card ([mcp-list-v2](../design/mcp-list-v2.md)).
+- **model** — this channel's model card, private; a pick changes it and tells the room ([model-card-v2](../design/model-card-v2.md)).
+- A bar posted before this change may still offer `artifacts` and `help`; a press answers with one sentence until the bar is next posted.
 
 **Flow choice is in-eddy, not on the bar.** Practitioners load a flow via the in-thread library or **`!flows`** inside an eddy. **`!flows`** in the parent river redirects to open an eddy first.
 

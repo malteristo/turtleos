@@ -36,19 +36,37 @@ async def dispatch_incoming_message(message: discord.Message) -> None:
     if message.author == state.client.user:
         return
 
-    if message.type not in (discord.MessageType.default, discord.MessageType.reply) and not getattr(
-        message, "message_snapshots", None
+    from spirit_voice import is_forge_turn
+
+    if (
+        message.type not in (discord.MessageType.default, discord.MessageType.reply)
+        and not getattr(message, "message_snapshots", None)
+        and not is_forge_turn(message)
     ):
         return
 
     maybe_reload_mage_registry()
     set_practice_context(message)
 
+    from spirit_voice import is_own_voice
+
+    if is_own_voice(message):
+        return  # a magic room's own reply, not an input (spirit_voice)
+
     if message.author.bot:
         if message.author.id == SPIRIT_BOT_ID and is_practice_channel(message):
             pass  # Spirit (dyad partner) — process like a practitioner message
         elif state.client.user in message.mentions and is_practice_channel(message):
             await route_practice_dialogue(message)
+            return
+        elif getattr(getattr(message, "channel", None), "parent_id", None):
+            from helpers import is_river_bot_message, note_river_post, river_post_text
+
+            # River posts the act. Turtle is the one who has to have read it
+            # by the time the next sentence arrives. The bar has no words.
+            if is_river_bot_message(message):
+                note_river_post(message.channel.id, river_post_text(message))
+                return
             return
         else:
             return

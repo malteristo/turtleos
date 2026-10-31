@@ -16,5 +16,6 @@ Before merging a change that touches practitioner-facing behavior:
 12. **Thread naming:** Does link-read or any shell path fight River-owned titles?
 13. **Document:** Update the relevant file under [docs/ux/](README.md) if the principle or pattern changed.
 14. **System state:** If this shows house or eddy state, is it a glance (attention order, one modifier, parked collapsed) rather than an inventory dump? See [system-state.md](system-state.md).
+15. **Language:** Does this surface follow [design-language.md](design-language.md) (state and control on one row, a button that says what happens, red only last and asked), or is it on the exemption list with a reason?
 
 **Topic docs:** [principles.md](principles.md) · [link-reading.md](link-reading.md) · [rejected.md](rejected.md)

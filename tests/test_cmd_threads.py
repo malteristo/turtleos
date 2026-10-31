@@ -32,14 +32,6 @@ class TestBuildConfigLine(unittest.TestCase):
         self.assertIn("gemma", line)
 
 
-class TestCmdEddyCheck(unittest.IsolatedAsyncioTestCase):
-    async def test_retired_message(self) -> None:
-        message = MagicMock()
-        message.reply = AsyncMock()
-        await ct.cmd_eddy_check(message, [])
-        self.assertIn("retired", message.reply.await_args[0][0].lower())
-
-
 class TestCmdRename(unittest.IsolatedAsyncioTestCase):
     async def test_requires_thread(self) -> None:
         message = MagicMock()
@@ -164,16 +156,6 @@ class TestCollectFiveStateItems(unittest.TestCase):
             now=now,
         )
         self.assertEqual(items[0][0], "gone")
-
-
-class TestCmdNew(unittest.IsolatedAsyncioTestCase):
-    async def test_rejects_in_thread(self) -> None:
-        message = MagicMock()
-        message.channel = _FakeThread()
-        message.reply = AsyncMock()
-        with patch.object(ct.discord, "Thread", _FakeThread):
-            await ct.cmd_new(message, [])
-        self.assertIn("main channel", message.reply.await_args[0][0])
 
 
 if __name__ == "__main__":

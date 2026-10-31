@@ -114,6 +114,62 @@ class TestArtifactReadRoute(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resp.status, 200)
 
 
+class TestArtifactPage(unittest.IsolatedAsyncioTestCase):
+    def test_todays_shell_is_not_the_note(self) -> None:
+        """Positive control: the shell contains words, and the check still fails."""
+        shell_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "static",
+            "practice_viewer",
+            "index.html",
+        )
+        with open(shell_path, encoding="utf-8") as fh:
+            shell = fh.read()
+        from artifact_viewer import note_is_readable_without_script
+
+        self.assertIn("Loading", shell)
+        self.assertIn("cdn.jsdelivr.net", shell)
+        self.assertFalse(note_is_readable_without_script(shell, "Loading"))
+
+    async def test_the_first_response_is_the_note(self) -> None:
+        from artifact_viewer import note_is_readable_without_script
+
+        phrase = "the sparks eddy kept its title"
+        with tempfile.TemporaryDirectory() as tmp:
+            eddies = os.path.join(tmp, "story", "eddies")
+            os.makedirs(eddies)
+            with open(os.path.join(eddies, "7-sparks-as-intentions.md"), "w", encoding="utf-8") as fh:
+                fh.write(f"title: sparks as intentions\n\n{phrase}\n")
+            request = _read_request("story/eddies/7-new-eddy.md", token="secret-token")
+            with patch("state.ARTIFACT_READ_TOKEN", "secret-token"), patch(
+                "mage.set_practice_context_for_mage_key", return_value=True
+            ), patch("mage.get_mage_type", return_value="practitioner"), patch(
+                "artifact_viewer.get_pd", return_value=tmp
+            ), patch("artifact_viewer.get_runtime_dir", return_value=tmp), patch(
+                "artifact_viewer.get_mage_type", return_value="practitioner"
+            ):
+                resp = await intake_server.handle_artifact_page(request)
+        page = resp.text
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.content_type, "text/html")
+        self.assertTrue(note_is_readable_without_script(page, phrase))
+        self.assertIn("sparks as intentions", page)
+        self.assertNotIn("<script", page.lower())
+
+    async def test_the_page_refuses_without_a_token(self) -> None:
+        request = _read_request("story/eddies/7-new-eddy.md")
+        with patch("state.ARTIFACT_READ_TOKEN", "secret-token"):
+            with self.assertRaises(web.HTTPForbidden):
+                await intake_server.handle_artifact_page(request)
+
+    async def test_a_script_in_the_note_is_not_a_script_in_the_page(self) -> None:
+        from artifact_viewer import render_note_page
+
+        page = render_note_page("Title", "hello <script>alert(1)</script>")
+        self.assertNotIn("<script", page.lower())
+        self.assertIn("hello", page)
+
+
 class TestArtifactTokenCompare(unittest.TestCase):
     def test_missing_secret_refuses_even_a_blank_query(self) -> None:
         self.assertFalse(intake_server.artifact_read_authorized("", ""))

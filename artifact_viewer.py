@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -56,7 +57,7 @@ SHELF_DEFS: tuple[Shelf, ...] = (
     Shelf("chronicle", "Chronicle", "Practice timeline (summary)"),
     Shelf("state", "State", "Continuity engine (current.yaml, notes)"),
     Shelf("intake", "Intake", "Your pasted captures"),
-    Shelf("links", "Saved links", "Distilled URLs from `!fetch`"),
+    Shelf("links", "Saved links", "Links you saved"),
     Shelf("artifacts", "Practice artifacts", "Long outputs made by this practice"),
     Shelf("proposals", "Proposals", "Host self-development notes (operator only)"),
     Shelf("craft", "Craft", "turtleOS backlog and the moves made on it (operator only)"),
@@ -168,15 +169,90 @@ def is_artifact_directory(rel_dir: str, *, mage_type: str | None = None) -> bool
     return False
 
 
+_EDDY_NOTE = re.compile(r"^story/eddies/(\d+)-[^/]+\.md$")
+
+
 def resolve_artifact_path(rel_path: str, *, mage_type: str | None = None) -> str | None:
-    """Absolute path for reading an artifact, or None if denied."""
+    """Absolute path for reading an artifact, or None if denied.
+
+    An eddy note is keyed by its thread id. After a retitle the file moves,
+    and a request for the old slug still opens that one file.
+    """
     rel = normalize_rel_path(rel_path, ensure_md=True)
     if not rel or not is_artifact_readable(rel, mage_type=mage_type):
         return None
     if rel.startswith(LINK_RESONANCE_PREFIX):
         name = rel[len(LINK_RESONANCE_PREFIX) :]
         return os.path.join(_link_resonance_dir(), name)
-    return os.path.join(get_pd(), rel)
+    exact = os.path.join(get_pd(), rel)
+    if os.path.isfile(exact):
+        return exact
+    alias = _eddy_note_by_thread(rel)
+    if alias:
+        return alias
+    return exact
+
+
+def _eddy_note_by_thread(rel: str) -> str | None:
+    match = _EDDY_NOTE.match(rel)
+    if not match:
+        return None
+    folder = os.path.join(get_pd(), "story", "eddies")
+    if not os.path.isdir(folder):
+        return None
+    prefix = f"{match.group(1)}-"
+    names = sorted(
+        name for name in os.listdir(folder) if name.startswith(prefix) and name.endswith(".md")
+    )
+    if len(names) != 1:
+        return None
+    return os.path.join(folder, names[0])
+
+
+def latest_note_title(text: str) -> str:
+    """The last ``title:`` line in a note. A later write is the eddy's name."""
+    found = ""
+    for line in (text or "").splitlines():
+        if not line.startswith("title:"):
+            continue
+        raw = line.split(":", 1)[1].strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+            raw = raw[1:-1]
+        found = raw.strip()
+    return found
+
+
+def render_note_page(title: str, body: str) -> str:
+    """The note, already readable. No script and no second request."""
+    import html
+
+    shown = (title or "").strip() or "Note"
+    safe_title = html.escape(shown)
+    safe_body = html.escape(body or "")
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{safe_title}</title>"
+        "<style>body{font-family:-apple-system,system-ui,sans-serif;"
+        "background:#1a1a2e;color:#e0e0e0;padding:1.5rem;max-width:40rem;"
+        "margin:0 auto;line-height:1.6}h1{font-size:1.4rem;color:#e2b714}"
+        "pre{white-space:pre-wrap;font-family:inherit}</style></head>"
+        f"<body><h1>{safe_title}</h1><pre>{safe_body}</pre></body></html>"
+    )
+
+
+def note_is_readable_without_script(page: str, phrase: str) -> bool:
+    """True when ``phrase`` is in the page and nothing else has to run to show it.
+
+    A shell that fetches the note, or that loads a script to render it, fails.
+    """
+    if not phrase or phrase not in (page or ""):
+        return False
+    lowered = page.lower()
+    if "<script" in lowered or "fetch(" in lowered or "cdn.jsdelivr.net" in lowered:
+        return False
+    return True
 
 
 def iter_artifact_files(*, mage_type: str | None = None) -> list[str]:
@@ -382,15 +458,9 @@ def format_shelf_menu(
     for shelf, count in list_shelves(mage_type=mage_type):
         if not include_empty and count == 0:
             continue
-        lines.append(f"• **{shelf.title}** (`!artifacts {shelf.key}`) — {count} — {shelf.blurb}")
+        lines.append(f"• **{shelf.title}** — {count} — {shelf.blurb}")
     if operator_hints:
-        lines.extend(
-            [
-                "",
-                "View one: `!read <path>` · Export: `!export <path>` · Search: `!search <term>`",
-                "Browse a shelf tree: `!ls sessions` (allowlisted paths only)",
-            ]
-        )
+        lines.extend(["", "Ask me to open, search or send you any of these."])
     return "\n".join(lines)
 
 
@@ -398,15 +468,15 @@ def format_shelf_listing(shelf_key: str, *, mage_type: str | None = None) -> str
     mage_type = _effective_mage_type(mage_type)
     artifacts = list_shelf_artifacts(shelf_key, mage_type=mage_type)
     if not artifacts:
-        return f"No artifacts in **{shelf_key}** yet. Try another shelf with `!artifacts`."
+        return f"No artifacts in **{shelf_key}** yet."
 
     title = next((s.title for s in SHELF_DEFS if s.key == shelf_key.lower()), shelf_key)
     lines = [f"**{title}** ({len(artifacts)})", ""]
     for path in artifacts[:40]:
         display = path.replace(LINK_RESONANCE_PREFIX, "link · ")
-        lines.append(f"• `{display}` — `!read {path}` · `!export {path}`")
+        lines.append(f"• `{display}`")
     if len(artifacts) > 40:
-        lines.append(f"\n*…and {len(artifacts) - 40} more. Use `!ls {shelf_key}` or `!search`.*")
+        lines.append(f"\n*…and {len(artifacts) - 40} more. Ask me to find one.*")
     return "\n".join(lines)
 
 
@@ -466,9 +536,9 @@ def checkpoint_artifact_hint(*, session_note: str | None, flow_write: str | None
     if not session_note and not flow_write:
         return None
     if flow_write and not session_note:
-        return "Flow note saved — browse with `!artifacts notes`."
+        return "Flow note saved to Notes."
     shelf = "sessions" if session_note else "notes"
-    return f"Saved to **{shelf.title()}** — try `!artifacts {shelf}`."
+    return f"Saved to **{shelf.title()}**."
 
 
 # ─── Search (§11.5.5) ─────────────────────────────────────────────
@@ -539,13 +609,13 @@ def format_search_results(hits: list[SearchHit], query: str, *, max_snippets_per
         file_hits = by_file[path]
         link = obsidian_link(path)
         lines.append(f"**{path}**")
-        lines.append(f"Open: {link} · `!read {path}`")
+        lines.append(f"Open: {link}")
         for hit in file_hits[:max_snippets_per_file]:
             snippet = hit.line_text.strip()[:120]
             lines.append(f"  L{hit.line_no}: {snippet}")
         extra = len(file_hits) - max_snippets_per_file
         if extra > 0:
-            lines.append(f"  *…{extra} more line(s) in this artifact — use `!read`*")
+            lines.append(f"  *…{extra} more line(s) in this artifact — ask me to read it*")
         lines.append("")
 
     return "\n".join(lines).strip()

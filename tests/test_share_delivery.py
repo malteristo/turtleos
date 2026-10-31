@@ -39,13 +39,14 @@ class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             from share_eddy import write_inbox_bundle
 
+            configs: dict = {}
             write_inbox_bundle(tmp, bundle)
             with patch("mage.set_practice_context_for_channel"), patch(
                 "mage.get_runtime_dir",
                 return_value=tmp,
             ), patch("eddy_spawn.river_add_turtle_to_eddy", new=AsyncMock()), patch(
                 "commands.thread_configs",
-                {},
+                configs,
             ), patch("state.dialogue_histories", {}), patch(
                 "helpers.sync_history"
             ), patch(
@@ -56,6 +57,10 @@ class ShareMaterializeTests(unittest.IsolatedAsyncioTestCase):
                 thread = await materialize_received_eddy(interaction, "abc123", 1002)
 
         self.assertIs(thread, fake_thread)
+        # A note left for a person: the sender is not told whether it was read.
+        (cfg,) = configs.values()
+        self.assertEqual(cfg["origin"], "received")
+        self.assertIs(cfg["share_notify_pending"], False)
         interaction.channel.create_thread.assert_awaited_once()
         self.assertEqual(fake_thread.send.await_count, 2)
         first_call = fake_thread.send.await_args_list[0]

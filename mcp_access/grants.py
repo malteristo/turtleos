@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from core.atomic_io import atomic_write_text, file_lock
-from mcp_access.operations import snapshot_for
+from mcp_access.operations import OPERATIONS, snapshot_for
 
 DEFAULT_TTL_DAYS = 30
 ACTIVE = "active"
@@ -52,6 +52,8 @@ class Grant:
     status: str = ACTIVE
     bound_login: str | None = None
     bound_addr: str | None = None
+    client_name: str | None = None
+    client_version: str | None = None
     calls: int = 0
     refused: int = 0
     refused_since_brief: int = 0
@@ -128,6 +130,51 @@ class GrantStore:
                 return grant
         return None
 
+    def remember_mcp_client(self, grant_id: str, session_id: str, name: str, version: str | None) -> Grant | None:
+        """Remember which program introduced itself on this session.
+
+        A grant is one credential. Two programs can hold it. The name used for a
+        receipt is the one stored under that program's session, not whichever
+        program called initialize most recently.
+        """
+        with file_lock(self.path):
+            grants = self._read()
+            grant = grants.get(grant_id)
+            if grant is None:
+                return None
+            extra = dict(grant.extra or {})
+            clients = dict(extra.get("mcp_clients") or {})
+            clients[session_id] = {"name": name, "version": version or ""}
+            while len(clients) > 8:
+                clients.pop(next(iter(clients)))
+            extra["mcp_clients"] = clients
+            grant.extra = extra
+            grant.client_name = name
+            grant.client_version = version or None
+            self._write(grants)
+            return grant
+
+    def add_operation(self, grant_id: str, operation: str) -> str:
+        """Add one operation the grant's profile now includes.
+
+        A profile edit does not widen a grant. This is the explicit add. An
+        operation the profile does not list is refused, and the grant is unchanged.
+        """
+        if operation not in OPERATIONS:
+            return "refused"
+        with file_lock(self.path):
+            grants = self._read()
+            grant = grants.get(grant_id)
+            if grant is None:
+                return "missing"
+            if operation not in snapshot_for(grant.profile):
+                return "refused"
+            if operation in grant.operations:
+                return "already"
+            grant.operations = list(grant.operations) + [operation]
+            self._write(grants)
+            return "added"
+
     def update(self, grant_id: str, **changes) -> Grant | None:
         with file_lock(self.path):
             grants = self._read()
@@ -146,6 +193,8 @@ class GrantStore:
             if grant is None:
                 return
             grant.calls += 1
+            # When, never what: the list in the owner's home channel says "last used".
+            grant.extra = {**(grant.extra or {}), "last_used": _now().isoformat()}
             if refused:
                 grant.refused += 1
                 grant.refused_since_brief += 1

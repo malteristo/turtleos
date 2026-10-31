@@ -32,9 +32,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-# `voice_live` is reserved, not implemented: the home-speaker case is deferred
-# until the hardware exists, on the Mage's call, and is named here so the
-# interface does not have to be reopened when it arrives.
+# `voice_live` is reserved and still not a production path. The house speaker
+# is in the house as of 2026-10-21. The destination is
+# `docs/design/house-speaker.md`. This modality stays named so the interface
+# does not have to be reopened when a sentence actually arrives on it.
 InputModality = Literal["text", "voice_message", "voice_live"]
 
 MODALITIES: tuple[str, ...] = ("text", "voice_message", "voice_live")

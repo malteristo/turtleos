@@ -196,10 +196,18 @@ def _considered_section(considered: list[dict[str, Any]]) -> list[str]:
 
 
 def tools_called(tools_executed: Iterable[dict[str, Any]]) -> list[str]:
+    try:
+        from outgoing_connections import channel_line
+    except Exception:
+        channel_line = lambda _name: None  # type: ignore[assignment]
     seen: list[str] = []
     for item in tools_executed:
         name = str(item.get("name") or "").strip()
-        if name and name not in seen:
+        if not name:
+            continue
+        if channel_line(name):
+            name = "X"
+        if name not in seen:
             seen.append(name)
     return seen
 

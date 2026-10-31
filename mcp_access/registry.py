@@ -14,6 +14,7 @@ import yaml
 
 KIND_PRIVATE = "private"
 KIND_SUBJECT = "subject"
+KIND_WORKSHOP = "workshop"
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,16 @@ class Source:
     kind: str
     root: Path
     owner: str
+    # A workshop's root is a bare git repository, which is no place for audit
+    # lines: they land in the owner's practice root instead (D12).
+    audit_root: Path | None = None
+    # The practice's own bootstrap file inside the workshop, named in the
+    # registry because the server names no practice files.
+    bootstrap: str = ""
+
+    @property
+    def audit_dir(self) -> Path:
+        return self.audit_root or self.root
 
 
 def registry_path() -> Path:
@@ -53,6 +64,18 @@ def owned_sources(member: str, registry: dict) -> list[Source]:
         root = _root(mage)
         if root is not None:
             out.append(Source(member, KIND_PRIVATE, root, member))
+            shop = mage.get("workshop")
+            if isinstance(shop, dict) and shop.get("repo"):
+                out.append(
+                    Source(
+                        f"{member}-workshop",
+                        KIND_WORKSHOP,
+                        Path(os.path.expanduser(str(shop["repo"]))),
+                        member,
+                        audit_root=root,
+                        bootstrap=str(shop.get("bootstrap") or ""),
+                    )
+                )
     for key, space in (registry.get("spaces") or {}).items():
         if not isinstance(space, dict) or space.get("archived"):
             continue

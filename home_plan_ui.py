@@ -151,7 +151,7 @@ class HomePlanPinView(discord.ui.View):
             )
         else:
             await interaction.response.send_message(
-                f"Read with `!read {path}` in an eddy.", ephemeral=True
+                f"Ask me to read `{path}` in an eddy.", ephemeral=True
             )
 
     async def _on_stop(self, interaction: discord.Interaction) -> None:

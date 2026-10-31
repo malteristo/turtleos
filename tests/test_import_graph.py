@@ -55,7 +55,9 @@ import import_graph  # noqa: E402
 # member_first_run is a leaf and is not in the cycle. Raise only to the
 # measured dest-day size; do not raise again for first-run copy.
 LARGEST_RUNTIME_CYCLE = 50
-HUB_FAN_IN = 64
+# 2026-10-25: voice_home is the speaker's path into the home channel. It has to
+# know whose room a sentence belongs to, so it imports mage. One new edge.
+HUB_FAN_IN = 65
 HUB_MODULE = "mage"
 
 

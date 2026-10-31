@@ -138,13 +138,13 @@ class CraftCoalesceTests(unittest.IsolatedAsyncioTestCase):
         msg2.author.id = 1
         msg2.channel = msg1.channel
 
-        with patch("craft_intake.process_craft_intake", new=AsyncMock(return_value="ack")) as mock_process:
+        with patch("craft_intake.open_boom_drop", new=AsyncMock()) as mock_open:
             await craft_intake.schedule_craft_intake(msg1, client)
             await craft_intake.schedule_craft_intake(msg2, client)
             await asyncio.sleep(0.12)
 
-        mock_process.assert_awaited_once()
-        processed = mock_process.await_args.args[0]
+        mock_open.assert_awaited_once()
+        processed = mock_open.await_args.args[0]
         self.assertEqual(processed, [msg1, msg2])
 
 

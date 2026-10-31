@@ -481,6 +481,41 @@ async def handle_intake_submit(request):
     })
 
 
+_GOOGLE_PAGE = (
+    "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<title>Google</title><body style='font:18px system-ui;max-width:28em;margin:3em auto;padding:0 1em'>"
+    "<p>{message}</p>"
+)
+
+
+async def handle_google_callback(request):
+    """The browser's return from Google. Finishes a sign-in; shows no code and no secret.
+
+    The page says only whether it worked. Which pending sign-in this is comes from
+    the single-use `state` the house made; anything else is refused in the same words."""
+    import html
+
+    import google_connection
+    from cloud_fallback import house_dir
+
+    query = request.rel_url.query
+    state = str(query.get("state") or "")
+    code = "" if query.get("error") else str(query.get("code") or "")
+    try:
+        done = await asyncio.to_thread(google_connection.complete, house_dir(create=True), state, code)
+        message = "Connected. You can close this page and go back to the chat."
+        status = 200
+        print(f"Google sign-in finished for {done.person}: {', '.join(done.services)}")
+    except google_connection.SigninError as exc:
+        message = html.escape(str(exc))
+        status = 400
+    except Exception as exc:  # the page never carries the reason
+        print(f"Google sign-in failed: {type(exc).__name__}")
+        message = "That did not work. Start again from the chat."
+        status = 500
+    return web.Response(text=_GOOGLE_PAGE.format(message=message), content_type="text/html", status=status)
+
+
 async def handle_health(request):
     """Health check endpoint."""
     return web.json_response({"status": "ok", "service": "turtleos-intake"})
@@ -537,6 +572,53 @@ async def handle_artifact_read(request):
             "Cache-Control": "no-store",
             "Access-Control-Allow-Origin": "*",
         },
+    )
+
+
+async def handle_artifact_page(request):
+    """The card's address. The first response is the note, or a refusal.
+
+    The token is the one the link already carries. Without it, nothing is
+    served. The page does not fetch the note and does not load a script.
+    """
+    from urllib.parse import unquote
+
+    from artifact_viewer import (
+        is_artifact_readable,
+        latest_note_title,
+        render_note_page,
+        resolve_artifact_path,
+    )
+    from mage import get_mage_type, set_practice_context_for_mage_key
+    from practice_io import read_safe
+    from state import ARTIFACT_READ_TOKEN
+
+    token = request.rel_url.query.get("t", "")
+    if not artifact_read_authorized(token, ARTIFACT_READ_TOKEN):
+        raise web.HTTPForbidden(text="Artifact read token required")
+
+    path_mage = request.match_info.get("mage_key", "")
+    rel_path = unquote(request.match_info.get("path", "")).lstrip("/")
+    if path_mage in {"read", "craft", "intake", "paste", "health", "shell"}:
+        raise web.HTTPNotFound()
+    if not rel_path.endswith(".md"):
+        raise web.HTTPNotFound()
+    if not rel_path or not set_practice_context_for_mage_key(path_mage):
+        raise web.HTTPNotFound()
+    if not is_artifact_readable(rel_path, mage_type=get_mage_type()):
+        raise web.HTTPForbidden(text="Artifact not available")
+    abs_path = resolve_artifact_path(rel_path, mage_type=get_mage_type())
+    if not abs_path or not os.path.isfile(abs_path):
+        raise web.HTTPNotFound()
+    content = read_safe(abs_path)
+    if not content.strip():
+        raise web.HTTPNotFound(text="Empty artifact")
+    page = render_note_page(latest_note_title(content), content)
+    return web.Response(
+        text=page,
+        content_type="text/html",
+        charset="utf-8",
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -867,7 +949,9 @@ def create_intake_app(discord_client=None, vortex_thread_id=None) -> web.Applica
     app.router.add_get("/paste", handle_intake_page)
     app.router.add_post("/paste", handle_intake_submit)
     app.router.add_get("/health", handle_health)
+    app.router.add_get("/connect/google/callback", handle_google_callback)
     app.router.add_get("/read/{mage_key}/{path:.+}", handle_artifact_read)
+    app.router.add_get("/{mage_key}/{path:.+}", handle_artifact_page)
     app.router.add_post("/shell", handle_shell_submit)
     app.router.add_post("/craft/ready", handle_craft_ready)
     app.router.add_post("/craft/gap", handle_craft_gap)

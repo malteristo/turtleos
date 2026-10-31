@@ -276,7 +276,7 @@ TOS_TOOLS = [
             "name": "read_practice_file",
             "description": (
                 "Read an allowlisted practice artifact (internal context). "
-                "In Discord replies: quote at most ~3 lines from an artifact; point to `!read <path>` for the full note — do not paste full bodies (§11.5.5). "
+                "In Discord replies: quote at most ~3 lines from an artifact; point to the note's Open button for the full note — do not paste full bodies (§11.5.5). "
                 "Practice artifacts: memory/topics.md (what this space keeps returning to; one page per topic under memory/topics/), "
                 "story/eddies/ (checkpoint notes), story/daily/, sessions/, state/notes/, state/current.yaml, thread-archive/, chronicle/surface.md, box/intake/."
             ),
@@ -540,20 +540,40 @@ TOS_TOOLS = [
             "description": (
                 "Ask River to post one contextual act button after this reply (split-bot). "
                 "Use when a platform act would help and the practitioner should confirm — "
-                "checkpoint to save progress, or save to library for a URL worth keeping. "
-                "Does not execute the act. Do not invent commands outside checkpoint/save. "
-                "Mentioning `!checkpoint` in prose does NOT spawn buttons — use this tool."
+                "checkpoint to save progress, save to library for a URL worth keeping, or keep_date "
+                "when the practitioner names a date worth remembering (a birthday, an appointment, a "
+                "deadline), keep when the practitioner wants this eddy kept, or ignore when they "
+                "want it left out of memory entirely (\"don't remember this\"). Does not execute "
+                "the act. Do not invent commands outside "
+                "checkpoint/save/keep_date/keep/ignore. "
+                "Naming a command in prose does NOT spawn buttons — use this tool."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "Allowlisted act: 'checkpoint' or 'save' (library distill).",
+                        "description": "Allowlisted act: 'checkpoint', 'save' (library distill), 'keep_date', 'keep' (keep this eddy) or 'ignore' (leave no trace in memory).",
                     },
                     "url": {
                         "type": "string",
                         "description": "Required for action=save — the http(s) URL to distill.",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Required for action=keep_date — what the date is, in the practitioner's words (e.g. \"Anna's birthday\").",
+                    },
+                    "when": {
+                        "type": "string",
+                        "description": "Required for action=keep_date — the date as YYYY-MM-DD. Work it out from today's date and what they said (\"next Thursday\", \"3rd of November\"); the practitioner confirms it on the button.",
+                    },
+                    "recurrence": {
+                        "type": "string",
+                        "description": "action=keep_date: 'yearly' for a birthday or anniversary, otherwise 'none'.",
+                    },
+                    "birth_year": {
+                        "type": "integer",
+                        "description": "action=keep_date, a birthday only: the year they were born, if they said it (the reminder then says how old they turn).",
                     },
                     "reason": {
                         "type": "string",
@@ -1112,6 +1132,31 @@ def tools_for_attunement(attunement: str) -> list[dict]:
         scopes = _TOOL_SCOPES.get(name)
         if scopes is None or attunement in scopes:
             allowed.append(tool)
+    # The door decides this offer. Asking is not a second decision, and this
+    # file does not name the tool.
+    from outgoing_connections import connection_tools
+
+    allowed.extend(connection_tools(attunement))
+    # The rooms' services (`service_tools`) decide from the room and the asker, not the attunement.
+    from service_tools import tools_offered
+
+    allowed.extend(tools_offered())
+    # The workshop's tools decide the same way: this room, this asker, this house.
+    from workshop_tools import tools_offered as workshop_offered
+
+    allowed.extend(workshop_offered())
+    from house_terminal import tools_offered as terminal_offered
+
+    allowed.extend(terminal_offered())
+    from house_browser import tools_offered as browser_offered
+
+    allowed.extend(browser_offered())
+    from house_read import tools_offered as house_read_offered
+
+    allowed.extend(house_read_offered())
+    from delegate_setup import tools_offered as delegate_offered
+
+    allowed.extend(delegate_offered())
     return allowed
 
 
@@ -1231,6 +1276,34 @@ def tools_for_channel(channel_id=None) -> list[dict]:
 # ─── Tool Execution ──────────────────────────────────────────────
 
 def _execute_tos_tool_raw(name, arguments):
+    from outgoing_connections import handles_tool, live_call
+    from service_tools import call as service_call, handles as service_handles
+
+    if service_handles(name):
+        return service_call(name, arguments if isinstance(arguments, dict) else {})
+    from workshop_tools import call as workshop_call, handles as workshop_handles
+
+    if workshop_handles(name):
+        return workshop_call(name, arguments if isinstance(arguments, dict) else {})
+    from house_terminal import call as terminal_call, handles as terminal_handles
+
+    if terminal_handles(name):
+        return terminal_call(name, arguments if isinstance(arguments, dict) else {})
+    from house_browser import call as browser_call, handles as browser_handles
+
+    if browser_handles(name):
+        return browser_call(name, arguments if isinstance(arguments, dict) else {})
+    from house_read import call as house_read_call, handles as house_read_handles
+
+    if house_read_handles(name):
+        return house_read_call(name, arguments if isinstance(arguments, dict) else {})
+    from delegate_setup import call as delegate_call, handles as delegate_handles
+
+    if delegate_handles(name):
+        return delegate_call(name, arguments if isinstance(arguments, dict) else {})
+    if handles_tool(name):
+        return live_call(arguments if isinstance(arguments, dict) else {}, tool=name)
+
     if name == "read_practice_file":
         filename = arguments.get("filename", "")
         if not is_readable(filename):
@@ -1575,6 +1648,10 @@ def _execute_tos_tool_raw(name, arguments):
             str(arguments.get("action") or ""),
             url=arguments.get("url"),
             reason=str(arguments.get("reason") or ""),
+            title=arguments.get("title"),
+            when=arguments.get("when"),
+            recurrence=arguments.get("recurrence"),
+            birth_year=arguments.get("birth_year"),
         )
 
     if name == "list_turtle_capabilities":

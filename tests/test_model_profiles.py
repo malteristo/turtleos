@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from core import models
 from core.model_profiles import PROFILES, awareness_block, cost_usd, is_cloud, profile_for
@@ -21,6 +22,16 @@ def _routed_models() -> set[str]:
     }
     named |= {m for m in models.KNOWN_MODELS.values() if m}
     return named
+
+
+class SystemModelDefaultTests(unittest.TestCase):
+    def test_memory_default_is_qwen38_and_river_stays_the_small_model(self) -> None:
+        # The running process may override these from the environment.
+        # The default written in the source is the decision.
+        source = Path(__file__).resolve().parents[1].joinpath("core/models.py").read_text()
+        self.assertIn('REFLECTION_MODEL = _env("REFLECTION_MODEL", "qwen3.8:27b")', source)
+        self.assertIn('RIVER_MODEL = _env("RIVER_MODEL", "qwen3.5:4b")', source)
+        self.assertIsNotNone(profile_for("qwen3.8:27b"))
 
 
 class ProfileCoverageTests(unittest.TestCase):

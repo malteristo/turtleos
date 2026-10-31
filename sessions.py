@@ -18,6 +18,7 @@ from state import (
     MIN_EXCHANGES_FOR_CHECKPOINT, SESSION_REFLECTION_COOLDOWN, last_reflection_time,
     last_checkpoint_anchor,
     REFLECTION_MODEL,
+    DIALOGUE_MODEL,
     thread_configs,
 )
 from mage import (
@@ -152,6 +153,19 @@ def _since_index_for(channel_id: int, history: list[dict]) -> int | None:
         if current[: len(suffix)] == suffix:
             return len(suffix)
     return 0
+
+
+def _author_model(channel_id: int, parent_channel_id: int | None) -> tuple[str, bool]:
+    """The model that was talking in this eddy. Not the reflection model."""
+    from room_models import resolve_room_model
+
+    parent = parent_channel_id or channel_id
+    cfg = thread_configs.get(channel_id) or thread_configs.get(parent) or {}
+    from mage import get_registry
+    from room_models import default_for_room
+
+    model, use_api, _source = resolve_room_model(parent, cfg, default_for_room(parent, get_registry(), DIALOGUE_MODEL))
+    return model, use_api
 
 
 def _practice_relative(path: Path) -> str:
@@ -388,12 +402,15 @@ async def checkpoint_session(
         last_reflection_time[channel_id] = now_ts
         for attempt in range(1, EDDY_NOTE_ATTEMPTS + 1):
             try:
+                note_model, note_use_api = _author_model(channel_id, parent_channel_id)
                 result.eddy_note = await story_notes.write_eddy_note(
                     channel_id,
                     history,
                     trigger=trigger,
                     since_index=_since_index_for(channel_id, history),
                     parent_channel_id=parent_channel_id,
+                    model=note_model,
+                    use_api=note_use_api,
                 )
                 # A recovered write is a written write — the window it covers
                 # is closed, so the anchor must advance normally.
@@ -493,8 +510,11 @@ async def checkpoint_session(
                     detail=f"{type(e).__name__}: {e}",
                 )
             try:
+                from practice_io import eddy_note_link, note_entry_title
+
+                title = note_entry_title(result.eddy_note.entry_text)
                 await log_activity(
-                    f"Eddy note: `{eddy_rel}`",
+                    f"Eddy note: {eddy_note_link(eddy_rel, title=title)}",
                     "\U0001f4dd",
                     channel=state.client.get_channel(channel_id),
                 )

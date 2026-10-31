@@ -97,7 +97,7 @@ The shell is **native-only** (Phase D, 2026-07-08). Legacy magic-attuned Appendi
 | Always offer eddy | **Live** — standing eddy bar | Aligned |
 | Eddy-only Turtle | **Live** — native `character/` in eddies | Legacy magic prompts remain for Appendix A |
 | Two local models (River 4–9B / Turtle ~30B) | Partial — triage still in tree | **Gap** on model routing cleanup |
-| `state/` + CE practice infrastructure | **Live** — CE Slice 0+1a, `!focus` | **Aligned** (2026-07-10 purge) |
+| `state/` + CE practice infrastructure | **Live** — CE Slice 0+1a (`!focus` retired 2026-10-14) | **Aligned** (2026-07-10 purge) |
 | Chronicle jump URLs | Partial | **Integrate** |
 | Magic-attuned mode | **Removed** (Phase D) | Appendix A retired from codebase |
 
@@ -404,7 +404,7 @@ Message arrives
     │
     ├─ Eddy / thread (native)
     │   ├─ Default → TURTLE_MODEL (Gemma ~31B)
-    │   ├─ !thread --model M → resolve_model(M) — local gemma/qwen or API claude/gemini
+    │   ├─ !model pick (per channel) → resolve_model — local gemma/qwen or API claude/gemini
     │   └─ think=False at Ollama API for Gemma
     │
     ├─ Magic-attuned main channel
@@ -416,7 +416,7 @@ Message arrives
         └─ EDIT_DELEGATE_MODEL — delegate file edits
 ```
 
-**Instance defaults** (see `.env.template`): `RIVER_MODEL=qwen3.5:4b`, `TURTLE_MODEL=gemma4:31b`. Install Lighter (~16 GB): `TURTLE_MODEL=gemma4:12b` (`!thread --model gemma-12b`). Faster eddy fallback: `!thread --model gemma-26b`. Cloud dialogue remains opt-in via `DIALOGUE_MODEL=claude-*` or per-thread `--model claude`.
+**Instance defaults** (see `.env.template`): `RIVER_MODEL=qwen3.5:4b`, `TURTLE_MODEL=gemma4:31b`. Install Lighter (~16 GB): `TURTLE_MODEL=gemma4:12b` (`!model gemma-12b` in the channel). Faster eddy fallback: `!thread --model gemma-26b`. Cloud dialogue remains opt-in via `DIALOGUE_MODEL=claude-*` or per-thread `--model claude`.
 
 ## Session Lifecycle
 
@@ -522,6 +522,8 @@ URL detected in message
     ├─ detect_platform()
     │   ├─ twitter/x.com → fetch_twitter()
     │   │   └─ Twitter oembed API → text + follow t.co links → extract linked articles
+    │   │   In craft, a signed-in read goes through the person's X connection first
+    │   │   (`outgoing_connections.py`). Other rooms keep this preview.
     │   ├─ youtube → fetch_youtube_transcript()
     │   │   └─ youtube_transcript_api → full transcript text
     │   └─ other → fetch_url_content()

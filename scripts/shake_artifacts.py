@@ -2,7 +2,7 @@
 """Shakedown for practice artifact viewer (TURTLE_SPEC §11.5).
 
 Offline: allowlist, command registration, shelf formatting.
-Live (--live): Spirit sends !artifacts in river/eddy via spirit_ops.
+Live (--live): Spirit types a retired browse command and reads the pointer reply (spirit_ops).
 """
 from __future__ import annotations
 
@@ -35,20 +35,20 @@ RIVER_CHANNEL = "1479428854513664030"
 
 
 def check_registration() -> list[str]:
+    """The typed door is shut and the button's room stays: handler + button gate, no member command."""
     errors: list[str] = []
     from commands import DIRECT_COMMANDS
-    from cmd_dispatch import COMMAND_ACT_FALLBACK, _PRACTITIONER_COMMANDS
+    from cmd_dispatch import COMMAND_ACT_FALLBACK, CONTEXTUAL_ACTION_COMMANDS, _PRACTITIONER_COMMANDS
 
-    if "artifacts" not in DIRECT_COMMANDS:
-        errors.append("DIRECT_COMMANDS missing artifacts")
-    if "artifacts" not in _PRACTITIONER_COMMANDS:
-        errors.append("_PRACTITIONER_COMMANDS missing artifacts")
+    for name in ("artifacts", "read", "export"):
+        if name not in DIRECT_COMMANDS:
+            errors.append(f"DIRECT_COMMANDS missing {name} (the Open and Browse buttons run it)")
+        if name not in CONTEXTUAL_ACTION_COMMANDS:
+            errors.append(f"CONTEXTUAL_ACTION_COMMANDS missing {name} (the button gate)")
+        if name in _PRACTITIONER_COMMANDS:
+            errors.append(f"_PRACTITIONER_COMMANDS still lists {name}: the typed door should be shut")
     if "artifacts" not in COMMAND_ACT_FALLBACK:
         errors.append("COMMAND_ACT_FALLBACK missing artifacts")
-    if "export" not in DIRECT_COMMANDS:
-        errors.append("DIRECT_COMMANDS missing export")
-    if "export" not in _PRACTITIONER_COMMANDS:
-        errors.append("_PRACTITIONER_COMMANDS missing export")
     return errors
 
 
@@ -89,10 +89,11 @@ def check_shelf_menu() -> list[str]:
     text = av.format_shelf_menu(mage_type="mage")
     if "Practice artifacts" not in text:
         errors.append("shelf menu missing title")
-    if "!artifacts sessions" not in text:
-        errors.append("shelf menu missing sessions hint")
-    if "!export" not in text:
-        errors.append("shelf menu missing export hint")
+    if "Sessions" not in text:
+        errors.append("shelf menu missing the sessions shelf")
+    for gone in ("`!artifacts", "`!read", "`!export", "`!search", "`!ls"):
+        if gone in text:
+            errors.append(f"shelf menu still tells a person to type {gone[1:]}`")
     return errors
 
 
@@ -116,43 +117,22 @@ def _run(cmd: list[str], timeout: int = 90) -> subprocess.CompletedProcess:
 
 
 def check_live(wait_seconds: int) -> list[str]:
+    """The typed doors answer once with where they went (2026-10-14); the shelves are buttons."""
     errors: list[str] = []
     if not VENV_PY.is_file() or not SPIRIT_OPS.is_file():
         return ["run live shake on Mac Mini (venv + spirit_ops required)"]
 
-    proc = _run([str(VENV_PY), str(SPIRIT_OPS), "send", RIVER_CHANNEL, "!artifacts"], timeout=60)
-    if proc.returncode != 0:
-        errors.append(f"spirit !artifacts send failed: {proc.stderr or proc.stdout}")
-        return errors
-
-    time.sleep(wait_seconds)
-    read_proc = _run([str(VENV_PY), str(SPIRIT_OPS), "read", RIVER_CHANNEL, "8"], timeout=60)
-    transcript = read_proc.stdout + read_proc.stderr
-    if "Practice artifacts" not in transcript and "Recent" not in transcript and "Sessions" not in transcript:
-        errors.append(f"!artifacts response not found in river transcript: {transcript[:400]}")
-
-    proc_all = _run([str(VENV_PY), str(SPIRIT_OPS), "send", RIVER_CHANNEL, "!artifacts --all"], timeout=60)
-    if proc_all.returncode != 0:
-        errors.append(f"spirit !artifacts --all send failed: {proc_all.stderr or proc_all.stdout}")
-    else:
+    for typed in ("!artifacts", "!read thread-state/registry.yaml", "!ls"):
+        proc = _run([str(VENV_PY), str(SPIRIT_OPS), "send", RIVER_CHANNEL, typed], timeout=60)
+        if proc.returncode != 0:
+            errors.append(f"spirit {typed} send failed: {proc.stderr or proc.stdout}")
+            continue
         time.sleep(wait_seconds)
-        read_all = _run([str(VENV_PY), str(SPIRIT_OPS), "read", RIVER_CHANNEL, "6"], timeout=60)
-        transcript_all = read_all.stdout + read_all.stderr
-        if "Practice artifacts" not in transcript_all:
-            errors.append("!artifacts --all missing operator catalog in transcript")
-
-    deny_proc = _run(
-        [str(VENV_PY), str(SPIRIT_OPS), "send", RIVER_CHANNEL, "!read thread-state/registry.yaml"],
-        timeout=60,
-    )
-    if deny_proc.returncode != 0:
-        errors.append(f"spirit deny probe send failed: {deny_proc.stderr}")
-    time.sleep(wait_seconds)
-    read_proc2 = _run([str(VENV_PY), str(SPIRIT_OPS), "read", RIVER_CHANNEL, "6"], timeout=60)
-    transcript2 = read_proc2.stdout + read_proc2.stderr
-    if "Cannot read" not in transcript2 and "artifacts" not in transcript2.lower():
-        errors.append("expected !read denial for thread-state path")
-
+        read_proc = _run([str(VENV_PY), str(SPIRIT_OPS), "read", RIVER_CHANNEL, "6"], timeout=60)
+        transcript = read_proc.stdout + read_proc.stderr
+        name = typed.split()[0]
+        if f"`{name}` is gone" not in transcript:
+            errors.append(f"{name} did not answer with where it went: {transcript[:300]}")
     return errors
 
 

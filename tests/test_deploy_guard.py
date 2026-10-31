@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
 import sys
 import time
 import unittest
@@ -56,6 +57,13 @@ class _Workshops:
         f.write_text("[]", encoding="utf-8")
         when = time.time() - age_seconds
         os.utime(f, (when, when))
+        return f
+
+    def flight(self, pid: int, root: str = "kermit", channel: str = "123") -> Path:
+        d = self.path / root / "dialogue"
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / f"{channel}.lock"
+        f.write_text(str(pid), encoding="utf-8")
         return f
 
     def write_in_flight(self, root: str = "family", name: str = "eddy") -> Path:
@@ -110,6 +118,29 @@ class VerdictTests(unittest.TestCase):
         self.ws.turn(age_seconds=10 * 60 + 5)
         self.assertTrue(self._assess(10.0)["quiet"])
         self.assertFalse(self._assess(11.0)["quiet"])
+
+    def test_the_default_gap_is_a_minute_after_the_turn(self) -> None:
+        """The default is what `restart.sh` uses. A minute covers the restart's own
+        gap. Half an hour was the pause-for-thought, and it held the next idea."""
+        for seconds, quiet in ((30, False), (90, True)):
+            ws = _Workshops()
+            self.addCleanup(ws.close)
+            ws.turn(age_seconds=seconds)
+            self.assertEqual(deploy_guard.assess(workshops=ws.path)["quiet"], quiet, f"{seconds}s")
+
+    def test_a_living_turn_holds_and_a_dead_one_does_not(self) -> None:
+        """The old file is hours old. Only the lock distinguishes the two."""
+        self.ws.turn(age_seconds=7200)
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(proc.kill)
+        self.ws.flight(proc.pid)
+        held = deploy_guard.assess(workshops=self.ws.path)
+        self.assertFalse(held["quiet"])
+        self.assertIn("in flight", held["what"])
+        proc.kill()
+        proc.wait(timeout=5)
+        released = deploy_guard.assess(workshops=self.ws.path)
+        self.assertTrue(released["quiet"])
 
     def test_it_reports_how_long_ago_and_where(self) -> None:
         """A refusal that does not say what it is protecting gets forced reflexively."""
@@ -230,14 +261,13 @@ class RestartScriptTests(unittest.TestCase):
 
 
 class ThresholdIsJustifiedTests(unittest.TestCase):
-    def test_the_default_covers_an_in_flight_local_turn(self) -> None:
-        """A 31B local reply was measured at up to 172s. The window must exceed it."""
-        self.assertGreaterEqual(
-            deploy_guard.DEFAULT_QUIET_MINUTES * 60,
-            172 * 2,
-            "the quiet window must comfortably cover a reply already being generated, "
-            "or the guard clears a deploy while Turtle is mid-answer",
-        )
+    def test_a_turn_is_held_where_the_guard_looks(self) -> None:
+        """The minute does not cover a reply. The lock does, and it has to be released."""
+        text = (REPO / "dialogue_turn.py").read_text(encoding="utf-8")
+        wrapper = text.split("async def handle_dialogue", 1)[1].split("async def _handle_dialogue", 1)[0]
+        self.assertIn("begin_turn(channel_id)", wrapper)
+        self.assertLess(wrapper.index("begin_turn(channel_id)"), wrapper.index("finally"))
+        self.assertIn("end_turn(channel_id)", wrapper)
 
     def test_the_threshold_is_not_so_long_that_it_never_clears(self) -> None:
         self.assertLessEqual(

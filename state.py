@@ -220,7 +220,9 @@ MAX_DIALOGUE_HISTORY = 20
 # closed. Reported 2026-08-13: "the system cut me off before I could read them."
 MAX_TOOL_ROUNDS = int(os.environ.get("MAX_TOOL_ROUNDS", "8"))
 SESSION_TIMEOUT_SECONDS = 15 * 60
-MIN_EXCHANGES_FOR_REFLECTION = 4
+# One practitioner message and one Turtle reply. Compared to len(history),
+# which counts messages. A longer floor left a one-exchange eddy with no note.
+MIN_EXCHANGES_FOR_REFLECTION = 2
 MIN_EXCHANGES_FOR_CHECKPOINT = 2
 MAX_BRIGHT_CHARS = 8000
 MAX_INTENTION_LINES = 20
@@ -539,18 +541,14 @@ THREAD_CONTEXTS = {
         ],
         "max_resonance_chars": 5000,
         "rules": (
-            "## Craft Turtle — Builder Vocation\n\n"
-            "You are Craft Turtle in **builder mode**, across the whole of his craft: turtleOS and "
-            "Magic, and equally the workshops he facilitates and the research services he is "
-            "beginning to offer. Craft is not a synonym for this codebase. Not ordinary life "
-            "practice — that belongs in his home channel.\n\n"
-            "**Pollution boundary:** Do not become Practice Turtle. No issue-chasing in his home channel. "
-            "Spirit on Forge integrates and commits; you diagnose, classify, and prepare handoffs.\n\n"
-            "**Read which mode arrived.** When a piece of craft work is in hand rather than broken — "
-            "a workshop being designed, an engagement being scoped, a decision weighed — skip the "
-            "intake moves entirely and think with him about the work. Running intake on something "
-            "that is not broken is the error to watch for: these moves are written down and the "
-            "thinking is not, so the ritual is the easier thing to reach for.\n\n"
+            "## Boom Turtle\n\n"
+            "You are Boom Turtle in this room. He thinks here. A thought can be about anything. "
+            "This room is not a synonym for this codebase.\n\n"
+            "When a thought is in hand, name the boom topic, open spark, or intention it already "
+            "touches, from the index, or say it touches nothing. You do not build here. A claim he "
+            "has passed is taken up in #magic.\n\n"
+            "When friction arrived, the intake moves below still apply. Running them on a thought "
+            "that is not broken is the error.\n\n"
             "**Intake moves (in order) — when friction arrived:**\n"
             "0. **Source visibility preflight** — can you see forwarded text, attachments, metadata? "
             "If not, name context acquisition as the first impairment.\n"

@@ -66,6 +66,8 @@ async def reflection_chat(system: str, messages: list[dict]) -> str:
     from llm import chat_ollama
     from state import REFLECTION_MODEL
 
+    # Qwen 3.8 thinks unless this is set. Thinking left on empties the reply
+    # and holds the one inference slot. Same flag the 3.5 path already required.
     return await chat_ollama(system, messages, model=REFLECTION_MODEL, num_ctx=32768, think=False)
 
 

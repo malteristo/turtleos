@@ -213,20 +213,226 @@ class TestLifecycleBarRehydration(unittest.TestCase):
         self.assertIn("rehydrate_lifecycle_bar_views", src)
         setup = src.split("async def _setup_native_river()", 1)[1].split("asyncio.create_task", 1)[0]
         self.assertIn("rehydrate_lifecycle_bar_views(river_client)", setup)
+        self.assertIn("withdraw_operator_lifecycle_bars(river_client)", setup)
+        self.assertLess(
+            setup.index("await withdraw_operator_lifecycle_bars"),
+            setup.index("rehydrate_lifecycle_bar_views(river_client)"),
+        )
 
     def test_bar_declaration_matches_what_the_view_renders(self) -> None:
         """prompts.py told Turtle the bar carried release and dissolve. It never did."""
         prompts_src = Path("prompts.py").read_text(encoding="utf-8")
-        line = next(
-            ln for ln in prompts_src.splitlines() if "Lifecycle bar (always visible" in ln
-        )
+        lines = [
+            ln
+            for ln in prompts_src.splitlines()
+            if "Lifecycle bar" in ln and "flow pick" in ln
+        ]
+        self.assertEqual(len(lines), 2)
         view_src = Path("eddy_lifecycle_bar.py").read_text(encoding="utf-8")
         block = view_src.split("class EddyLifecycleBarView", 1)[1].split(
             "class EddyDissolveConfirmView", 1
         )[0]
+        for claim in lines:
+            self.assertIn("operator's own eddies", claim)
+            self.assertNotIn("always visible", claim)
+            for label in ("checkpoint", "share"):
+                self.assertIn(label, claim)
+            for absent in ("release", "dissolve"):
+                self.assertNotIn(f"· {absent}", claim)
         for label in ("checkpoint", "share"):
             self.assertIn(f'label="{label}"', block)
-            self.assertIn(label, line)
         for absent in ("release", "dissolve"):
             self.assertNotIn(f'label="{absent}"', block)
-            self.assertNotIn(f"· {absent}", line)
+
+
+class TestLifecycleBarHiddenForTheOperator(unittest.TestCase):
+    """The bar is off in the operator's own eddies until it is redesigned."""
+
+    def test_his_eddy_withholds_the_bar(self) -> None:
+        primitive = SimpleNamespace(practice_key="operator", base="solo")
+        registry = {"spaces": {}, "mages": {"operator": {"type": "mage"}}}
+        with patch("mage.get_channel_primitive", return_value=primitive), patch(
+            "mage.get_registry", return_value=registry
+        ):
+            self.assertTrue(bar.lifecycle_bar_withheld(10))
+
+    def test_another_persons_eddy_keeps_the_bar(self) -> None:
+        primitive = SimpleNamespace(practice_key="guest", base="solo")
+        registry = {"spaces": {}, "mages": {"guest": {"type": "practitioner"}}}
+        with patch("mage.get_channel_primitive", return_value=primitive), patch(
+            "mage.get_registry", return_value=registry
+        ):
+            self.assertFalse(bar.lifecycle_bar_withheld(10))
+
+    def test_a_shared_room_keeps_the_bar(self) -> None:
+        primitive = SimpleNamespace(practice_key="house", base="shared")
+        registry = {"spaces": {"house": {}}, "mages": {}}
+        with patch("mage.get_channel_primitive", return_value=primitive), patch(
+            "mage.get_registry", return_value=registry
+        ):
+            self.assertFalse(bar.lifecycle_bar_withheld(10))
+
+    def test_a_withheld_room_does_not_qualify_for_a_new_bar(self) -> None:
+        with patch.object(bar, "lifecycle_bar_withheld", return_value=True):
+            self.assertFalse(bar.bootstrap_bar_eligible(11, 22))
+            self.assertFalse(bar.lifecycle_bar_eligible(11, 22))
+
+    def test_the_operator_file_is_his_even_when_context_is_another_room(self) -> None:
+        registry = {
+            "spaces": {},
+            "mages": {
+                "guest": {"type": "practitioner", "runtime_dir": "/tmp/guest"},
+                "operator": {"type": "mage", "primary": True, "runtime_dir": "/tmp/operator"},
+            },
+        }
+        with patch("mage.get_registry", return_value=registry), patch.object(
+            bar, "_state_path", return_value="/tmp/ambient/lifecycle_bar.json"
+        ):
+            self.assertEqual(
+                bar._operator_eddy_dir(),
+                "/tmp/operator/thread-state/eddy",
+            )
+
+    def test_startup_removes_his_bar_and_leaves_the_other(self) -> None:
+        import asyncio
+        import json
+        import tempfile
+
+        class Message:
+            def __init__(self):
+                self.deleted = False
+
+            async def delete(self):
+                self.deleted = True
+
+        class Thread:
+            def __init__(self, thread_id: int, parent_id: int):
+                self.id = thread_id
+                self.parent_id = parent_id
+                self.message = Message()
+
+            async def fetch_message(self, _message_id: int):
+                return self.message
+
+        his = Thread(7, 10)
+        theirs = Thread(8, 99)
+
+        class Client:
+            def get_channel(self, channel_id: int):
+                return {7: his, 8: theirs}[channel_id]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "lifecycle_bar.json").write_text(
+                json.dumps({"7": 100, "8": 200}), encoding="utf-8"
+            )
+            (directory / "bar_phase.json").write_text(
+                json.dumps({"7": "live", "8": "live"}), encoding="utf-8"
+            )
+            with patch.object(bar, "_operator_eddy_dir", return_value=str(directory)), patch.object(
+                bar, "_load_state", return_value={"9": 300}
+            ), patch.object(
+                bar, "clear_lifecycle_bar_state", side_effect=AssertionError("ambient file")
+            ), patch.object(
+                bar, "lifecycle_bar_withheld", side_effect=lambda parent_id: parent_id == 10
+            ):
+                hidden = asyncio.run(bar.withdraw_operator_lifecycle_bars(Client()))
+            left = json.loads((directory / "lifecycle_bar.json").read_text(encoding="utf-8"))
+            phases = json.loads((directory / "bar_phase.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(hidden, 1)
+        self.assertTrue(his.message.deleted)
+        self.assertFalse(theirs.message.deleted)
+        self.assertEqual(left, {"8": 200})
+        self.assertEqual(phases, {"8": "live"})
+
+    def test_a_failed_delete_keeps_the_row_so_the_next_start_tries_again(self) -> None:
+        import asyncio
+        import json
+        import tempfile
+
+        import discord
+
+        failed = discord.HTTPException.__new__(discord.HTTPException)
+        Exception.__init__(failed, "discord said no")
+
+        class Thread:
+            id = 7
+            parent_id = 10
+
+            async def fetch_message(self, _message_id: int):
+                class Message:
+                    async def delete(self):
+                        raise failed
+
+                return Message()
+
+        class Client:
+            def get_channel(self, _channel_id: int):
+                return Thread()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "lifecycle_bar.json").write_text(
+                json.dumps({"7": 100}), encoding="utf-8"
+            )
+            with patch.object(bar, "_operator_eddy_dir", return_value=str(directory)), patch.object(
+                bar, "lifecycle_bar_withheld", return_value=True
+            ):
+                hidden = asyncio.run(bar.withdraw_operator_lifecycle_bars(Client()))
+            left = json.loads((directory / "lifecycle_bar.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(hidden, 0)
+        self.assertEqual(left, {"7": 100})
+
+    def test_a_closed_eddy_is_opened_only_long_enough_to_take_the_bar_down(self) -> None:
+        import asyncio
+        import json
+        import tempfile
+
+        class Message:
+            def __init__(self):
+                self.deleted = False
+
+            async def delete(self):
+                self.deleted = True
+
+        class Thread:
+            id = 7
+            parent_id = 10
+            archived = True
+            edits: list[bool] = []
+
+            def __init__(self):
+                self.message = Message()
+                self.edits = []
+
+            async def edit(self, *, archived: bool):
+                self.edits.append(archived)
+                self.archived = archived
+
+            async def fetch_message(self, _message_id: int):
+                return self.message
+
+        thread = Thread()
+
+        class Client:
+            def get_channel(self, _channel_id: int):
+                return thread
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "lifecycle_bar.json").write_text(
+                json.dumps({"7": 100}), encoding="utf-8"
+            )
+            with patch.object(bar, "_operator_eddy_dir", return_value=str(directory)), patch.object(
+                bar, "lifecycle_bar_withheld", return_value=True
+            ):
+                hidden = asyncio.run(bar.withdraw_operator_lifecycle_bars(Client()))
+            left = json.loads((directory / "lifecycle_bar.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(hidden, 1)
+        self.assertTrue(thread.message.deleted)
+        self.assertEqual(thread.edits, [False, True])
+        self.assertTrue(thread.archived)
+        self.assertEqual(left, {})

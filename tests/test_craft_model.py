@@ -1,4 +1,4 @@
-"""Craft eddy model routing — frontier CRAFT_MODEL, not local Gemma."""
+"""Conversation default is the local model. A channel leaves it only by a pick."""
 
 from __future__ import annotations
 
@@ -19,8 +19,12 @@ from core import models
 
 
 class CraftModelConfigTests(unittest.TestCase):
-    def test_craft_model_defaults_to_claude(self) -> None:
-        self.assertTrue(models.CRAFT_MODEL.startswith("claude-"))
+    def test_conversation_default_is_the_local_model_even_if_craft_env_is_claude(self) -> None:
+        # 2026-10-06: craft used to speak on CRAFT_MODEL with no pick. An env
+        # value of claude-sonnet-5 must not move the default.
+        with patch.object(models, "CRAFT_MODEL", "claude-sonnet-5"):
+            self.assertEqual(models.conversation_model(), models.TURTLE_MODEL)
+            self.assertFalse(models.conversation_model().startswith("claude-"))
 
     def test_state_exports_craft_model(self) -> None:
         from state import CRAFT_MODEL
@@ -76,11 +80,11 @@ class CraftBlankEddyModelTests(unittest.IsolatedAsyncioTestCase):
         ):
             thread = await spawn_blank_river_eddy(channel)
             self.assertIs(thread, fake_thread)
-            resolve.assert_called_with(models.CRAFT_MODEL)
+            resolve.assert_not_called()
             cfg = configs[42]
-            self.assertEqual(cfg["model"], "claude-sonnet-4-6")
-            self.assertTrue(cfg["use_api"])
-            self.assertEqual(cfg["model_label"], "api")
+            self.assertEqual(cfg["model"], models.TURTLE_MODEL)
+            self.assertFalse(cfg["use_api"])
+            self.assertEqual(cfg["model_label"], "local")
 
     async def test_native_spawn_stays_local_turtle(self) -> None:
         from eddy_spawn import spawn_blank_river_eddy

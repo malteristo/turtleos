@@ -43,7 +43,7 @@ Hosted practitioners (`mage_type: practitioner`) receive a **minimal allowlist**
 | Affordance | Behavior | Spec |
 |------------|----------|------|
 | **new eddy** (standing bar) | Materialize blank thread; practitioner speaks first; Turtle joins on first message | §5.4, §17 |
-| **more** (standing bar select) | Secondary: artifacts (public Recent) · help (ephemeral) | §5.3 |
+| **more** (standing bar select) | The house's own surfaces, answered privately: mcp · model | §5.3 |
 | **flow library** (in-eddy) | **`!flows`** or **`!flow`** in eddy posts inline picker; load → Turtle bootstrap | §5.4, §5.6, §10.2 |
 | Contextual flow acts | `offer_flow_menu` / `offer_flow` on a river message when intent detected | §5.6 |
 
@@ -71,21 +71,22 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 
 | Command | Handler | Spec | Clears history? |
 |---------|---------|------|-----------------|
-| `!checkpoint` | `cmd_checkpoint` | §8.4 | No — saves flow state + session notes |
+| *(retired)* `!checkpoint` | `cmd_checkpoint` (the checkpoint button under `...` and Turtle's offer run it) | §8.4 | No — saves flow state + session notes. Typing it answers once; the idle checkpoint (15 min) runs on its own |
 | `!release` | `cmd_release` | §8.4, §9.2 | Yes — after checkpoint |
-| `!focus` | `cmd_focus` | CE Slice 1, design §5.2a | No — narrows this eddy's substrate to one thing |
-| `!context` | `cmd_context` | §3.2 | No — renders the packet this eddy's last turn injected |
+| `!context` (operator) | `cmd_context` | §3.2 | No — renders the packet this eddy's last turn injected. Operator group of the `!` card; not a member command |
 | `!dissolve` | `cmd_dissolve` | §9.2 | Archives thread — does not clear history first |
-| `!help` | `cmd_help` | — | Profile-aware inventory (this doc) |
-| `!status` | `cmd_status` | Ops | No |
+| `!help` (and a bare `!`) | `cmd_help`, `help_card.py` | — | The curated commands as one card in three groups, plus an operator group for the operator. What is deliberately unlisted is `help_card.LISTED_ELSEWHERE` (a test compares both lists with the registry). Design: [curated-surfaces-v1](design/curated-surfaces-v1.md) |
+| `!status` (operator) | `cmd_status` | Ops | No. Operator group of the `!` card; not a member command, not pinnable |
 | `!readiness` | `cmd_readiness` | Ops (hosted substrate check) | No |
-| `!model` | `room_models.cmd_model` | §8.1, [own-channel-model](design/own-channel-model.md) | No — shows this room's model; `!model sonnet` / `opus` / `local` picks it — in your own channels (and your health channel, as its owner), and in any shared room you are a member of (the room is told who changed it) |
+| `!model` | `room_models.cmd_model` | §8.1, [own-channel-model](design/own-channel-model.md) | No — shows this channel's model, plus River and Memory (system models, not picked here), and a menu of local and API models the house can route to. `!model sonnet-5.5` / `opus` / `local` picks this channel — in your own channels (and your health channel, as its owner), and in any shared room you are a member of (the room is told who changed it). The conversation default is the local Gemma model |
+| `!feed` | `backlog_feed_ui.cmd_feed` | [magic-channel](design/magic-channel.md) | No — craft only, the channel owner only. Posts every backlog pitch not posted yet, each with Build, Drop and Talk it through. River also posts new ones on its own when the channel has `push: true` (never at night). `!feed queue` lists what Spirit was asked to build; `!feed status` counts |
+| `!mcp` | `cmd_mcp` | [mcp-connections](design/mcp-connections.md), [connection-chooser](design/connection-chooser.md) | No — posts a button. The reply only the person who pressed can see is built in the [design language](ux/design-language.md): *Who can read your context* (a card per program, a row per thing — notes, health picture, practice — with its state and its own Open or Close, and End connection, which asks once) and *What your house uses for you* (X, its state, the room it answers in, Pause and Remove X). A press changes the reply in place. Your own connections only; the card in your home channel follows what you change here |
 
 **Idle checkpoint:** 15 min quiet → automatic checkpoint; does **not** release (§8.4, Law of Checkpoint Before Sweep).
 
 **`!context` (readability contract):** shows, for this eddy's last turn, the shell-injected blocks by name, the tools called, the files loaded, which injection slots were empty, and — when the room had notes to choose from — every note the window offered with a mark for whether it was carried. The source of truth is `state/packets/<eddy-id>.md` — a file the turn wrote, not Turtle self-report. It does not name the alive layer.
 
-**`!focus` (Continuity Engine narrowing):** the **power-practitioner shortcut** for narrowing — conversational narrowing is the intended front door (design §5.2a, ships in Slice 1b). `!focus <topic>` narrows this eddy to one active thread (creating it if new) and pulls deeper context from matching session notes; `!focus` alone shows what's in motion; `!focus clear` widens back to holistic. Scope is **per-eddy** (cross-process via `state/scopes.yaml`), so narrowing one conversation never narrows the others.
+**`!focus` is retired (2026-10-14).** Focusing is something Turtle does when told, shown a file, or given an eddy link. Typing it answers once with that pointer (`help_card.RETIRED`). The continuity-engine scope it wrote (`state/scopes.yaml`) is still read; nothing writes it now (issue 056).
 
 **Flow session state:** Flows with YAML front matter participate in persistent practice state — declared `writes` paths updated on checkpoint (§10). This is platform continuity, not a Magic workshop mirror.
 
@@ -94,7 +95,7 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 | Mode | Trigger | Spec | Handler |
 |------|---------|------|---------|
 | Read for dialogue | URL in eddy chat (auto / **Read article**) | §9.5 | `link_read.py` — silent extract for the turn; **no** `link-resonance/` write |
-| Distill for library | `!fetch <url>` or **Save to library** button (River, post-Turtle) | §9.5 | `cmd_fetch` → `link-resonance/` under practice root |
+| Distill for library | **Save to library** button (River, post-Turtle); the typed `!fetch` is retired and answers with a pointer | §9.5 | `cmd_fetch` → `link-resonance/` under practice root |
 
 **Discord links** (message, eddy, or whole channel) are read on the poster's behalf: only what they can see; a heads-up when it lands in a room where some people couldn't see it; frontier-model rooms read more before summarising ([own-channel-model](design/own-channel-model.md)).
 
@@ -104,14 +105,13 @@ Commands every practitioner SHOULD know. Mapped to platform law.
 
 | Command | Handler | Purpose |
 |---------|---------|---------|
-| `!export <path>` | `cmd_export` | Download allowlisted artifact as `.md` |
-| `!artifacts [shelf]` | `cmd_artifacts` | Curated practice artifact shelves (§11.5) |
-| `!read <path>` | `cmd_read` | View allowlisted practice artifact |
-| `!ls [dir]` | `cmd_ls` | Browse allowlisted practice paths |
-| `!search <query>` | `cmd_search` | Search allowlisted practice artifacts |
-| `!fetch <url>` | `cmd_fetch` | Distill URL to library cache |
+| *(retired)* `!export`, `!artifacts`, `!read` | `cmd_export`, `cmd_artifacts`, `cmd_read` (the Open, Browse and Download buttons run them) | Typing one answers once: ask Turtle; saved notes come with an Open button |
+| *(retired)* `!ls`, `!search` | none | Turtle finds and reads files with its own tools (`search_practice_files`, `list_practice_files`, `read_practice_file`) |
+| *(retired)* `!keep`, `!ignore` | `cmd_keep`, `cmd_ignore` (Turtle's offers run them) | Say it: Turtle offers `keep` or `ignore`. `ignore` takes a second press before anything is removed |
+| *(retired)* `!fetch` | `cmd_fetch` (the offer button still runs it) | Typing it answers once: paste the link instead |
+| *(retired)* `!date` | none | Typing it answers once: tell Turtle the date; Turtle offers `keep_date`, River draws the confirm |
 | `!rename <title>` | `cmd_rename` | Exact eddy title (in thread) |
-| `!share` | `cmd_share` | §15.6 — send eddy to another practitioner (digest + received eddy) |
+| *(retired)* `!share` | `cmd_share` (the share button under `...` runs it) | §15.6 — send eddy to another practitioner (digest + received eddy). Typing it answers once. To a person, the sender is not told whether it was read; to a shared room, the sharer is told once |
 
 Paths resolve to `practice_root` from `mage_registry.yaml` — typically `~/workshops/<name>/`, not Magic `desk/`.
 
@@ -132,17 +132,24 @@ For instance operators (`mage_type: mage`). Not shown to hosted practitioners.
 
 ## Appendix A — deferred patterns (not v1)
 
-Legacy orchestration retained in codebase for possible re-integration; **not** part of default turtle-talk fluency. Spec: `TURTLE_SPEC.md` Appendix A.
+Old orchestration commands. **Retired 2026-10-14**: typing one answers once with where it went (`help_card.RETIRED`), and the handlers are deleted. The test `test_a_shut_door_has_no_room_behind_it` fails if one comes back.
+
+| Typed | Where it went |
+|-------|---------------|
+| `!thread`, `!new`, `!panel` | **new eddy** in the channel bar |
+| `!thread-type` | The type buttons on an eddy's opening message |
+| `!eddy-check` | `!dissolve` in an eddy |
+| `!absorb`, `!absorbed`, `!forget` | Turtle carries what matters across eddies (memory agent); `!live` shows what it has in mind |
+| `!day` | The daily note refreshes itself |
+| `!focus` | Tell Turtle, attach a file, or share an eddy link |
+| `!fetch`, `!date` | Paste a link; say a date in words |
+
+Still live and not listed: `!eddy` (alias `!threads`) and `!live`, below.
 
 | Command | Handler | Notes |
 |---------|---------|-------|
-| `!thread "topic" [flags]` | `cmd_thread` | Legacy spawn — **new eddy** bar is default (§5.4) |
-| `!new [topic]` | `cmd_new` | AI-named thread spawn |
-| `!threads` | `cmd_threads` | List threads + eddy metadata |
-| `!thread-type <type>` | `cmd_thread_type` | Standing/slow/fast — §9.3 deferred |
-| `!eddy-check` | `cmd_eddy_check` | Metabolic sweep — §16 deferred |
-| `!absorb` / `!absorbed` / `!forget` | absorb cmds | Cross-thread context in main channel |
-| `!panel` | `cmd_panel` | Control panel UI |
+| `!eddy` (alias `!threads`) | `cmd_eddy` | Open eddies as a card: link, what each last held, when. `!eddy all` adds parked ones |
+| `!live` | `cmd_live` | What Turtle has in mind in this channel, with related eddies and what this practice adds. `...` in a channel shows the same card |
 
 ---
 

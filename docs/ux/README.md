@@ -28,6 +28,9 @@ When implementation and these docs disagree, **implementation wins until someone
 |-------|-----|
 | Cross-cutting intent (River/Turtle, consent, visibility) | [principles.md](principles.md) |
 | System-state glance (counts, attention order, collapse) | [system-state.md](system-state.md) |
+| Design language (parts, grammar, vocabulary, kit; §8 modalities and cognitive ergonomics) | [design-language.md](design-language.md) |
+| `!model` card and the home-channel connection card | [model-card-v2.md](../design/model-card-v2.md) |
+| `!` command card, the channel bar's menu, and the board for the curated command set | [curated-surfaces-v1.md](../design/curated-surfaces-v1.md) |
 | River bar, acts, chronicle | [river.md](river.md) |
 | Blank eddy, deferred presence, system lines | [eddy-entry.md](eddy-entry.md) |
 | Eddy lifecycle bar (flow pick / checkpoint / share) | [eddy-lifecycle-bar.md](eddy-lifecycle-bar.md) |

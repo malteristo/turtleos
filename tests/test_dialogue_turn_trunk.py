@@ -285,6 +285,7 @@ class ContinueDialogueTurnTests(unittest.TestCase):
         self.assertTrue(sent[0].startswith("-# ⚠️"))
         self.assertIn("This reply is from", sent[0])
         self.assertIn("local fallback", sent[0])
+        self.assertNotIn("view", msg.reply.await_args.kwargs)
         # A transient failure does not hold the house.
         self.assertFalse(Path(calls["house"], "cloud_hold.json").exists())
 
@@ -306,9 +307,45 @@ class CloudFallbackTests(unittest.TestCase):
             self.assertEqual(hold["kind"], "funds")
             self.assertIn("credit balance is out", sent[0])
             self.assertIn("parked", sent[0])
+            self.assertIn("All stocked up", sent[0])
+            view = msg.reply.await_args.kwargs["view"]
+            self.assertEqual(view.children[0].label, "All stocked up")
+            self.assertEqual(view.children[0].custom_id, "cloud:stocked")
             parked = list(Path(pd, "state", "parked").glob("*.md"))
             self.assertEqual(len(parked), 1)
             self.assertIn("add the revoke check after the new grant", parked[0].read_text())
+
+    def test_a_magic_funds_notice_puts_the_button_on_spirits_message(self) -> None:
+        delivered: dict = {}
+
+        async def capture(message, chunks, components=None, view=None):
+            delivered["chunks"] = list(chunks)
+            delivered["components"] = components
+            delivered["view"] = view
+            return "spirit"
+
+        runtime = type("Rt", (), {"prompt_profile": "magic", "parent_handler": None})()
+        with tempfile.TemporaryDirectory() as pd:
+            msg = _message(content="the parked ask")
+            with _turn_env(raises=self.CREDIT, practice_dir=pd) as (sent, _calls):
+                with (
+                    patch("primitive_runtime.runtime_for", return_value=runtime),
+                    patch("magic_prompt.turn_prompt_and_model", return_value=("SYSTEM", "claude-test", True)),
+                    patch("magic_prompt.magic_runtime_env", return_value=""),
+                    patch("workshop_tools.set_forge_turn", return_value=None),
+                    patch("spirit_voice.is_forge_turn", return_value=False),
+                    patch("spirit_voice.deliver", new=capture),
+                    patch("session_record.append_turn"),
+                ):
+                    _run_turn(msg, [], sent=sent)
+
+        self.assertEqual(sent, [])
+        self.assertIn("All stocked up", delivered["chunks"][0])
+        row = delivered["components"][0]["components"][0]
+        self.assertEqual(row["label"], "All stocked up")
+        self.assertEqual(row["custom_id"], "cloud:stocked")
+        self.assertEqual(delivered["view"].children[0].custom_id, "cloud:stocked")
+        msg.channel.send.assert_not_awaited()
 
     def test_while_held_the_cloud_is_not_called_and_the_room_still_answers(self) -> None:
         with tempfile.TemporaryDirectory() as pd:
@@ -445,14 +482,117 @@ class CloudFallbackTests(unittest.TestCase):
                 _run_turn(msg, [], sent=sent)
 
         self.assertTrue(sent and sent[0].startswith("an answer"))
-        msg.channel.send.assert_awaited_once()
-        first = msg.channel.send.await_args.args[0]
-        self.assertIn("💭 *Let me check what we said about the lighthouse.*", first)
-        final = posted.edit.await_args.kwargs["content"]
-        self.assertIn("attuned in", final)
-        self.assertIn('🔎 searched notes for "lighthouse" → 3 match(es)', final)
-        self.assertIn("📖 read `story/eddies/1.md`", final)
-        self.assertNotIn("looked up:", final)  # the list is the record, not a summary
+        sends = [call.args[0] for call in msg.channel.send.await_args_list]
+        self.assertGreaterEqual(len(sends), 2)
+        self.assertIn("Let me check what we said about the lighthouse.", sends[0])
+        self.assertNotIn("*Let me check", sends[0])
+        shown = "\n".join(sends)
+        self.assertIn("-# search_practice_files · query lighthouse", shown)
+        self.assertIn("-# read_practice_file · filename story/eddies/1.md", shown)
+        self.assertNotIn("snippet", shown)  # the result is not the call
+        self.assertNotIn("looked up:", shown)
+
+    def test_a_magic_room_posts_each_sentence_in_full_as_spirit(self) -> None:
+        import time
+
+        channel = MagicMock()
+        channel.id = 777
+        channel.send = AsyncMock()
+        said: list[str] = []
+        edited: list[tuple] = []
+        gate = asyncio.Event()
+        entered = asyncio.Event()
+
+        async def say(channel_id, text, **kwargs):
+            entered.set()
+            await gate.wait()
+            said.append(text)
+            return len(said)
+
+        async def edit(channel_id, message_id, text, **kwargs):
+            edited.append((message_id, text, kwargs.get("components")))
+            return True
+
+        recorded: list[dict] = []
+
+        def capture(room, text, message=None, tool=None):
+            recorded.append({"text": text, "message": message, "tool": tool})
+
+        long = ("word " * 80).strip()
+
+        async def run():
+            card = dialogue_turn._StepCard(
+                channel, dialogue_turn.AttunementSteps(), "claude-sonnet-5-5",
+                time.monotonic(), full=True, as_spirit=True,
+            )
+            card.start()
+            pending = asyncio.create_task(card.on_event("prose", {"text": "First sentence, kept whole."}))
+            await asyncio.wait_for(entered.wait(), 1)
+            await asyncio.wait_for(pending, 0.05)
+            gate.set()
+            await card.on_event("tool", {
+                "name": "workshop_read", "args": {"path": "desk/state.md"}, "result": "ok",
+            })
+            await card.on_event("prose", {"text": "Second sentence.\n\n" + long})
+            await card.on_event("tool", {
+                "name": "workshop_read", "args": {"path": "desk/boom.md"}, "result": "ok",
+            })
+            await card.settle([])
+            await card.dress()
+
+        with (
+            patch("spirit_voice.say", new=say),
+            patch("spirit_voice.edit", new=edit),
+            patch.object(dialogue_turn, "_record_magic_trace", capture),
+        ):
+            asyncio.run(run())
+
+        channel.send.assert_not_awaited()
+        blob = "\n".join(said)
+        self.assertIn("First sentence, kept whole.", blob)
+        self.assertIn(long, blob)
+        self.assertGreater(len(long), 160)
+        self.assertIn("-# workshop_read · path desk/state.md", blob)
+        self.assertIn("-# workshop_read · path desk/boom.md", blob)
+        self.assertNotIn("ok", blob)  # the tool's result is not part of the call
+        self.assertNotIn("🐢", blob)
+        self.assertEqual(edited, [])
+        self.assertEqual(recorded, [])
+
+    def test_a_call_is_one_quiet_line_and_a_file_body_stays_a_count(self) -> None:
+        self.assertEqual(
+            dialogue_turn.call_as_sent("workshop_read", {"path": "desk/state.md"}),
+            "-# workshop_read · path desk/state.md",
+        )
+        self.assertEqual(dialogue_turn.call_as_sent("workshop_run", {}), "-# workshop_run")
+        body = "paragraph\n" * 4
+        line = dialogue_turn.call_as_sent("workshop_edit", {"path": "a.md", "new": body})
+        self.assertEqual(line, "-# workshop_edit · path a.md · new 4 lines")
+        self.assertNotIn("paragraph", line)
+
+    def test_a_sentence_longer_than_one_message_is_split_on_a_line(self) -> None:
+        import time
+
+        channel = MagicMock()
+        posted = MagicMock()
+        posted.edit = AsyncMock()
+        posted.delete = AsyncMock()
+        channel.send = AsyncMock(return_value=posted)
+
+        async def run():
+            card = dialogue_turn._StepCard(
+                channel, dialogue_turn.AttunementSteps(), "claude-sonnet-5-5",
+                time.monotonic(), full=True, as_spirit=False,
+            )
+            await card.on_event("prose", {"text": "line\n" * 2000})
+            await card.settle([])
+            return card
+
+        card = asyncio.run(run())
+        placed = [entry["text"] for entry in card._placed]
+        self.assertGreater(len(placed), 1)
+        self.assertTrue(all(len(part) <= 1900 for part in placed))
+        self.assertEqual(sum(part.count("line") for part in placed), 2000)
 
     def test_a_quick_turn_posts_no_progress_line(self) -> None:
         msg = _message()
@@ -922,6 +1062,104 @@ class HandleDialogueTests(unittest.TestCase):
         triage.assert_awaited_once()
         continued.assert_awaited_once()
         self.assertEqual(continued.await_args.kwargs["triage_cat"], "deep")
+
+
+class StockedPressTests(unittest.IsolatedAsyncioTestCase):
+    """The button resumes. A typed line is not required, and a miss stays private."""
+
+    def _interaction(self, channel):
+        interaction = MagicMock()
+        interaction.channel_id = channel.id
+        interaction.channel = channel
+        interaction.response.is_done.return_value = False
+        interaction.response.defer = AsyncMock()
+        interaction.response.send_message = AsyncMock()
+        interaction.followup.send = AsyncMock()
+        interaction.message.edit = AsyncMock()
+        interaction.message.id = 42
+        interaction.user.display_name = "Kermit"
+        channel.send = AsyncMock()
+        return interaction
+
+    def _hold(self, house: str) -> None:
+        Path(house, "cloud_hold.json").write_text(json.dumps({
+            "kind": "funds",
+            "model": "claude-sonnet-4-6",
+            "last_try": 9_000_000_000,
+        }))
+
+    async def test_a_press_while_the_credit_is_out_stays_private(self) -> None:
+        channel = MagicMock()
+        channel.id = 424242
+        interaction = self._interaction(channel)
+        asked = []
+
+        async def broke(system, messages, model, **kwargs):
+            asked.append(model)
+            raise RuntimeError("Your credit balance is too low")
+
+        with tempfile.TemporaryDirectory() as house:
+            self._hold(house)
+            with (
+                patch.dict("os.environ", {"TURTLEOS_HOUSE_DIR": house}),
+                patch.object(dialogue_turn, "chat_anthropic_with_model", new=broke),
+                patch.object(dialogue_turn, "continue_dialogue_turn", new=AsyncMock()) as cont,
+                patch("mage.set_practice_context_for_channel"),
+            ):
+                await dialogue_turn.resume_stocked(interaction)
+
+            self.assertEqual(asked, ["claude-sonnet-4-6"])
+            interaction.response.defer.assert_awaited_with(ephemeral=True)
+            interaction.followup.send.assert_awaited_with(
+                "The credit is still out.", ephemeral=True
+            )
+            cont.assert_not_awaited()
+            channel.send.assert_not_awaited()
+            self.assertEqual(
+                json.loads(Path(house, "cloud_hold.json").read_text())["kind"], "funds"
+            )
+            self.assertNotIn("ok", interaction.followup.send.await_args.args[0])
+
+    async def test_a_press_when_the_credit_is_back_continues_the_parked_words(self) -> None:
+        channel = MagicMock()
+        channel.id = 424243
+        interaction = self._interaction(channel)
+        history: list = []
+        parked = "add the revoke check after the new grant"
+
+        async def ok(system, messages, model, **kwargs):
+            return "ok", []
+
+        with tempfile.TemporaryDirectory() as house, tempfile.TemporaryDirectory() as pd:
+            self._hold(house)
+            dialogue_turn.cloud_fallback.park(
+                pd, channel_id=channel.id, room="magic", author="Kermit",
+                message_text=parked, cloud_model="claude-sonnet-4-6", kind="funds",
+            )
+            with (
+                patch.dict("os.environ", {"TURTLEOS_HOUSE_DIR": house}),
+                patch.object(dialogue_turn, "chat_anthropic_with_model", new=ok),
+                patch.object(dialogue_turn, "get_pd", return_value=pd),
+                patch.object(dialogue_turn, "get_history", return_value=history),
+                patch.object(dialogue_turn, "sync_history"),
+                patch.object(dialogue_turn, "_resume_room", new=AsyncMock(return_value=channel)),
+                patch.object(dialogue_turn, "uses_native_turtle_prompt", return_value=False),
+                patch("dialogue_store.begin_turn"),
+                patch("dialogue_store.end_turn"),
+                patch("mage.set_practice_context_for_channel"),
+                patch.object(dialogue_turn, "continue_dialogue_turn", new=AsyncMock()) as cont,
+            ):
+                await dialogue_turn.resume_stocked(interaction)
+
+            interaction.followup.send.assert_not_awaited()
+            channel.send.assert_not_awaited()
+            interaction.message.edit.assert_awaited_with(view=None)
+            self.assertFalse(Path(house, "cloud_hold.json").exists())
+            cont.assert_awaited_once()
+            stand, passed = cont.await_args.args
+            self.assertEqual(stand.content, parked)
+            self.assertIn(parked, passed[-1]["content"])
+            self.assertEqual(passed[-1]["role"], "user")
 
 
 if __name__ == "__main__":

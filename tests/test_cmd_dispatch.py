@@ -31,7 +31,7 @@ class TestInjectActDigest(unittest.TestCase):
         dialogue_histories[channel_id] = []
         dispatch.inject_act_digest(channel_id, "help", "")
         history = dialogue_histories[channel_id]
-        self.assertIn("inventory", history[0]["content"].lower())
+        self.assertIn("command card", history[0]["content"].lower())
 
 
 class TestSeneschalRegistries(unittest.TestCase):
@@ -44,15 +44,24 @@ class TestSeneschalRegistries(unittest.TestCase):
         self.assertIn("flows", dispatch._PRACTITIONER_COMMANDS)
         self.assertIn("flow", dispatch._PRACTITIONER_COMMANDS)
 
-    def test_day_allowed_for_practitioners(self) -> None:
-        self.assertIn("day", dispatch._PRACTITIONER_COMMANDS)
+    def test_a_retired_command_is_not_a_member_command(self) -> None:
+        import help_card
+
+        for name in help_card.RETIRED:
+            self.assertNotIn(name, dispatch._PRACTITIONER_COMMANDS)
+            if name not in help_card.RETIRED_KEEPS_ACT:
+                self.assertNotIn(name, dispatch.SENESCHAL_ACTION_COMMANDS)
 
     def test_date_commands_allowed_for_practitioners(self) -> None:
-        self.assertIn("date", dispatch._PRACTITIONER_COMMANDS)
         self.assertIn("dates", dispatch._PRACTITIONER_COMMANDS)
 
-    def test_context_allowed_for_practitioners(self) -> None:
-        self.assertIn("context", dispatch._PRACTITIONER_COMMANDS)
+    def test_status_and_context_are_the_operators(self) -> None:
+        import help_card
+
+        for name in ("status", "context", "checkpoint"):
+            self.assertNotIn(name, dispatch._PRACTITIONER_COMMANDS)
+        operator = {command for _, command, _ in help_card.OPERATOR}
+        self.assertTrue({"status", "context"} <= operator)
 
 
 class TestDispatchDirectCommand(unittest.IsolatedAsyncioTestCase):

@@ -360,6 +360,34 @@ class EffectiveAttunementThroughThreadsTests(MageChannelResolutionTests):
         self.assertEqual(mage.get_current_channel_primitive().name, "craft")
         self.assertEqual(mage.primitive_for_practice_dir(root).name, "craft")
 
+    def test_refreshing_the_same_channel_keeps_who_spoke(self) -> None:
+        root = os.path.join(self._tmpdir.name, "operator")
+        self._write_registry(
+            {
+                "100": {"type": "river", "mage": "operator"},
+                "200": {"type": "craft", "primitive": "craft", "mage": "operator"},
+            },
+            mages={"operator": {"practice_dir": root, "runtime_dir": self._runtime_root}},
+        )
+        mage.set_practice_context_for_channel(200)
+        mage._actor_key_ctx.set("kermit")
+        mage.set_practice_context_for_channel(200)
+        self.assertEqual(mage.get_actor_key(), "kermit")
+
+    def test_a_different_channel_forgets_who_spoke(self) -> None:
+        root = os.path.join(self._tmpdir.name, "operator")
+        self._write_registry(
+            {
+                "100": {"type": "river", "mage": "operator"},
+                "200": {"type": "craft", "primitive": "craft", "mage": "operator"},
+            },
+            mages={"operator": {"practice_dir": root, "runtime_dir": self._runtime_root}},
+        )
+        mage.set_practice_context_for_channel(200)
+        mage._actor_key_ctx.set("kermit")
+        mage.set_practice_context_for_channel(100)
+        self.assertIsNone(mage.get_actor_key())
+
 
 if __name__ == "__main__":
     unittest.main()

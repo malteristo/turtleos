@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextvars
 import threading
 import time
 import unittest
@@ -154,6 +155,23 @@ class BehaviourIsUnchangedTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_timeout_raises_and_does_not_wedge(self) -> None:
         with self.assertRaises(asyncio.TimeoutError):
             await offload.run_blocking(_block, 5.0, timeout=0.05)
+
+    async def test_the_worker_sees_who_asked(self) -> None:
+        """A bare thread starts from the defaults. The tool thread must not."""
+        asker = contextvars.ContextVar("asker", default="nobody")
+        asker.set("ada")
+        raw: list[str] = []
+        thread = threading.Thread(target=lambda: raw.append(asker.get()))
+        thread.start()
+        thread.join()
+        seen: list[str] = []
+
+        def check() -> None:
+            seen.append(asker.get())
+
+        await offload.run_blocking(check)
+        self.assertEqual(raw, ["nobody"])
+        self.assertEqual(seen, ["ada"])
 
     async def test_a_late_result_after_timeout_is_harmless(self) -> None:
         """The thread cannot be interrupted, so its delivery must land nowhere."""

@@ -11,7 +11,7 @@ without anyone having learned a command.
   4. keep      — accepting writes the owning root's registry
   5. surface   — reminders come due at the lead times, once each
   6. read back — `!dates` answers in the member's language
-  7. typed     — the `!date` path accepts the same forms the river does
+  7. typed     — the retired `!date` points to the native path
 
 Offline only. Live verification is the operator dogfood after restart:
 say a date in the river, take the Keep, wait for the lead day.
@@ -201,28 +201,13 @@ def check_read_back() -> list[str]:
 
 
 def check_typed_path() -> list[str]:
-    """Stage 7 — `!date` accepts every form the river accepts."""
+    """Stage 7 — the typed `!date` is gone and says where it went; `!dates` stays."""
     errors: list[str] = []
-    import dates as fd
+    from help_card import retired_answer
 
-    cases = [
-        (["2026-12-24", "Kita", "Fest"], date(2026, 12, 24), "Kita Fest"),
-        (["24.12.", "Kita", "Fest"], date(2026, 12, 24), "Kita Fest"),
-        (["24.", "Dezember", "Kita", "Fest"], date(2026, 12, 24), "Kita Fest"),
-        (["Samstag", "Kita", "Fest"], date(2026, 8, 8), "Kita Fest"),
-        (["morgen", "Zahnarzt"], date(2026, 8, 7), "Zahnarzt"),
-    ]
-    for args, expected, title in cases:
-        token, rest = fd.split_when_and_title(args, locale="de", today=TODAY)
-        try:
-            parsed = fd.parse_date_token(token, locale="de", today=TODAY)
-        except fd.DateError as exc:
-            errors.append(f"!date {' '.join(args)} → refused: {exc}")
-            continue
-        if parsed != expected:
-            errors.append(f"!date {' '.join(args)} → {parsed}, expected {expected}")
-        if " ".join(rest) != title:
-            errors.append(f"!date {' '.join(args)} → title {' '.join(rest)!r}")
+    for locale in ("en", "de"):
+        if not retired_answer("date", locale=locale):
+            errors.append(f"!date has no pointer in {locale}")
     return errors
 
 
@@ -230,9 +215,10 @@ def check_registration() -> list[str]:
     errors: list[str] = []
     from commands import DIRECT_COMMANDS
 
-    for name in ("date", "dates"):
-        if name not in DIRECT_COMMANDS:
-            errors.append(f"DIRECT_COMMANDS missing {name}")
+    if "dates" not in DIRECT_COMMANDS:
+        errors.append("DIRECT_COMMANDS missing dates")
+    if "date" in DIRECT_COMMANDS:
+        errors.append("DIRECT_COMMANDS still has the retired date")
     return errors
 
 

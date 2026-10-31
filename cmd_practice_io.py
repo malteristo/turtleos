@@ -19,7 +19,6 @@ from helpers import split_message
 from mage import get_mage_type, get_pd
 from practice_io import artifact_display_name, is_readable, obsidian_link, read_safe
 from state import PRACTICE_WEB_BASE
-from tos_tools import execute_tos_tool
 
 
 def _read_embed(filename: str, content: str, url: str) -> discord.Embed:
@@ -39,9 +38,7 @@ def _read_embed(filename: str, content: str, url: str) -> discord.Embed:
 async def cmd_read(message, args):
     if not args:
         await message.reply(
-            "Usage: `!read <artifact>`\n"
-            "Examples: `!read bright.md`, `!read sessions/2026-03-16.md`\n"
-            "Browse shelves: `!artifacts`",
+            "Tell me which note to open.",
             mention_author=False,
         )
         return
@@ -52,7 +49,7 @@ async def cmd_read(message, args):
 
     if not is_readable(filename):
         await message.reply(
-            f"Cannot read `{filename}`. Use `!artifacts` to browse your practice corpus.",
+            f"Cannot read `{filename}`. Ask me what is there.",
             mention_author=False,
         )
         return
@@ -60,7 +57,7 @@ async def cmd_read(message, args):
     path = resolve_artifact_path(filename)
     if not path:
         await message.reply(
-            f"Cannot read `{filename}`. Use `!artifacts` to browse your practice corpus.",
+            f"Cannot read `{filename}`. Ask me what is there.",
             mention_author=False,
         )
         return
@@ -87,7 +84,7 @@ async def cmd_read(message, args):
         await message.reply(
             f"{link} ({lines} lines, {len(content)} chars) — showing first ~50 lines:\n"
             f"```md\n{preview}\n```\n"
-            f"*Artifact too long for Discord. Use `!search <term>` or ask Turtle to summarize.*",
+            f"*Artifact too long for Discord. Ask me to summarize it.*",
             mention_author=False,
         )
 
@@ -107,119 +104,6 @@ def _ls_visible_subdir(directory: str, name: str, *, mage_type: str) -> bool:
     if rel == "proposals" and mage_type != "practitioner":
         return True
     return is_artifact_directory(rel, mage_type=mage_type)
-
-
-async def cmd_ls(message, args):
-    directory = args[0] if args else ""
-    rel_dir = directory.rstrip("/")
-    mage_type = get_mage_type()
-
-    if rel_dir and not is_artifact_directory(rel_dir, mage_type=mage_type):
-        await message.reply(
-            f"Cannot browse `{directory}`. Use `!artifacts` for curated shelves.",
-            mention_author=False,
-        )
-        return
-
-    target = os.path.join(get_pd(), directory) if directory else get_pd()
-
-    if not os.path.isdir(target):
-        await message.reply(f"Directory `{directory}` not found.", mention_author=False)
-        return
-
-    lines = []
-    for item in sorted(os.listdir(target)):
-        full = os.path.join(target, item)
-        if item.startswith("."):
-            continue
-        if os.path.isdir(full):
-            if not _ls_visible_subdir(directory, item, mage_type=mage_type):
-                continue
-            subdir = _rel_path(directory, item)
-            count = len(
-                [
-                    f
-                    for f in os.listdir(full)
-                    if f.endswith(".md")
-                    and is_artifact_readable(f"{subdir}/{f}", mage_type=mage_type)
-                ]
-            )
-            lines.append(f"  `{item}/` — {count} artifacts")
-        elif item.endswith(".md"):
-            filepath = _rel_path(directory, item)
-            if not is_artifact_readable(filepath, mage_type=mage_type):
-                continue
-            size = os.path.getsize(full)
-            age = datetime.now().timestamp() - os.path.getmtime(full)
-            if age < 3600:
-                age_str = f"{int(age / 60)}m ago"
-            elif age < 86400:
-                age_str = f"{int(age / 3600)}h ago"
-            else:
-                age_str = f"{int(age / 86400)}d ago"
-            link = obsidian_link(filepath)
-            lines.append(f"  {link} — {size}b, {age_str}")
-
-    if not lines:
-        await message.reply(
-            f"`{directory or 'practice/'}` has no browsable artifacts. Try `!artifacts`.",
-            mention_author=False,
-        )
-        return
-
-    header = f"**{directory + '/' if directory else 'practice/'}** (allowlisted)"
-    await message.reply(f"{header}\n" + "\n".join(lines), mention_author=False)
-
-
-async def cmd_search(message, args):
-    if not args:
-        await message.reply(
-            "Usage: `!search <query>`\nSearches your allowlisted practice artifacts.",
-            mention_author=False,
-        )
-        return
-    query = " ".join(args)
-    from artifact_viewer import collect_artifact_search_hits, format_search_results
-    from artifact_presenter import ArtifactPresenterView
-    from practice_io import artifact_display_name
-
-    hits = collect_artifact_search_hits(query, mage_type=get_mage_type())
-    if hits:
-        body = format_search_results(hits, query)
-        top_paths: list[str] = []
-        for hit in hits:
-            if hit.path not in top_paths:
-                top_paths.append(hit.path)
-            if len(top_paths) >= 3:
-                break
-        open_actions = [
-            (f"Open: {artifact_display_name(path)}", f"!read {path}") for path in top_paths
-        ]
-        embed = discord.Embed(
-            title=f"Search · {query[:80]}",
-            description=body[:4096],
-            color=0x5865F2,
-        )
-        view = ArtifactPresenterView(message.channel.id, open_actions)
-        kwargs: dict = {"embed": embed, "mention_author": False}
-        if view.children:
-            kwargs["view"] = view
-        await message.reply(**kwargs)
-        return
-
-    # Off the loop: a practice-wide file search is filesystem work, and doing it
-    # here stopped every other channel for its duration. Same defect as the tool
-    # loop in `llm.py`, reached through a command instead of the model.
-    from core.offload import run_blocking
-
-    result = await run_blocking(
-        execute_tos_tool, "search_practice_files", {"query": query}, name="search_practice_files"
-    )
-    if len(result) <= 1900:
-        await message.reply(result, mention_author=False)
-    else:
-        for chunk in split_message(result, limit=1900):
-            await message.reply(chunk, mention_author=False)
 
 
 async def cmd_artifacts(message, args):
@@ -248,7 +132,7 @@ async def cmd_artifacts(message, args):
         shelf_key == "proposals" and mage_type == "practitioner"
     ):
         await message.reply(
-            f"Unknown shelf `{args[0]}`. Try `!artifacts` for recent items.",
+            f"Unknown shelf `{args[0]}`.",
             mention_author=False,
         )
         return
@@ -266,8 +150,7 @@ async def cmd_export(message, args):
 
     if not args:
         await message.reply(
-            "Usage: `!export <artifact>`\n"
-            "Example: `!export sessions/2026-06-29.md`",
+            "Tell me which note to send you.",
             mention_author=False,
         )
         return
@@ -278,7 +161,7 @@ async def cmd_export(message, args):
 
     if not is_readable(filename):
         await message.reply(
-            f"Cannot export `{filename}`. Use `!artifacts` to browse your practice corpus.",
+            f"Cannot export `{filename}`. Ask me what is there.",
             mention_author=False,
         )
         return

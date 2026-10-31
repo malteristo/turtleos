@@ -75,7 +75,7 @@ def checkpoint_open_path(
 
 
 def _practitioner_footer() -> str:
-    return "Search: !search · All shelves: !artifacts --all"
+    return "Ask me to search your files."
 
 
 def _open_label(path: str) -> str:
@@ -142,7 +142,7 @@ def compose_artifact_surface(
         lines = [artifact_display_name(p) for p in artifacts[:40]]
         body = "\n".join(f"• {line}" for line in lines)
         if len(artifacts) > 40:
-            body += f"\n\n*…and {len(artifacts) - 40} more. Use `!search`.*"
+            body += f"\n\n*…and {len(artifacts) - 40} more. Ask me to search.*"
         embed = discord.Embed(
             title=f"{title} ({len(artifacts)})",
             description=body[:4096],

@@ -1154,6 +1154,37 @@ def _topics_for_surface(
     return topics, own_room
 
 
+def live_topics(
+    practice_dir: str | os.PathLike,
+    *,
+    exclude_shared_rooms: bool = False,
+    toward: str = "",
+    limit: int = 7,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+    """What a person may be shown as live here: ``(carried, others, own_room)``.
+
+    ``carried`` is exactly what the passive block puts in front of Turtle on every
+    turn when nothing else is asked (`select_topics` with no message). `!live` names
+    them as such, so the claim is true by construction, and a test compares the two.
+    ``others`` are the next-hottest, which reach Turtle only when a message reaches
+    for them; an aimed glance (``toward``) puts the topics it matches first.
+    """
+    topics, own_room = _topics_for_surface(practice_dir, exclude_shared_rooms=exclude_shared_rooms)
+    if not topics:
+        return [], [], own_room
+    carried = select_topics(topics, "", excerpts_by_topic=_excerpts_by_topic(topics))
+    carried_ids = {t.get("id") for t in carried}
+    rest = sorted(
+        (t for t in topics if t.get("id") not in carried_ids),
+        key=lambda t: float(t.get("heat") or 0.0),
+        reverse=True,
+    )
+    words = salient_words(toward)
+    if words:
+        rest.sort(key=lambda t: topic_overlap_score(t, words) > 0, reverse=True)  # stable: heat order inside each half
+    return carried, rest[: max(0, limit - len(carried))], own_room
+
+
 def _excerpts_by_topic(topics: list[dict[str, Any]]) -> dict[str, list[str]]:
     return {
         str(t.get("id")): [str(e.get("excerpt") or "") for e in (t.get("entries") or [])]

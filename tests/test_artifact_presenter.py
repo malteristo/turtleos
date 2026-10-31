@@ -148,7 +148,9 @@ class TestComposeArtifactSurface(unittest.TestCase):
             )
         self.assertEqual(surface.template_id, "operator_catalog")
         assert surface.embed is not None
-        self.assertIn("!artifacts sessions", surface.embed.description or "")
+        self.assertIn("Sessions", surface.embed.description or "")
+        self.assertNotIn("!artifacts", surface.embed.description or "")
+
 
     def test_artifact_read_url_uses_mage_key_not_default(self) -> None:
         with patch("practice_io.is_readable", return_value=True), patch(

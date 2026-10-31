@@ -3,7 +3,7 @@
 **Date:** 2026-09-26  
 **Status:** Destination — nothing built. The community channel exists on one instance and has not been used; nothing yet makes it the atrium.  
 **Spec:** TURTLE_SPEC §3.1 (promise; amendment drafted in `autoresearch/proposals/2026-09-26-atrium-product-promise.md`, awaiting sanction).  
-**Companion:** [practice-channels.md](practice-channels.md) (the install pair this gives a job) · [co-created-practice.md](co-created-practice.md) (the private wish path this sits beside) · [family-care-operating-model.md](family-care-operating-model.md) (the operator stance it widens) · [relations-and-membership.md](relations-and-membership.md).
+**Companion:** [practice-channels.md](practice-channels.md) (the install pair this gives a job) · [co-created-practice.md](co-created-practice.md) (the private wish path this sits beside) · [family-care-operating-model.md](family-care-operating-model.md) (the operator stance it widens) · [relations-and-membership.md](relations-and-membership.md) · [home-turtle.md](home-turtle.md) (the private companion whose gift is the house; the atrium stays the room where the house is run in the open).
 
 Practitioner-visible change. Four artifacts first (`docs/development.md` §12). No mechanism in the press release.
 
@@ -57,7 +57,7 @@ Robin:  Keep it quiet.
 | # | Experience | Can fail in week three | Re-run |
 |---|------------|------------------------|--------|
 | 1 | A member can find, in the atrium, every change to a shared room they belong to — what changed, who asked, why — without asking the administrator. | A shared room changed and the atrium has no line for it. | Each release that touches a shared room: diff of shared-room changes against atrium lines. |
-| 2 | Nothing about a member's private channel appears in the atrium unless that member put it there. | A line about a private channel appears that its owner did not choose — including that a room of theirs *exists*. | Automated: a planted private-channel change produces no atrium line; the owner's own announcement does. |
+| 2 | A member's own private-channel work stays out of the atrium unless that member put it there — including that the room exists. **Amended 2026-09-28:** an act of power is the exception. Someone tending or holding the house, touching a channel they do not belong to, leaves a line every member can read (who, whose channel, what kind of act). The words stay out. [tending-the-house.md](tending-the-house.md). | A line about a member's own private work appears that its owner did not choose — or an act of power on someone else's channel leaves no line, or that line quotes what was said. | Automated: the owner's own change stays silent; their announcement produces a line; a planted act of power produces a line with no message text. |
 | 3 | A member who is not the administrator has started or shaped a conversation about a shared room in the atrium. | Months pass and only the administrator ever speaks there. | Quarterly glance at atrium speakers. |
 | 4 | A new member can tell, from the atrium alone, how rooms get made here. | A new member asks the administrator how the house works and the atrium could not have answered. | Next join; ask them, voluntarily. |
 
@@ -67,7 +67,7 @@ Mechanism-blind: a different transport could still be scored on *shared-room cha
 
 ## 4. Abandon line
 
-Stop calling it the atrium if members read it and still ask the administrator what changed — or if anyone ever learns something about another member's private channel from it that the owner did not choose to say.
+Stop calling it the atrium if members read it and still ask the administrator what changed — or if anyone learns something about another member's private channel from a line the owner did not choose, other than an act-of-power line (who, whose channel, what kind of act, and nothing that was said — [tending-the-house.md](tending-the-house.md)).
 
 The second half is not a stop-and-rethink. It is a defect to fix before anything else ships.
 
@@ -77,7 +77,7 @@ The second half is not a stop-and-rethink. It is a defect to fix before anything
 
 | | Shared room | Someone's private channel |
 |---|---|---|
-| **Act on it** (create, change, retire, connect) | In the atrium, in full | Owner's choice to announce; default silent |
+| **Act on it** (create, change, retire, connect) | In the atrium, in full | Owner's own act: their choice to announce; default silent. An act of power by someone who does not belong to the channel: visible to every member — who, whose channel, what kind of act — and nothing that was said ([tending-the-house.md](tending-the-house.md), 2026-09-28) |
 | **What was said in it** | Never in the atrium | Never in the atrium |
 | **Development of it** | Atrium conversation, anyone who uses it may join | The owner's own; a wish may cross privately per [co-created-practice.md](co-created-practice.md) |
 

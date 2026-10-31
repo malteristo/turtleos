@@ -159,7 +159,7 @@ class TickTests(unittest.TestCase):
         # folding them in must not drop them.
         source = (ROOT / "river_bot.py").read_text(encoding="utf-8")
         body = source[source.index("def _house_chores():"):]
-        for name in ("connection_offers", "eddy_bars", "discord_names", "shared_access",
+        for name in ("mcp_receipts", "connection_offers", "eddy_bars", "discord_names", "shared_access",
                      "eddy_membership", "house_check", "cloud_credit", "missed_joins", "error_triage"):
             self.assertIn(f'Chore("{name}"', body)
         self.assertNotIn("_river_bar_safety_sweep_loop", source)

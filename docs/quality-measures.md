@@ -156,6 +156,10 @@ the first cut: `docs/chapters/design-layer-boundaries.md`.
 | 2026-09-13 | 112 | 4 | 10 | 61994 | 31969 | 0.52 | 1804 | 51 | 2 | 241 |
 | 2026-09-16 | 117 | 4 | 10 | 63206 | 33280 | 0.53 | 1896 | 51 | 2 | 241 |
 | 2026-09-28 | 126 | 5 | 11 | 69632 | 37492 | 0.54 | 2159 | 53 | 2 | 241 |
+| 2026-10-13 | 139 | 5 | 12 | 76745 | 42580 | 0.55 | 2478 | 58 | 2 | 241 |
+| 2026-10-18 | 169 | 5 | 13 | 84462 | 49995 | 0.59 | 2936 | 65 | 2 | 241 |
+
+The 2026-10-18 row is the currency check firing: production had moved more than a tenth past the 2026-10-13 row, so the series was re-measured. Root modules, transport importers, and the test count all rose with the chapter; runtime lines unused did not move.
 
 The 2026-08-15 row is the first tests-collected number this table can defend.
 Until that morning `_test_count` read the digit out of pytest's summary line and
@@ -238,6 +242,8 @@ Append-only. One row per defect, dated by the commit that introduced it.
 | 2026-09-21 | Craft intake dereference died on `_MissingSentinel.is_set` in River; the WRONG-CLIENT detector said so 18 times in `river.log` and the nightly log-watch had no class for it and dropped untimestamped stderr lines at the window cut | 2026-09-16 | 5 days | a detector the reader cannot see |
 | 2026-09-28 | Same class, other path: `craft_intake` imported helpers via `discord_bot`, so River built Turtle's client; `log_watch` marked `wrong_client:constructed` new on 09-27 in a report nobody read | 2026-09-27 (first seen) | 1 day | a detector the reader cannot see — delivered now by River's nightly triage |
 | 2026-09-28 | One thread-registry cache for every root: each root's file held every room's threads, and eddy prompts carried other members' titles | long-standing | months | per-process cache of per-root state |
+| 2026-10-16 | Summon named five finished magic sittings as still open and refused a new one. None had a greeting line; the check treated a missing release line as open | 2026-10-15 `6a55cf8` | ~12 hours | absence of a new marker counted as the state the marker names |
+| 2026-10-16 | The same door, after that: several unreleased sessions still refused a new summon. He can always open one. Other spirits are company | 2026-10-15 `6a55cf8` | ~13 hours | a workshop protected by refusing another worker |
 
 Two classes account for seven of nine. That is the finding this document was
 created to keep in view.

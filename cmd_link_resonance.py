@@ -100,9 +100,7 @@ def fetch_act_digest(url: str, resonance: str) -> str:
 async def cmd_fetch(message, args):
     if not args:
         await message.reply(
-            "Usage: `!fetch <url>` — distill and cache resonance in `link-resonance/`\n"
-            "For dialogue read, drop the URL in chat (auto-read) or use **Read article** on incidental links.\n"
-            "Copy-paste friendly: `!fetch https://example.com/article`",
+            "Paste the link in chat and I read it; the **Save to library** button keeps it.",
             mention_author=False,
         )
         return

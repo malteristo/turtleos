@@ -15,7 +15,7 @@ How practitioners share URLs in eddy dialogue and how the shell makes fetch legi
 | Mode | Trigger | Purpose | Cache |
 |------|---------|---------|-------|
 | **Read for dialogue** | URL or Discord permalink in eddy chat (auto or Read button) | Ground the **current turn** | No `link-resonance/` write |
-| **Distill for library** | `!fetch <url>` | Save curated resonance for later | Yes — `link-resonance/` |
+| **Distill for library** | **Save to library** button after Turtle replies (typed `!fetch` retired 2026-10-14) | Save curated resonance for later | Yes — `link-resonance/` |
 
 Practitioners should never wonder whether dropping a link **saved** something to their library. Dialogue read is ephemeral context; `!fetch` is explicit archival.
 

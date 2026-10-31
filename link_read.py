@@ -24,18 +24,35 @@ from content_fetch import (
 )
 
 PROMPT_INLINE_MAX = 8000
+# A signed-in X article belongs in the turn. Spilling it would store it.
+X_READ_MAX = 40_000
 DIALOGUE_INJECT_MAX = PROMPT_INLINE_MAX
+
+
+def stored_fetch(text: str) -> str:
+    """The context packet names an X read. It does not keep the text."""
+    if "(via X)" in (text or "")[:240]:
+        return f"X read ({len(text or '')} chars). Not stored."
+    return text or ""
+
+
+def inject_limit(text: str) -> int:
+    """How much of a fetched block may enter the turn.
+
+    The receipt counts the whole block. A second cut here is how that count
+    becomes the first half of an article. A signed-in X read is already
+    bounded. Ordinary pages stay short.
+    """
+    if "(via X)" in (text or "")[:240]:
+        return X_READ_MAX
+    return DIALOGUE_INJECT_MAX + 512
 HISTORY_INLINE_MAX = 6000
 # Re-exported from the runtime, which owns the rule. Two literals meant two
 # numbers to change and one of them would be missed.
-from runtime.link_offers import COMMENTARY_MAX as AUTO_URL_COMMENTARY_MAX
-from runtime.link_offers import MEDIA_COMMENTARY_MAX as AUTO_URL_MEDIA_COMMENTARY_MAX
-MAX_URLS_PER_MESSAGE = 3
+from runtime.link_offers import AUTO_READ_MAX
+MAX_URLS_PER_MESSAGE = AUTO_READ_MAX
 SPILL_THRESHOLD = PROMPT_INLINE_MAX
 
-# The engagement-cue pattern moved to `runtime.link_offers.READ_CUE_RE` — it is a
-# judgement about the message, not about Discord, and it needed watch/listen cues
-# a reading-only list could not carry. Do not re-add a local copy.
 
 _COLOR_READING = 0x5865F2
 _COLOR_OK = 0x57F287
@@ -95,18 +112,11 @@ def external_urls(urls: list[str]) -> list[str]:
 
 
 def should_auto_fetch_urls(text: str, urls: list[str]) -> bool:
-    """URL-primary messages auto-read; long incidental text gets an offer instead.
+    """A pasted link is read. Delegates to `runtime.link_offers.should_auto_fetch`.
 
-    Delegates to `runtime.link_offers.should_auto_fetch`. The rule — commentary
-    length as a proxy for "the link is incidental", with a wider ceiling for media
-    because sharing a video *with* a remark is the ordinary way to share a video —
-    is a judgement about the message, not about Discord. The operator's 08-12
-    report was exactly this: every bare YouTube link shape fetched its transcript,
-    and the moment he wrote a sentence around one it stopped.
-
-    Kept as a name here because callers and shake scripts use it; kept as a
-    *delegation* because a second copy of a rule revised twice in one week is a
-    second copy that will not be revised the third time.
+    The commentary-length rule is gone: he pastes a link with or without words, and
+    a command or a button for reading it is a gap in the native path. Kept as a name
+    because callers and shake scripts use it.
     """
     from runtime.link_offers import should_auto_fetch
 
@@ -119,19 +129,16 @@ def plan_dialogue_urls(
     *,
     native_eddy: bool = False,
 ) -> tuple[bool, list[str], list[str]]:
-    """Return (auto_fetch, urls_for_context, pending_incidental_urls).
+    """Return (auto_fetch, urls_to_read_now, urls_over_the_cap_to_offer).
 
-    Native and legacy eddies share heuristics: silent link-read when URL-primary,
-    short commentary, or read cue; otherwise a read offer for long incidental text.
-    ``native_eddy`` is reserved for future divergence; behavior is unified (harness
-    split: Turtle read for conversation; River ``!fetch`` = library save only).
+    The first `AUTO_READ_MAX` links are read for the conversation; any more get one
+    offer. Harness split: Turtle reads for the conversation; River's library save
+    is a separate act (docs/chapters/2026-06-20-harness-split-read-vs-cache.md).
     """
-    del native_eddy  # unified policy — see docs/chapters/2026-06-20-harness-split-read-vs-cache.md
-    if not external:
+    del native_eddy  # unified policy
+    if not external or not should_auto_fetch_urls(visible_content, external):
         return False, [], []
-    if should_auto_fetch_urls(visible_content, external):
-        return True, external, []
-    return False, external, external
+    return True, external[:MAX_URLS_PER_MESSAGE], external[MAX_URLS_PER_MESSAGE:]
 
 
 def _guess_title(content: str, url: str) -> str | None:
@@ -147,8 +154,9 @@ def spill_fetch_artifact(result: FetchResult) -> FetchResult:
     if not result.ok or not result.content:
         return result
 
-    result.prompt_excerpt_chars = min(len(result.content), PROMPT_INLINE_MAX)
-    if result.char_count <= SPILL_THRESHOLD:
+    cap = X_READ_MAX if result.source == "X" else PROMPT_INLINE_MAX
+    result.prompt_excerpt_chars = min(len(result.content), cap)
+    if result.source == "X" or result.char_count <= SPILL_THRESHOLD:
         return result
 
     try:
@@ -175,6 +183,30 @@ def spill_fetch_artifact(result: FetchResult) -> FetchResult:
     return result
 
 
+async def _open_signed_in_link(url: str) -> str | None:
+    """A pasted x.com link in craft is the signed-in read.
+
+    The old preview runs first otherwise, and the turn answers from that thin
+    extract. A failure leaves the old preview in place. Anywhere but craft
+    returns nothing, so this does not become a read in a family room.
+    """
+    try:
+        from mage import get_current_channel_id, uses_craft_surface
+
+        channel_id = get_current_channel_id()
+        if channel_id is None or not uses_craft_surface(channel_id):
+            return None
+    except Exception:
+        return None
+    from core.offload import run_blocking
+    from outgoing_connections import live_call
+
+    text = await run_blocking(live_call, {"operation": "open", "link": url}, name="open_link")
+    if not text or "X could not be read." in text:
+        return None
+    return text
+
+
 async def _fetch_one_url(url: str) -> FetchResult:
     from core.url_validate import validate_fetch_url
 
@@ -188,9 +220,13 @@ async def _fetch_one_url(url: str) -> FetchResult:
     attempts: list[str] = []
 
     if platform == "twitter":
-        content, source_type = await fetch_twitter(url)
-        if not content:
-            attempts.append(f"twitter oembed: {source_type}")
+        opened = await _open_signed_in_link(url)
+        if opened:
+            content, source_type = opened, "X"
+        else:
+            content, source_type = await fetch_twitter(url)
+            if not content:
+                attempts.append(f"twitter oembed: {source_type}")
     elif platform == "youtube":
         content, source_type = await fetch_youtube_transcript(url)
         if not content:
@@ -258,7 +294,8 @@ def format_result_for_dialogue(result: FetchResult) -> str:
             and "x.com" not in u
         ]
         header = f"[URL: {result.url} (via {result.source})]"
-        excerpt = result.content[:PROMPT_INLINE_MAX]
+        cap = X_READ_MAX if result.source == "X" else PROMPT_INLINE_MAX
+        excerpt = result.content[:cap]
         if result.artifact_path:
             body = (
                 f"[Full text: `{result.artifact_path}` — {result.char_count:,} chars]\n\n"
@@ -266,10 +303,10 @@ def format_result_for_dialogue(result: FetchResult) -> str:
                 f"[Turtle read the first {len(excerpt):,} characters for this turn; "
                 f"full extract is in the file above. Ask to search or focus on a section if needed.]"
             )
-        elif len(result.content) > PROMPT_INLINE_MAX:
+        elif len(result.content) > cap:
             body = (
                 f"{excerpt}\n\n"
-                f"[Note: extract truncated to {PROMPT_INLINE_MAX:,} chars for this turn; "
+                f"[Note: extract truncated to {cap:,} chars for this turn; "
                 f"full extract was {result.char_count:,} chars.]"
             )
         else:
@@ -296,7 +333,7 @@ def format_result_for_dialogue(result: FetchResult) -> str:
         f"[URL: {result.url}]\n"
         f"[Tried: {attempts_str}]\n"
         f"[Could not extract content. Options: share a screenshot, "
-        f"paste the text directly, or try `!fetch {result.url} --fresh`.]"
+        f"or paste the text directly.]"
     )
 
 
@@ -379,8 +416,7 @@ def _status_embed_single(result: FetchResult) -> discord.Embed:
         title=f"🔗 Couldn't read {host}",
         description=(
             f"**Tried:** {attempts[:900]}\n\n"
-            f"Paste full text: {paste}\n"
-            f"Or: `!fetch {result.url}`"
+            f"Paste full text: {paste}"
         ),
         color=_COLOR_FAIL,
     )
@@ -525,7 +561,7 @@ async def post_link_offer(
         bot_client=bot_client,
         title="🔗 Link detected",
         color=_COLOR_READING,
-        footer=f"`!fetch {external[0][:80]}` · hide Discord preview: <url>",
+        footer="Hide the Discord preview: <url>",
     )
     if sent is None:
         # A post that failed is not an offer, so it is not recorded as one. This is

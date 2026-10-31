@@ -161,34 +161,6 @@ def thread_button_specs(
     return specs
 
 
-def compose_thread_glance_body(
-    records: list[dict[str, Any]],
-    *,
-    cap: int = SECTION_CAP,
-) -> str:
-    """One list, sidebar order. Title already holds the counts."""
-    live = [row for row in records if row.get("state") == "live"]
-    other = [row for row in records if row.get("state") and row.get("state") != "live"]
-    lines = [row.get("line") or row.get("name") or "" for row in live[:cap]]
-    omitted = max(0, len(live) - cap)
-    if omitted:
-        lines.append(f"… and {omitted} more in the sidebar")
-    parked = sum(1 for row in other if row.get("state") == "resting")
-    gone = sum(1 for row in other if row.get("state") == "gone")
-    kept = sum(1 for row in other if row.get("state") in {"kept", "sealed"})
-    extras = []
-    if kept:
-        extras.append(f"{kept} kept")
-    if parked:
-        extras.append(f"{parked} parked")
-    if gone:
-        extras.append(f"{gone} gone")
-    if extras:
-        lines.append("")
-        lines.append(" · ".join(extras))
-    return "\n".join(line for line in lines if line is not None).strip()
-
-
 def waiting_title(records: list[dict[str, Any]]) -> str:
     n = len(records)
     return "Waiting — none" if n == 0 else f"Waiting — {n}"
@@ -207,17 +179,6 @@ def compose_waiting_body(
     if omitted:
         lines.append(f"… and {omitted} more waiting")
     return "\n".join(line for line in lines if line).strip()
-
-
-def threads_title(grouped: dict[str, list[str]], days: int | None) -> str:
-    from eddy_five_state import five_state_title
-
-    title = five_state_title(grouped)
-    if days is None:
-        return title
-    if title.endswith("none"):
-        return f"Eddies — none in the last {days}d"
-    return f"{title} · last {days}d"
 
 
 def river_window_counts(
@@ -252,6 +213,7 @@ def river_window_line(
 
 CONTROL_LABELS = {
     "new_eddy": "new eddy",
+    "summon": "summon",
     "threads": "threads",
     "artifacts": "artifacts",
 }

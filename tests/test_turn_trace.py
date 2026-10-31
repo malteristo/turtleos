@@ -34,6 +34,8 @@ class Trace(unittest.TestCase):
         working = tt.render_card(steps, 12.0, "gemma4:31b")
         self.assertTrue(working.startswith("-# 🐢 working · 12 s"))
         self.assertIn("-# ✅ read 1 link (8,034 chars)", working)
+        pictured = tt.AttunementSteps(links=1, link_chars=10, pictures=1)
+        self.assertIn("read 1 link (10 chars, 1 picture)", " ".join(pictured.lines()))
         self.assertNotIn("remembering", working)
         self.assertNotIn("Mother-in-law", working)
         self.assertTrue(working.endswith("-# ✍️ gemma4:31b is composing…"))
@@ -59,16 +61,84 @@ class Trace(unittest.TestCase):
         self.assertIn("-# 📖 read `memory/topics/x.md`", done)
         self.assertNotIn("composing", done)
         self.assertTrue(done.endswith("-# gemma4:31b"))
+        spirit = tt.render_card(steps, 12.0, "claude-sonnet-5-5", voice="spirit")
+        self.assertTrue(spirit.startswith("-# working · 12 s"))
+        self.assertNotIn("🐢", spirit)
 
-    def test_card_stays_readable_when_a_turn_wanders(self):
+    def test_a_long_card_names_the_first_act_and_the_last(self):
         steps = [tt.Step("🔧", f"step {i}") for i in range(30)]
         card = tt.render_card(steps, 5, "m")
-        self.assertLessEqual(len(card.splitlines()), tt.CARD_MAX_LINES + 2)
-        self.assertIn("more step(s)", card)
+        self.assertNotIn("earlier step", card)
+        self.assertIn("step 29", card)
+        self.assertIn("step 0", card)
+        self.assertGreater(len(card.splitlines()), tt.CARD_MAX_LINES)
         long = tt.prose_step("word " * 100)
-        self.assertLessEqual(len(long.text), tt.CARD_PROSE_CHARS + 2)
-        self.assertTrue(long.text.endswith("…*"))
+        self.assertEqual(long.text, ("word " * 100).strip())
+        self.assertGreater(len(long.text), tt.CARD_PROSE_CHARS)
+        clipped = tt.render_card([long], 5, "m", done=True)
+        self.assertIn("…*", clipped)
+        self.assertNotIn(long.text, clipped)
         self.assertIsNone(tt.prose_step("   "))
+
+    def test_a_long_card_keeps_one_intent_and_the_write(self):
+        steps = [tt.prose_step("Starting with the date.")]
+        steps.append(tt.prose_step("The branch exists and I will write the record."))
+        for i in range(20):
+            steps.append(tt.Step("📖", f"read `desk/file-{i}.md`"))
+        steps.append(tt.Step("📖", "read `secret.md` — blocked: outside the checkout"))
+        steps.append(tt.Step("📖", "wrote `desk/craft/note.md`"))
+        steps.append(tt.Step("📖", "kept · commit"))
+        card = tt.render_card(steps, 49, "claude-sonnet-5-5", done=True, voice="spirit")
+        self.assertIn("*Starting with the date.*", card)
+        self.assertNotIn("The branch exists", card)
+        self.assertNotIn("read 20", card)
+        self.assertNotIn("earlier step", card)
+        self.assertIn("file-0", card)
+        self.assertIn("file-19", card)
+        self.assertIn("blocked: outside the checkout", card)
+        self.assertIn("wrote `desk/craft/note.md`", card)
+        self.assertIn("kept · commit", card)
+
+    def test_a_short_card_keeps_one_intent_and_every_look(self):
+        steps = [
+            tt.prose_step("First aim."),
+            tt.Step("📖", "read `desk/state.md`"),
+            tt.prose_step("Second aim that should not fill the card."),
+        ]
+        card = tt.render_card(steps, 5, "m", done=True)
+        self.assertIn("First aim.", card)
+        self.assertNotIn("Second aim", card)
+        self.assertIn("read `desk/state.md`", card)
+
+    def test_every_sentence_is_its_own_message_and_is_not_clipped(self):
+        long = ("word " * 80).strip()
+        steps = [
+            tt.prose_step("Starting with the date."),
+            tt.Step("📖", "read `desk/file-0.md`"),
+            tt.Step("📖", "read `desk/file-0.md`"),
+            tt.prose_step("The branch exists and I will write the record.\n\n" + long),
+            tt.Step("📖", "read `desk/file-1.md`"),
+        ]
+        messages = tt.express_messages(steps)
+        self.assertEqual(messages[0], "Starting with the date.")
+        self.assertIn("× 2", messages[1])
+        self.assertIn("file-0", messages[1])
+        self.assertEqual(messages[2], "The branch exists and I will write the record.\n\n" + long)
+        self.assertGreater(len(messages[2]), tt.CARD_PROSE_CHARS)
+        self.assertNotIn("…", messages[2])
+        self.assertIn("file-1", messages[3])
+        self.assertNotIn("×", messages[3])
+        # A shared room still draws one card, and that card keeps the first sentence only.
+        card = tt.render_card(steps, 5, "m", done=True)
+        self.assertIn("*Starting with the date.*", card)
+        self.assertNotIn("The branch exists", card)
+
+    def test_git_status_is_a_look_and_a_commit_is_a_keep(self):
+        status = tt.describe_tool("workshop_git", {"verb": "status"}, "## magic-port-writepath\n M a.md")
+        commit = tt.describe_tool("workshop_git", {"verb": "commit"}, "[branch abc] kept")
+        self.assertEqual(status.text, "looked · status")
+        self.assertNotIn("a.md", status.text)
+        self.assertEqual(commit.text, "kept · commit")
 
     def test_tools_are_described_as_a_person_would(self):
         self.assertEqual(
@@ -91,16 +161,39 @@ class Trace(unittest.TestCase):
             raw,
         )
         self.assertEqual(step.icon, "🔧")
-        self.assertIn("`sed -n '1,20p' mage.py`", step.text)
-        self.assertIn("blocked: command not allowed: sed", step.text)
+        self.assertEqual(step.text, "looked with sed — blocked: command not allowed: sed")
+        self.assertNotIn("sed -n", step.text)
         self.assertNotIn("ToolResult[blocked]", step.text)
         ok = tt.describe_tool(
             "run_turtleos_shell",
             {"command": 'rg -i "model" docs/ --glob "*.md" -l'},
             '$ rg -i "model" docs/ --glob "*.md" -l\ndocs/a.md',
         )
-        self.assertEqual(ok.text, '`rg -i "model" docs/ --glob "*.md" -l`')
+        self.assertEqual(ok.text, "searched with rg")
+        self.assertNotIn("docs/", ok.text)
         self.assertNotIn("ToolResult", ok.text)
+        git = tt.describe_tool(
+            "run_turtleos_shell",
+            {"command": "git log --oneline -14 --stat"},
+            "eba5648 The card\n",
+        )
+        self.assertEqual(git.text, "looked · git log")
+        self.assertNotIn("--oneline", git.text)
+        refused = tt.describe_tool(
+            "run_turtleos_shell",
+            {"command": "git branch -vv"},
+            "ToolResult[blocked] run_turtleos_shell: Shell command blocked: only git branch --show-current is allowed",
+        )
+        self.assertEqual(refused.text, "looked · git branch — blocked: only git branch --show-current is allowed")
+        self.assertNotIn("-vv", refused.text)
+
+    def test_the_same_act_is_one_line_that_says_how_many(self):
+        steps = [tt.describe_tool("run_turtleos_shell", {"command": "grep boom logs/discord.log"}, "") for _ in range(5)]
+        steps.append(tt.describe_tool("run_turtleos_shell", {"command": "git status -sb"}, ""))
+        card = tt.render_card(steps, 5, "m", done=True)
+        self.assertIn("searched with grep × 5", card)
+        self.assertEqual(card.count("searched with grep"), 1)
+        self.assertIn("looked · git status", card)
 
     def test_exa_query_is_readable_and_bounded(self):
         long_q = (

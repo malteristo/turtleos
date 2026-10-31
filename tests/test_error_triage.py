@@ -120,6 +120,14 @@ class NightlyTests(unittest.TestCase):
         line = asyncio.run(et.run_nightly(self.logs, self.issues, garbage, now=datetime(2026, 9, 30, 5, 30)))
         self.assertIn("unjudged", line)
 
+    def test_without_an_issue_list_it_says_so(self):
+        self._log("[x] Old thing failed: boom")
+        self._run(NIGHT)
+        self._log("[y] New thing failed: x")
+        missing = Path(self.tmp.name) / "no-issues-here"
+        line = asyncio.run(et.run_nightly(self.logs, missing, self._ask, now=datetime(2026, 9, 30, 5, 30)))
+        self.assertIn("no issue list on this host", line)
+
     def test_an_issue_the_model_invents_is_not_named(self):
         self._log("[x] Old thing failed: boom")
         self._run(NIGHT)

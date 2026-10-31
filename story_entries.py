@@ -37,6 +37,7 @@ class EddyEntry:
     source_path: Path
     participants: list[str] = field(default_factory=list)
     proposed_themes: list[str] = field(default_factory=list)
+    sparks: list[dict] = field(default_factory=list)
 
 
 _ENTRY_FRONT_RE = re.compile(r"---\n(.*?)---\n\n", re.S)
@@ -91,6 +92,8 @@ def entry_from_front(
     if not isinstance(themes, list):
         themes = []
 
+    from eddy_sparks import sparks_from_front
+
     return EddyEntry(
         participants=[str(p).strip() for p in participants if str(p).strip()],
         proposed_themes=[str(t).strip() for t in themes if str(t).strip()],
@@ -101,4 +104,5 @@ def entry_from_front(
         related_topics=related_topics,
         body=body.strip(),
         source_path=source_path,
+        sparks=sparks_from_front(front),
     )

@@ -26,6 +26,7 @@ than believed.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import threading
 from typing import Any, Callable, TypeVar
 
@@ -108,8 +109,12 @@ async def run_blocking(
         _active += 1
         _peak = max(_peak, _active)
 
+    # The asker is a context var set on the event-loop task. A fresh thread
+    # starts from the defaults, so a tool that asks who spoke would see nobody.
+    caller = contextvars.copy_context()
     thread = threading.Thread(
-        target=_runner,
+        target=caller.run,
+        args=(_runner,),
         name=f"offload:{name or getattr(fn, '__name__', 'anonymous')}",
         daemon=True,
     )

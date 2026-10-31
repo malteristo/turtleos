@@ -524,7 +524,9 @@ class EddyNoteWriterTests(unittest.IsolatedAsyncioTestCase):
                 first = await story_notes.write_eddy_note(
                     CHANNEL_ID, HISTORY, trigger="idle"
                 )
-                # Retitled eddies must keep appending to the same file.
+                # Contract (`story_notes._note_path`): one note per eddy, keyed by
+                # thread id; a real new title renames that file and the next
+                # checkpoint appends to it. Every reader finds it by the id.
                 with patch(
                     "story_notes._resolve_thread_title", return_value="Renamed eddy"
                 ):
@@ -532,8 +534,12 @@ class EddyNoteWriterTests(unittest.IsolatedAsyncioTestCase):
                         CHANNEL_ID, HISTORY, trigger="manual", since_index=2
                     )
 
-            self.assertEqual(first.note_path, second.note_path)
-            entries = _parse_entries(first.note_path.read_text(encoding="utf-8"))
+            self.assertNotEqual(first.note_path.name, second.note_path.name)
+            self.assertEqual(second.note_path.name, f"{CHANNEL_ID}-renamed-eddy.md")
+            self.assertFalse(first.note_path.exists(), "a rename, not a second file")
+            folder = second.note_path.parent
+            self.assertEqual(len(list(folder.glob(f"{CHANNEL_ID}-*.md"))), 1)
+            entries = _parse_entries(second.note_path.read_text(encoding="utf-8"))
             self.assertEqual(len(entries), 2)
             self.assertEqual(entries[0][0]["trigger"], "idle")
             self.assertEqual(entries[1][0]["trigger"], "manual")
@@ -709,6 +715,36 @@ class EddyEntryCollectorTests(unittest.TestCase):
                 ),
                 [],
             )
+
+
+class NotePathFollowsTitle(unittest.TestCase):
+    def test_a_real_title_renames_the_blank_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            eddies = Path(tmp) / "story" / "eddies"
+            eddies.mkdir(parents=True)
+            old = eddies / f"{CHANNEL_ID}-new-eddy.md"
+            old.write_text("title: new eddy\n", encoding="utf-8")
+            got = story_notes._note_path(Path(tmp), CHANNEL_ID, "tool use and thinking traces")
+            self.assertEqual(got.name, f"{CHANNEL_ID}-tool-use-and-thinking-traces.md")
+            self.assertTrue(got.is_file())
+            self.assertFalse(old.exists())
+            self.assertIn("title: new eddy", got.read_text(encoding="utf-8"))
+
+    def test_a_blank_title_does_not_invent_or_erase_a_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            eddies = Path(tmp) / "story" / "eddies"
+            eddies.mkdir(parents=True)
+            blank = eddies / f"{CHANNEL_ID}-new-eddy.md"
+            blank.write_text("still blank\n", encoding="utf-8")
+            stayed = story_notes._note_path(Path(tmp), CHANNEL_ID, "new eddy")
+            self.assertEqual(stayed, blank)
+            self.assertTrue(blank.is_file())
+
+            named = eddies / "999-sparks-as-intentions.md"
+            named.write_text("kept\n", encoding="utf-8")
+            kept = story_notes._note_path(Path(tmp), 999, "new eddy")
+            self.assertEqual(kept, named)
+            self.assertFalse((eddies / "999-new-eddy.md").exists())
 
 
 if __name__ == "__main__":

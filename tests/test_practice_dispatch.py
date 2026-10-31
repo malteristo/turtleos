@@ -57,3 +57,24 @@ class DispatchIncomingMessageTests(unittest.IsolatedAsyncioTestCase):
         ) as route, patch.object(practice_dispatch, "_processed_messages", []):
             await practice_dispatch.dispatch_incoming_message(message)
             route.assert_awaited_once_with(message)
+
+    async def test_a_river_post_in_an_eddy_is_remembered_and_not_answered(self) -> None:
+        message = MagicMock()
+        message.author = MagicMock(bot=True, id=42, name="river")
+        message.author.bot = True
+        message.type = practice_dispatch.discord.MessageType.default
+        message.content = "This channel\nClaude Sonnet 5.5"
+        message.embeds = []
+        message.message_snapshots = []
+        message.channel.id = 555
+        message.channel.parent_id = 100
+        message.mentions = []
+
+        with patch.dict("os.environ", {"RIVER_BOT_USER_ID": "42"}), patch(
+            "practice_dispatch.route_practice_dialogue", new_callable=AsyncMock
+        ) as route, patch("helpers.note_river_post") as note, patch(
+            "helpers.is_river_bot_message", return_value=True
+        ):
+            await practice_dispatch.dispatch_incoming_message(message)
+        route.assert_not_awaited()
+        note.assert_called_once_with(555, "This channel\nClaude Sonnet 5.5")

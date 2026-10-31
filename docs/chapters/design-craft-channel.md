@@ -43,7 +43,7 @@ channels:
 
 **Sidebar:** `#craft-turtle` lives under category **Craft** (Rivers → Craft → Family) — operator-only; not under Rivers or Family.
 
-**Model:** craft eddies default to frontier `CRAFT_MODEL` (Claude). Practice rivers stay on local Gemma.
+**Model:** craft speaks on the house conversation model (Gemma) until someone picks another with `!model`. Practice rivers stay on that same default.
 
 ### Prompt stack (target)
 
@@ -106,7 +106,7 @@ This offloads bug/UX tracking from the Mage: drop friction in `#craft-turtle`, t
 
 - Standing **new eddy** bar on `#craft-turtle` (`supports_eddy_bar` + craft in `practice_parent_channel_ids`)
 - Craft intake = parent only; eddies are Craft Turtle dialogue
-- Frontier `CRAFT_MODEL` for craft eddies
+- House conversation model (Gemma) for craft eddies until an explicit `!model` pick
 - Discord category **Craft** (Rivers → Craft → Family)
 
 ## Shipped (2026-09-10) — practice key

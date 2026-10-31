@@ -84,6 +84,42 @@ def obsidian_link(filename):
     return f"[{filename}](obsidian://open?vault={quote(OBSIDIAN_VAULT)}&file={quote(name)})"
 
 
+_BLANK_NOTE_TITLES = frozenset({"new eddy", "new", "eddy"})
+
+
+def note_entry_title(entry_text: str) -> str:
+    """The title line of one note entry. Later callers pass it to the card."""
+    for line in (entry_text or "").splitlines():
+        if not line.startswith("title:"):
+            continue
+        raw = line.split(":", 1)[1].strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+            raw = raw[1:-1]
+        return raw.strip()
+    return ""
+
+
+def eddy_note_label(title: str | None, rel: str) -> str:
+    """The card shows the eddy's title. A blank name stays the path."""
+    label = " ".join((title or "").split())
+    if not label or label.lower() in _BLANK_NOTE_TITLES:
+        return rel
+    return label.replace("[", "").replace("]", "")
+
+
+def eddy_note_link(rel_path: str, *, title: str | None = None) -> str:
+    """A tappable link to an eddy note. A bare path is not a link."""
+    rel = (rel_path or "").strip()
+    label = eddy_note_label(title, rel)
+    web = artifact_read_url(rel)
+    if web:
+        return f"[{label}]({web})"
+    if label != rel:
+        name = rel.replace(".md", "")
+        return f"[{label}](obsidian://open?vault={quote(OBSIDIAN_VAULT)}&file={quote(name)})"
+    return obsidian_link(rel)
+
+
 def artifact_display_name(filename: str) -> str:
     base = filename.replace("\\", "/").rstrip("/").split("/")[-1]
     return base.replace(".md", "").replace("-", " ").replace("_", " ")

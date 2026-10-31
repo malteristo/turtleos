@@ -286,10 +286,10 @@ class CheckpointConvergenceTests(_CheckpointHarness):
             self.assertIsNone(result.eddy_note)
             chronicle.assert_called_once_with(self.CHANNEL_ID, result)
 
-    async def test_short_history_records_checkpoint_anchor_without_reflection(self) -> None:
+    async def test_one_message_does_not_write_a_note(self) -> None:
         from state import last_checkpoint_anchor
 
-        short = HISTORY_4[:2]
+        short = HISTORY_4[:1]
         with tempfile.TemporaryDirectory() as tmp:
             writer = AsyncMock(return_value=_fake_note(tmp))
             with self._patched(tmp, short), patch(
@@ -301,6 +301,23 @@ class CheckpointConvergenceTests(_CheckpointHarness):
         writer.assert_not_awaited()
         self.assertIsNone(result.eddy_note)
         self.assertEqual(last_checkpoint_anchor[self.CHANNEL_ID], _fingerprints(short))
+
+    async def test_one_exchange_is_written_by_the_room_model(self) -> None:
+        one = HISTORY_4[:2]
+        with tempfile.TemporaryDirectory() as tmp:
+            writer = AsyncMock(return_value=_fake_note(tmp))
+            with self._patched(tmp, one), patch(
+                "story_notes.write_eddy_note", writer
+            ), patch(
+                "sessions._author_model", return_value=("the-turtle-in-the-eddy", False)
+            ):
+                result = await checkpoint_session(
+                    self.CHANNEL_ID, trigger="idle", mark_paused=True
+                )
+        self.assertIsNotNone(result.eddy_note)
+        writer.assert_awaited()
+        self.assertEqual(writer.await_args.kwargs["model"], "the-turtle-in-the-eddy")
+        self.assertIs(writer.await_args.kwargs["use_api"], False)
 
     async def test_idle_checkpoint_posts_no_preview_surface(self) -> None:
         """Issue 036 regression guard: idle checkpoints stay quiet in the
@@ -339,6 +356,8 @@ class CheckpointConvergenceTests(_CheckpointHarness):
             joined = "\n".join(payloads)
             # The sink is wired: the quiet ops line still lands…
             self.assertIn("Eddy note", joined)
+            self.assertIn("](", joined)
+            self.assertNotIn("`story/eddies/42-test-eddy.md`", joined)
             # …but nothing sent carries the preview surface.
             self.assertNotIn("```md", joined)
             self.assertNotIn("Open note", joined)

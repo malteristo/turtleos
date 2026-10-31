@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from core.atomic_io import atomic_write_json
@@ -47,6 +48,30 @@ def read_shared(channel_id: int) -> list[dict] | None:
 def write_shared(channel_id: int, history: list[dict]) -> None:
     trimmed = history[-MAX_DIALOGUE_HISTORY:] if len(history) > MAX_DIALOGUE_HISTORY else list(history)
     atomic_write_json(_path_for(channel_id), trimmed, ensure_ascii=False, indent=0)
+
+
+def _lock_path(channel_id: int) -> Path:
+    return _dialogue_dir() / f"{channel_id}.lock"
+
+
+def begin_turn(channel_id: int) -> None:
+    """A living process holds this file for the whole turn.
+
+    The deploy guard treats a lock whose process is alive as a turn in flight,
+    so the quiet gap can be the restart itself and not a half hour of silence.
+    A failure here does not stop the turn: the guard then has only the file's age.
+    """
+    try:
+        _lock_path(channel_id).write_text(str(os.getpid()), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def end_turn(channel_id: int) -> None:
+    try:
+        _lock_path(channel_id).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def clear_shared(channel_id: int) -> None:

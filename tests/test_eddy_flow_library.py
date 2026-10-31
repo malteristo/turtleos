@@ -15,8 +15,8 @@ class EddyFlowLibraryTests(unittest.TestCase):
         self.assertIn("new eddy", bar_block)
         self.assertIn("_river_bar_custom_ids", bar_block)
         self.assertIn("more…", bar_block)
-        self.assertIn("artifacts", bar_block)
-        self.assertIn("help", bar_block)
+        self.assertIn("menu_options", bar_block, "the menu is built from bar_menu, not a fixed list")
+        self.assertNotIn('label="artifacts"', bar_block, "never used; the menu holds commands, what the channel keeps, mcp, model")
         self.assertIn("ephemeral=True", bar_block)
         self.assertNotIn("with_active_command", bar_block)
 

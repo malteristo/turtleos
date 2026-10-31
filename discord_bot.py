@@ -65,7 +65,7 @@ from mage import (
     get_pd, get_mage_name, get_mage_key, get_runtime_dir,
     set_practice_context, set_practice_context_for_channel,
     is_practice_channel, is_registered_parent_channel,
-    get_registry, _resolve_mage_from_author,
+    get_registry, get_channel_primitive, resolve_dialogue_channel_id, _resolve_mage_from_author,
     get_thread_member_ids, river_bot_enabled,
     suppress_turtle_river_voice, get_attunement_profile,
     maybe_reload_mage_registry, reload_mage_registry,
@@ -105,6 +105,11 @@ from helpers import (
 from sessions import session_monitor, checkpoint_session, close_session, maybe_reflect
 from eddy_spawn import handle_eddy_spawn_interaction
 from intake_server import start_intake_server
+from spirit_voice import bind as bind_spirit_voice
+
+bind_spirit_voice(
+    lambda message: getattr(get_channel_primitive(resolve_dialogue_channel_id(message)), "name", None)
+)
 from background import (
     interoception_loop,
     daily_reminders_loop,
@@ -115,7 +120,7 @@ from background import (
 )
 
 from commands import (
-    try_direct_command, DIRECT_COMMANDS, ControlPanelView,
+    try_direct_command, DIRECT_COMMANDS,
     ThreadConfigView,
 )
 
@@ -241,6 +246,10 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     if after.author.bot and after.author.id != SPIRIT_BOT_ID:
         return
+    from spirit_voice import is_own_voice
+
+    if is_own_voice(after):
+        return
     if await _should_skip_native_starter(after):
         return
     if after.content.strip().startswith("!") and river_bot_enabled():
@@ -294,14 +303,70 @@ async def on_interaction(interaction: discord.Interaction):
 async def on_ready():
     global _intake_runner
     reload_mage_registry()
-    client.add_view(ControlPanelView())
+    try:
+        from spirit_link import answer_pending
+
+        asyncio.create_task(answer_pending(client, registry=get_registry()))
+    except Exception as exc:
+        print(f"Forge answer failed to start: {exc}")
     client.add_view(ThreadConfigView())
+    try:
+        from delegate_setup_ui import register_delegate_views
+
+        register_delegate_views(client, get_registry)
+    except Exception as exc:
+        print(f"Delegate key view failed: {exc}")
+    try:
+        from room_models import arm_model_menu
+
+        arm_model_menu(client, get_registry, resolve_dialogue_channel_id)
+    except Exception as exc:
+        print(f"Model menu view failed: {exc}")
+    try:
+        from backlog_feed_ui import arm_feed
+        from share_targets import practice_dir_for_mage
+
+        arm_feed(client, get_registry, practice_dir_for_mage)
+    except Exception as exc:
+        print(f"Backlog feed view failed: {exc}")
+    try:
+        from mage import get_actor_key, get_current_channel_id, list_registered_runtime_dirs
+        from outgoing_connect_ui import register_outgoing_views
+        from outgoing_connections import Shell
+
+        register_outgoing_views(
+            client, Shell(get_registry, get_actor_key, get_runtime_dir, list_registered_runtime_dirs, get_current_channel_id)
+        )
+    except Exception as exc:
+        print(f"Outgoing connections view failed: {exc}")
     try:
         from share_eddy import register_persistent_share_views
 
         register_persistent_share_views(client)
     except Exception as exc:
         print(f"Share view registration failed: {exc}")
+    try:
+        from boom_takeup import arm_takeup
+
+        arm_takeup(client)
+    except Exception as exc:
+        print(f"Take this up button failed: {exc}")
+    try:
+        from dialogue_turn import open_trace_calls
+        from trace_calls import arm_calls, bind_open
+
+        bind_open(open_trace_calls)
+        arm_calls(client)
+        from cloud_stocked import arm_stocked, bind_resume
+        from dialogue_turn import resume_stocked
+
+        bind_resume(resume_stocked)
+        arm_stocked(client)
+        from spirit_ears import listen
+
+        listen()
+    except Exception as exc:
+        print(f"Calls button failed: {exc}")
     try:
         from primitive_runtime import rehydrate_runtime_views
 
@@ -339,6 +404,12 @@ async def on_ready():
             _intake_runner = await start_intake_server(discord_client=client, vortex_thread_id=vortex_id)
         except Exception as e:
             print(f"Intake server failed to start: {e}")
+        try:
+            from voice_door import start_voice_door
+
+            await start_voice_door(client)
+        except Exception as e:
+            print(f"Voice door failed to start: {e}")
 
     dialogue = get_channel("dialogue")
     thread_count = 0

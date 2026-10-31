@@ -23,14 +23,16 @@ class RiverParentCommandTests(unittest.IsolatedAsyncioTestCase):
         message.reply = AsyncMock()
         return message
 
-    async def test_help_on_parent_posts_command_act(self) -> None:
+    async def test_help_on_parent_is_the_card_in_a_reply(self) -> None:
         message = self._river_message()
-        with patch("commands.is_river_message", return_value=True):
-            with patch("commands.post_command_act", new_callable=AsyncMock) as act:
-                digest = await commands.cmd_help(message)
-        message.reply.assert_not_called()
-        act.assert_awaited_once()
-        self.assertIn("full inventory", digest.lower())
+        message.author.id = 1
+        with patch("commands.is_river_message", return_value=True), patch(
+            "commands.get_registry", return_value={}
+        ):
+            digest = await commands.cmd_help(message)
+        view = message.reply.await_args.kwargs["view"]
+        self.assertIn("What you can type here", str(view.to_components()))
+        self.assertIn("card", digest.lower())
 
     async def test_readiness_on_parent_posts_command_act(self) -> None:
         message = self._river_message()

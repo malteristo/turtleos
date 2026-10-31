@@ -846,6 +846,16 @@ def get_actor_key() -> str | None:
     return _actor_key_ctx.get()
 
 
+def note_actor(mage_key: str | None) -> None:
+    """Who this turn is for, when the message has no registered author.
+
+    Call this after ``set_practice_context_for_channel``. That call clears the
+    actor when the channel changes, and a house-speaker turn has no Discord
+    author of its own.
+    """
+    _actor_key_ctx.set(mage_key)
+
+
 def get_mage_type():
     """Return the type ('mage' or 'practitioner') for the current channel's mage."""
     mage_key = _mage_key_ctx.get()
@@ -1044,6 +1054,17 @@ def resolve_registry_channel_id(channel_id) -> int:
     return ch_id
 
 
+def _message_is_forge(message) -> bool:
+    try:
+        from spirit_voice import is_forge_turn
+    except Exception:
+        return False
+    try:
+        return bool(is_forge_turn(message))
+    except Exception:
+        return False
+
+
 def set_practice_context(message):
     """Set the practice directory context for the current async task."""
     channel = message.channel
@@ -1057,6 +1078,10 @@ def set_practice_context(message):
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
     actor_key, _ = _resolve_mage_from_author(message.author)
+    # Spirit's account carries a forge turn. The workshop belongs to the room's
+    # owner, or the prompt is built as if the room had no checkout.
+    if mage_key and _message_is_forge(message):
+        actor_key = mage_key
     _actor_key_ctx.set(actor_key)
     _channel_id_ctx.set(ch_id if is_registered_parent_channel(ch_id) else None)
     return pd
@@ -1074,14 +1099,24 @@ def set_practice_context_for_channel(channel_id, *, require_registered: bool = F
         raise ValueError(
             f"unresolved practice channel {channel_id}; refusing primary-root fallback"
         )
+    # A shared-eddy lookup refreshes this same channel on every turn. Clearing
+    # the author there made a signed-in person look unsigned. A different
+    # channel still forgets them, so one task cannot carry the previous room's
+    # speaker into the next.
+    stored_channel = _channel_id_ctx.get()
+    stored_actor = _actor_key_ctx.get()
+    next_channel = registry_id if is_registered_parent_channel(registry_id) else None
     pd = _resolve_practice_dir_for_channel(registry_id)
     _practice_dir_ctx.set(pd)
     _runtime_dir_ctx.set(_resolve_runtime_dir_for_channel(registry_id))
     mage_name, mage_key = _resolve_mage_info_for_channel(registry_id)
     _mage_name_ctx.set(mage_name)
     _mage_key_ctx.set(mage_key)
-    _actor_key_ctx.set(None)
-    _channel_id_ctx.set(registry_id if is_registered_parent_channel(registry_id) else None)
+    if next_channel is not None and next_channel == stored_channel:
+        _actor_key_ctx.set(stored_actor)
+    else:
+        _actor_key_ctx.set(None)
+    _channel_id_ctx.set(next_channel)
     return pd
 
 

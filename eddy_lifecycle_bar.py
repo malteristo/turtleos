@@ -33,6 +33,28 @@ def standing_lifecycle_bar_enabled() -> bool:
     return True
 
 
+def lifecycle_bar_withheld(parent_id: int | None) -> bool:
+    """The operator's own eddies keep the bar off until it is redesigned.
+
+    A shared room, and another person's room, still have it. The typed
+    commands do the same work while the bar is gone.
+    """
+    if not parent_id:
+        return False
+    from mage import get_channel_primitive, get_registry
+
+    primitive = get_channel_primitive(parent_id)
+    if primitive is None or primitive.base != "solo" or not primitive.practice_key:
+        return False
+    registry = get_registry()
+    if primitive.practice_key in (registry.get("spaces") or {}):
+        return False
+    entry = (registry.get("mages") or {}).get(primitive.practice_key)
+    if not isinstance(entry, dict):
+        return False
+    return entry.get("type") == "mage"
+
+
 def lifecycle_act_labels(phase: str) -> list[str]:
     """Acts the bar and the glance show for a phase — availability, not ranking."""
     from flow_runner import list_flow_ids_for_bar_phase
@@ -179,7 +201,7 @@ def clear_bar_phase(thread_id: int) -> None:
 
 def bootstrap_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
     """Phase 0 bar — flows select on empty eddy (may be awaiting first message)."""
-    if not standing_lifecycle_bar_enabled():
+    if not standing_lifecycle_bar_enabled() or lifecycle_bar_withheld(parent_id):
         return False
     if not parent_id:
         return False
@@ -197,7 +219,7 @@ def bootstrap_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
 
 def lifecycle_bar_eligible(thread_id: int, parent_id: int | None) -> bool:
     """Phase 1+ bar — checkpoint/share need live dialogue (not pre-first-message)."""
-    if not standing_lifecycle_bar_enabled():
+    if not standing_lifecycle_bar_enabled() or lifecycle_bar_withheld(parent_id):
         return False
     if not parent_id:
         return False
@@ -804,6 +826,138 @@ async def _post_eddy_bar(
     return msg
 
 
+async def withdraw_lifecycle_bar(thread, client) -> bool:
+    """Delete the tracked bar in one eddy and forget it. False if it is still there."""
+    if not is_lifecycle_bar_active(thread.id):
+        return False
+    message_id = _load_state().get(str(thread.id))
+    if message_id:
+        from bar_anchor import channel_for_client
+
+        channel = await channel_for_client(thread, client)
+        try:
+            message = await channel.fetch_message(int(message_id))
+            await message.delete()
+        except discord.NotFound:
+            pass
+        except discord.HTTPException as exc:
+            print(f"Lifecycle bar hide failed for {thread.id}: {type(exc).__name__}: {exc}")
+            return False
+    clear_lifecycle_bar_state(thread.id)
+    return True
+
+
+def _operator_eddy_dir() -> str | None:
+    """The operator's eddy state, not whichever room the previous call left open.
+
+    Startup walks every river before it hides bars. That walk leaves the
+    practice context on the last room, and the bar list there is not his.
+    """
+    from mage import get_registry
+
+    registry = get_registry()
+    chosen: tuple[str, dict] | None = None
+    for key, entry in (registry.get("mages") or {}).items():
+        if not isinstance(entry, dict) or entry.get("type") != "mage":
+            continue
+        if key in (registry.get("spaces") or {}):
+            continue
+        chosen = (key, entry)
+        if entry.get("primary"):
+            break
+    if chosen is None:
+        return None
+    key, entry = chosen
+    runtime = os.path.expanduser(entry.get("runtime_dir") or f"~/workshops/{key}")
+    return os.path.join(runtime, "thread-state", "eddy")
+
+
+def _load_operator_bar_state() -> dict[str, int]:
+    directory = _operator_eddy_dir()
+    if not directory:
+        return {}
+    path = os.path.join(directory, "lifecycle_bar.json")
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return {str(key): int(value) for key, value in data.items()}
+    except (json.JSONDecodeError, TypeError, ValueError, OSError):
+        return {}
+
+
+def _clear_operator_bar_row(thread_id: int) -> None:
+    directory = _operator_eddy_dir()
+    if not directory:
+        return
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, "lifecycle_bar.json")
+    state = _load_operator_bar_state()
+    if state.pop(str(thread_id), None) is not None:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(state, fh)
+    phase_path = os.path.join(directory, "bar_phase.json")
+    if not os.path.exists(phase_path):
+        return
+    try:
+        with open(phase_path, encoding="utf-8") as fh:
+            phases = json.load(fh)
+    except (json.JSONDecodeError, TypeError, ValueError, OSError):
+        return
+    if not isinstance(phases, dict) or phases.pop(str(thread_id), None) is None:
+        return
+    with open(phase_path, "w", encoding="utf-8") as fh:
+        json.dump(phases, fh)
+
+
+async def withdraw_operator_lifecycle_bars(client) -> int:
+    """Take the bar down in the operator's eddies. Other rooms are left as they are."""
+    hidden = 0
+    for thread_id_str, message_id in list(_load_operator_bar_state().items()):
+        try:
+            channel = client.get_channel(int(thread_id_str))
+            if channel is None:
+                channel = await client.fetch_channel(int(thread_id_str))
+        except Exception as exc:  # noqa: BLE001 — one missing thread must not keep the rest
+            print(f"Lifecycle bar hide skipped {thread_id_str}: {type(exc).__name__}: {exc}")
+            continue
+        parent_id = getattr(channel, "parent_id", None)
+        if not lifecycle_bar_withheld(parent_id):
+            continue
+        opened = False
+        if getattr(channel, "archived", False):
+            try:
+                await channel.edit(archived=False)
+                opened = True
+            except discord.HTTPException as exc:
+                print(f"Lifecycle bar hide failed for {thread_id_str}: {type(exc).__name__}: {exc}")
+                print(f"Lifecycle bar still up in {thread_id_str} ({message_id})")
+                continue
+        try:
+            try:
+                message = await channel.fetch_message(int(message_id))
+                await message.delete()
+            except discord.NotFound:
+                pass
+            except discord.HTTPException as exc:
+                print(f"Lifecycle bar hide failed for {thread_id_str}: {type(exc).__name__}: {exc}")
+                print(f"Lifecycle bar still up in {thread_id_str} ({message_id})")
+                continue
+            _clear_operator_bar_row(int(thread_id_str))
+            hidden += 1
+        finally:
+            if opened:
+                try:
+                    await channel.edit(archived=True)
+                except discord.HTTPException as exc:
+                    print(
+                        f"Lifecycle bar left an eddy open {thread_id_str}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+    return hidden
+
+
 def rehydrate_lifecycle_bar_views(client) -> int:
     """Re-register a persistent view for every live lifecycle bar. Returns count.
 
@@ -852,6 +1006,9 @@ async def upgrade_eddy_bar_to_live(thread: discord.Thread, client) -> None:
     parent_id = thread.parent_id
     if not parent_id:
         return
+    if lifecycle_bar_withheld(parent_id):
+        await withdraw_lifecycle_bar(thread, client)
+        return
     set_bar_phase(thread.id, "live")
     from bar_anchor import channel_for_client
 
@@ -890,6 +1047,11 @@ async def _ensure_eddy_lifecycle_bar_at_bottom_unlocked(
 ) -> None:
     parent_id = getattr(thread, "parent_id", None)
     if not parent_id or not is_lifecycle_bar_active(thread.id):
+        return
+    if lifecycle_bar_withheld(parent_id):
+        resolved = client or get_lifecycle_bar_client(thread)
+        if resolved:
+            await withdraw_lifecycle_bar(thread, resolved)
         return
 
     from mage import set_practice_context_for_channel
@@ -946,6 +1108,16 @@ async def touch_eddy_lifecycle_bar(
     thread = message.channel
     parent_id = thread.parent_id
     if not parent_id:
+        return
+    if lifecycle_bar_withheld(parent_id):
+        if is_lifecycle_bar_active(thread.id):
+            client = get_lifecycle_bar_client(thread)
+            if client:
+                from state import get_channel_lock
+
+                lock = get_channel_lock(thread.id)
+                async with lock:
+                    await withdraw_lifecycle_bar(thread, client)
         return
 
     from thread_registry import is_eddy_locked

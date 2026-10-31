@@ -18,7 +18,7 @@ class TestCmdRead(unittest.IsolatedAsyncioTestCase):
         message = MagicMock()
         message.reply = AsyncMock()
         await cpio.cmd_read(message, [])
-        self.assertIn("Usage", message.reply.await_args[0][0])
+        self.assertIn("which note", message.reply.await_args[0][0])
 
     async def test_reads_small_file_inline_without_web_base(self) -> None:
         message = MagicMock()
@@ -60,71 +60,6 @@ class TestCmdRead(unittest.IsolatedAsyncioTestCase):
         self.assertIn("browser", (captured.get("description") or "").lower())
         message.reply.assert_awaited_once()
         self.assertIn("embed", message.reply.await_args.kwargs)
-
-
-class TestCmdLs(unittest.IsolatedAsyncioTestCase):
-    async def test_lists_markdown_files(self) -> None:
-        message = MagicMock()
-        message.reply = AsyncMock()
-        with tempfile.TemporaryDirectory() as tmp:
-            os.makedirs(os.path.join(tmp, "sessions"), exist_ok=True)
-            open(os.path.join(tmp, "sessions", "2026-07-09.md"), "w").close()
-            with patch("cmd_practice_io.get_pd", return_value=tmp), patch(
-                "cmd_practice_io.get_mage_type", return_value="practitioner"
-            ), patch(
-                "cmd_practice_io.is_artifact_directory", return_value=True
-            ), patch(
-                "cmd_practice_io.is_artifact_readable", return_value=True
-            ), patch(
-                "cmd_practice_io.obsidian_link", side_effect=lambda p: f"[[{p}]]"
-            ):
-                await cpio.cmd_ls(message, [])
-        body = message.reply.await_args[0][0]
-        self.assertIn("sessions/", body)
-
-    async def test_denied_directory(self) -> None:
-        message = MagicMock()
-        message.reply = AsyncMock()
-        with patch("cmd_practice_io.get_pd", return_value="/practice"), patch(
-            "cmd_practice_io.get_mage_type", return_value="practitioner"
-        ), patch("cmd_practice_io.is_artifact_directory", return_value=False):
-            await cpio.cmd_ls(message, ["proposals"])
-        self.assertIn("!artifacts", message.reply.await_args[0][0])
-
-
-class TestCmdSearch(unittest.IsolatedAsyncioTestCase):
-    async def test_replies_with_embed_when_hits_found(self) -> None:
-        message = MagicMock()
-        message.channel.id = 123
-        message.reply = AsyncMock()
-        hit = MagicMock(path="turtle.md", line_no=1, line_text="turtle notes")
-
-        class FakeEmbed:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        with patch("artifact_viewer.collect_artifact_search_hits", return_value=[hit]), patch(
-            "artifact_viewer.format_search_results", return_value="match: turtle.md"
-        ), patch("practice_io.artifact_display_name", return_value="turtle.md"), patch(
-            "artifact_presenter.ArtifactPresenterView"
-        ) as view_cls, patch("cmd_practice_io.discord.Embed", FakeEmbed):
-            view_cls.return_value.children = []
-            await cpio.cmd_search(message, ["turtle"])
-
-        message.reply.assert_awaited_once()
-        kwargs = message.reply.await_args.kwargs
-        self.assertIn("embed", kwargs)
-        self.assertEqual(kwargs.get("mention_author"), False)
-        self.assertNotIn("view", kwargs)
-
-    async def test_falls_back_to_tool_when_no_hits(self) -> None:
-        message = MagicMock()
-        message.reply = AsyncMock()
-        with patch("artifact_viewer.collect_artifact_search_hits", return_value=[]), patch(
-            "cmd_practice_io.execute_tos_tool", return_value="match: turtle.md"
-        ):
-            await cpio.cmd_search(message, ["turtle"])
-        message.reply.assert_awaited_once_with("match: turtle.md", mention_author=False)
 
 
 class TestCmdExport(unittest.IsolatedAsyncioTestCase):

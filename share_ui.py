@@ -86,7 +86,7 @@ class ShareTargetSelect(discord.ui.Select):
         draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
-                "Share session expired — run `!share` again.",
+                "Share session expired — send `...` and press **share** again.",
                 ephemeral=True,
             )
             return
@@ -189,7 +189,7 @@ class ShareSpaceSelect(discord.ui.Select):
         draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
-                "Share session expired — run `!share` again.",
+                "Share session expired — send `...` and press **share** again.",
                 ephemeral=True,
             )
             return
@@ -285,7 +285,7 @@ class ShareEditModal(discord.ui.Modal, title="Edit share preview"):
         draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
-                "Share session expired — run `!share` again.",
+                "Share session expired — send `...` and press **share** again.",
                 ephemeral=True,
             )
             return
@@ -373,7 +373,7 @@ class SharePreviewView(discord.ui.View):
         draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
-                "Share session expired — run `!share` again.",
+                "Share session expired — send `...` and press **share** again.",
                 ephemeral=True,
             )
             return
@@ -409,7 +409,7 @@ class SharePreviewView(discord.ui.View):
         draft = load_pending_draft(runtime_dir, self._author_id, self._thread_id)
         if not draft:
             await interaction.response.send_message(
-                "Share session expired — run `!share` again.",
+                "Share session expired — send `...` and press **share** again.",
                 ephemeral=True,
             )
             return
@@ -537,7 +537,7 @@ async def cmd_share(message: discord.Message, args: list[str]) -> None:
     """Start Share eddy flow — picker + confirm (practitioner and space targets)."""
     if not isinstance(message.channel, discord.Thread):
         await message.reply(
-            "Use `!share` inside an eddy to send this conversation to another practitioner or space.",
+            "Sharing works inside an eddy: send `...` there and press **share**.",
             mention_author=False,
         )
         return

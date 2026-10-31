@@ -1,4 +1,8 @@
-"""Craft Turtle intake — coalesce forwards, gather evidence, register backlog."""
+"""Boom intake — coalesce a forward with his comment, then open one eddy.
+
+The eddy is the boom event. Boom Turtle answers in it. The parent channel
+does not post a registration, and the drop is not appended to the backlog.
+"""
 
 from __future__ import annotations
 
@@ -356,7 +360,11 @@ def _ensure_backlog(path: Path) -> None:
 
 
 def write_craft_intake(evidence: dict) -> tuple[str, str]:
-    """Write intake artifact and append backlog entry. Returns (intake_rel, intake_id)."""
+    """Write an intake file and a backlog row.
+
+    The parent drop does not call this. A drop opens an eddy
+    (`open_boom_drop`). This remains for a caller that still wants the file.
+    """
     intake_id = _intake_id(evidence)
     title = _title_from_evidence(evidence)
     root = _craft_root()
@@ -490,10 +498,34 @@ def format_craft_ack(evidence: dict, intake_rel: str, intake_id: str) -> str:
     )
 
 
-async def process_craft_intake(messages, client) -> str:
+async def open_boom_drop(messages, client) -> None:
+    """One eddy for the coalesced drop. His words name it."""
+    from parent_intake import eddy_title, preface_for
+    from river_handler import open_drop_thread
+
+    anchor = messages[-1]
+    from parent_intake import MOVED_HOME, boom_channel_retired
+
+    if boom_channel_retired(getattr(anchor.channel, "name", None)):
+        await anchor.channel.send(MOVED_HOME)
+        return
     evidence = await gather_craft_evidence(messages, client)
-    intake_rel, intake_id = write_craft_intake(evidence)
-    return format_craft_ack(evidence, intake_rel, intake_id)
+    title = eddy_title(
+        evidence.get("merged_user") or evidence.get("merged_forward") or ""
+    )
+    preface = preface_for(
+        getattr(anchor, "content", "") or "",
+        evidence.get("merged_forward") or "",
+    )
+    opened = await open_drop_thread(anchor, title=title, kind="boom", preface=preface)
+    if not opened:
+        await anchor.channel.send("Could not open the eddy.")
+        return
+    channel = anchor.channel
+    print(
+        f"Boom eddy opened: {len(messages)} message(s) "
+        f"from {anchor.author.display_name} in #{getattr(channel, 'name', channel.id)}"
+    )
 
 
 async def _flush_craft_buffer(key: tuple[int, int], client) -> None:
@@ -503,23 +535,11 @@ async def _flush_craft_buffer(key: tuple[int, int], client) -> None:
         return
     messages = buf["messages"]
     try:
-        from helpers import split_message
-
-        ack = await process_craft_intake(messages, client)
-        channel = messages[-1].channel
-        for chunk in split_message(ack):
-            await channel.send(chunk)
-        print(
-            f"Craft intake registered: {len(messages)} message(s) "
-            f"from {messages[-1].author.display_name} in #{getattr(channel, 'name', channel.id)}"
-        )
+        await open_boom_drop(messages, client)
     except Exception as exc:
-        print(f"Craft intake failed: {type(exc).__name__}: {exc}")
+        print(f"Boom eddy failed: {type(exc).__name__}: {exc}")
         try:
-            await messages[-1].channel.send(
-                f"Craft intake failed to register ({type(exc).__name__}). "
-                "Spirit can still investigate manually."
-            )
+            await messages[-1].channel.send("Could not open the eddy.")
         except Exception:
             pass
 

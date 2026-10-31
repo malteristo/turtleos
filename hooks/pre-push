@@ -49,11 +49,20 @@ if [ "$saw_ref" -eq 1 ] && [ "$deletions_only" -eq 1 ]; then
 fi
 
 REMOTE_NAME="${1:-}"
+REMOTE_URL="${2:-}"
 # The live host pulls origin. A public-subset push is a different lineage;
 # treating it as a Mini deploy is why the first snapshot died on Forge
 # (system Python, no venv). Other remotes are not the Mini's pull.
-if [ "$REMOTE_NAME" != "origin" ]; then
-  echo "pre-push: $REMOTE_NAME is not origin — skipping the live-host gate"
+#
+# Decided by where the push lands, not by what the remote is called (issue 054):
+# `turtle` and `origin` were the same URL in one checkout, so two pushes that
+# reached the Mini's repository went out without the gate. A remote is the Mini's
+# pull when its name is origin OR its URL is origin's.
+ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+ORIGIN_PUSH_URL="$(git remote get-url --push origin 2>/dev/null || true)"
+if [ "$REMOTE_NAME" != "origin" ] && \
+   { [ -z "$REMOTE_URL" ] || { [ "$REMOTE_URL" != "$ORIGIN_URL" ] && [ "$REMOTE_URL" != "$ORIGIN_PUSH_URL" ]; }; }; then
+  echo "pre-push: $REMOTE_NAME is not the live host's remote — skipping the live-host gate"
   exit 0
 fi
 

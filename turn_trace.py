@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import sys
+from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -48,6 +50,8 @@ class AttunementSteps:
 
     links: int = 0
     link_chars: int = 0
+    pictures: int = 0
+    videos: int = 0
     attachments: list[str] = field(default_factory=list)
     forwarded: bool = False
     dereferenced: int = 0
@@ -61,8 +65,15 @@ class AttunementSteps:
         out: list[str] = []
         if self.links:
             noun = "link" if self.links == 1 else "links"
-            chars = f" ({self.link_chars:,} chars)" if self.link_chars else ""
-            out.append(f"read {self.links} {noun}{chars}")
+            detail = []
+            if self.link_chars:
+                detail.append(f"{self.link_chars:,} chars")
+            if self.pictures:
+                detail.append("1 picture" if self.pictures == 1 else f"{self.pictures} pictures")
+            if self.videos:
+                detail.append("1 video" if self.videos == 1 else f"{self.videos} videos")
+            suffix = f" ({', '.join(detail)})" if detail else ""
+            out.append(f"read {self.links} {noun}{suffix}")
         if self.attachments:
             out.append("read " + ", ".join(self.attachments[:3]))
         if self.forwarded:
@@ -84,16 +95,20 @@ class AttunementSteps:
 
 # ─── The step card ───────────────────────────────────────────────────
 #
-# One message, edited as the turn works: what was read, what is remembered,
-# each lookup as it happens, the model's own sentence before a lookup, and
-# how long it has been composing. Discord has no token stream; it has edits,
-# and a bot may edit its own message every second or two without being
-# throttled. That is the whole modality — the card is the Cursor-style tool
-# feed rendered with the primitive Discord actually offers (2026-09-03).
+# Discord has no token stream and no disclosure row. A sentence the model
+# wrote is a message. The acts that followed it are a message, edited as the
+# calls land. A shared room still draws one card (`render_card`) and ends as
+# one line. The provider's chain of thought is not a message here.
 
 CARD_EDIT_INTERVAL_SECONDS = float(os.environ.get("TURN_CARD_EDIT_INTERVAL_SECONDS", "1.5"))
 CARD_TICK_SECONDS = float(os.environ.get("TURN_CARD_TICK_SECONDS", "30"))
+# A long card used to drop acts past this and say "earlier steps." The session
+# file was the excuse. The card names every act. The number stays so a test can
+# fail if the fold comes back.
 CARD_MAX_LINES = 14
+# The compact card is one Discord message. A shared room still uses it, so
+# the first sentence is clipped there. A personal, craft, or magic room posts
+# the sentence itself (`express_messages`) and does not use this cap.
 CARD_PROSE_CHARS = 160
 CARD_ASK_CHARS = 72
 _MAX_RESULT_PREVIEW = 60
@@ -143,11 +158,76 @@ def _blocked_reason(result: str) -> str | None:
     return None
 
 
+# Lines the channel uses for a personal connection. A repeat of one is one step.
+CONNECTION_LINES = frozenset(
+    {
+        "searched X",
+        "read bookmarks on X",
+        "checked the X account",
+        "read an article on X",
+        "read X",
+        "X refused a write",
+    }
+)
+
+
+def remember_step(steps: list[Step], step: Step) -> None:
+    """A second X act of the same kind does not add a line. Other steps do."""
+    if step.text in CONNECTION_LINES and any(existing.text == step.text for existing in steps):
+        return
+    steps.append(step)
+
+
 def describe_tool(name: str, args: dict | None, result: str | None) -> Step:
     """A lookup as a person would say it, with what it found."""
     args = args or {}
     result = result or ""
     blocked = _blocked_reason(result)
+    try:
+        from outgoing_connections import channel_line
+
+        line = channel_line(name)
+    except Exception:
+        line = None
+    if line:
+        if blocked:
+            return Step("📖", f"{line} — blocked: {blocked}")
+        icon = "🔎" if line == "searched X" else "📖"
+        return Step(icon, line)
+    try:
+        from workshop_tools import channel_line as workshop_line
+
+        shop = workshop_line(name, args)
+    except Exception:
+        shop = None
+    if shop is None and name in {"house_browser", "house_read"}:
+        try:
+            from house_browser import channel_line as browser_line
+            from house_read import channel_line as house_read_line
+
+            shop = browser_line(name, args) or house_read_line(name, args)
+        except Exception:
+            shop = None
+    if shop:
+        icon = "🔎" if name == "workshop_search" else "📖"
+        return Step(icon, f"{shop} — blocked: {blocked}" if blocked else shop)
+    try:
+        from delegate_setup import channel_line as delegate_line
+
+        offered = delegate_line(name)
+    except Exception:
+        offered = None
+    if offered:
+        return Step("🔑", f"{offered} — blocked: {blocked}" if blocked else offered)
+    try:
+        from service_tools import channel_line as service_line
+
+        service = service_line(name, args)
+    except Exception:
+        service = None
+    if service:
+        # Before the result preview below. A connection's result is someone else's words.
+        return Step("📖", f"{service} — blocked: {blocked}" if blocked else service)
     if name == "search_practice_files":
         q = _clip_ask(str(args.get("query") or "").strip())
         if blocked:
@@ -164,12 +244,11 @@ def describe_tool(name: str, args: dict | None, result: str | None) -> Step:
         return Step("📂", f"listed `{args.get('directory') or '/'}`")
     if name == "offer_river_act":
         return Step("🪶", f"offered: {args.get('action') or 'an act'}")
-    if name == "run_turtleos_shell":
-        cmd = _clip_ask(str(args.get("command") or "").strip())
-        shown = f"`{cmd}`" if cmd else "shell"
+    if name in {"run_turtleos_shell", "house_terminal"}:
+        act = shell_act(str(args.get("command") or ""))
         if blocked:
-            return Step("🔧", f"{shown} — blocked: {blocked}")
-        return Step("🔧", shown)
+            return Step("🔧", f"{act} — blocked: {blocked}")
+        return Step("🔧", act)
     if name == "exa_search":
         q = _clip_ask(str(args.get("query") or "").strip())
         if blocked:
@@ -190,24 +269,130 @@ def describe_tool(name: str, args: dict | None, result: str | None) -> Step:
 
 
 def prose_step(text: str) -> Step | None:
-    """The model's own sentence before a lookup — its stated intent for the step."""
-    line = " ".join(text.split())
-    if not line:
+    """A sentence the model wrote. The words, whole, including its paragraphs.
+
+    The compact card clips this when it draws one message. The expression
+    does not.
+    """
+    raw = (text or "").strip()
+    if not raw:
         return None
+    return Step("💭", raw)
+
+
+def _compact_prose(text: str) -> str:
+    """One quiet line for the single-message card. The expression does not use this."""
+    line = " ".join(text.split())
     if len(line) > CARD_PROSE_CHARS:
         line = line[: CARD_PROSE_CHARS - 1].rstrip() + "…"
-    return Step("💭", f"*{line}*")
+    return f"*{line}*"
+
+
+def shell_act(command: str) -> str:
+    """The program, and the git verb. The command itself stays in the session record."""
+    try:
+        parts = shlex.split(command, posix=True)
+    except ValueError:
+        parts = command.split()
+    if not parts:
+        return "ran a command"
+    program = Path(parts[0]).name
+    if program == "git" and len(parts) > 1 and not parts[1].startswith("-"):
+        verb = parts[1]
+        if verb in {"status", "log", "diff", "show", "branch"}:
+            return f"looked · git {verb}"
+        if verb in {"add", "commit", "push"}:
+            return f"kept · git {verb}"
+        return f"ran git {verb}"
+    if program in {"grep", "rg"}:
+        return f"searched with {program}"
+    if program in {"ls", "cat", "sed", "tail", "head", "ps", "find"}:
+        return f"looked with {program}"
+    return f"ran {program}"
+
+
+def collapse_repeats(steps: list[Step]) -> list[Step]:
+    """The same act, however many times, is one line that says how many."""
+    counts: dict[tuple[str, str], int] = {}
+    order: list[Step] = []
+    for step in steps:
+        key = (step.icon, step.text)
+        if key in counts:
+            counts[key] += 1
+            continue
+        counts[key] = 1
+        order.append(step)
+    out: list[Step] = []
+    for step in order:
+        count = counts[(step.icon, step.text)]
+        if count > 1:
+            out.append(Step(step.icon, f"{step.text} × {count}"))
+        else:
+            out.append(step)
+    return out
+
+
+def fold_steps(steps: list[Step], limit: int = CARD_MAX_LINES) -> list[Step]:
+    """One intent sentence. Every act stays. A repeat is one line with a count.
+
+    ``limit`` is not a reason to drop an act. Session 8 hid five of them behind
+    "earlier steps," and the session file was the excuse.
+    """
+    del limit
+    intent = [step for step in steps if step.icon == "💭"][:1]
+    rest = [step for step in steps if step.icon != "💭"]
+    return intent + collapse_repeats(rest)
+
+
+def express_messages(steps: list[Step]) -> list[str]:
+    """Each sentence the model wrote, then the acts that followed it.
+
+    A sentence is its own message, uncapped. The acts after it are the next
+    message. The same act collapses only inside that stretch, so a later
+    sentence does not swallow an earlier one. The reply is not in this list.
+    A shared room does not use this; it still draws `render_card`.
+    """
+    beats: list[tuple[str | None, list[Step]]] = []
+    prose: str | None = None
+    acts: list[Step] = []
+    started = False
+
+    def flush() -> None:
+        nonlocal prose, acts
+        if not started:
+            return
+        beats.append((prose, list(acts)))
+        prose = None
+        acts = []
+
+    for step in steps:
+        if step.icon == "💭":
+            flush()
+            prose = step.text
+            started = True
+        else:
+            acts.append(step)
+            started = True
+    flush()
+    messages: list[str] = []
+    for said, did in beats:
+        if said:
+            messages.append(said)
+        if did:
+            messages.append("\n".join(f"-# {s.icon} {s.text}" for s in collapse_repeats(did)))
+    return messages
 
 
 def render_card(
-    steps: list[Step], elapsed: float, model: str, *, done: bool = False, composing: bool = True
+    steps: list[Step], elapsed: float, model: str, *, done: bool = False, composing: bool = True, voice: str = "turtle"
 ) -> str:
-    header = f"-# 🐢 {'attuned in' if done else 'working ·'} {fmt_duration(elapsed)}"
-    body = list(steps)
-    if len(body) > CARD_MAX_LINES:
-        hidden = len(body) - CARD_MAX_LINES
-        body = body[: CARD_MAX_LINES - 1] + [Step("…", f"{hidden} more step(s)")]
-    lines = [header] + [f"-# {s.icon} {s.text}" for s in body]
+    badge = "" if voice == "spirit" else "🐢 "
+    header = f"-# {badge}{'attuned in' if done else 'working ·'} {fmt_duration(elapsed)}"
+    body = fold_steps(steps)
+    lines = [header]
+    for step in body:
+        shown = _compact_prose(step.text) if step.icon == "💭" else step.text
+        lines.append(f"-# {step.icon} {shown}")
     if not done and composing:
         lines.append(f"-# ✍️ {model} is composing…")
     elif done:
@@ -237,10 +422,20 @@ def render_log(label: str, steps: AttunementSteps, elapsed: float, model: str,
 
 
 def _count_names(tools: list[str]) -> list[str]:
+    try:
+        from outgoing_connections import channel_line
+    except Exception:
+        channel_line = lambda _name: None  # type: ignore[assignment]
     counts: dict[str, int] = {}
+    order: list[str] = []
     for name in tools:
-        counts[name] = counts.get(name, 0) + 1
-    return [f"{n} ×{c}" if c > 1 else n for n, c in counts.items()]
+        shown = "X" if channel_line(name) else name
+        if shown not in counts:
+            order.append(shown)
+        counts[shown] = counts.get(shown, 0) + 1
+    if "X" in counts:
+        counts["X"] = 1
+    return [f"{n} ×{counts[n]}" if counts[n] > 1 else n for n in order]
 
 
 def tool_names(tools_executed) -> list[str]:

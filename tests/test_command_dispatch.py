@@ -30,7 +30,7 @@ class TestActDigest(unittest.TestCase):
         commands.dialogue_histories[channel_id] = []
         commands.inject_act_digest(channel_id, "help", "")
         history = commands.get_history(channel_id)
-        self.assertIn("inventory", history[0]["content"].lower())
+        self.assertIn("command card", history[0]["content"].lower())
 
     def test_fetch_act_digest_includes_excerpt(self) -> None:
         resonance = "# Time Emerges\n\n**Source:** x\n\n**Summary:**\n\n- Point one\n- Point two"

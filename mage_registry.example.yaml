@@ -45,6 +45,13 @@ mages:
     primary: true
     admin: true
     relation: household
+    # A practice repository this member keeps, served read-only over MCP at its head
+    # (docs/design/magic-channel.md slice 2). `repo` is a bare git repository the
+    # Forge pushes to; `bootstrap` is the file inside it that says how a session
+    # begins. The server names no practice files: this is the only place one is named.
+    # workshop:
+    #   repo: ~/repos/magic.git
+    #   bootstrap: system/flows/summon/slash.md
 
   # Coach studio — a house-bot identity, not a member. Doctor stays clean.
   # spirit:

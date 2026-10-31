@@ -341,7 +341,7 @@ class TestDateRouting(unittest.IsolatedAsyncioTestCase):
 
 
 class TestDateCommands(unittest.IsolatedAsyncioTestCase):
-    async def test_date_capture_and_dates_listing(self) -> None:
+    async def test_dates_lists_what_was_kept(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             message = MagicMock()
             message.channel = MagicMock()
@@ -353,33 +353,15 @@ class TestDateCommands(unittest.IsolatedAsyncioTestCase):
             with (
                 patch("mage.get_pd", return_value=tmp),
                 patch("dates.locale_for_practice_dir", return_value="de"),
-                patch("dates.address_for_capture", return_value="a member"),
                 patch("dates.local_now", return_value=frozen),
             ):
-                digest = await fd.cmd_date(
-                    message, ["24.12.", "kita", "fest"]
-                )
-                self.assertIn("kita fest", digest.lower())
-
-                listed = fd.list_dates(tmp)
-                self.assertEqual(len(listed), 1)
-                self.assertEqual(listed[0]["date"], "2026-12-24")
-                self.assertEqual(listed[0]["title"], "kita fest")
-
-                digest2 = await fd.cmd_dates(message, [])
-                self.assertIn("upcoming", digest2.lower())
+                fd.add_date(tmp, title="kita fest", when="2026-12-24", locale="de", today=date(2026, 8, 4))
+                digest = await fd.cmd_dates(message, [])
+                self.assertIn("upcoming", digest.lower())
                 reply_text = " ".join(
                     str(c.args[0]) for c in message.reply.await_args_list if c.args
                 ).lower()
                 self.assertIn("kita fest", reply_text)
-
-    async def test_date_usage_on_missing_args(self) -> None:
-        message = MagicMock()
-        message.reply = AsyncMock()
-        digest = await fd.cmd_date(message, [])
-        self.assertIn("!date", digest)
-        self.assertIn("<when>", digest)
-        self.assertIn("<what>", digest)
 
 
 class TestReminderCopy(unittest.TestCase):
@@ -623,88 +605,6 @@ class TestConversationalTiers(unittest.TestCase):
         self.assertIsNotNone(parsed)
         assert parsed is not None
         self.assertEqual(parsed.when, date(2026, 12, 24))
-
-
-class TestTypedCommandMultiWordWhen(unittest.IsolatedAsyncioTestCase):
-    async def test_multiword_when_keeps_the_rest_as_title(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            reg = _registry(tmp)
-            message = MagicMock()
-            message.reply = AsyncMock()
-            message.author = MagicMock()
-            with patch.object(mage, "_REGISTRY", reg, create=True), patch.object(
-                mage, "get_pd", return_value=f"{tmp}/alpha"
-            ), patch.object(fd, "locale_for_practice_dir", return_value="de"):
-                await fd.cmd_date(message, ["24.", "Dezember", "Kita", "Fest"])
-
-            kept = fd.list_dates(f"{tmp}/alpha")
-            self.assertEqual(len(kept), 1)
-            self.assertEqual(kept[0]["date"][5:], "12-24")
-            self.assertEqual(kept[0]["title"], "Kita Fest")
-
-    async def test_weekday_when_token(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            reg = _registry(tmp)
-            message = MagicMock()
-            message.reply = AsyncMock()
-            message.author = MagicMock()
-            with patch.object(mage, "_REGISTRY", reg, create=True), patch.object(
-                mage, "get_pd", return_value=f"{tmp}/alpha"
-            ), patch.object(fd, "locale_for_practice_dir", return_value="de"):
-                await fd.cmd_date(message, ["Samstag", "Kita", "Fest"])
-
-            kept = fd.list_dates(f"{tmp}/alpha")
-            self.assertEqual(len(kept), 1)
-            self.assertEqual(kept[0]["title"], "Kita Fest")
-            self.assertEqual(date.fromisoformat(kept[0]["date"]).weekday(), 5)
-
-    async def test_birthday_year_detected_in_name_form(self) -> None:
-        # `15. März 2019` must buy the same yearly + age as `15.03.2019`.
-        with tempfile.TemporaryDirectory() as tmp:
-            reg = _registry(tmp)
-            message = MagicMock()
-            message.reply = AsyncMock()
-            message.author = MagicMock()
-            with patch.object(mage, "_REGISTRY", reg, create=True), patch.object(
-                mage, "get_pd", return_value=f"{tmp}/alpha"
-            ), patch.object(fd, "locale_for_practice_dir", return_value="de"):
-                await fd.cmd_date(message, ["15.", "März", "2019", "Geburtstag"])
-
-            kept = fd.list_dates(f"{tmp}/alpha")
-            self.assertEqual(len(kept), 1)
-            self.assertEqual(kept[0]["recurrence"], "yearly")
-            self.assertEqual(kept[0]["birth_year"], 2019)
-
-    async def test_weekday_birthday_has_no_birth_year(self) -> None:
-        # No year written means no age claim — "turns N" must not be invented.
-        with tempfile.TemporaryDirectory() as tmp:
-            reg = _registry(tmp)
-            message = MagicMock()
-            message.reply = AsyncMock()
-            message.author = MagicMock()
-            with patch.object(mage, "_REGISTRY", reg, create=True), patch.object(
-                mage, "get_pd", return_value=f"{tmp}/alpha"
-            ), patch.object(fd, "locale_for_practice_dir", return_value="de"):
-                await fd.cmd_date(message, ["Samstag", "Geburtstag"])
-
-            kept = fd.list_dates(f"{tmp}/alpha")
-            self.assertEqual(kept[0]["recurrence"], "yearly")
-            self.assertIsNone(kept[0].get("birth_year"))
-
-    async def test_single_token_when_is_unchanged(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            reg = _registry(tmp)
-            message = MagicMock()
-            message.reply = AsyncMock()
-            message.author = MagicMock()
-            with patch.object(mage, "_REGISTRY", reg, create=True), patch.object(
-                mage, "get_pd", return_value=f"{tmp}/alpha"
-            ), patch.object(fd, "locale_for_practice_dir", return_value="de"):
-                await fd.cmd_date(message, ["2026-12-24", "Kita", "Fest"])
-
-            kept = fd.list_dates(f"{tmp}/alpha")
-            self.assertEqual(kept[0]["date"], "2026-12-24")
-            self.assertEqual(kept[0]["title"], "Kita Fest")
 
 
 if __name__ == "__main__":

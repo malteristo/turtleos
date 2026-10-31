@@ -11,7 +11,6 @@ from river_display import (
     likely_thread_action,
     parse_display_request,
     thread_button_specs,
-    threads_title,
 )
 
 
@@ -94,21 +93,6 @@ class ThreadDisplayHelpersTests(unittest.TestCase):
         self.assertNotIn("11", specs[0]["label"])
         self.assertEqual(specs[0]["url"], "https://discord.com/channels/99/11")
 
-    def test_glance_body_is_one_list_not_a_button_echo(self) -> None:
-        from river_display import compose_thread_glance_body
-
-        body = compose_thread_glance_body(
-            [
-                {"state": "live", "line": "**new eddy** · 1h", "name": "new eddy"},
-                {"state": "live", "line": "**older** · 2d", "name": "older"},
-                {"state": "resting", "line": "**asleep** · 12d", "name": "asleep"},
-            ]
-        )
-        self.assertIn("new eddy", body)
-        self.assertIn("older", body)
-        self.assertIn("1 parked", body)
-        self.assertNotIn("Open", body)
-
     def test_waiting_body_is_whose_move_not_an_inventory(self) -> None:
         from river_display import compose_waiting_body, waiting_title
 
@@ -153,10 +137,6 @@ class ThreadDisplayHelpersTests(unittest.TestCase):
         self.assertNotIn("SECRET-EDDY", line)
         self.assertNotIn("old-secret", line)
         self.assertNotIn("parked-secret", line)
-
-    def test_title_names_the_window(self) -> None:
-        grouped = {"live": ["a"], "kept": [], "sealed": [], "resting": [], "gone": []}
-        self.assertIn("last 5d", threads_title(grouped, 5))
 
     def test_channel_menu_uses_declared_controls(self) -> None:
         specs = channel_menu_specs(("new_eddy", "threads", "artifacts"))

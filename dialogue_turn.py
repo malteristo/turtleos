@@ -11,6 +11,7 @@ absorbed into history in order, and the newest one answers them together.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -55,9 +56,9 @@ from llm import (
     chat_ollama_with_tools,
 )
 from link_read import (
-    DIALOGUE_INJECT_MAX,
     external_urls,
     fetch_urls_with_status,
+    inject_limit,
     maybe_refine_thread_name_from_fetch,
     post_link_offer,
 )
@@ -74,7 +75,6 @@ from prompts import (
 from sessions import maybe_reflect
 import state
 from state import (
-    CRAFT_MODEL,
     DIALOGUE_MODEL,
     EDDY_DEFAULT,
     GOOGLE_API_KEY,
@@ -110,6 +110,7 @@ from turn_trace import (
     attunement_step_list,
     describe_tool,
     prose_step,
+    remember_step,
     render_card,
     render_log,
     render_trace,
@@ -123,37 +124,178 @@ from turn_trace import (
 COMPACT_TOPICS_MESSAGE_CHARS = int(os.environ.get("COMPACT_TOPICS_MESSAGE_CHARS", "4000"))
 
 
+
+def _magic_loop_limits(prompt_profile: str) -> dict:
+    """What a magic turn's model loop is allowed: more rounds, and a reply without the narration."""
+    if prompt_profile != "magic":
+        return {}
+    from magic_prompt import MAGIC_TOOL_ROUNDS
+
+    return {"max_rounds": MAGIC_TOOL_ROUNDS, "final_prose_only": True}
+
+
+class _SpiritPosted:
+    """A message Spirit posted, so later edits go through the same account."""
+
+    def __init__(self, channel_id: int, message_id: int):
+        self.channel_id = channel_id
+        self.id = message_id
+
+    async def edit(self, *, content: str, components=None) -> None:
+        from spirit_voice import edit
+
+        await edit(self.channel_id, self.id, content, components=components)
+
+
+class _NoTyping:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _record_magic_trace(channel, text: str, message=None, tool: int | None = None) -> None:
+    """The trace as it was posted, in the session file.
+
+    ``message`` is the id of the card that carries the button. ``tool`` is
+    that card's call in the turn already written above it.
+    """
+    try:
+        from mage import get_pd
+        from session_record import append_event
+
+        append_event(
+            get_pd(), channel.id, kind="trace", actor="spirit", text=text,
+            message="" if message is None else str(message),
+            tool=tool,
+        )
+    except Exception as exc:
+        print(f"Magic trace record failed: {type(exc).__name__}: {exc}")
+
+
+def _file_link(path: str) -> str | None:
+    """A link when the house can open the file. A workshop path has none."""
+    from artifact_viewer import is_artifact_readable
+    from practice_io import artifact_read_url
+
+    if not is_artifact_readable(path, mage_type="practitioner"):
+        return None
+    return artifact_read_url(path)
+
+
+async def open_trace_calls(interaction) -> None:
+    """The press. Only the person who pressed sees the calls."""
+    from mage import get_pd, set_practice_context_for_channel
+    from session_record import read_turns
+    from trace_reveal import QUIET, calls_for_message, reveal_calls
+
+    channel_id = getattr(interaction, "channel_id", None)
+    if channel_id is None:
+        channel = getattr(interaction, "channel", None)
+        channel_id = getattr(channel, "id", None)
+    try:
+        set_practice_context_for_channel(channel_id)
+    except Exception as exc:
+        print(f"Trace calls context failed: {type(exc).__name__}: {exc}")
+    posted = getattr(interaction, "message", None)
+    try:
+        events = read_turns(get_pd(), channel_id)
+    except Exception as exc:
+        print(f"Trace calls read failed: {type(exc).__name__}: {exc}")
+        events = []
+    tools = calls_for_message(events, getattr(posted, "id", None))
+    text = (
+        f"{QUIET}\n\nThis turn is not written down yet."
+        if tools is None
+        else reveal_calls(tools, link_for=_file_link)
+    )
+    from ui_kit import read_window
+
+    await interaction.response.send_modal(read_window("What this turn opened", text))
+
+
+_CALL_VALUE_CHARS = 80
+
+
+def _call_value(value) -> str:
+    """The argument, as a few words. A file body stays a count."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (list, dict)):
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    else:
+        text = "" if value is None else str(value)
+    if "\n" in text:
+        lines = [line for line in text.splitlines() if line.strip()]
+        return f"{len(lines) or 1} lines"
+    text = " ".join(text.split())
+    if len(text) > _CALL_VALUE_CHARS:
+        return f"{len(text)} characters"
+    return text
+
+
+def call_as_sent(name: str, args) -> str:
+    """One quiet line: the tool, then each argument as its key and its value.
+
+    The result is not on the line. A value that is a file stays a count,
+    so the line never carries the body.
+    """
+    name = (name or "").strip() or "call"
+    parts = [name]
+    if isinstance(args, dict):
+        for key, value in args.items():
+            label = str(key).strip() or "arg"
+            shown = _call_value(value)
+            parts.append(f"{label} {shown}".rstrip() if shown else label)
+    return "-# " + " · ".join(parts)
+
+
 class _StepCard:
-    """Show the turn working: one message in the channel, edited as steps happen.
+    """Show the turn working.
 
-    Discord has no token stream; it has edits. The card is posted at the first
-    significant operation — a link or attachment already read, or the first
-    lookup the model makes — and otherwise only once the turn has run past
-    ``PROGRESS_AFTER_SECONDS``; a quick reply with nothing to show posts
-    nothing. While it runs, each lookup and each sentence the model wrote
-    before a lookup is appended, edits are spaced ``CARD_EDIT_INTERVAL_SECONDS``
-    apart so Discord is never asked to redraw faster than it will, and every
-    ``CARD_TICK_SECONDS`` the elapsed time is refreshed so a long compose is
-    visibly still alive.
+    Discord has no token stream. In a personal room, a craft room, and a magic
+    room, each sentence is posted as the model wrote it, and each call is
+    posted as the model made it. Those messages are created once. A shared
+    room still uses one message and, when the reply lands, one line.
 
-    ``full`` decides what the card becomes when the reply lands: on craft
-    surfaces and personal rooms it stays as the step list next to the answer
-    (the operator's ask: watch Turtle work, keep the record); in a shared room
-    it collapses to the one-line trace, so the room reads an answer and not a
-    process log. A Discord failure here never costs the turn.
+    The card is posted at the first significant operation — a link or
+    attachment already read, or the first lookup the model makes — and
+    otherwise only once the turn has run past ``PROGRESS_AFTER_SECONDS``; a
+    quick reply with nothing to show posts nothing. Edits are spaced
+    ``CARD_EDIT_INTERVAL_SECONDS`` apart so Discord is never asked to redraw
+    faster than it will, and every ``CARD_TICK_SECONDS`` the elapsed time is
+    refreshed so a long compose is visibly still alive.
+
+    A Discord failure here never costs the turn. The provider's chain of
+    thought is not posted and not stored.
     """
 
     def __init__(self, channel, steps: AttunementSteps, model: str, started: float,
-                 *, full: bool = False, after: float | None = None):
+                 *, full: bool = False, after: float | None = None, as_spirit: bool = False):
         self.channel = channel
         self.attunement = steps
         self.model = model
         self.started = started
         self.full = full
+        self.as_spirit = as_spirit
+        self.express = bool(full or as_spirit)
         self.after = PROGRESS_AFTER_SECONDS if after is None else after
         self.steps: list[Step] = attunement_step_list(steps)
         self.operations = bool(steps.links or steps.attachments or steps.dereferenced or steps.forwarded)
         self.posted = None
+        self._pages: list = []
+        self._page_text: list[str] = []
+        self._record: list[dict] = []
+        self._placed: list[dict] = []
+        self._live = None
+        self._live_text = ""
+        self._tool_count = 0
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._actor = None
+        self._lock = asyncio.Lock()
         self._timer = None
         self._tick = None
         self._pending_edit = None
@@ -163,7 +305,16 @@ class _StepCard:
     def _elapsed(self) -> float:
         return time.monotonic() - self.started
 
+    def _card(self, *, done: bool = False) -> str:
+        return render_card(
+            self.steps, self._elapsed(), self.model,
+            done=done, voice="spirit" if self.as_spirit else "turtle",
+        )
+
     def start(self) -> None:
+        if self.express:
+            self._ensure_actor()
+            return
         if self.operations:
             self._timer = asyncio.ensure_future(self._post())
         elif self.after > 0:
@@ -172,12 +323,18 @@ class _StepCard:
     async def on_event(self, kind: str, payload: dict) -> None:
         if self._closed:
             return
+        if self.express:
+            if kind not in {"prose", "tool", "status"}:
+                return
+            self._ensure_actor()
+            self._queue.put_nowait((kind, payload))
+            return
         if kind == "prose":
             step = prose_step(str(payload.get("text") or ""))
             if step:
                 self.steps.append(step)
         elif kind == "tool":
-            self.steps.append(describe_tool(
+            remember_step(self.steps, describe_tool(
                 str(payload.get("name") or ""), payload.get("args") or {}, str(payload.get("result") or "")
             ))
         else:
@@ -196,11 +353,21 @@ class _StepCard:
         except asyncio.CancelledError:
             raise
 
+    async def _send_page(self, text: str):
+        if self.as_spirit:
+            from spirit_voice import say
+
+            mid = await say(self.channel.id, text)
+            if mid:
+                return _SpiritPosted(self.channel.id, mid)
+        return await self.channel.send(text)
+
     async def _post(self) -> None:
         if self.posted is not None or self._closed:
             return
         try:
-            self.posted = await self.channel.send(render_card(self.steps, self._elapsed(), self.model))
+            text = self._card()
+            self.posted = await self.channel.send(text)
             self._last_edit = time.monotonic()
             if CARD_TICK_SECONDS > 0:
                 self._tick = asyncio.ensure_future(self._tick_loop())
@@ -219,7 +386,7 @@ class _StepCard:
                 await asyncio.sleep(wait)
             if self._closed or self.posted is None:
                 return
-            await self.posted.edit(content=render_card(self.steps, self._elapsed(), self.model))
+            await self.posted.edit(content=self._card())
             self._last_edit = time.monotonic()
         except asyncio.CancelledError:
             raise
@@ -235,16 +402,138 @@ class _StepCard:
         except asyncio.CancelledError:
             raise
 
+    def _ensure_actor(self) -> None:
+        if self._actor is None or self._actor.done():
+            self._actor = asyncio.ensure_future(self._actor_loop())
+
+    def _status_line(self, payload: dict) -> str:
+        written = str(payload.get("text") or "").strip()
+        if written:
+            return f"-# {written}"
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            return "-# writing"
+        return f"-# {name}"
+
+    async def _actor_loop(self) -> None:
+        while True:
+            item = await self._queue.get()
+            try:
+                if item is None:
+                    return
+                kind, payload = item
+                await self._apply(kind, payload)
+            except Exception as exc:
+                print(f"Step card line failed: {type(exc).__name__}: {exc}")
+            finally:
+                self._queue.task_done()
+
+    async def _place(self, text: str, item: dict | None) -> None:
+        """A new message. Editing it would mark the model's own words as edited."""
+        for index, chunk in enumerate(split_message(text)):
+            posted = await self._send_page(chunk)
+            if posted is None:
+                return
+            self._placed.append({"message": posted, "text": chunk, "item": item if index == 0 else None})
+
+    async def _apply(self, kind: str, payload: dict) -> None:
+        if kind == "status":
+            await self._show_live(self._status_line(payload))
+            return
+        if kind == "prose":
+            step = prose_step(str(payload.get("text") or ""))
+            if not step:
+                return
+            item = {"kind": "prose", "text": step.text}
+            self._record.append(item)
+            await self._place(step.text, item)
+            return
+        if kind != "tool":
+            return
+        text = call_as_sent(str(payload.get("name") or ""), payload.get("args") or {})
+        item = {
+            "kind": "tool",
+            "text": text,
+            "name": str(payload.get("name") or ""),
+            "index": self._tool_count,
+        }
+        self._tool_count += 1
+        self._record.append(item)
+        await self._place(text, item)
+
+    async def _show_live(self, text: str) -> None:
+        if not text.strip() or text == self._live_text:
+            return
+        if self._live is None:
+            posted = await self._send_page(text)
+            if posted is None:
+                return
+            self._live = posted
+        else:
+            await self._live.edit(content=text)
+        self._live_text = text
+
+    async def _clear_live(self) -> None:
+        live = self._live
+        self._live = None
+        self._live_text = ""
+        if live is None:
+            return
+        try:
+            if isinstance(live, _SpiritPosted):
+                from spirit_voice import remove
+
+                await remove(live.channel_id, live.id)
+            else:
+                await live.delete()
+        except Exception as exc:
+            print(f"Step card clear failed: {type(exc).__name__}: {exc}")
+
+    async def _drain(self) -> None:
+        self._ensure_actor()
+        await self._queue.join()
+        self._queue.put_nowait(None)
+        actor = self._actor
+        self._actor = None
+        if actor is not None:
+            try:
+                await actor
+            except Exception as exc:
+                print(f"Step card actor failed: {type(exc).__name__}: {exc}")
+
+    async def flush(self) -> None:
+        """The model is done. The sentences and calls are already posted.
+
+        The live line was only a status. It is removed so the thread keeps
+        the messages that were created, not a message that was rewritten.
+        """
+        await self._drain()
+        await self._clear_live()
+
+    async def dress(self) -> None:
+        """The visual layer is not on these messages yet.
+
+        The call is the message. A button edited onto it is what stamped
+        every line as edited, and it paraphrased the call to do it.
+        """
+        return
+
     async def settle(self, tools_executed) -> None:
         self._closed = True
         for task in (self._timer, self._tick, self._pending_edit):
             if task is not None and not task.done():
                 task.cancel()
+        if self.express:
+            try:
+                await self.flush()
+            except Exception as exc:
+                print(f"Step card close failed: {type(exc).__name__}: {exc}")
+            return
         if self.posted is None:
             return
         try:
             if self.full:
-                content = render_card(self.steps, self._elapsed(), self.model, done=True)
+                content = self._card(done=True)
             else:
                 content = render_trace(self.attunement, self._elapsed(), self.model, tool_names(tools_executed))
             await self.posted.edit(content=content)
@@ -315,6 +604,21 @@ TURN_UNAVAILABLE_REPLY = (
 
 
 async def handle_dialogue(message, *, reply: bool = True):
+    """Hold the turn where a restart can see it, then absorb the message."""
+    channel = getattr(message, "channel", None)
+    channel_id = int(getattr(channel, "id", 0) or 0)
+    from dialogue_store import begin_turn, end_turn
+
+    if channel_id:
+        begin_turn(channel_id)
+    try:
+        await _handle_dialogue(message, reply=reply)
+    finally:
+        if channel_id:
+            end_turn(channel_id)
+
+
+async def _handle_dialogue(message, *, reply: bool = True):
     """Absorb a practitioner message and, unless coalesced, answer it.
 
     ``reply=False`` runs everything except the generation: the message still
@@ -501,14 +805,13 @@ async def handle_dialogue(message, *, reply: bool = True):
             FRONTIER_BUDGET, LOCAL_BUDGET, extract_all_discord_refs,
             fetch_all_discord_refs_with_status,
         )
-        from mage import get_channel_primitive
-        from primitive_runtime import runtime_for
         from room_models import room_reads_on_cloud
 
         if extract_all_discord_refs(ref_text):
-            room_runtime = runtime_for(get_channel_primitive(parent_ch_id))
-            is_craft = bool(room_runtime and room_runtime.prompt_profile == "craft")
-            room_default = CRAFT_MODEL if is_craft else TURTLE_MODEL
+            from mage import get_registry as _registry
+            from room_models import default_for_room
+
+            room_default = default_for_room(parent_ch_id, _registry(), TURTLE_MODEL)
             ref_budget = (
                 FRONTIER_BUDGET
                 if room_reads_on_cloud(parent_ch_id, thread_configs.get(channel_id), room_default)
@@ -543,7 +846,7 @@ async def handle_dialogue(message, *, reply: bool = True):
     if intake_context:
         user_entry += f"\n\n[Locally extracted record evidence]:\n{intake_context}"
     if url_content:
-        user_entry += f"\n\n[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
+        user_entry += f"\n\n[Fetched content]:\n{url_content[:inject_limit(url_content)]}"
     if dereferenced_context:
         user_entry += f"\n\n{dereferenced_context[:ref_inject_max + 2000]}"
     history.append({"role": "user", "content": user_entry})
@@ -600,7 +903,7 @@ async def run_link_read_followup(
             "role": "user",
             "content": (
                 f"[Link read requested: {urls[0]}]\n\n"
-                f"[Fetched content]:\n{url_content[:DIALOGUE_INJECT_MAX + 512]}"
+                f"[Fetched content]:\n{url_content[:inject_limit(url_content)]}"
             ),
         }
     )
@@ -629,6 +932,148 @@ async def run_link_read_followup(
     )
 
 
+_resuming: set[int] = set()
+
+
+class _ResumeMessage:
+    """A turn the button started. The reply quotes the notice; they typed nothing."""
+
+    def __init__(self, channel, content: str, author_name: str, anchor_id: int):
+        self.channel = channel
+        self.content = content
+        self.id = anchor_id
+        self.author = type("Author", (), {"display_name": author_name, "id": 0, "bot": False})()
+        self.attachments = []
+        self.reference = None
+
+    async def reply(self, text, *, mention_author=False, view=None):
+        if view is None:
+            await self.channel.send(text)
+        else:
+            await self.channel.send(text, view=view)
+
+
+async def _resume_room(interaction):
+    """The turtle client's channel. Spirit's gateway does not keep the thread."""
+    cid = int(getattr(interaction, "channel_id", 0) or 0)
+    try:
+        found = state.client.get_channel(cid) if cid else None
+        if found is None and cid:
+            found = await state.client.fetch_channel(cid)
+        if found is not None:
+            return found
+    except Exception as exc:
+        print(f"Stocked room lookup failed: {type(exc).__name__}: {exc}")
+    return getattr(interaction, "channel", None)
+
+
+async def resume_stocked(interaction) -> None:
+    """The press says the credit is back. Try now, and continue what was parked."""
+    channel_id = int(getattr(interaction, "channel_id", 0) or 0)
+    if channel_id in _resuming:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Already trying the cloud.", ephemeral=True
+            )
+        return
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    _resuming.add(channel_id)
+    try:
+        await _resume_stocked(interaction, channel_id)
+    finally:
+        _resuming.discard(channel_id)
+
+
+async def _resume_stocked(interaction, channel_id: int) -> None:
+    from mage import set_practice_context_for_channel
+
+    try:
+        set_practice_context_for_channel(channel_id)
+    except Exception as exc:
+        print(f"Stocked context failed: {type(exc).__name__}: {exc}")
+
+    async def ask(model: str) -> None:
+        await chat_anthropic_with_model(
+            "Reply with ok.",
+            [{"role": "user", "content": "ok"}],
+            model,
+            use_tools=False,
+        )
+
+    try:
+        back = await cloud_fallback.try_now(ask)
+    except Exception as exc:
+        print(f"Stocked probe failed: {type(exc).__name__}: {exc}")
+        back = False
+    if not back:
+        await interaction.followup.send("The credit is still out.", ephemeral=True)
+        return
+
+    try:
+        await interaction.message.edit(view=None)
+    except Exception as exc:
+        print(f"Stocked button stayed: {type(exc).__name__}: {exc}")
+
+    channel = await _resume_room(interaction)
+    if channel is None:
+        await interaction.followup.send("This room is not open from here.", ephemeral=True)
+        return
+
+    text = ""
+    try:
+        waiting = cloud_fallback.parked_for(get_pd(), int(getattr(channel, "id", channel_id) or channel_id))
+        text = cloud_fallback.asked(waiting[-1]) if waiting else ""
+    except Exception as exc:
+        print(f"Stocked park read failed: {type(exc).__name__}: {exc}")
+    if not text:
+        await interaction.followup.send("Back on the cloud.", ephemeral=True)
+        return
+
+    who = getattr(getattr(interaction, "user", None), "display_name", None) or "practitioner"
+    room_id = int(getattr(channel, "id", channel_id) or channel_id)
+    history = get_history(room_id)
+    history.append({"role": "user", "content": f"[{who}]: {text}"})
+    if len(history) > MAX_DIALOGUE_HISTORY:
+        history.pop(0)
+    sync_history(room_id)
+
+    anchor = int(getattr(getattr(interaction, "message", None), "id", 0) or 0)
+    stand = _ResumeMessage(channel, text, who, anchor)
+    native_eddy = False
+    try:
+        native_eddy = uses_native_turtle_prompt(resolve_dialogue_channel_id(stand))
+    except Exception as exc:
+        print(f"Stocked attunement failed: {type(exc).__name__}: {exc}")
+
+    from dialogue_store import begin_turn, end_turn
+
+    if room_id:
+        begin_turn(room_id)
+    try:
+        await continue_dialogue_turn(
+            stand,
+            history,
+            triage_cat="practice",
+            native_eddy=native_eddy,
+            attachments=[],
+            attachment_names=[],
+            attachment_note="",
+            attachment_extracted=False,
+            raw_attachments=[],
+            url_content="",
+            url_source_count=0,
+            urls=[],
+            forwarded_context="",
+            dereferenced_context="",
+            dereferenced_count=0,
+            pending_incidental_urls=[],
+        )
+    finally:
+        if room_id:
+            end_turn(room_id)
+
+
 async def continue_dialogue_turn(
     message,
     history,
@@ -649,6 +1094,8 @@ async def continue_dialogue_turn(
     pending_incidental_urls: list[str] | None = None,
 ):
     channel_id = message.channel.id
+    _forge_token = None
+    _platform_token = None
     turn_started = time.monotonic()
     now = datetime.now(timezone.utc)
     is_new_session = channel_id not in active_sessions or active_sessions[channel_id]["closed"]
@@ -689,6 +1136,20 @@ async def continue_dialogue_turn(
     prompt_profile = (
         primitive_runtime.prompt_profile if primitive_runtime else "native"
     )
+    try:
+        from boom_takeup import begin_platform_turn
+        from mage import get_runtime_dir
+
+        token = begin_platform_turn(
+            isinstance(message.channel, discord.Thread),
+            get_runtime_dir(),
+            channel_id,
+        )
+        if token is not None:
+            prompt_profile = "magic"
+            _platform_token = token
+    except Exception as exc:
+        print(f"Platform session check failed: {type(exc).__name__}: {exc}")
     craft_surface = bool(
         primitive_runtime and primitive_runtime.parent_handler == "craft_intake"
     )
@@ -699,7 +1160,7 @@ async def continue_dialogue_turn(
         primitive and primitive.memory_boundary == "personal_without_shared"
     )
     cfg = thread_configs.get(channel_id)
-    if prompt_profile == "native" and native_eddy:
+    if prompt_profile in ("native", "magic") and native_eddy:
         from eddy_spawn import hydrate_native_eddy_context
 
         parent_for_hydrate = (
@@ -712,14 +1173,19 @@ async def continue_dialogue_turn(
         ctx = (cfg or {}).get("context_type")
         if not ctx and hasattr(message.channel, "parent_id") and message.channel.parent_id:
             ctx = get_channel_default_context(message.channel.parent_id)
-        system_prompt = get_native_eddy_prompt(ctx)
-        thread_model, thread_use_api, _ = resolve_room_model(parent_ch_id, cfg, TURTLE_MODEL)
+        if prompt_profile == "magic":
+            from magic_prompt import turn_prompt_and_model
+
+            system_prompt, thread_model, thread_use_api = turn_prompt_and_model(parent_ch_id, cfg)
+        else:
+            system_prompt = get_native_eddy_prompt(ctx)
+            thread_model, thread_use_api, _ = resolve_room_model(parent_ch_id, cfg, TURTLE_MODEL)
     elif prompt_profile == "craft":
         ctx = (cfg or {}).get("context_type") if cfg else None
         if not ctx:
             ctx = get_channel_default_context(parent_ch_id) or "craft"
         system_prompt = get_craft_channel_prompt(ctx)
-        thread_model, thread_use_api, _ = resolve_room_model(parent_ch_id, cfg, CRAFT_MODEL)
+        thread_model, thread_use_api, _ = resolve_room_model(parent_ch_id, cfg, TURTLE_MODEL)
     elif prompt_profile == "health":
         ctx = (cfg or {}).get("context_type") if cfg else None
         if not ctx:
@@ -750,7 +1216,18 @@ async def continue_dialogue_turn(
     ):
         await update_thread_state(message.channel, cfg, history)
 
-    if native_eddy:
+    if prompt_profile == "magic":
+        from magic_prompt import magic_runtime_env
+        from spirit_voice import is_forge_turn
+        from workshop_tools import set_forge_turn
+
+        _forge_token = set_forge_turn(is_forge_turn(message))
+        runtime_env = magic_runtime_env(
+            getattr(getattr(message.channel, "parent", None), "name", None),
+            getattr(message.channel, "name", ""),
+        )
+        system_prompt = runtime_env + system_prompt
+    elif native_eddy:
         runtime_env = build_native_runtime_env(message, cfg, history)
         system_prompt = runtime_env + system_prompt
     else:
@@ -781,39 +1258,43 @@ async def continue_dialogue_turn(
     # rather than an undefined name at persist time.
     room_memory_considered: list[dict] = []
     topics_considered: list[dict] = []
-    try:
-        from continuity_engine import get_scope, render_substrate_packet
+    # A magic room's Spirit stands on the workshop. Turtle's memory of the room (topics,
+    # checkpoint, other rooms' notes) is not handed to it: it misattributed Spirit's own
+    # session to Turtle, and the practice already holds what Spirit needs.
+    if prompt_profile != "magic":
+        try:
+            from continuity_engine import get_scope, render_substrate_packet
 
-        pd = get_pd()
-        scope = get_scope(pd, channel_id)
-        message_text = str(getattr(message, "content", "") or "")
-        current_block = render_substrate_packet(
-            pd,
-            dialogue_model=thread_model,
-            use_api=thread_use_api,
-            scope=scope,
-            current_thread=str(channel_id),
-            considered=room_memory_considered,
-            message_text=message_text,
-            topics_considered=topics_considered,
-            compact_topics=bool(url_content) or bool(attachments)
-            or len(message_text) > COMPACT_TOPICS_MESSAGE_CHARS,
-            exclude_shared_rooms=exclude_shared_memory,
-        )
-        if current_block:
-            system_prompt = current_block + system_prompt
-    except Exception as exc:
-        print(f"CE substrate packet failed: {type(exc).__name__}: {exc}")
+            pd = get_pd()
+            scope = get_scope(pd, channel_id)
+            message_text = str(getattr(message, "content", "") or "")
+            current_block = render_substrate_packet(
+                pd,
+                dialogue_model=thread_model,
+                use_api=thread_use_api,
+                scope=scope,
+                current_thread=str(channel_id),
+                considered=room_memory_considered,
+                message_text=message_text,
+                topics_considered=topics_considered,
+                compact_topics=bool(url_content) or bool(attachments)
+                or len(message_text) > COMPACT_TOPICS_MESSAGE_CHARS,
+                exclude_shared_rooms=exclude_shared_memory,
+            )
+            if current_block:
+                system_prompt = current_block + system_prompt
+        except Exception as exc:
+            print(f"CE substrate packet failed: {type(exc).__name__}: {exc}")
 
-    # Pinned home eddy — inject working-plan attunement (river pin + file, not sidebar).
-    try:
-        from home_plans import render_home_attunement_packet
+        # Pinned home eddy — inject working-plan attunement (river pin + file, not sidebar).
+        try:
+            from home_plans import render_home_attunement_packet
 
-        home_block = render_home_attunement_packet(get_pd(), channel_id)
-        if home_block:
-            system_prompt = home_block + system_prompt
-    except Exception as exc:
-        print(f"Home-plan attunement failed: {type(exc).__name__}: {exc}")
+            home_block = render_home_attunement_packet(get_pd(), channel_id)
+            if home_block:
+                system_prompt = home_block + system_prompt
+        except Exception as exc:
+            print(f"Home-plan attunement failed: {type(exc).__name__}: {exc}")
 
     source_flags = []
     if url_content:
@@ -855,9 +1336,23 @@ async def continue_dialogue_turn(
 
     from act_offer_signal import act_offer_turn_context, extract_and_propose_from_reply
 
+    x_images: list[dict] = []
+    if url_content:
+        try:
+            from core.offload import run_blocking
+            from outgoing_x import fetch_views, views_in_text
+
+            looked = views_in_text(url_content)
+            if looked:
+                x_images = await run_blocking(fetch_views, looked, name="x_images") or []
+        except Exception as exc:
+            print(f"X picture fetch failed: {type(exc).__name__}")
+
     steps = AttunementSteps(
         links=(url_source_count or len(urls)) if url_content else 0,
         link_chars=len(url_content or ""),
+        pictures=sum(1 for item in x_images if item.get("kind") != "video"),
+        videos=sum(1 for item in x_images if item.get("kind") == "video"),
         attachments=list(attachment_names or []),
         forwarded=bool(forwarded_context),
         dereferenced=dereferenced_count or 0,
@@ -873,13 +1368,17 @@ async def continue_dialogue_turn(
         card_full = bool(craft_surface) or not space_members_for_practice_dir(get_pd())
     except Exception:
         card_full = False  # unknown room → the shared-room shape
-    progress = _StepCard(message.channel, steps, thread_model, turn_started, full=card_full)
+    progress = _StepCard(
+        message.channel, steps, thread_model, turn_started,
+        full=card_full, as_spirit=prompt_profile == "magic",
+    )
 
     turn_usage: dict = {}
     cloud_prose: list[str] = []
     cloud_tools: list[str] = []
     cloud_answered = False
     fallback_notice_line = ""
+    stocked = False
     hold = cloud_fallback.read_hold() if thread_use_api else None
     cloud_held = bool(hold) and not cloud_fallback.should_try_cloud(hold)
     if hold and not cloud_held:
@@ -907,11 +1406,13 @@ async def continue_dialogue_turn(
         result = await chat_anthropic_with_model(
             system_prompt, messages_for_llm, thread_model, use_tools=True,
             tos_tools=tools_for_channel(parent_ch_id), execute_tool=execute_tos_tool,
-            on_event=_capture, usage=turn_usage)
+            on_event=_capture, usage=turn_usage, images=x_images,
+            **_magic_loop_limits(prompt_profile))
         cloud_answered = True
         return result
 
     async def _cloud_fallback_reply(exc: BaseException) -> tuple[str, str]:
+        nonlocal stocked
         held = isinstance(exc, cloud_fallback.CloudHeld)
         kind = cloud_fallback.classify(exc)
         current = hold if held else cloud_fallback.note_failure(kind, thread_model, exc)
@@ -943,9 +1444,10 @@ async def continue_dialogue_turn(
         notice = cloud_fallback.fallback_notice(
             thread_model, local_model, kind, parked=parked,
             since=(current or {}).get("since"))
+        stocked = bool(parked) and cloud_fallback.offers_stocked(kind)
         return text, notice
 
-    async with message.channel.typing():
+    async with (_NoTyping() if prompt_profile == "magic" else message.channel.typing()):
         with act_offer_turn_context(channel_id, message.id):
             progress.start()
             if native_eddy:
@@ -960,6 +1462,14 @@ async def continue_dialogue_turn(
                     print(f"Flow presence failed: {exc}")
             tool_report = ""
             tools_executed = []
+            if craft_surface:
+                try:
+                    from core.offload import run_blocking
+                    from outgoing_connections import refresh_catalog_if_due
+
+                    await run_blocking(refresh_catalog_if_due, name="x_catalog")
+                except Exception as exc:
+                    print(f"X catalog refresh failed: {type(exc).__name__}")
             is_gemini = thread_model.startswith("gemini-")
             if native_eddy:
                 thread_label = message.channel.name if isinstance(message.channel, discord.Thread) else "eddy"
@@ -1075,6 +1585,7 @@ async def continue_dialogue_turn(
     # exists from CE's debounce write. The packet is the named blocks that
     # actually went into the prompt, plus tools and files from this call.
     try:
+        from link_read import stored_fetch
         from turn_packet import persist_turn_packet
 
         persist_turn_packet(
@@ -1085,7 +1596,7 @@ async def continue_dialogue_turn(
                 "runtime_environment": runtime_env,
                 "home_working_plan": home_block,
                 "absorbed_threads": absorbed_block,
-                "url_content": url_content,
+                "url_content": stored_fetch(url_content),
                 "attachments": attachment_note,
                 "forwarded_messages": forwarded_context,
                 "discord_context": dereferenced_context,
@@ -1194,8 +1705,60 @@ async def continue_dialogue_turn(
     if fallback_notice_line:
         reply = f"{fallback_notice_line}\n{reply}"
     history.append({"role": "assistant", "content": reply})
-    for chunk in split_message(reply):
-        await message.reply(chunk, mention_author=False)
+    if prompt_profile == "magic":
+        try:
+            from session_record import append_turn
+
+            append_turn(
+                get_pd(), channel_id,
+                practitioner=str(getattr(message, "content", "") or ""),
+                reply=reply,
+                tools=tools_executed,
+                model=thread_model,
+                usage=turn_usage,
+            )
+            from magic_session import finish_release, is_release_ask
+            from pathlib import Path
+
+            if is_release_ask(str(getattr(message, "content", "") or "")):
+                from workshop_tools import room_checkout
+
+                parent = getattr(message.channel, "parent_id", None)
+                checkout = room_checkout(parent) if isinstance(parent, int) else None
+                await finish_release(message.channel, Path(get_pd()), checkout)
+        except Exception as exc:
+            print(f"Session record failed: {type(exc).__name__}: {exc}")
+    components = cloud_fallback.stocked_components() if stocked else None
+    view = None
+    if components:
+        from cloud_stocked import StockedView
+
+        view = StockedView()
+    if prompt_profile == "magic":
+        from spirit_voice import deliver
+
+        await deliver(message, split_message(reply), components=components, view=view)
+        try:
+            from delegate_key import take_offer
+
+            if take_offer():
+                from delegate_setup_ui import post_key_button
+
+                await post_key_button(message.channel)
+        except Exception as exc:
+            print(f"Delegate key offer failed: {type(exc).__name__}: {exc}")
+    else:
+        first = True
+        for chunk in split_message(reply):
+            if first and view is not None:
+                await message.reply(chunk, mention_author=False, view=view)
+            else:
+                await message.reply(chunk, mention_author=False)
+            first = False
+    try:
+        await progress.dress()
+    except Exception as exc:
+        print(f"Step card dress failed: {type(exc).__name__}: {exc}")
     if (
         primitive
         and primitive.has("intersection_state")
@@ -1284,4 +1847,12 @@ async def continue_dialogue_turn(
             turtle_client,
         )
 
+    if _forge_token is not None:
+        from workshop_tools import reset_forge_turn
+
+        reset_forge_turn(_forge_token)
+    if _platform_token is not None:
+        from workshop_tools import reset_platform_turn
+
+        reset_platform_turn(_platform_token)
     sync_history(channel_id)

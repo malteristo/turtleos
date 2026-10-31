@@ -44,6 +44,7 @@ from mage import (
     member_address_map,
     set_practice_context_for_channel,
     space_members_for_practice_dir,
+    uses_craft_surface,
 )
 from state import REFLECTION_MODEL
 
@@ -60,6 +61,14 @@ _RELATION = "---RELATION---"
 _TOPICS = "---RELATED-TOPICS---"
 _PROPOSED = "---PROPOSED-THEMES---"
 _END = "---END---"
+_SPARKS = "---SPARKS---"
+_SPARKS_RULE = (
+    "The sparks in this conversation: something that could later be developed "
+    "or dropped. One per line, `- name | topic`. The name is the spark in a "
+    "few words. The topic is the larger theme it belongs with; reuse a topic "
+    "when this spark belongs with others. One conversation may hold one spark "
+    "or several. If there is no spark, write exactly: none\n"
+)
 _MAX_PROPOSED_THEMES = 3
 _MAX_THEME_LABEL_CHARS = 60
 
@@ -236,6 +245,8 @@ _SYSTEM_PROMPT = (
     f"{_PROPOSED}\n"
     f"{_THEMES_RULE}"
     "Prefer reusing an in-motion label when it fits.\n"
+    f"{_SPARKS}\n"
+    f"{_SPARKS_RULE}"
     f"{_END}"
 )
 
@@ -273,6 +284,8 @@ _WITNESS_SYSTEM_PROMPT = (
     "line prefixed with \"- \". If you wrote none above, write exactly: none\n"
     f"{_PROPOSED}\n"
     f"{_THEMES_RULE}"
+    f"{_SPARKS}\n"
+    f"{_SPARKS_RULE}"
     f"{_END}"
 )
 
@@ -300,6 +313,26 @@ class EddyNoteResult:
 
 
 
+async def _complete_note(system: str, prompt: str, model: str, use_api: bool) -> str:
+    """The Turtle who was in the eddy writes the note, on that same model."""
+    messages = [{"role": "user", "content": prompt}]
+    if use_api and str(model).startswith("gemini"):
+        from llm import chat_gemini
+
+        text, _tools = await chat_gemini(system, messages, model=model)
+        return text
+    if use_api:
+        from llm import chat_anthropic_with_model
+
+        text, _tools = await chat_anthropic_with_model(
+            system, messages, model, use_tools=False
+        )
+        return text
+    return await chat_ollama(
+        system, messages, model=model, num_ctx=8192, think=False
+    )
+
+
 async def write_eddy_note(
     channel_id: int,
     history: list[dict],
@@ -310,6 +343,8 @@ async def write_eddy_note(
     title: str | None = None,
     occurred_at: datetime | None = None,
     alive_items: list[str] | None = None,
+    model: str | None = None,
+    use_api: bool = False,
 ) -> EddyNoteResult:
     """Write (or append to) the eddy's story note and return it with a preview.
 
@@ -347,16 +382,17 @@ async def write_eddy_note(
 
     if alive_items is None:
         alive_items = _alive_items(practice_dir)
+    recent_notes = _recent_note_lines(practice_dir, exclude_thread=str(channel_id))
     prompt = _build_prompt(
-        history, mage_name, alive_items, trigger, since_index, names=names
+        history, mage_name, alive_items, trigger, since_index,
+        names=names, recent_notes=recent_notes,
     )
 
-    raw = await chat_ollama(
+    raw = await _complete_note(
         _WITNESS_SYSTEM_PROMPT if witness else _SYSTEM_PROMPT,
-        [{"role": "user", "content": prompt}],
-        model=REFLECTION_MODEL,
-        num_ctx=8192,
-        think=False,
+        prompt,
+        model=model or REFLECTION_MODEL,
+        use_api=use_api,
     )
 
     # Quality floor (M1): chat_ollama never returns empty — it substitutes a
@@ -366,7 +402,7 @@ async def write_eddy_note(
     if reply == _NO_RESPONSE_SENTINEL or len(reply) <= _MIN_REPLY_CHARS:
         raise EddyNoteError(f"reflection reply failed the quality floor: {reply[:80]!r}")
 
-    held, relation, topics, proposed = _parse_response(reply)
+    held, relation, topics, proposed, sparks = _parse_response(reply)
     if not held.strip():
         raise EddyNoteError("reflection reply had an empty what-the-eddy-held section")
     relation, topics = _validate_relation(relation, topics, alive_items)
@@ -419,6 +455,7 @@ async def write_eddy_note(
         activity_id=lane.get("activity_id"),
         lane_owner=lane.get("lane_owner"),
         occurred_at=occurred_at,
+        sparks=sparks,
     )
 
     # Per-eddy lock (keyed on channel id) held across discovery + append so
@@ -427,6 +464,17 @@ async def write_eddy_note(
     with file_lock(eddies_dir / str(channel_id)):
         note_path = _note_path(practice_dir, channel_id, title)
         _append_entry(note_path, entry_text)
+
+    # The note is the record. The page is a projection of it. A failure here
+    # must not pretend the note failed, and it must not pass silently: the
+    # next decision surface is how the miss becomes visible, and this line
+    # is how the log shows it.
+    try:
+        from craft_context_page import maintain_craft_context_page
+
+        maintain_craft_context_page(practice_dir, parent_channel_id or channel_id, uses_craft_surface)
+    except Exception as exc:
+        print(f"craft context page was not refreshed: {type(exc).__name__}: {exc}")
 
     return EddyNoteResult(
         note_path=note_path,
@@ -525,6 +573,27 @@ def _transcript(
     )
 
 
+def _recent_note_lines(practice_dir: Path, exclude_thread: str) -> list[str]:
+    """Other recent notes, so a spark can sit with what it belongs to."""
+    entries = collect_recent_eddy_entries(
+        practice_dir=practice_dir,
+        exclude_thread=exclude_thread,
+        limit=5,
+    )
+    lines: list[str] = []
+    for entry in entries:
+        names = ", ".join(
+            spark.get("name", "")
+            for spark in (entry.sparks or [])
+            if spark.get("name")
+        )
+        line = entry.title or "a conversation"
+        if names:
+            line = f"{line}: {names}"
+        lines.append(line)
+    return lines
+
+
 def _build_prompt(
     history: list[dict],
     mage_name: str,
@@ -533,6 +602,7 @@ def _build_prompt(
     since_index: int | None,
     *,
     names: dict[str, str] | None = None,
+    recent_notes: list[str] | None = None,
 ) -> str:
     parts: list[str] = []
     witness = names is not None
@@ -553,6 +623,14 @@ def _build_prompt(
             f"Nothing is currently listed as in motion for {subject.lower()} — "
             "describe what the conversation held and stop; do not invent a "
             "connection."
+        )
+
+    if recent_notes:
+        listing = "\n".join(f"- {line}" for line in recent_notes)
+        parts.append(
+            "RECENT NOTES from other conversations. Connect a spark to one "
+            "only when it genuinely belongs with it. Do not invent a link:\n"
+            f"{listing}"
         )
 
     weighted = (
@@ -597,26 +675,38 @@ def _parse_bullet_labels(body: str) -> list[str]:
     return labels
 
 
-def _parse_response(raw: str) -> tuple[str, str | None, list[str], list[str]]:
+def _parse_response(raw: str) -> tuple[str, str | None, list[str], list[str], list[dict]]:
+    from eddy_sparks import parse_spark_lines
+
     held = _section(raw, _HELD, _RELATION)
     if held is None:
         # Sentinels missing — degrade to treating the whole reply as the note.
-        return raw.strip(), None, [], []
+        return raw.strip(), None, [], [], []
 
     relation = _section(raw, _RELATION, _TOPICS) or ""
     if relation.strip().lower() in ("", "none", "none."):
         relation = None
 
-    if _PROPOSED in raw:
+    if _SPARKS in raw and _PROPOSED in raw:
+        topics_body = _section(raw, _TOPICS, _PROPOSED) or ""
+        proposed_body = _section(raw, _PROPOSED, _SPARKS) or ""
+        sparks_body = _section(raw, _SPARKS, _END) or ""
+    elif _PROPOSED in raw:
         topics_body = _section(raw, _TOPICS, _PROPOSED) or ""
         proposed_body = _section(raw, _PROPOSED, _END) or ""
+        sparks_body = ""
     else:
         # Pre-Slice-2 replies omit proposed themes.
         topics_body = _section(raw, _TOPICS, _END) or ""
         proposed_body = ""
+        sparks_body = ""
 
-    return held, relation, _parse_bullet_labels(topics_body), _parse_bullet_labels(
-        proposed_body
+    return (
+        held,
+        relation,
+        _parse_bullet_labels(topics_body),
+        _parse_bullet_labels(proposed_body),
+        parse_spark_lines(sparks_body),
     )
 
 
@@ -768,14 +858,38 @@ def _resolve_thread_title(channel_id: int) -> str:
     return "eddy"
 
 
+# River names a blank thread "new eddy". That slug is not a title the eddy
+# earned, and a later real title must be allowed to replace it. A blank title
+# must not erase a name the file already has.
+_BLANK_SLUGS = frozenset({"new-eddy", "new", "eddy"})
+
+
 def _note_path(practice_dir: Path, channel_id: int, title: str) -> Path:
-    """One file per eddy: reuse the existing note when present (survives
-    retitles), otherwise name it from the current title."""
+    """One file per eddy. The thread id is the key.
+
+    Contract: an eddy has exactly one note; a real new title renames it and later
+    checkpoints append to the renamed file; every reader finds it by the id prefix,
+    never by the slug (`tests/test_story_notes.py`, the second-checkpoint test).
+
+    A title other than the blank name renames the file so the slug follows it.
+    The old path stays readable by that same id (see artifact resolution).
+    A blank title does not invent a name and does not replace one already there.
+    """
     eddies_dir = practice_dir / EDDIES_SUBDIR
-    existing = sorted(eddies_dir.glob(f"{channel_id}-*.md"))
-    if existing:
-        return existing[0]
-    return eddies_dir / f"{channel_id}-{_slug(title)}.md"
+    existing = sorted(
+        path for path in eddies_dir.glob(f"{channel_id}-*.md") if path.is_file()
+    )
+    desired = eddies_dir / f"{channel_id}-{_slug(title)}.md"
+    if not existing:
+        return desired
+    current = desired if desired in existing else existing[0]
+    if current.name == desired.name or _slug(title) in _BLANK_SLUGS or desired.exists():
+        return current
+    try:
+        current.rename(desired)
+    except OSError:
+        return current
+    return desired
 
 
 def _compose_entry(
@@ -791,6 +905,7 @@ def _compose_entry(
     activity_id: str | None = None,
     lane_owner: str | None = None,
     occurred_at: datetime | None = None,
+    sparks: list[dict] | None = None,
 ) -> str:
     fields = {
         "thread": str(channel_id),
@@ -808,6 +923,7 @@ def _compose_entry(
         fields["activity"] = str(activity_id)
     if lane_owner:
         fields["lane-owner"] = str(lane_owner)
+    fields["sparks"] = list(sparks or [])
     dumped = yaml.safe_dump(
         fields, sort_keys=False, allow_unicode=True, default_flow_style=None
     ).strip()

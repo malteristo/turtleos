@@ -90,24 +90,19 @@ from cmd_dispatch import (
     send_with_actions,
     try_direct_command,
 )
-from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_ignore, cmd_keep, cmd_release, cmd_day
+from cmd_sessions import cmd_checkpoint, cmd_dissolve, cmd_ignore, cmd_keep, cmd_release, cmd_spark
 from share_eddy import cmd_share
-from dates import cmd_date as _cmd_date, cmd_dates as _cmd_dates
-from cmd_practice_io import cmd_artifacts, cmd_export, cmd_ls, cmd_read, cmd_search
+from dates import cmd_dates as _cmd_dates
+from cmd_practice_io import cmd_artifacts, cmd_export, cmd_read
 from cmd_threads import (
-    ControlPanelView,
     EddyDissolutionView,
     ThreadConfigView,
     ThreadTypeView,
     build_config_line,
     build_config_line as _build_config_line,
-    cmd_eddy_check,
-    cmd_new,
-    cmd_panel,
     cmd_rename,
-    cmd_thread,
-    cmd_thread_type,
-    cmd_threads,
+    cmd_eddy,
+    cmd_live,
     eddy_dissolution_check,
 )
 
@@ -313,107 +308,29 @@ async def cmd_diagnose(message):
     return digest
 
 
-def _river_help_body() -> str:
-    """Compact parent-river command summary — full inventory lives in eddies."""
-    mage_type = get_mage_type()
-    lines = [
-        "**River:** `new eddy` + more (bar) · `!pin` · `!dissolve`",
-        "**Eddies:** `!checkpoint` · `!release` · `!flows` · `!share` · `!help` (full list)",
-        "**Browse:** more → artifacts · `!artifacts` · `!read` / `!ls` / `!search`",
-        f"Models: River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}` · `!model` — this channel's model",
-    ]
-    if mage_type != "practitioner":
-        lines.insert(3, "**Operator:** `!diagnose` · `!admin …`")
-    lines.append("Open an eddy for the full command inventory.")
-    return "\n".join(lines)
+async def cmd_mcp(message, args):
+    """The list is a button. The reply only the asker sees is the press."""
+    from outgoing_connect_ui import ACT, CHANNEL_LINE, OutgoingConnectionsView
 
-
-def _help_lines(pairs: list[tuple[str, str]]) -> str:
-    return "\n".join(f"{cmd} — {desc}" for cmd, desc in pairs)
-
-
-def _help_embed_fields() -> list[tuple[str, str]]:
-    """Profile-aware turtle-talk sections. See docs/turtle-talk.md."""
-    mage_type = get_mage_type()
-    fields: list[tuple[str, str]] = []
-
-    river_cmds = [
-        ("**new eddy**", "Standing bar — open a blank eddy (TURTLE_SPEC §5.4)"),
-        ("`!flows`", "In-eddy flow library — load a guided flow (`!flow` alias)"),
-        ("`!pin`", "Working plan — in eddy: home + river pin card; on river: pin a message"),
-        ("`!date <when> <what>`", "Keep an important date in this root (`!dates` lists upcoming)"),
-        ("`!dissolve`", "Archive eddy + chronicle (river or in-thread)"),
-    ]
-    fields.append(("River (parent channel)", _help_lines(river_cmds)))
-
-    eddy_core = [
-        ("`!checkpoint`", "Save resonance — flow state + session note; keeps history"),
-        ("`!day`", "Refresh today's daily note (overwrites if it exists)"),
-        ("`!date <when> <what>`", "Keep an important date (`!dates` lists upcoming)"),
-        ("`!release`", "Close session — checkpoint, then clear history"),
-        ("`!focus <topic>`", "Narrow this eddy to one thing (`!focus` to view, `!focus clear` to widen)"),
-        ("`!context`", "What this turn injected — blocks, tools, files, and what was not loaded"),
-        ("`!dissolve`", "Archive eddy + chronicle — distinct from `!release`"),
-        ("`!help`", "This inventory"),
-        ("`!status`", "System + practice-root dashboard"),
-        ("`!readiness`", "Substrate / practice-readiness check"),
-        ("`!rename <title>`", "Exact eddy title (in thread)"),
-        ("`!share`", "Send this eddy to another practitioner (digest + received eddy)"),
-        ("`!fetch <url>`", "Distill URL to library (not auto link-read in chat)"),
-        ("`!artifacts`", "Curated practice artifact shelves"),
-        ("`!export <path>`", "Download allowlisted artifact as .md"),
-        ("`!read` / `!ls` / `!search`", "Browse allowlisted practice artifacts"),
-    ]
-    fields.append(("Eddy core (v1)", _help_lines(eddy_core)))
-
-    if mage_type == "practitioner":
-        fields.append((
-            "Note",
-            "Other `!` commands fall through to dialogue. Full map: `docs/turtle-talk.md`.",
-        ))
-        return fields
-
-    operator_cmds = [
-        ("`!diagnose`", "Full stack health (canary view)"),
-        ("`!admin …`", "Host tools — `invite`, `rivers`, `space`, `doctor` (§15.4)"),
-    ]
-    fields.append(("Operator", _help_lines(operator_cmds)))
-    fields.append((
-        "Deferred (Appendix A)",
-        "Legacy thread/orchestration (`!thread`, `!panel`, absorb, …) — not default fluency. See `docs/turtle-talk.md`.",
-    ))
-    fields.append((
-        "Inventory",
-        "Full map: `docs/turtle-talk.md`. Magic workshop commands retired — use Forge for boom/compass/@ flows.",
-    ))
-    return fields
+    await message.reply(
+        CHANNEL_LINE,
+        view=OutgoingConnectionsView(),
+        mention_author=False,
+    )
+    return ACT
 
 
 async def cmd_help(message):
-    if is_river_message(message):
-        body = _river_help_body()
-        await _post_river_command_act(message, title="Commands", body=body, emoji="📋")
-        return "River command summary posted (full inventory in eddies)."
+    """`!` or `!help`: the curated commands as one card. The card is the whole answer."""
+    from help_card import render
+    from room_models import locale_for, open_menu_private
 
-    embed = discord.Embed(
-        title="\U0001f422 Turtle Commands",
-        description="Direct `!` commands bypass the LLM — instant and free. Layered per TURTLE_SPEC v1.",
-        color=EMBED_COLORS["help"],
+    locale = locale_for(message.author.id, get_registry())
+    await message.reply(
+        view=render(locale=locale, operator=get_mage_type() != "practitioner", menu=open_menu_private),
+        mention_author=False,
     )
-    for name, body in _help_embed_fields():
-        embed.add_field(name=name, value=truncate(body, 1020), inline=False)
-    models_str = ", ".join(f"`{k}`" for k in KNOWN_MODELS.keys())
-    embed.add_field(
-        name="Models",
-        value=(
-            f"River `{RIVER_MODEL}` · Turtle `{TURTLE_MODEL}`\n"
-            f"Overrides: {models_str}\n"
-            f"API opt-in: `claude`, `gemini-*` via `--model` or `DIALOGUE_MODEL`"
-        ),
-        inline=False,
-    )
-    await message.reply(embed=embed, mention_author=False)
-    return "Command inventory embed posted."
+    return "Command card posted."
 
 
 # ─── Practice browse → cmd_practice_io.py ────────────────────────
@@ -642,187 +559,6 @@ async def _cmd_pin_home_eddy(message, args):
     )
 
 
-async def cmd_absorb(message, args):
-    dialogue = get_channel("dialogue")
-    if not dialogue:
-        await message.reply("No dialogue channel configured.", mention_author=False)
-        return
-
-    main_id = dialogue.id
-    if isinstance(message.channel, discord.Thread):
-        main_id = message.channel.parent_id
-
-    if not args:
-        return await cmd_absorbed(message, [])
-
-    name = " ".join(args).strip().strip('"').lower()
-    target_thread = None
-
-    # Search: exact match first, then partial, across cached + fetched threads
-    all_threads = list(dialogue.threads)
-    try:
-        guild_threads = await dialogue.guild.active_threads()
-        for t in guild_threads.threads:
-            if t.parent_id == dialogue.id and t not in all_threads:
-                all_threads.append(t)
-    except Exception:
-        pass
-
-    # Exact match (name or ID)
-    for t in all_threads:
-        if t.name.lower() == name or str(t.id) == name:
-            target_thread = t
-            break
-
-    # Partial match (search term contained in thread name)
-    if not target_thread:
-        partial_matches = [t for t in all_threads if name in t.name.lower()]
-        if len(partial_matches) == 1:
-            target_thread = partial_matches[0]
-        elif len(partial_matches) > 1:
-            names = ", ".join(f"**{t.name}**" for t in partial_matches[:5])
-            await message.reply(f"Multiple threads match `{name}`: {names}. Be more specific.", mention_author=False)
-            return
-
-    if not target_thread:
-        await message.reply(f"Thread `{name}` not found. Try `!threads` to see active threads.", mention_author=False)
-        return
-
-    cfg = thread_configs.get(target_thread.id)
-    model_info = f" [{cfg['model_label']} / {cfg['attunement']}]" if cfg else ""
-
-    state = read_thread_state(target_thread.name)
-    if state:
-        digest = f"In the \"{target_thread.name}\" thread{model_info}:\n{state}"
-        if main_id not in absorbed_contexts:
-            absorbed_contexts[main_id] = []
-        existing = [a for a in absorbed_contexts[main_id] if a["name"] != target_thread.name]
-        existing.append({
-            "name": target_thread.name,
-            "digest": digest,
-            "absorbed_at": datetime.now(timezone.utc),
-            "model_info": model_info,
-        })
-        absorbed_contexts[main_id] = existing
-        count = len(absorbed_contexts[main_id])
-        embed = discord.Embed(
-            title=f"🌀 Absorbed \"{target_thread.name}\" (from state file — instant)",
-            description=truncate(digest, 1800),
-            color=EMBED_COLORS.get("help", 0x2ECC71),
-        )
-        embed.set_footer(text=f"{count} thread(s) in context. Use !absorbed to list, !forget to clear.")
-        await message.reply(embed=embed, mention_author=False)
-        await log_activity(f"Absorbed thread **{target_thread.name}** (instant, from state file)", "🌀", channel=message.channel)
-        return
-
-    msgs = []
-    async for m in target_thread.history(limit=50, oldest_first=True):
-        if m.author == state.client.user or not m.author.bot:
-            role = "Mage" if not m.author.bot else "Spirit"
-            msgs.append(f"{role}: {m.content[:500]}")
-
-    if len(msgs) < 2:
-        await message.reply("Not enough conversation in this thread to absorb.", mention_author=False)
-        return
-
-    conversation = "\n".join(msgs)
-
-    digest_prompt = (
-        f"Distill this Discord thread \"{target_thread.name}\"{model_info} into a compact context digest. "
-        "Capture: key ideas discussed, positions taken, insights reached, open questions, "
-        "and the emotional/intellectual tone. Write as a dense paragraph or two — "
-        "this will be injected into another conversation as background context. "
-        "Write in present tense. Start with 'In the \"{name}\" thread:'"
-    )
-
-    async with message.channel.typing():
-        try:
-            digest = await chat_ollama(
-                digest_prompt,
-                [{"role": "user", "content": conversation}],
-                model=REFLECTION_MODEL, num_ctx=8192,
-            )
-            if not digest:
-                await message.reply("Failed to generate digest.", mention_author=False)
-                return
-
-            if main_id not in absorbed_contexts:
-                absorbed_contexts[main_id] = []
-
-            existing = [a for a in absorbed_contexts[main_id] if a["name"] != target_thread.name]
-            existing.append({
-                "name": target_thread.name,
-                "digest": digest,
-                "absorbed_at": datetime.now(timezone.utc),
-                "model_info": model_info,
-            })
-            absorbed_contexts[main_id] = existing
-
-            count = len(absorbed_contexts[main_id])
-            embed = discord.Embed(
-                title=f"\U0001f300 Absorbed \"{target_thread.name}\"",
-                description=truncate(digest, 1800),
-                color=EMBED_COLORS.get("help", 0x2ECC71),
-            )
-            embed.set_footer(text=f"{count} thread(s) in context. Use !absorbed to list, !forget to clear.")
-            await message.reply(embed=embed, mention_author=False)
-            await log_activity(f"Absorbed thread **{target_thread.name}** into main channel", "\U0001f300", channel=message.channel)
-        except Exception as e:
-            await message.reply(f"Absorb failed: {e}", mention_author=False)
-
-
-async def cmd_absorbed(message, args):
-    dialogue = get_channel("dialogue")
-    main_id = dialogue.id if dialogue else message.channel.id
-    if isinstance(message.channel, discord.Thread):
-        main_id = message.channel.parent_id
-
-    contexts = absorbed_contexts.get(main_id, [])
-    if not contexts:
-        await message.reply(
-            "No absorbed threads. Use `!absorb <thread-name>` to bring a thread's resonance into the main channel.",
-            mention_author=False,
-        )
-        return
-
-    lines = []
-    for ctx in contexts:
-        age = datetime.now(timezone.utc) - ctx["absorbed_at"]
-        age_str = f"{int(age.total_seconds() / 60)}m" if age.total_seconds() < 3600 else f"{int(age.total_seconds() / 3600)}h"
-        preview = ctx["digest"][:120].replace("\n", " ")
-        lines.append(f"**{ctx['name']}**{ctx.get('model_info', '')} ({age_str} ago)\n> {preview}...")
-
-    embed = discord.Embed(
-        title=f"\U0001f300 Absorbed Context ({len(contexts)} threads)",
-        description="\n\n".join(lines),
-        color=EMBED_COLORS.get("help", 0x2ECC71),
-    )
-    embed.set_footer(text="Spirit sees these when responding in the main channel. !forget to clear.")
-    await message.reply(embed=embed, mention_author=False)
-
-
-async def cmd_forget(message, args):
-    dialogue = get_channel("dialogue")
-    main_id = dialogue.id if dialogue else message.channel.id
-    if isinstance(message.channel, discord.Thread):
-        main_id = message.channel.parent_id
-
-    if args:
-        name = " ".join(args).strip().strip('"').lower()
-        contexts = absorbed_contexts.get(main_id, [])
-        before = len(contexts)
-        absorbed_contexts[main_id] = [c for c in contexts if c["name"].lower() != name]
-        after = len(absorbed_contexts.get(main_id, []))
-        if after < before:
-            await message.reply(f"\U0001f300 Released **{name}** from context. {after} thread(s) remaining.", mention_author=False)
-        else:
-            await message.reply(f"Thread `{name}` not found in absorbed context.", mention_author=False)
-    else:
-        count = len(absorbed_contexts.get(main_id, []))
-        absorbed_contexts[main_id] = []
-        await message.reply(f"\U0001f300 Cleared all absorbed context ({count} threads).", mention_author=False)
-
-
 async def cmd_readiness(message):
     set_practice_context(message)
     result = assess_readiness()
@@ -860,79 +596,6 @@ async def cmd_readiness(message):
     await message.reply(embed=embed, mention_author=False)
     save_readiness_trail(result)
     return truncate(digest, 200)
-
-
-async def cmd_focus(message, args):
-    """Narrow this conversation to one thing (CE Slice 1 — the power-practitioner shortcut).
-
-    Conversational narrowing is the intended front door (Slice 1b); this ``!``
-    lever exists for practitioners who want an explicit handle (design §5.2a).
-      - ``!focus``            → what's in motion + this eddy's current focus
-      - ``!focus <label>``    → focus on that thread (create it if new); scope
-                                is per-eddy so other conversations stay wide
-      - ``!focus clear``      → widen back to holistic
-    """
-    from continuity_engine import (
-        add_active_thread,
-        clear_scope,
-        find_active_thread,
-        get_scope,
-        list_active_threads,
-        set_scope,
-    )
-
-    set_practice_context(message)
-    pd = get_pd()
-    channel_id = message.channel.id
-
-    # No args → show what's in motion + current focus (plain language, firewall §4).
-    if not args:
-        threads = list_active_threads(pd)
-        current = get_scope(pd, channel_id)
-        current_label = None
-        if current:
-            found = find_active_thread(pd, current)
-            current_label = found.get("label") if found else current
-        if threads:
-            listed = "\n".join(
-                f"- **{t.get('label', t.get('id'))}**"
-                f"{' — ' + t['tone'] if t.get('tone') else ''}"
-                + ("  ← focused here" if str(t.get("id")) == str(current) else "")
-                for t in threads
-            )
-            body = f"In motion:\n{listed}"
-        else:
-            body = "Nothing in motion yet. `!focus <topic>` starts one."
-        if current_label:
-            body += f"\n\nThis eddy is focused on **{current_label}**. `!focus clear` to widen."
-        await message.reply(body, mention_author=False)
-        return f"Focus overview shown ({len(threads)} in motion)."
-
-    first = args[0].lower()
-    if first in ("clear", "off", "wide", "none"):
-        cleared = clear_scope(pd, channel_id)
-        await message.reply(
-            "Widened back out — talking about everything again."
-            if cleared
-            else "This eddy wasn't focused on anything in particular.",
-            mention_author=False,
-        )
-        return "Focus cleared." if cleared else "Focus already wide."
-
-    label = " ".join(args).strip().strip('"').strip("'")
-    thread = find_active_thread(pd, label)
-    created = False
-    if not thread:
-        thread = add_active_thread(pd, label)
-        created = True
-    set_scope(pd, channel_id, str(thread.get("id")))
-    tlabel = thread.get("label", label)
-    await message.reply(
-        f"Focusing on **{tlabel}**{' (new)' if created else ''} — I'll pull deeper "
-        "context on it here. `!focus clear` to widen.",
-        mention_author=False,
-    )
-    return f"Focused this eddy on \"{tlabel}\"{' (new thread)' if created else ''}."
 
 
 async def cmd_context(message, args):
@@ -1553,14 +1216,70 @@ async def cmd_admin(message, args):
 
 
 async def _cmd_model(message, args):
-    from core.models import CRAFT_MODEL, TURTLE_MODEL as LOCAL_MODEL
-    from mage import get_registry, resolve_dialogue_channel_id, uses_craft_surface
+    from core.models import conversation_model
+    from mage import get_registry, resolve_dialogue_channel_id
     from room_models import cmd_model
 
     parent_id = resolve_dialogue_channel_id(message)
-    default = CRAFT_MODEL if uses_craft_surface(parent_id) else LOCAL_MODEL
+    default = conversation_model()
     return await cmd_model(
         message, args, parent_id=parent_id, registry=get_registry(), default=default)
+
+
+async def _cmd_feed(message, args):
+    from backlog_feed_ui import cmd_feed
+
+    return await cmd_feed(message, args)
+
+
+async def cmd_pi(message, args):
+    """The coding agent's version and model. An update names the release and asks."""
+    from mage import get_channel_primitive, resolve_dialogue_channel_id
+
+    from pi_card import _t, maintained_here, read_installed, reply_view
+
+    prim = get_channel_primitive(resolve_dialogue_channel_id(message))
+    locale = "en"
+    try:
+        from room_models import locale_for
+
+        locale = locale_for(message.author.id, get_registry())
+    except Exception:
+        locale = "en"
+    if not maintained_here(getattr(prim, "name", None)):
+        await message.reply(_t(locale)["elsewhere"], mention_author=False)
+        return "Pi is maintained in #magic."
+    version, model = read_installed()
+    await message.reply(view=reply_view(version, model, locale=locale), mention_author=False)
+    return "Pi card posted."
+
+
+async def cmd_git(message, args):
+    """The workshop's unkept files. Arguments are ignored: this is not a diff."""
+    from mage import get_channel_primitive, get_registry, resolve_dialogue_channel_id
+    from room_connections import owner_of
+    from workshop_tools import checkout_for
+
+    from git_card import _t, maintained_here, reply_for
+
+    del args  # a path or a verb would turn the list into a diff
+    channel_id = resolve_dialogue_channel_id(message)
+    prim = get_channel_primitive(channel_id)
+    locale = "en"
+    try:
+        from room_models import locale_for
+
+        locale = locale_for(message.author.id, get_registry())
+    except Exception:
+        locale = "en"
+    if not maintained_here(getattr(prim, "name", None)):
+        await message.reply(_t(locale)["elsewhere"], mention_author=False)
+        return "Git list is in #magic."
+    registry = get_registry()
+    owner = owner_of(registry, channel_id)
+    text = reply_for(checkout_for(registry, owner) if owner else None, locale=locale)
+    await message.reply(text, mention_author=False)
+    return "Workshop list posted."
 
 
 DIRECT_COMMANDS = {
@@ -1568,10 +1287,8 @@ DIRECT_COMMANDS = {
     "artifacts": lambda msg, args: cmd_artifacts(msg, args),
     "export": lambda msg, args: cmd_export(msg, args),
     "read": lambda msg, args: cmd_read(msg, args),
-    "ls": lambda msg, args: cmd_ls(msg, args),
-    "search": lambda msg, args: cmd_search(msg, args),
     "checkpoint": lambda msg, args: cmd_checkpoint(msg),
-    "day": lambda msg, args: cmd_day(msg),
+    "spark": lambda msg, args: cmd_spark(msg, args),
     "release": lambda msg, args: cmd_release(msg),
     "dissolve": lambda msg, args: cmd_dissolve(msg, args),
     "keep": lambda msg, args: cmd_keep(msg, args),
@@ -1579,25 +1296,21 @@ DIRECT_COMMANDS = {
     "flows": lambda msg, args: cmd_flows(msg, args),
     "flow": lambda msg, args: cmd_flows(msg, args),
     "pin": lambda msg, args: cmd_pin(msg, args),
-    "thread": lambda msg, args: cmd_thread(msg, args),
-    "threads": lambda msg, args: cmd_threads(msg, args),
-    "thread-type": lambda msg, args: cmd_thread_type(msg, args),
+    "threads": lambda msg, args: cmd_eddy(msg, args),  # the older name of !eddy
+    "eddy": lambda msg, args: cmd_eddy(msg, args),
+    "live": lambda msg, args: cmd_live(msg, args),
     "rename": lambda msg, args: cmd_rename(msg, args),
-    "eddy-check": lambda msg, args: cmd_eddy_check(msg, args),
     "fetch": lambda msg, args: cmd_fetch(msg, args),
-    "absorb": lambda msg, args: cmd_absorb(msg, args),
-    "absorbed": lambda msg, args: cmd_absorbed(msg, args),
-    "forget": lambda msg, args: cmd_forget(msg, args),
     "readiness": lambda msg, args: cmd_readiness(msg),
-    "focus": lambda msg, args: cmd_focus(msg, args),
     "context": lambda msg, args: cmd_context(msg, args),
     "diagnose": lambda msg, args: cmd_diagnose(msg),
-    "panel": lambda msg, args: cmd_panel(msg),
     "help": lambda msg, args: cmd_help(msg),
     "admin": lambda msg, args: cmd_admin(msg, args),
-    "new": lambda msg, args: cmd_new(msg, args),
     "share": lambda msg, args: cmd_share(msg, args),
-    "date": lambda msg, args: _cmd_date(msg, args),
     "dates": lambda msg, args: _cmd_dates(msg, args),
     "model": lambda msg, args: _cmd_model(msg, args),
+    "mcp": lambda msg, args: cmd_mcp(msg, args),
+    "feed": lambda msg, args: _cmd_feed(msg, args),
+    "pi": lambda msg, args: cmd_pi(msg, args),
+    "git": lambda msg, args: cmd_git(msg, args),
 }

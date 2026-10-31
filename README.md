@@ -130,13 +130,14 @@ pip install -r requirements.txt
 
 # 4. Local models — Standard (~32 GB RAM)
 ollama pull qwen3.5:4b     # intake / action selection
+ollama pull qwen3.8:27b    # memory, when the house is quiet
 ollama pull gemma4:31b     # conversation
 
 # 5. Start
 python discord_bot.py
 ```
 
-On about **16 GB RAM**, take Lighter instead of the Standard pull: `qwen3.5:4b` and `gemma4:12b`, then set `TURTLE_MODEL=gemma4:12b` in `.env`. Long eddies may feel thinner. Do not pull `gemma4:31b` on that machine.
+On about **16 GB RAM**, take Lighter instead of the Standard pull: `qwen3.5:4b` and `gemma4:12b`, then set `TURTLE_MODEL=gemma4:12b` in `.env`. Long eddies may feel thinner. Do not pull `gemma4:31b` or `qwen3.8:27b` on that machine — the memory model is about 18 GB and belongs to the Standard pull.
 
 ```bash
 ollama pull qwen3.5:4b

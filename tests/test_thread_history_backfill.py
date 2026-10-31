@@ -64,6 +64,24 @@ class ThreadBackfillTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(loaded, [])
 
+    async def test_a_river_post_is_kept_and_a_wordless_bar_is_not(self) -> None:
+        river = _msg(3, "someone", "This channel\nClaude Sonnet 5.5", bot=True)
+        river.author.id = 42
+        river.author.name = "river"
+        bar = _msg(4, "someone", "\u200b", bot=True)
+        bar.author.id = 42
+        bar.author.name = "river"
+        other = _msg(5, "someone", "ignore me", bot=True)
+        other.author.id = 99
+        other.author.name = "other"
+        person = _msg(1, "kermit", "can you see it?")
+        with patch.dict("os.environ", {"RIVER_BOT_USER_ID": "42"}), patch.object(state, "client", MagicMock()):
+            loaded = await helpers.load_thread_history(_thread([person, river, bar, other]))
+        self.assertEqual(
+            [m["content"] for m in loaded],
+            ["[kermit]: can you see it?", "[River]: This channel\nClaude Sonnet 5.5"],
+        )
+
     async def test_without_exclusion_behaviour_is_unchanged(self) -> None:
         """Resume paths (lifecycle, !resume) still want the full history."""
         messages = [

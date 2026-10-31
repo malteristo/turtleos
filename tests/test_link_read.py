@@ -2,13 +2,17 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules.setdefault("discord", MagicMock())
 
 from link_read import (
     FetchResult,
     PROMPT_INLINE_MAX,
+    X_READ_MAX,
+    DIALOGUE_INJECT_MAX,
+    inject_limit,
+    stored_fetch,
     external_urls,
     format_fetch_results_for_dialogue,
     format_result_for_dialogue,
@@ -17,6 +21,8 @@ from link_read import (
     plan_dialogue_urls,
     spill_fetch_artifact,
     url_display_host,
+    _fetch_one_url,
+    _open_signed_in_link,
     _partial_read_status_lines,
 )
 
@@ -89,21 +95,16 @@ class LinkKindAndLabelTests(unittest.TestCase):
         out = describe_urls([f"https://example.com/{i}" for i in range(9)])
         self.assertIn("and 6 more", out)
 
-    def test_a_video_shared_with_a_paragraph_still_auto_fetches(self) -> None:
-        url = "https://www.youtube.com/watch?v=abc123"
-        text = self.LONG + url
-        self.assertGreater(len(self.LONG.strip()), 120)
-        self.assertTrue(should_auto_fetch_urls(text, [url]))
+    def test_a_link_with_a_paragraph_is_read_whatever_it_is(self) -> None:
+        """His rule: he pastes the link, with or without words. Video or article."""
+        for url in ("https://www.youtube.com/watch?v=abc123", "https://example.com/essay"):
+            text = self.LONG * 2 + url
+            self.assertGreater(len(self.LONG.strip()), 120)
+            self.assertTrue(should_auto_fetch_urls(text, [url]), url)
 
-    def test_an_article_shared_with_the_same_paragraph_does_not(self) -> None:
-        """Negative control — the widening is for media, not for everything."""
-        url = "https://example.com/essay"
-        self.assertFalse(should_auto_fetch_urls(self.LONG + url, [url]))
-
-    def test_a_watch_cue_counts_as_engagement(self) -> None:
-        url = "https://www.youtube.com/watch?v=abc123"
-        text = self.LONG * 2 + f" watch this when you get a chance {url}"
-        self.assertTrue(should_auto_fetch_urls(text, [url]))
+    def test_no_link_is_nothing_to_read(self) -> None:
+        """Positive control: the rule is not 'always True'."""
+        self.assertFalse(should_auto_fetch_urls(self.LONG, []))
 
     def test_detect_platform_and_the_offer_read_one_list(self) -> None:
         """Two copies of "what is this link" is how the button starts lying."""
@@ -130,23 +131,10 @@ class LinkReadHeuristicTests(unittest.TestCase):
         text = f"what do you think? {url}"
         self.assertTrue(should_auto_fetch_urls(text, [url]))
 
-    def test_long_incidental_skips_auto(self) -> None:
+    def test_a_long_message_with_a_link_is_read(self) -> None:
         url = "https://example.com/article"
-        text = (
-            "This is a long message about many things that are not primarily about the link. "
-            "I wanted to mention my week, the workshop, intentions, and a few other threads "
-            "before noting this article in passing without any particular ask attached. "
-            + url
-        )
+        text = ("A long message about my week, the workshop and a few other threads. " * 4) + url
         self.assertGreater(len(text.replace(url, "").strip()), 120)
-        self.assertFalse(should_auto_fetch_urls(text, [url]))
-
-    def test_read_cue_auto_fetches(self) -> None:
-        url = "https://example.com/article"
-        text = (
-            "I've been thinking about practice design all week and also wanted you to "
-            f"read this when you have a moment: {url}"
-        )
         self.assertTrue(should_auto_fetch_urls(text, [url]))
 
     def test_native_eddy_auto_fetches_when_heuristics_match(self) -> None:
@@ -157,18 +145,24 @@ class LinkReadHeuristicTests(unittest.TestCase):
         self.assertEqual(urls, [url])
         self.assertEqual(pending, [])
 
-    def test_native_eddy_incidental_offers_read_skip(self) -> None:
+    def test_a_long_message_with_a_link_reads_it_and_offers_nothing(self) -> None:
         url = "https://example.com/article"
-        text = (
-            "This is a long message about many things that are not primarily about the link. "
-            "I wanted to mention my week, the workshop, intentions, and a few other threads "
-            "before noting this article in passing without any particular ask attached. "
-            + url
-        )
+        text = ("A long message about my week, the workshop and a few other threads. " * 4) + url
         auto, urls, pending = plan_dialogue_urls(text, [url], native_eddy=True)
-        self.assertFalse(auto)
-        self.assertEqual(urls, [url])
-        self.assertEqual(pending, [url])
+        self.assertTrue(auto)
+        self.assertEqual((urls, pending), ([url], []))
+
+    def test_more_than_the_cap_reads_the_first_and_offers_the_rest(self) -> None:
+        from link_read import MAX_URLS_PER_MESSAGE
+
+        links = [f"https://example.com/{i}" for i in range(MAX_URLS_PER_MESSAGE + 2)]
+        auto, urls, pending = plan_dialogue_urls("these " + " ".join(links), links)
+        self.assertTrue(auto)
+        self.assertEqual(urls, links[:MAX_URLS_PER_MESSAGE])
+        self.assertEqual(pending, links[MAX_URLS_PER_MESSAGE:])
+
+    def test_no_links_plans_nothing(self) -> None:
+        self.assertEqual(plan_dialogue_urls("hello", []), (False, [], []))
 
     def test_legacy_short_message_auto_fetches(self) -> None:
         url = "https://example.com/article"
@@ -207,7 +201,7 @@ class LinkReadFormatTests(unittest.TestCase):
         )
         block = format_result_for_dialogue(result)
         self.assertIn("HTTP 404", block)
-        self.assertIn("!fetch", block)
+        self.assertNotIn("!fetch", block)
 
     def test_format_multiple_joins(self) -> None:
         results = [
@@ -335,6 +329,78 @@ class LinkReadSpillTests(unittest.TestCase):
         block = format_result_for_dialogue(result)
         self.assertIn("box/intake/test.md", block)
         self.assertIn("first", block.lower())
+
+
+class ACraftLinkUsesTheSignedInReadTests(unittest.IsolatedAsyncioTestCase):
+    POST = "https://x.com/ada/status/1"
+
+    async def test_craft_uses_the_signed_in_read_and_skips_the_old_preview(self) -> None:
+        with (
+            patch("link_read._open_signed_in_link", new=AsyncMock(return_value="[X — ada's]\nPLANTED_POST")),
+            patch("link_read.fetch_twitter", new=AsyncMock()) as preview,
+        ):
+            result = await _fetch_one_url(self.POST)
+        preview.assert_not_called()
+        self.assertEqual(result.source, "X")
+        self.assertIn("PLANTED_POST", result.content)
+
+    async def test_outside_craft_the_old_preview_still_reads_the_link(self) -> None:
+        with (
+            patch("link_read._open_signed_in_link", new=AsyncMock(return_value=None)),
+            patch("link_read.fetch_twitter", new=AsyncMock(return_value=("thin tweet", "twitter-cli"))),
+        ):
+            result = await _fetch_one_url(self.POST)
+        self.assertEqual(result.source, "twitter-cli")
+        self.assertEqual(result.content, "thin tweet")
+
+    async def test_a_door_failure_leaves_the_old_preview(self) -> None:
+        with (
+            patch("mage.get_current_channel_id", return_value=1),
+            patch("mage.uses_craft_surface", return_value=True),
+            patch("outgoing_connections.live_call", return_value="X could not be read.") as door,
+        ):
+            text = await _open_signed_in_link(self.POST)
+        door.assert_called_once()
+        self.assertIsNone(text)
+
+    async def test_another_room_does_not_open_the_connection(self) -> None:
+        with (
+            patch("mage.get_current_channel_id", return_value=1),
+            patch("mage.uses_craft_surface", return_value=False),
+            patch("outgoing_connections.live_call") as door,
+        ):
+            text = await _open_signed_in_link(self.POST)
+        door.assert_not_called()
+        self.assertIsNone(text)
+
+    def test_a_long_signed_in_read_stays_in_the_turn_and_is_not_stored(self) -> None:
+        body = ("word " * 2000) + "ENDMARK"
+        result = FetchResult(
+            url=self.POST,
+            ok=True,
+            content=body,
+            source="X",
+            char_count=len(body),
+        )
+        spilled = spill_fetch_artifact(result)
+        self.assertIsNone(spilled.artifact_path)
+        self.assertIn("ENDMARK", format_result_for_dialogue(spilled))
+
+    def test_the_turn_keeps_a_signed_in_article_and_still_cuts_a_page(self) -> None:
+        article = "[URL: https://x.com/ada/status/1 (via X)]\n" + ("word " * 3000)
+        page = "[URL: https://example.com/a (via article)]\n" + ("word " * 3000)
+        self.assertEqual(inject_limit(article), X_READ_MAX)
+        self.assertGreater(len(article), DIALOGUE_INJECT_MAX)
+        self.assertEqual(inject_limit(page), DIALOGUE_INJECT_MAX + 512)
+        page_body = "[URL: https://example.com/a (via article)]\nPLANTED_PAGE"
+        self.assertIn("PLANTED_PAGE", stored_fetch(page_body))
+        kept = stored_fetch(article)
+        self.assertNotIn("word", kept)
+        self.assertIn("Not stored.", kept)
+        source = Path(__file__).resolve().parents[1].joinpath("dialogue_turn.py").read_text()
+        self.assertNotIn("url_content[:DIALOGUE_INJECT_MAX", source)
+        self.assertEqual(source.count("inject_limit(url_content)"), 2)
+        self.assertIn("stored_fetch(url_content)", source)
 
 
 if __name__ == "__main__":

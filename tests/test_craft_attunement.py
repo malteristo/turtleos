@@ -150,7 +150,7 @@ class CraftAttunementTests(unittest.TestCase):
             _prefix_claims_spirit(prompt),
             "craft identity prefix still names Spirit",
         )
-        self.assertIn("resident of turtleOS", CRAFT_VOCATION_HEADER)
+        self.assertIn("Boom Turtle", CRAFT_VOCATION_HEADER)
 
     # ── Vocation breadth ────────────────────────────────────────────
     #
@@ -178,24 +178,22 @@ class CraftAttunementTests(unittest.TestCase):
     @staticmethod
     def _names_craft_beyond_codebase(text: str) -> bool:
         low = text.lower()
-        return "not a synonym for this codebase" in low and (
-            "workshop" in low or "research services" in low
-        )
+        return "boom turtle" in low and "about anything" in low and "not a synonym for this codebase" in low
 
     @staticmethod
     def _splits_friction_from_work(text: str) -> bool:
         low = text.lower()
-        arrived = "friction arrived" in low or "when friction arrived" in low
+        relates = "touches nothing" in low and "do not build" in low
+        arrived = "friction arrived" in low
         in_hand = "in hand" in low
-        return arrived and in_hand
+        return relates and arrived and in_hand
 
     def test_vocation_covers_craft_beyond_this_codebase(self) -> None:
         for name, text in self._vocation_texts().items():
             with self.subTest(surface=name):
                 self.assertTrue(
                     self._names_craft_beyond_codebase(text),
-                    f"{name} narrowed craft back to turtleOS/Magic; workshops and "
-                    "research services are craft too",
+                    f"{name} narrowed the room back to the codebase; a thought here can be about anything",
                 )
 
     def test_vocation_distinguishes_friction_from_work_in_hand(self) -> None:
@@ -203,8 +201,7 @@ class CraftAttunementTests(unittest.TestCase):
             with self.subTest(surface=name):
                 self.assertTrue(
                     self._splits_friction_from_work(text),
-                    f"{name} lost the mode split; intake would run on work that "
-                    "is not broken",
+                    f"{name} lost the split; a thought would be built here, or intake would run on it",
                 )
 
     def test_pre_widening_vocation_fails_both_checks(self) -> None:

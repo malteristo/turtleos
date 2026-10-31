@@ -113,7 +113,9 @@ needs_person is true only when something is broken for a user or will get worse 
 
 
 def open_issues(issues_dir: Path) -> list[tuple[str, str]]:
-    out = []
+    out: list[tuple[str, str]] = []
+    if not issues_dir.is_dir():
+        return out
     for path in sorted(issues_dir.glob("[0-9]*.md")):
         text = path.read_text(encoding="utf-8", errors="replace")
         if "## Done" in text:
@@ -152,12 +154,12 @@ async def judge(new: dict[str, dict], issues: list[tuple[str, str]], ask: Callab
     return out
 
 
-def report_lines(judged: list[dict]) -> list[str]:
+def report_lines(judged: list[dict], *, have_issues: bool = True) -> list[str]:
     lines = []
     for j in judged:
         if not j["needs_person"]:
             continue
-        where = f"issue {j['issue']}" if j["issue"] else "no issue yet"
+        where = f"issue {j['issue']}" if j["issue"] else ("no issue yet" if have_issues else "no issue list on this host")
         lines.append(f"- **{j['class']}** ({j['count']}× in {j['log']}; {where}) — {j['why']}\n  `{j['signature']}`")
     return lines
 
@@ -207,7 +209,7 @@ async def run_nightly(
         state["seen"][j["signature"]].update(cls=j["class"], issue=j["issue"], needs_person=j["needs_person"])
     state["last_night"] = today
     _write_state(state)
-    lines = report_lines(judged)
+    lines = report_lines(judged, have_issues=issues_dir.is_dir())
     if judged:
         inbox = house_dir(create=True) / "error_triage.md"
         with open(inbox, "a", encoding="utf-8") as fh:

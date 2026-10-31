@@ -142,7 +142,7 @@ class McpConnectView(discord.ui.View):
 
 
 async def announce_pickups(client, registry_loader) -> int:
-    """Edit each picked-up offer's message to say so and drop its button."""
+    """Say, on each picked-up offer's message, that it connected, and post the card that opens and closes what it shows under it."""
     from offer_ledger import record_for_channel
 
     registry = registry_loader()
@@ -153,13 +153,20 @@ async def announce_pickups(client, registry_loader) -> int:
             continue
         for offer in offer_store.to_announce(root):
             locale = owner_locale(registry, owner)
-            text = _t(locale)["done"].format(
+            connected = _t(locale)["done"].format(
                 principal=offer.principal, expires=(offer.grant_expires or "?")[:10]
             )
+            from mcp_access.grants import GrantStore
+            from mcp_reveal_ui import show_card
+
+            grant = GrantStore().get(offer.grant) if offer.grant else None
             try:
-                channel = client.get_channel(offer.channel_id) or await client.fetch_channel(offer.channel_id)
-                message = await channel.fetch_message(offer.message_id)
-                await message.edit(content=text, view=None)
+                if grant is not None and grant.status == "active":
+                    await show_card(client, registry, offer, grant, said=connected)
+                else:
+                    channel = client.get_channel(offer.channel_id) or await client.fetch_channel(offer.channel_id)
+                    message = await channel.fetch_message(offer.message_id)
+                    await message.edit(content=connected, view=None)
             except discord.HTTPException as exc:
                 print(f"MCP connect: announce failed for {offer.id}: {exc}")
                 continue

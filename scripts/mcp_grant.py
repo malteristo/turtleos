@@ -30,8 +30,13 @@ if str(REPO) not in sys.path:
 
 from mcp_access import offers  # noqa: E402
 from mcp_access.grants import GrantStore, state_dir  # noqa: E402
-from mcp_access.operations import PROFILES, snapshot_for  # noqa: E402
-from mcp_access.registry import load_registry, member_for_login, owned_sources, registry_path  # noqa: E402
+from mcp_access.operations import (  # noqa: E402
+    PROFILES,
+    ROOM_OPERATIONS,
+    WORKSHOP_OPERATIONS,
+    snapshot_for,
+)
+from mcp_access.registry import KIND_WORKSHOP, load_registry, member_for_login, owned_sources, registry_path  # noqa: E402
 
 CONTENT_FREE = "operator-health"
 
@@ -43,14 +48,22 @@ def plan(owner: str, profile: str, wanted: list[str], registry: dict) -> list[st
         if wanted:
             raise SystemExit(f"{CONTENT_FREE} reaches no sources; drop --source")
         return []
-    owned = [s.id for s in owned_sources(owner, registry)]
+    # A profile reaches the kinds its operations can read. `reader` never reaches
+    # a workshop and `workshop-reader` never reaches a room. `house` reaches both
+    # and starts with none of them open: the card is how they open.
+    ops = set(snapshot_for(profile))
+    owned = [
+        s.id
+        for s in owned_sources(owner, registry)
+        if ops & (WORKSHOP_OPERATIONS if s.kind == KIND_WORKSHOP else ROOM_OPERATIONS)
+    ]
     if not owned:
-        raise SystemExit(f"{owner!r} owns no sources in the registry")
+        raise SystemExit(f"{owner!r} owns nothing in the registry that profile {profile!r} can reach")
     if not wanted:
-        return owned
+        return [] if profile == "house" else owned
     foreign = [s for s in wanted if s not in owned]
     if foreign:
-        raise SystemExit(f"{owner!r} does not own: {', '.join(foreign)}")
+        raise SystemExit(f"{owner!r} does not own, or profile {profile!r} cannot reach: {', '.join(foreign)}")
     return wanted
 
 

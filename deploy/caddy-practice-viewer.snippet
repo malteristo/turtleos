@@ -23,6 +23,14 @@ your-hostname.example.com {
         reverse_proxy localhost:8742
     }
 
+    # The card's address is /{mage}/story/eddies/{file}.md?t=…
+    # That response is the note itself. The static shell used to answer
+    # here and then fetch /read/, which is why a tap could sit on Loading.
+    @notes path *.md
+    handle @notes {
+        reverse_proxy localhost:8742
+    }
+
     # NOTE: never add a raw file_server over the workshops tree here.
     # All artifact reads must go through the allowlisted /read endpoint —
     # a bare /files/* route bypasses the tier policy entirely.

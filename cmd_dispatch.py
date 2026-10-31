@@ -9,56 +9,45 @@ from state import MAX_DIALOGUE_HISTORY
 COMMAND_ACT_FALLBACK = {
     "status": "Platform status act posted (models, uptime, practice root summary).",
     "diagnose": "Stack diagnostic act posted (canary checks).",
-    "help": "River command summary posted (full inventory in eddies).",
-    "thread-type": "Eddy type updated.",
+    "help": "Command card posted (the curated commands, grouped).",
     "rename": "Eddy renamed on Discord.",
-    "eddy-check": "Eddy dissolution scan completed.",
     "fetch": "URL fetched and distilled to practice library cache.",
     "checkpoint": "Checkpoint complete — flow state and/or session note saved.",
     "release": "Session released — checkpoint saved, history cleared.",
     "share": "Share eddy picker opened — choose target and confirm.",
-    "focus": "Focus updated — this eddy narrowed (or widened) to one thing.",
     "context": "Context this turn posted — injected blocks, tools, and files.",
     "dissolve": "Eddy dissolved — thread archived, chronicle updated.",
     "flows": "Flow menu opened.",
     "flow": "Flow loaded or flow menu opened.",
-    "day": "Daily note refreshed from today's eddy notes.",
     "pin": "Message pinned in this channel.",
     "readiness": "Practice-readiness act posted.",
     "artifacts": "Practice artifact shelves displayed.",
     "export": "Practice artifact exported as .md attachment.",
     "read": "Practice artifact content displayed.",
-    "ls": "Allowlisted practice directory listing displayed.",
-    "search": "Practice artifact search results displayed.",
-    "date": "Date kept in this practice root's dates registry.",
     "dates": "Upcoming dates listed for this practice root.",
     "model": "This room's model shown, or the owner's pick recorded.",
+    "mcp": "Connections opened. Only the asker sees the list.",
+    "feed": "Backlog pitch posted in craft, or the build queue shown.",
+    "eddy": "Eddies card posted: the latest eddies here, each with what it last held and a link.",
+    "threads": "Eddies card posted (the older name of !eddy).",
+    "live": "Live state posted: what Turtle has in mind here, the open eddies, and what this practice adds.",
 }
 
 _PRACTITIONER_COMMANDS = {
-    "status",
     "help",
-    "checkpoint",
+    "spark",
     "release",
     "dissolve",
     "flows",
     "flow",  # alias of !flows — required for !flow <id> on hosted rivers
-    "day",  # Act Two daily note refresh — needed on hosted rivers too
     "pin",
-    "focus",
-    "context",
     "readiness",
     "rename",
-    "fetch",
-    "share",
-    "artifacts",
-    "export",
-    "read",
-    "ls",
-    "search",
-    "date",
     "dates",
     "model",
+    "mcp",
+    "eddy",
+    "live",
 }
 
 CONTEXTUAL_ACTION_TIMEOUT = 3600
@@ -68,14 +57,9 @@ CONTEXTUAL_ACTION_COMMANDS = {
     "checkpoint",
     "release",
     "dissolve",
-    "thread",
-    "new",
-    "threads",
-    "eddy-check",
     "fetch",
-    "absorb",
-    "absorbed",
-    "forget",
+    "keep",
+    "ignore",
     "readiness",
     "context",
     "flows",
@@ -135,7 +119,20 @@ async def try_direct_command(message) -> bool:
         return False
     parts = text[1:].split(None, 1)
     cmd = parts[0].lower() if parts else ""
+    if text == "!":
+        cmd = "help"  # a bare ! asks what can be typed
     args = parts[1].split() if len(parts) > 1 else []
+    from help_card import retired_answer
+
+    if retired_answer(cmd) is not None:
+        from mage import get_registry
+        from room_models import locale_for
+
+        await message.reply(
+            retired_answer(cmd, locale=locale_for(message.author.id, get_registry())),
+            mention_author=False,
+        )
+        return True
     if get_mage_type() == "practitioner" and cmd not in _PRACTITIONER_COMMANDS:
         return False
     # Registry lives in commands.py until handler modules are extracted (Slice 3+).
@@ -164,7 +161,7 @@ async def dispatch_direct_command(message, *, bar_client=None) -> bool:
 
     text = message.content.strip()
     parts = text[1:].split(None, 1) if text.startswith("!") else []
-    cmd = parts[0].lower() if parts else ""
+    cmd = "help" if text == "!" else (parts[0].lower() if parts else "")
     args = parts[1].split() if len(parts) > 1 else []
 
     defer_bar = cmd in INTERACTIVE_COMMANDS_DEFER_BAR

@@ -24,8 +24,12 @@ whenever a turn is appended (`helpers.sync_history`). Its mtime is exactly "when
 conversation last moved." Background work — bar refreshes, pre-warms, the nightly
 report — does not touch it.
 
-`<practice-root>/story/eddies/*.lock` is stronger still: a lock present means a write
-is in flight *right now*, which is the worst possible moment to restart.
+`<practice-root>/dialogue/<channel_id>.lock` is a turn that is running. It holds
+the process id. A living process is busy no matter how old the history file is.
+A dead process is a turn that crashed, and it does not hold the restart.
+
+`<practice-root>/story/eddies/*.lock` is a write in flight, which is the worst
+possible moment to restart.
 
 Deliberately **not** the logs. Most lines there carry no timestamp, and the ones that
 do come from discord.py's own logger rather than from practitioner turns — a detector
@@ -39,7 +43,7 @@ detector that cannot see must not read as "all clear" — that is the shape that
 pre-push gate allow every push while printing a reassuring line. Refusing costs one
 flag; a dropped message cannot be recovered at all.
 
-    python3 scripts/deploy_guard.py                 # default: 10 minutes of quiet
+    python3 scripts/deploy_guard.py                 # default: 1 minute after the last turn
     python3 scripts/deploy_guard.py --quiet-minutes 20
     python3 scripts/deploy_guard.py --json
 """
@@ -48,17 +52,54 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
-# Ten minutes. A person waiting on a reply usually gets one within three (a 31B local
-# turn is up to ~172s measured), so this comfortably covers an in-flight answer as well
-# as a pause for thought. Long enough to protect a live exchange, short enough that
-# deploying is rarely blocked for long.
-DEFAULT_QUIET_MINUTES = 10.0
+# One minute. A restart takes about fifteen seconds, and a message sent in that
+# gap is never seen. The minute is the gap after a turn ends: long enough to
+# send the next line, and the window in which a restart is safe. A turn that is
+# running is not this gap. It is a lock in dialogue/ whose process is alive, so
+# the reply is not cut off because the previous turn is old.
+#
+# Half an hour was the earlier hold. Ten minutes cleared into a craft pitch on
+# 2026-10-10, and thirty was chosen so a pause for thought would not look
+# finished. On 2026-10-16 that hold was the thing in the way: the next idea
+# waited out the deploy. The turn itself is the signal now. Thirty remains the
+# ceiling past which the guard gets forced every time, which is not having one.
+DEFAULT_QUIET_MINUTES = 1.0
 
 WORKSHOPS = Path.home() / "workshops"
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _in_flight(workshops: Path) -> tuple[str, str] | None:
+    """A dialogue lock whose process is alive. A dead process is a crashed turn."""
+    if not workshops.is_dir():
+        return None
+    for root in sorted(p for p in workshops.iterdir() if p.is_dir()):
+        for path in sorted(root.glob("dialogue/*.lock")):
+            try:
+                pid = int(path.read_text(encoding="utf-8").strip())
+            except (OSError, ValueError):
+                return root.name, f"turn in flight ({path.stem})"
+            if _pid_alive(pid):
+                return root.name, f"turn in flight ({path.stem})"
+    return None
 
 
 def _signals(workshops: Path) -> list[tuple[float, str, str]]:
@@ -86,6 +127,20 @@ def _describe(seconds: float) -> str:
 def assess(quiet_minutes: float = DEFAULT_QUIET_MINUTES, workshops: Path = WORKSHOPS) -> dict:
     signals = _signals(workshops)
     now = time.time()
+    flight = _in_flight(workshops)
+    if flight is not None:
+        root, what = flight
+        return {
+            "verdict": "busy",
+            "quiet": False,
+            "in_flight": True,
+            "idle_seconds": 0,
+            "threshold_seconds": quiet_minutes * 60,
+            "last_activity": "now",
+            "where": root,
+            "what": what,
+            "conversations_seen": len(signals),
+        }
 
     if not signals:
         return {
@@ -128,18 +183,30 @@ def main() -> int:
         print(f"CANNOT TELL — {result['reason']}")
         return 1
 
+    gap = f"{args.quiet_minutes:.0f} min" if args.quiet_minutes >= 1 else f"{args.quiet_minutes * 60:.0f}s"
     if result["quiet"]:
         print(
             f"QUIET — last turn {result['last_activity']} "
-            f"({result['where']}), threshold {args.quiet_minutes:.0f} min. Safe to restart."
+            f"({result['where']}). {gap.capitalize()} has passed and no turn is running. Safe to restart."
         )
         return 0
+
+    if result.get("in_flight"):
+        print(
+            f"BUSY — {result['what']} in {result['where']}.\n"
+            f"The turn finishes, then {gap} is the safe gap.\n"
+            f"A restart drops anything sent in the next ~15s, and it is never redelivered.\n"
+            f"Wait for that, or restart anyway with:\n"
+            f"    ./restart.sh --force"
+        )
+        return 1
 
     print(
         f"BUSY — last turn {result['last_activity']} in {result['where']} "
         f"({result['what']}).\n"
+        f"The safe gap is {gap} after a turn. Talking holds the restart until that turn finishes.\n"
         f"A restart drops anything sent in the next ~15s, and it is never redelivered.\n"
-        f"Wait for {args.quiet_minutes:.0f} min of quiet, or restart anyway with:\n"
+        f"Wait for that gap, or restart anyway with:\n"
         f"    ./restart.sh --force"
     )
     return 1

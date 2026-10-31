@@ -1,12 +1,14 @@
 """turtleOS LLM backends — Anthropic, Gemini, Ollama chat functions."""
 
 import asyncio
+import inspect
 import json
 import os
 
 import httpx
 
 from core.offload import run_blocking
+from core.models import anthropic_request_extras
 from state import (
     OLLAMA_URL, DIALOGUE_MODEL, ANTHROPIC_API_KEY, GOOGLE_API_KEY,
     HAS_ANTHROPIC, HAS_GEMINI, USE_API, MAX_TOOL_ROUNDS,
@@ -156,6 +158,30 @@ def resolve_model(model_str: str) -> tuple[str, bool]:
     return model_str, False
 
 
+def visible_round_text(blocks) -> str:
+    """Text the practitioner should see from one response.
+
+    Sonnet 5.5 can put the words between tool calls in a thinking block and
+    leave the text blocks empty. An empty thinking field (the default display
+    omits it) is not prose. A real text block wins over a thinking block.
+    """
+    texts: list[str] = []
+    thoughts: list[str] = []
+    for block in blocks or []:
+        kind = getattr(block, "type", None)
+        if kind == "text":
+            piece = getattr(block, "text", "") or ""
+            if piece.strip():
+                texts.append(piece.strip())
+        elif kind == "thinking":
+            piece = getattr(block, "thinking", "") or ""
+            if piece.strip():
+                thoughts.append(piece.strip())
+    if texts:
+        return "\n".join(texts)
+    return "\n".join(thoughts)
+
+
 async def chat_anthropic(system_prompt, messages):
     return await chat_anthropic_with_model(system_prompt, messages, DIALOGUE_MODEL)
 
@@ -168,6 +194,72 @@ async def _emit(on_event, kind: str, **payload) -> None:
         await on_event(kind, payload)
     except Exception as exc:
         print(f"Turn event listener failed ({kind}): {type(exc).__name__}: {exc}")
+
+
+class _StreamWatch:
+    """What the live line needs from a round, and nothing of the tokens."""
+
+    def __init__(self) -> None:
+        self.writing = False
+        self.names: dict[int, str] = {}
+        self.buffers: dict[int, str] = {}
+        self.announced: set[tuple[int, str]] = set()
+
+
+async def _watch_stream(event, on_event, watch: _StreamWatch) -> None:
+    """A call's name updates the line when the model emits it. The tokens stay out."""
+    etype = getattr(event, "type", "") or ""
+    if etype == "content_block_start":
+        block = getattr(event, "content_block", None)
+        kind = getattr(block, "type", "") or ""
+        index = int(getattr(event, "index", 0) or 0)
+        if kind in {"text", "thinking"} and not watch.writing:
+            watch.writing = True
+            await _emit(on_event, "status", text="writing")
+        elif kind == "tool_use":
+            name = getattr(block, "name", "") or ""
+            watch.names[index] = name
+            watch.buffers[index] = ""
+            if name:
+                await _emit(on_event, "status", name=name, args={})
+        return
+    if etype != "content_block_delta":
+        return
+    delta = getattr(event, "delta", None)
+    if getattr(delta, "type", "") != "input_json_delta":
+        return
+    index = int(getattr(event, "index", 0) or 0)
+    watch.buffers[index] = watch.buffers.get(index, "") + (getattr(delta, "partial_json", "") or "")
+    raw = watch.buffers[index]
+    try:
+        args = json.loads(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return
+    if not isinstance(args, dict):
+        return
+    key = (index, raw)
+    if key in watch.announced:
+        return
+    watch.announced.add(key)
+    await _emit(on_event, "status", name=watch.names.get(index, ""), args=args)
+
+
+def _can_stream(messages) -> bool:
+    """A real stream method. A stand-in client keeps the plain call."""
+    stream = getattr(messages, "stream", None)
+    return inspect.isfunction(stream) or inspect.ismethod(stream)
+
+
+async def _await_round(aclient, kwargs, on_event):
+    """The round. When the client can stream, the live line hears a call as it is named."""
+    messages = aclient.messages
+    if not _can_stream(messages):
+        return await messages.create(**kwargs)
+    watch = _StreamWatch()
+    async with messages.stream(**kwargs) as handle:
+        async for event in handle:
+            await _watch_stream(event, on_event, watch)
+        return await handle.get_final_message()
 
 
 USAGE_FIELDS = (
@@ -191,9 +283,37 @@ def _add_usage(total: dict | None, response) -> None:
     total["calls"] = total.get("calls", 0) + 1
 
 
+def messages_seeing(messages, images) -> list:
+    """Show a fetched picture to the model. The stored turn stays text."""
+    images = list(images or [])
+    if not images:
+        return list(messages)
+    prepared = []
+    attached = False
+    for message in messages:
+        content = message.get("content") if isinstance(message, dict) else None
+        if attached or message.get("role") != "user" or not isinstance(content, str):
+            prepared.append(message)
+            continue
+        blocks = [{"type": "text", "text": content}]
+        for image in images[:4]:
+            data = image.get("data") if isinstance(image, dict) else None
+            media_type = image.get("media_type") if isinstance(image, dict) else None
+            if not data or not media_type:
+                continue
+            blocks.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": data},
+            })
+        prepared.append({**message, "content": blocks})
+        attached = True
+    return prepared
+
+
 async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=False,
                                      tos_tools=None, execute_tool=None, on_event=None,
-                                     usage=None):
+                                     usage=None, images=None, max_rounds=None,
+                                     final_prose_only=False):
     """Chat with Anthropic API, optionally with tOS tool use.
 
     Args:
@@ -203,6 +323,11 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
             wrote before calling tools, payload ``text``) and ``"tool"`` (payload
             ``name``, ``args``, ``result``), as they happen. The step card in
             ``dialogue_turn`` listens; the log line does not depend on it.
+        max_rounds: cap on model calls for this turn (default ``MAX_TOOL_ROUNDS``).
+        final_prose_only: the reply is the last round's text, not every round's joined.
+            A room whose model narrates between lookups (the step card already shows
+            each sentence) would otherwise open every reply with that narration. If the
+            last round wrote nothing, the joined prose is the fallback.
         usage: optional dict, filled with token counts summed over every round
             (``USAGE_FIELDS`` plus ``calls``). Filled as rounds complete, so a
             turn that fails mid-loop still reports what it spent.
@@ -227,7 +352,13 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
         if system_prompt
         else system_prompt
     )
-    kwargs = dict(model=model, max_tokens=4096, system=system, messages=list(messages))
+    kwargs = dict(
+        model=model,
+        max_tokens=4096,
+        system=system,
+        messages=messages_seeing(messages, images),
+    )
+    kwargs.update(anthropic_request_extras(model))
     if anthropic_tools:
         kwargs["tools"] = anthropic_tools
 
@@ -242,24 +373,18 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
     # craft-turtle: three intakes, one eddy where the reply existed in the API
     # response and never reached Discord.
     prose_parts: list[str] = []
-    for round_num in range(MAX_TOOL_ROUNDS):
-        response = await aclient.messages.create(**kwargs)
+    rounds = max_rounds if max_rounds is not None else MAX_TOOL_ROUNDS
+    for round_num in range(rounds):
+        response = await _await_round(aclient, kwargs, on_event)
         _add_usage(usage, response)
 
-        text_parts = []
-        tool_uses = []
-        for block in response.content:
-            if block.type == "text":
-                text_parts.append(block.text)
-            elif block.type == "tool_use":
-                tool_uses.append(block)
-
-        round_text = "\n".join(text_parts).strip()
+        tool_uses = [block for block in response.content if block.type == "tool_use"]
+        round_text = visible_round_text(response.content)
         if round_text:
             prose_parts.append(round_text)
 
         if not tool_uses:
-            text = "\n\n".join(prose_parts).strip()
+            text = (round_text if final_prose_only and round_text else "\n\n".join(prose_parts)).strip()
             if not text and tools_executed:
                 text = _text_after_tools_only(tools_executed)
             return text or "(no response generated)", tools_executed
@@ -270,6 +395,7 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
         tool_results = []
         round_failed = False
         for tu in tool_uses:
+            await _emit(on_event, "status", name=tu.name, args=tu.input or {})
             # Off the event loop. `execute_tool` is synchronous — file reads,
             # subprocesses, HTTP, a local model doing a whole-file rewrite — and
             # calling it here stopped every other channel until it returned. See
@@ -280,7 +406,9 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
                 else f"Unknown tool: {tu.name}"
             )
             tools_executed.append({"name": tu.name, "args": tu.input, "result": result})
-            print(f"  Tool ({model}): {tu.name} -> {result}")
+            from outgoing_connections import tool_log_line
+
+            print(f"  Tool ({model}): {tool_log_line(tu.name, result)}")
             await _emit(on_event, "tool", name=tu.name, args=tu.input, result=result)
             if _tool_result_failed(result):
                 round_failed = True
@@ -295,7 +423,7 @@ async def chat_anthropic_with_model(system_prompt, messages, model, use_tools=Fa
         # It also rode in a *second* consecutive user message behind the
         # tool_result turn; it belongs in the same block, where the API expects
         # a tool_result turn to end.
-        if round_num == MAX_TOOL_ROUNDS - 2:
+        if round_num == rounds - 2:
             nudge = (
                 "[System: Tool attempts are not succeeding. Please respond in text, "
                 "explaining what you were trying to do and what went wrong. Do not call more tools.]"
@@ -529,6 +657,12 @@ async def chat_ollama_with_tools(system_prompt, messages, model_override=None,
             func = tc.get("function", {})
             tool_name = func.get("name", "")
             args = func.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    args = {}
+            await _emit(on_event, "status", name=tool_name, args=args if isinstance(args, dict) else {})
             result = (
                 await run_blocking(execute_tool, tool_name, args, name=tool_name)
                 if execute_tool

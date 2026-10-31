@@ -1,6 +1,6 @@
 # Eddy lifecycle bar
 
-**Status:** Implemented (2026-06-19) · **Native attunement:** standing bar **retired** (2026-06-24) — use typed `!checkpoint` / `!release` / `!dissolve` + bottom **flow library** bar + contextual act rows (D3)  
+**Status:** Implemented (2026-06-19) · **Native attunement:** standing bar **retired** (2026-06-24) — use typed `!checkpoint` / `!release` / `!dissolve` + bottom **flow library** bar + contextual act rows (D3) · **2026-10-18:** hidden in the operator's own eddies until the bar is redesigned. Shared rooms and other people's rooms still show it. The typed commands stay.  
 **Principles:** [principles.md](principles.md) · **Sessions:** [sessions.md](sessions.md) · **River bar:** [river.md](river.md)
 
 ---

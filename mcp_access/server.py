@@ -16,7 +16,9 @@ from aiohttp import web
 
 from mcp_access import offers
 from mcp_access.grants import ACTIVE, GrantStore
+from mcp_access.operations import ROOM_OPERATIONS, WORKSHOP_OPERATIONS
 from mcp_access.protocol import INVALID_REQUEST, Session, _error
+from mcp_access.receipts import locale_of
 from mcp_access.registry import load_registry, member_for_login, private_root, resolve_sources
 
 LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -25,6 +27,25 @@ LOGIN_HEADER = "Tailscale-User-Login"
 ADDR_HEADER = "X-Forwarded-For"
 CLIENT_HEADER = "X-Turtleos-Client"
 CONNECT_TOOL = "connect-tool"
+WORKSHOP_CONNECTION = "turtleos-workshop"
+HOUSE_CONNECTION = "turtleos"
+
+
+def connection_name(operations) -> tuple[str, list[str]]:
+    """The client settings key, and the keys a combined connection replaces.
+
+    A workshop-only grant keeps its own name so it cannot overwrite the rooms
+    connection. A grant that reaches both is the one connection, under the
+    rooms name, and names the workshop entry so the client can drop it.
+    """
+    ops = set(operations)
+    shop = bool(ops & WORKSHOP_OPERATIONS)
+    rooms = bool(ops & ROOM_OPERATIONS)
+    if shop and rooms:
+        return HOUSE_CONNECTION, [WORKSHOP_CONNECTION]
+    if shop:
+        return WORKSHOP_CONNECTION, []
+    return HOUSE_CONNECTION, []
 
 
 class NotLoopback(ValueError):
@@ -75,13 +96,22 @@ def build_app(store: GrantStore | None = None, registry_loader=load_registry) ->
         if isinstance(message, list):
             return web.json_response(_error(None, INVALID_REQUEST, "batch not supported"), status=400)
 
-        sources = resolve_sources(grant.owner, grant.sources, registry_loader())
-        session = Session(grant=grant, sources=sources, store=store)
+        registry = registry_loader()
+        sources = resolve_sources(grant.owner, grant.sources, registry)
+        session = Session(
+            grant=grant,
+            sources=sources,
+            store=store,
+            owner_root=private_root(grant.owner, registry),
+            locale=locale_of(registry, grant.owner),
+            mcp_session=request.headers.get("Mcp-Session-Id", "").strip(),
+        )
         reply = session.handle(message)
         store.count(grant.id, refused=session.refused)
+        headers = {"Mcp-Session-Id": session.mcp_session} if session.mcp_session else {}
         if reply is None:
-            return web.Response(status=202)
-        return web.json_response(reply)
+            return web.Response(status=202, headers=headers)
+        return web.json_response(reply, headers=headers)
 
     async def connect_post(request: web.Request) -> web.Response:
         """Pickup: the owner's own client collects the credential inside the press window.
@@ -113,8 +143,14 @@ def build_app(store: GrantStore | None = None, registry_loader=load_registry) ->
         except offers.OfferError:
             return nothing
         store.update(grant.id, bound_login=login, bound_addr=addr)
+        name, replaces = connection_name(grant.operations)
         body = {
-            "name": "turtleos",
+            # One client config entry per profile family: a second connection under
+            # the same name would overwrite the first in the client's settings.
+            # A house grant is the one connection and names the workshop entry
+            # so the client removes it instead of leaving two.
+            "name": name,
+            "replaces": replaces,
             "server": offers.server_entry(offer.url, token),
             "reaches": offer.sources,
             "expires": grant.expires,

@@ -64,12 +64,31 @@ class BuildHistoryTests(unittest.TestCase):
         )
 
     def test_other_bots_are_furniture(self):
-        """River's embeds and the eddy bar are not conversation."""
+        """A bar with no words, and a bot that is not River, stay out."""
         history = backfill.build_history(
-            [bot_msg(RIVER, "**Eddy bar**"), user_msg("kermit", "hi"), bot_msg(TURTLE, "hello")],
+            [bot_msg(RIVER, "\u200b"), user_msg("kermit", "hi"), bot_msg(TURTLE, "hello"),
+             bot_msg(str(10**18 + 3), "some other bot")],
             TURTLE,
+            river_bot_id=RIVER,
         )
-        self.assertEqual([m["role"] for m in history], ["user", "assistant"])
+        self.assertEqual(
+            history,
+            [
+                {"role": "user", "content": "[kermit]: hi"},
+                {"role": "assistant", "content": "hello"},
+            ],
+        )
+
+    def test_a_river_post_is_kept_and_named(self):
+        history = backfill.build_history(
+            [bot_msg(RIVER, "This channel\nClaude Sonnet 5.5")],
+            TURTLE,
+            river_bot_id=RIVER,
+        )
+        self.assertEqual(
+            history,
+            [{"role": "user", "content": "[River]: This channel\nClaude Sonnet 5.5"}],
+        )
 
     def test_thread_open_marker_is_dropped(self):
         history = backfill.build_history(

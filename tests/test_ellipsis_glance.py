@@ -129,6 +129,14 @@ class TimedGlanceIsNotPersistentTests(unittest.TestCase):
         glance = glance.split("from eddy_spawn", 1)[0]
         self.assertIn("post_ellipsis_memory", glance)
         self.assertLess(glance.find("except"), glance.find("post_ellipsis_memory"))
+        # A magic room returns before either post — `...` is arrival there.
+        self.assertLess(glance.find("spirit_owns_the_pair"), glance.find("post_ellipsis_glance"))
+
+    def test_a_magic_go_does_not_post_the_checkpoint_bar(self) -> None:
+        src = Path("river_bot.py").read_text(encoding="utf-8")
+        go = src.split("if is_go_breath", 1)[1]
+        go = go.split("from eddy_spawn", 1)[0]
+        self.assertLess(go.find("spirit_owns_the_pair"), go.find("touch_eddy_lifecycle_bar"))
 
     def test_go_does_not_schedule_a_contextual_offer(self) -> None:
         src = Path("river_bot.py").read_text(encoding="utf-8")

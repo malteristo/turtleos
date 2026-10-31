@@ -1086,6 +1086,17 @@ def render_substrate_packet(
         topic_block = ""
     if topic_block:
         scope_block = (scope_block + "\n" if scope_block else "") + topic_block
+    # The dates he keeps in words ("when is Anna's birthday?") must be in the turn,
+    # or answering depends on Turtle thinking to open a file.
+    try:
+        from dates import render_upcoming_dates_context
+
+        dates_block = render_upcoming_dates_context(practice_dir, within_days=366, limit=15)
+    except Exception as exc:  # a broken registry must not cost the turn
+        print(f"Upcoming dates block failed: {type(exc).__name__}: {exc}")
+        dates_block = ""
+    if dates_block:
+        scope_block = (scope_block + "\n" if scope_block else "") + dates_block
     return render_substrate_block(
         data,
         alive,

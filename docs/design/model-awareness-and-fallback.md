@@ -75,4 +75,4 @@ Stop calling the fallback visible if a practitioner ever learns after the fact t
 ## Deliberately not in this slice
 
 - Picking models from the atrium; updating the local model from inside turtleOS. Next slices ([atrium.md](atrium.md)).
-- Auto-resuming parked work. The practitioner resumes it; Turtle reminds.
+- Auto-resuming on a timer. The practitioner resumes by pressing **All stocked up** on the notice. That press tries the cloud at once. If the credit is still out, only they are told, and the hold stays. If it answers, the parked words are the next turn.

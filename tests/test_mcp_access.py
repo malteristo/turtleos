@@ -28,7 +28,8 @@ from mcp_access import operations  # noqa: E402
 from mcp_access.audit import AUDIT_REL  # noqa: E402
 from mcp_access.grants import GrantStore  # noqa: E402
 from mcp_access.protocol import FORBIDDEN, NOT_FOUND, Session  # noqa: E402
-from mcp_access.registry import owned_sources, resolve_sources  # noqa: E402
+from mcp_access.receipts import already_read, locale_of, program_label
+from mcp_access.registry import owned_sources, private_root, resolve_sources  # noqa: E402
 from mcp_access.server import NotLoopback, assert_loopback, build_app  # noqa: E402
 
 OWN = "CANARY-OWN-7f3a"
@@ -72,7 +73,13 @@ class Fixture:
         return self.store.create(principal="laptop", owner=owner, sources=ids, profile=profile)
 
     def session(self, grant):
-        return Session(grant, resolve_sources(grant.owner, grant.sources, self.registry), self.store)
+        return Session(
+            grant,
+            resolve_sources(grant.owner, grant.sources, self.registry),
+            self.store,
+            owner_root=private_root(grant.owner, self.registry),
+            locale=locale_of(self.registry, grant.owner),
+        )
 
     def close(self):
         self.tmp.cleanup()
@@ -361,6 +368,34 @@ class HttpTests(unittest.IsolatedAsyncioTestCase):
         if addr:
             h["X-Forwarded-For"] = addr
         return h
+
+    async def test_the_session_header_keeps_a_programs_name_after_a_probe_initializes(self):
+        note = self.f.roots["alice"] / "story/eddies/123456789012345-probe.md"
+        note.write_text(_note("Probe walk", "body stays here"))
+        cursor = {
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "Cursor", "version": "1"}},
+        }
+        first = await self._post(self._h(), cursor)
+        self.assertEqual(first.status, 200)
+        cursor_sid = first.headers.get("Mcp-Session-Id")
+        self.assertTrue(cursor_sid)
+        probe = {
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "cursor-check", "version": "0"}},
+        }
+        second = await self._post(self._h(), probe)
+        self.assertTrue(second.headers.get("Mcp-Session-Id"))
+        self.assertNotEqual(second.headers.get("Mcp-Session-Id"), cursor_sid)
+        read_body = {
+            "jsonrpc": "2.0", "id": 2, "method": "resources/read",
+            "params": {"uri": "turtleos://room/alice/note/123456789012345-probe"},
+        }
+        got = await self._post(self._h(**{"Mcp-Session-Id": cursor_sid}), read_body)
+        self.assertEqual(got.status, 200)
+        blob = (self.f.roots["alice"] / "state" / "mcp_receipts.jsonl").read_text()
+        self.assertIn("Cursor", blob)
+        self.assertNotIn("cursor-check", blob)
 
     async def _post(self, headers, body=None):
         body = body or {"jsonrpc": "2.0", "id": 1, "method": "ping"}
@@ -766,6 +801,119 @@ class TransportIndependenceTests(unittest.TestCase):
         if out.returncode != 0:
             self.skipTest("discord not installed in this interpreter")
         self.assertEqual(out.stdout.strip(), "True")
+
+
+class ReceiptTests(unittest.TestCase):
+    """Words that leave get a receipt. The receipt names the place and not the words."""
+
+    BODY = "CANARY-BODY-qq91"
+    TITLE = "Morning walk"
+
+    def setUp(self):
+        self.f = Fixture()
+        self.f.registry["mages"]["alice"]["locale"] = "de"
+        note = self.f.roots["alice"] / "story/eddies/123456789012345-morning.md"
+        note.write_text(_note(self.TITLE, f"we talked {self.BODY}"))
+        self.note = note
+        self.before = note.read_bytes()
+        g, _ = self.f.grant()
+        self.s = self.f.session(g)
+        self.receipt = self.f.roots["alice"] / "state" / "mcp_receipts.jsonl"
+
+    def tearDown(self):
+        self.f.close()
+
+    def _rows(self):
+        return [json.loads(line) for line in self.receipt.read_text().splitlines() if line.strip()]
+
+    def _blob(self):
+        return self.receipt.read_text() if self.receipt.is_file() else ""
+
+    def test_a_read_names_the_conversation_and_not_the_body(self):
+        read(self.s, "turtleos://brief")
+        read(self.s, "turtleos://room/alice/notes")
+        self.assertFalse(self.receipt.exists(), "a brief or a list sends titles, not a receipt")
+        call(self.s, "initialize", {"protocolVersion": "2025-06-18", "clientInfo": {"name": "Cursor", "version": "1.2.3"}})
+        read(self.s, "turtleos://room/alice/note/123456789012345-morning")
+        self.assertEqual(self.note.read_bytes(), self.before, "the receipt must not be written into the note")
+        rows = self._rows()
+        self.assertEqual(len(rows), 1)
+        posts = rows[0]["posts"]
+        self.assertEqual([p["to"] for p in posts], ["thread", "private"])
+        self.assertEqual(posts[0]["thread_id"], "123456789012345")
+        self.assertIn(self.TITLE, posts[1]["text"])
+        self.assertIn("gerade gelesen", posts[1]["text"])
+        self.assertIn("Cursor", posts[1]["text"])
+        self.assertNotIn("1.2.3", posts[1]["text"])
+        self.assertIn("laptop", posts[1]["text"])
+        self.assertIn("Modell", posts[1]["text"])
+        self.assertNotIn(self.BODY, self._blob())
+        self.assertNotIn("MCP", self._blob())
+        grant_file = (self.f.state / "grants.json").read_text()
+        self.assertIn("Cursor", grant_file)
+        self.assertNotIn(self.BODY, grant_file)
+        self.assertNotIn(self.TITLE, grant_file)
+        for path in self.f.state.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(self.TITLE, path.read_text(errors="ignore"), path)
+                self.assertNotIn(self.BODY, path.read_text(errors="ignore"), path)
+        read(self.s, "turtleos://room/alice/note/123456789012345-morning")
+        self.assertEqual(len(self._rows()), 1, "the same conversation twice inside ten minutes is one receipt")
+        call(self.s, "initialize", {"protocolVersion": "2025-06-18", "clientInfo": {"name": "Claude", "version": "9"}})
+        read(self.s, "turtleos://room/alice/note/123456789012345-morning")
+        self.assertEqual(len(self._rows()), 2, "a second program is a second receipt")
+        self.assertIn("Claude", self._blob())
+        self.assertNotIn("Claude 9", self._blob())
+        self.assertEqual(program_label("Cursor", "abc123deadbeefabc123deadbeef"), "Cursor")
+
+    def test_a_later_initialize_does_not_rename_an_earlier_programs_read(self):
+        call(self.s, "initialize", {"protocolVersion": "2025-06-18", "clientInfo": {"name": "Cursor", "version": "1"}})
+        cursor_session = self.s.mcp_session
+        other = self.f.session(self.f.store.get(self.s.grant.id))
+        call(other, "initialize", {"protocolVersion": "2025-06-18", "clientInfo": {"name": "cursor-check", "version": "0"}})
+        again = self.f.session(self.f.store.get(self.s.grant.id))
+        again.mcp_session = cursor_session
+        read(again, "turtleos://room/alice/note/123456789012345-morning")
+        self.assertIn("Cursor", self._blob())
+        self.assertNotIn("cursor-check", self._blob())
+        unnamed = self.f.session(self.f.store.get(self.s.grant.id))
+        read(unnamed, "turtleos://room/alice/note/123456789012345-morning")
+        self.assertNotIn("cursor-check", self._blob(), "a read with no session is not given the last probe's name")
+
+    def test_a_search_names_places_and_not_the_excerpt_or_the_query(self):
+        hits = json.loads(
+            call(self.s, "tools/call", {"name": "search", "arguments": {"query": self.BODY}})["result"]["content"][0]["text"]
+        )
+        self.assertTrue(hits and self.BODY in hits[0]["snippet"])
+        rows = self._rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual([p["to"] for p in rows[0]["posts"]], ["private"])
+        self.assertIn(self.TITLE, rows[0]["posts"][0]["text"])
+        self.assertIn("Modell", rows[0]["posts"][0]["text"])
+        self.assertNotIn(self.BODY, self._blob())
+        empty = call(self.s, "tools/call", {"name": "search", "arguments": {"query": "no-such-needle"}})
+        self.assertEqual(json.loads(empty["result"]["content"][0]["text"]), [])
+        self.assertEqual(len(self._rows()), 1)
+
+    def test_health_and_a_letter_name_themselves_and_not_their_text(self):
+        _store_document(self.f.roots["alice_health"], DOC_ID, DOC, filename="Antrag.pdf")
+        read(self.s, "turtleos://health/health/picture")
+        read(self.s, f"turtleos://documents/health/{DOC_ID}")
+        blob = self._blob()
+        self.assertIn("Gesundheitsbild", blob)
+        self.assertIn("Antrag.pdf", blob)
+        self.assertNotIn(HEALTH, blob)
+        self.assertNotIn(DOC, blob)
+        kinds = [p["to"] for row in self._rows() for p in row["posts"]]
+        self.assertEqual(kinds.count("health"), 1)
+        self.assertNotIn("thread", kinds)
+        past = already_read("de", principal="Laptop Cursor", health=True, conversation=True, letter=True)
+        self.assertIn("Laptop Cursor", past)
+        self.assertIn("Gesundheitsbild", past)
+        self.assertIn("Gespräch", past)
+        self.assertIn("Brief", past)
+        self.assertIn("Modell", past)
+        self.assertNotIn(DOC, past)
 
 
 if __name__ == "__main__":

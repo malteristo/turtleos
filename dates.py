@@ -297,7 +297,7 @@ def parse_date_token(
     """
     raw = (when or "").strip()
     if not raw:
-        raise DateError("Need a date — try `!date 2026-12-24 title` or `!date 24.12. title`.")
+        raise DateError("Need a date — try 2026-12-24 or 24.12.")
 
     loc = (locale or "en").strip().lower()
 
@@ -637,6 +637,7 @@ def render_upcoming_dates_context(
     *,
     within_days: int = 30,
     today: date | None = None,
+    limit: int = 8,
 ) -> str:
     """Compact block for daily-note / attunement ambient awareness."""
     base = today or local_now().date()
@@ -653,7 +654,7 @@ def render_upcoming_dates_context(
         return ""
     rows.sort(key=lambda r: r[0])
     lines = ["[Upcoming dates — shell-injected]"]
-    for occ, title in rows[:8]:
+    for occ, title in rows[:limit]:
         lines.append(f"- {occ.isoformat()}: {title}")
     lines.append("")
     return "\n".join(lines)
@@ -994,110 +995,6 @@ async def offer_date_keep(
 # ─── Typed commands ──────────────────────────────────────────────
 
 
-def _usage_date() -> str:
-    return (
-        "Usage: `!date <when> <what>`\n"
-        "Examples: `!date 2026-12-24 kita fest` · `!date 24.12. kita fest` · "
-        "`!date 24. Dezember kita fest` · `!date Samstag kita fest`\n"
-        "Optional yearly birthday: `!date 15.03.2019 a member birthday` "
-        "(birth year enables age on reminders).\n"
-        "List upcoming: `!dates`"
-    )
-
-
-# `24. Dezember` and `next Saturday` are two and three tokens; the date is
-# whatever longest leading run parses, so long as a title survives it.
-_MAX_WHEN_TOKENS = 3
-
-
-def _token_carries_year(token: str) -> bool:
-    """True when the member wrote an explicit year, in any accepted form."""
-    raw = (token or "").strip()
-    if _ISO_RE.match(raw) or _DE_FULL_RE.match(raw):
-        return True
-    m = _NAME_TOKEN_RE.match(raw)
-    return bool(m and (m.group("nd_year") or m.group("nm_year")))
-
-
-def split_when_and_title(
-    args: list[str], *, locale: str = "en", today: date | None = None
-) -> tuple[str, list[str]]:
-    """Split `!date` args into the when-token(s) and the remaining title."""
-    limit = min(_MAX_WHEN_TOKENS, max(1, len(args) - 1))
-    for count in range(limit, 1, -1):
-        token = " ".join(args[:count])
-        try:
-            parse_date_token(token, locale=locale, today=today)
-        except DateError:
-            continue
-        return token, list(args[count:])
-    return args[0], list(args[1:])
-
-
-async def cmd_date(message, args: list[str]) -> str:
-    """`!date <when> <what>` — capture into this root's dates registry."""
-    from mage import get_pd
-
-    if len(args) < 2:
-        await message.reply(_usage_date(), mention_author=False)
-        return "Usage: !date <when> <what>"
-
-    pd_locale_today = local_now().date()
-    when_token, title_parts = split_when_and_title(
-        args, locale="de", today=pd_locale_today
-    )
-    if not title_parts:
-        await message.reply(_usage_date(), mention_author=False)
-        return "Usage: !date <when> <what>"
-    birth_year: int | None = None
-    recurrence = "none"
-
-    # A birthday recurs; a birth year in the token also buys "turns N" on the
-    # reminder. Year detection is by shape, so `15. März 2019` counts the same
-    # as `15.03.2019` — anything the parser accepts, this sees.
-    if _BIRTHDAY_RE.search(" ".join(title_parts)):
-        recurrence = "yearly"
-        try:
-            parsed = parse_date_token(when_token, locale="de", today=pd_locale_today)
-            if _token_carries_year(when_token):
-                birth_year = parsed.year
-        except DateError:
-            pass
-
-    pd = get_pd()
-    locale = locale_for_practice_dir(pd)
-    title = " ".join(title_parts).strip()
-    try:
-        entry = add_date(
-            pd,
-            title=title,
-            when=when_token,
-            recurrence=recurrence,
-            birth_year=birth_year,
-            captured_by=address_for_capture(getattr(message, "author", None)),
-            locale=locale,
-            today=local_now().date(),
-        )
-    except DateError as exc:
-        await message.reply(str(exc), mention_author=False)
-        return f"Date capture refused: {exc}"
-
-    leads = ", ".join(str(d) for d in entry["lead_days"])
-    kept_when = human_date(date.fromisoformat(entry["date"]), locale=locale)
-    if locale == "de":
-        body = (
-            f"Gemerkt: **{entry['title']}** am **{kept_when}** "
-            f"(Erinnerung {leads} Tag(e) vorher)."
-        )
-    else:
-        body = (
-            f"Kept **{entry['title']}** on **{kept_when}** "
-            f"(reminders at {leads} day(s) before)."
-        )
-    await message.reply(body, mention_author=False)
-    return f"Date kept: {entry['title']} on {entry['date']}"
-
-
 async def cmd_dates(message, args: list[str] | None = None) -> str:
     """`!dates` — list upcoming dates for this practice root."""
     from mage import get_pd
@@ -1117,9 +1014,9 @@ async def cmd_dates(message, args: list[str] | None = None) -> str:
 
     if not rows:
         body = (
-            "Noch keine Termine. Mit `!date <wann> <was>` festhalten."
+            "Noch keine Termine. Sag mir ein Datum, dann frage ich, ob ich es merken soll."
             if locale == "de"
-            else "No upcoming dates yet. Capture one with `!date <when> <what>`."
+            else "No upcoming dates yet. Tell me a date and I'll offer to keep it."
         )
         await message.reply(body, mention_author=False)
         return "No upcoming dates"

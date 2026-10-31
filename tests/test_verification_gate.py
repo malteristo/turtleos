@@ -86,6 +86,78 @@ class BothGatesRunTheSameThingTests(unittest.TestCase):
         self.assertIn("3.14", text, "the live host runs 3.14 — CI must too")
 
 
+class WhichRemotesAreGatedTests(unittest.TestCase):
+    """Run the real hook in a scratch repository (issue 054).
+
+    The gate is the Mini's pull, and the Mini's pull is a repository, not a name:
+    a remote with `origin`'s URL must be gated whatever it is called. The "gate" in
+    the scratch repo is a script that leaves a mark, so *ran* and *did not run* are
+    both observable (the positive control is the remote that must run it).
+    """
+
+    MINI = "ssh://mini.invalid/repos/turtleos.git"
+    PUBLIC = "https://public.invalid/turtleos.git"
+
+    def setUp(self) -> None:
+        import subprocess
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        run = lambda *a: subprocess.run(a, cwd=self.repo, check=True, capture_output=True)  # noqa: E731
+        run("git", "init", "-q")
+        run("git", "remote", "add", "origin", self.MINI)
+        run("git", "remote", "add", "turtle", self.MINI)
+        run("git", "remote", "add", "public", self.PUBLIC)
+        (self.repo / "scripts").mkdir()
+        gate = self.repo / "scripts" / "spirit_verify.sh"
+        gate.write_text("#!/usr/bin/env bash\ntouch gate-ran\nexit ${GATE_EXIT:-0}\n")
+        gate.chmod(0o755)
+        self.hook = self.repo / "pre-push"
+        self.hook.write_text(HOOK.read_text(encoding="utf-8"))
+        self.hook.chmod(0o755)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def push(self, name: str, url: str, *, gate_exit: str = "0"):
+        import os
+        import subprocess
+
+        sha = "1" * 40
+        result = subprocess.run(
+            [str(self.hook), name, url],
+            cwd=self.repo,
+            input=f"refs/heads/main {sha} refs/heads/main {'0' * 40}\n",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "GATE_EXIT": gate_exit},
+        )
+        return result, (self.repo / "gate-ran").exists()
+
+    def test_origin_is_gated(self) -> None:
+        _result, ran = self.push("origin", self.MINI)
+        self.assertTrue(ran)
+
+    def test_a_remote_with_another_name_and_the_origin_url_is_gated(self) -> None:
+        """The hole: `turtle` was the Mini's repository and the gate was skipped."""
+        _result, ran = self.push("turtle", self.MINI)
+        self.assertTrue(ran)
+
+    def test_the_public_remote_is_not_gated(self) -> None:
+        _result, ran = self.push("public", self.PUBLIC)
+        self.assertFalse(ran)
+
+    def test_a_red_gate_refuses_a_push_to_the_mini_under_any_name(self) -> None:
+        result, ran = self.push("turtle", self.MINI, gate_exit="1")
+        self.assertTrue(ran)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_a_remote_with_no_url_is_not_assumed_to_be_the_mini(self) -> None:
+        _result, ran = self.push("elsewhere", "")
+        self.assertFalse(ran)
+
+
 class FailClosedTests(unittest.TestCase):
     """The skip path is the dangerous part of any gate."""
 
@@ -118,6 +190,7 @@ class FailClosedTests(unittest.TestCase):
         hook = HOOK.read_text(encoding="utf-8")
         self.assertIn("deletions only", hook)
         self.assertIn('"$REMOTE_NAME" != "origin"', hook)
+        self.assertIn("ORIGIN_URL", hook)
 
     def test_the_bypass_is_named_but_not_encouraged(self) -> None:
         text = HOOK.read_text(encoding="utf-8")

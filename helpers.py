@@ -171,6 +171,57 @@ def clear_history(channel_id: int) -> None:
         clear_shared(channel_id)
 
 
+def is_river_bot_message(message) -> bool:
+    """River is a second bot. Its posts are not Turtle's, and not furniture."""
+    import os
+
+    author = getattr(message, "author", None)
+    if author is None or not getattr(author, "bot", False):
+        return False
+    from eddy_spawn import is_turtle_bot_message
+
+    if is_turtle_bot_message(message):
+        return False
+    raw = os.environ.get("RIVER_BOT_USER_ID", "").strip()
+    if raw and str(getattr(author, "id", "")) == raw:
+        return True
+    return (getattr(author, "name", None) or "").strip().lower() == "river"
+
+
+def river_post_text(message) -> str:
+    """The words River actually posted. A bar with no words is not a post."""
+    content = (getattr(message, "content", None) or "").replace("\u200b", "").strip()
+    parts = [content] if content else []
+    embeds = getattr(message, "embeds", None)
+    if isinstance(embeds, (list, tuple)):
+        for embed in embeds:
+            title = (getattr(embed, "title", None) or "").strip()
+            desc = (getattr(embed, "description", None) or "").strip()
+            bit = "\n".join(p for p in (title, desc) if p)
+            if bit:
+                parts.append(bit)
+    return "\n".join(parts).strip()
+
+
+def note_river_post(channel_id: int, text: str) -> None:
+    """Keep a River post where Turtle will read it on the next turn.
+
+    Role is user, and the line is named, so Turtle does not treat the post as
+    something it said. The eddy bar carries no words and is not recorded.
+    """
+    text = (text or "").strip()
+    if not text or text.startswith("🧵"):
+        return
+    history = get_history(channel_id)
+    line = f"[River]: {text}"
+    if history and history[-1].get("content") == line:
+        return
+    history.append({"role": "user", "content": line})
+    if len(history) > MAX_DIALOGUE_HISTORY:
+        del history[: len(history) - MAX_DIALOGUE_HISTORY]
+    sync_history(channel_id)
+
+
 async def load_thread_history(
     thread: discord.Thread,
     max_messages: int = 50,
@@ -191,6 +242,11 @@ async def load_thread_history(
             if exclude_message_id is not None and msg.id == exclude_message_id:
                 continue
             if msg.author.bot:
+                if is_river_bot_message(msg):
+                    posted = river_post_text(msg)
+                    if posted and not posted.startswith("🧵"):
+                        history.append({"role": "user", "content": f"[River]: {posted}"})
+                    continue
                 if not (is_turtle_bot_message(msg) or msg.author == state.client.user):
                     continue
                 content = (msg.content or "").strip()

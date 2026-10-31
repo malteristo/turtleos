@@ -48,6 +48,7 @@ class Offer:
     ready_until: str | None = None
     grant_expires: str | None = None
     announced: bool = False
+    card_message_id: int | None = None  # the layout card under the connect message; None until it is posted
 
     def pickup_open(self, now: datetime | None = None) -> bool:
         return (
@@ -170,6 +171,14 @@ def mark_posted(root: Path, offer_id: str, *, channel_id: int, message_id: int) 
             _write(root, offers)
 
 
+def mark_card(root: Path, offer_id: str, message_id: int) -> None:
+    with file_lock(_path(root)):
+        offers = _read(root)
+        if offer_id in offers:
+            offers[offer_id].card_message_id = int(message_id)
+            _write(root, offers)
+
+
 def server_entry(url: str, token: str) -> dict:
     return {"url": url, "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -178,10 +187,22 @@ def base_url(url: str) -> str:
     return url[: -len("/mcp")] if url.endswith("/mcp") else url
 
 
+def accepted(root: Path) -> list[Offer]:
+    return [o for o in _read(root).values() if o.status == ACCEPTED and o.grant and o.message_id]
+
+
 def describe(offer: Offer) -> list[str]:
-    reach = ", ".join(offer.sources) or "nothing"
-    ops = snapshot_for(offer.profile)
-    can = "read and search" if "search" in ops else "report on itself"
+    ops = set(snapshot_for(offer.profile))
+    both = {"read_note", "workshop_read"} <= ops and not offer.sources
+    if both:
+        reach = "nothing yet"
+        can = "show your notes, your health picture and your practice, whichever you open afterwards"
+    else:
+        reach = ", ".join(offer.sources) or "nothing"
+        if "workshop_read" in ops and "read_note" not in ops:
+            can = "read and search the practice repository"
+        else:
+            can = "read and search" if "search" in ops else "report on itself"
     return [
         f"**For:** {offer.principal}",
         f"**Reaches:** {reach} — it can {can}, and cannot write.",

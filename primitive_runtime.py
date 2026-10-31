@@ -54,7 +54,8 @@ def runtime_for(primitive: ChannelPrimitive | None) -> PrimitiveRuntime | None:
         if primitive.has(capability)
     )
     return PrimitiveRuntime(
-        prompt_profile=primitive.attunement,
+        # A room with a workshop speaks as Spirit; its tools and memory rules are the primitive's.
+        prompt_profile="magic" if primitive.has("workshop") else primitive.attunement,
         parent_handler=parent_handler,
         readiness_profile=readiness_profile,
         startup_hooks=startup_hooks,

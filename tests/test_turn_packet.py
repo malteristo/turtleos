@@ -261,10 +261,13 @@ class ConsideredSectionTests(unittest.TestCase):
 
 
 class PractitionerAllowlistTests(unittest.TestCase):
-    def test_context_is_allowed_for_practitioners(self) -> None:
+    def test_context_is_the_operators_readout(self) -> None:
+        """It shows what the house injected; a member asks Turtle instead (2026-10-14)."""
+        import help_card
         from cmd_dispatch import _PRACTITIONER_COMMANDS
 
-        self.assertIn("context", _PRACTITIONER_COMMANDS)
+        self.assertNotIn("context", _PRACTITIONER_COMMANDS)
+        self.assertIn("context", {command for _, command, _ in help_card.OPERATOR})
 
 
 if __name__ == "__main__":
