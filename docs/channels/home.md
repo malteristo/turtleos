@@ -24,7 +24,11 @@ This channel walked the identity question above, and that question is answered. 
 
 **What is on your mind?**
 
-This channel's walk of that question starts in the craft channel, then the room that was boom, then home. A home channel that did not have that earlier room starts in home. Opened in the home channel on 2026-10-31. The reading is not written yet.
+This channel's walk of that question starts in the craft channel, then the room that was boom, then home. A home channel that did not have that earlier room starts in home. The channel runs the walk. The practitioner does not start it.
+
+The first run brings the key up to the present. After that, the channel rewrites the key when an eddy's note lands. It keeps the key it has and takes in the new eddy. It does not walk the history again. The reading is not written yet. The catch-up has not run.
+
+When a session in this channel closes, the channel rewrites the key to include it. The key records the frozen description, what the spirit did, and what it left open. It records that as a session. There are none yet, so the first run does not wait for one. A session that may change the house still leaves only a title and a link with the channel whose gift is making.
 
 The key is rewritten, not appended. A key that is not rewritten becomes a story of a practice that has already moved.
 
@@ -55,7 +59,7 @@ Once a day, today's eddy opens with a briefing. An empty band says it is empty. 
 4. **Sparks.** Ones named recently. They are still noticings.
 5. **Deeds.** What a spirit changed so that it exists now.
 
-Under that, three lines: what has been achieved, where things stand, and what there is to do today. The briefing does not start a spirit. The second band is what the next rewrite of the key consumes.
+Under that, three lines: what has been achieved, where things stand, and what there is to do today. The briefing does not start a spirit. The key does not wait for the briefing. It is already current with each eddy whose note has landed.
 
 The path is one. A thought stays where the practitioner keeps notes, or lands in the day eddy, or in an eddy they open. Turtle records it, connects it, and names a spark. Turtle helps that spark become a description. The practitioner commits, and the text freezes. A spirit, in its own thread, does the try and says what it leaves open. The next morning that deed is in the briefing.
 

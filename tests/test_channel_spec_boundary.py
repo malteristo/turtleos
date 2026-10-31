@@ -33,6 +33,7 @@ class ChannelSpecBoundaryTests(unittest.TestCase):
         home = HOME.read_text(encoding="utf-8")
         self.assertIn("A channel key is part of the channel's architecture.", home)
         self.assertIn("starts in the craft channel", home)
+        self.assertIn("When a session in this channel closes", home)
         self.assertIn("Not what the running house does.", home)
 
 
